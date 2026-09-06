@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%" fill="none">
+  <defs>
+    <!-- Top curved path for "SMK NEGERI 6" (Clockwise along top) -->
+    <path id="text-path-top" d="M 116,195 A 140,140 0 0,1 396,195" fill="none" stroke="none" />
+    
+    <!-- Bottom curved path for "GARUT" (Left-to-right along bottom, tops of letters point inward) -->
+    <path id="text-path-bottom" d="M 136,185 A 140,140 0 0,0 376,185" fill="none" stroke="none" />
+    
+    <!-- Clip path to keep inner globe details strictly inside blue circle -->
+    <clipPath id="inner-globe-clip">
+      <circle cx="256" cy="195" r="115" />
+    </clipPath>
+  </defs>
+
+  <!-- Complete SMK NEGERI 6 GARUT Logo with Transparent Background -->
+  <g id="smk-negeri-6-garut">
+    
+    <!-- 1. ORANGE / GOLD RIBBON (Pita Orange di bagian bawah) -->
+    <!-- Clearly visible wings on both sides and prominent curved base at the bottom -->
+    <path d="M 40,315 L 472,315 C 472,405 380,465 256,465 C 132,465 40,405 40,315 Z" 
+          fill="#f5b041" 
+          stroke="#000000" 
+          stroke-width="5.5" 
+          stroke-linejoin="round" />
+
+    <!-- 2. MAIN OUTER WHITE CIRCLE -->
+    <circle cx="256" cy="195" r="165" 
+            fill="#ffffff" 
+            stroke="#000000" 
+            stroke-width="6" />
+
+    <!-- 3. TOP CURVED TEXT: "SMK NEGERI 6" -->
+    <text font-family="'Times New Roman', Times, 'Georgia', serif" 
+          font-weight="900" 
+          font-size="28" 
+          fill="#000000"
+          letter-spacing="1.5">
+      <textPath href="#text-path-top" startOffset="50%" text-anchor="middle">SMK NEGERI 6</textPath>
+    </text>
+
+    <!-- 4. BOTTOM CURVED TEXT: "GARUT" -->
+    <text font-family="'Times New Roman', Times, 'Georgia', serif" 
+          font-weight="900" 
+          font-size="28" 
+          fill="#000000"
+          letter-spacing="2.5">
+      <textPath href="#text-path-bottom" startOffset="50%" text-anchor="middle">GARUT</textPath>
+    </text>
+
+    <!-- 5. INNER BLUE GLOBE CIRCLE -->
+    <circle cx="256" cy="195" r="115" 
+            fill="#5b9bd5" 
+            stroke="#000000" 
+            stroke-width="4.5" />
+
+    <!-- 6. INNER GLOBE GRID & EDUCATION BOOK (CLIPPED) -->
+    <g clip-path="url(#inner-globe-clip)">
+      <!-- Double Vertical Center Meridian Lines -->
+      <line x1="250" y1="70" x2="250" y2="320" stroke="#000000" stroke-width="3.5" />
+      <line x1="262" y1="70" x2="262" y2="320" stroke="#000000" stroke-width="3.5" />
+      
+      <!-- Horizontal Equator Line -->
+      <line x1="130" y1="195" x2="382" y2="195" stroke="#000000" stroke-width="3.5" />
+
+      <!-- Top Latitude Lines (Curved) -->
+      <path d="M 135,145 Q 256,188 377,145" fill="none" stroke="#000000" stroke-width="3.5" />
+      <path d="M 135,172 Q 256,205 377,172" fill="none" stroke="#000000" stroke-width="3.5" />
+
+      <!-- Open Book Foundation (Lambang Buku Pendidikan Terbuka) -->
+      <!-- Left Page -->
+      <path d="M 256,245 C 220,230 175,230 148,245 L 148,282 C 175,268 220,268 256,282 Z" 
+            fill="#ffffff" 
+            stroke="#000000" 
+            stroke-width="4" 
+            stroke-linejoin="round" />
+      
+      <!-- Right Page -->
+      <path d="M 256,245 C 292,230 337,230 364,245 L 364,282 C 337,268 292,268 256,282 Z" 
+            fill="#ffffff" 
+            stroke="#000000" 
+            stroke-width="4" 
+            stroke-linejoin="round" />
+      
+      <!-- Book Center Spine -->
+      <line x1="256" y1="245" x2="256" y2="282" stroke="#000000" stroke-width="4" stroke-linecap="round" />
+
+      <!-- Bottom Latitude Curve under the book -->
+      <path d="M 135,302 Q 256,330 377,302" fill="none" stroke="#000000" stroke-width="3.5" />
+    </g>
+
+  </g>
+</svg>

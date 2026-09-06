@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "AppState": {
+      "title": "AppState",
+      "description": "Main application state for school attendance system",
+      "type": "object",
+      "properties": {
+        "sekolah": { "type": "object" },
+        "adminAccounts": { "type": "array" },
+        "jurusanList": { "type": "array" },
+        "waliKelasList": { "type": "array" },
+        "kelasList": { "type": "array" },
+        "siswaList": { "type": "array" },
+        "presensiRecords": { "type": "array" },
+        "gsheetUrl": { "type": "string" },
+        "spreadsheetId": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["sekolah", "siswaList", "presensiRecords"]
+    }
+  }
+}

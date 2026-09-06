@@ -1,0 +1,3096 @@
+import express from "express";
+import path from "path";
+import { createServer as createViteServer } from "vite";
+import mysql from "mysql2/promise";
+import fs from "fs";
+import QRCode from "qrcode";
+import compression from "compression";
+
+const app = express();
+const PORT = 3000;
+
+// Enable gzip/brotli response compression for ultra-fast multi-client throughput
+app.use(compression());
+app.use(express.json({ limit: "50mb" }));
+
+// Server-side QR Code Attendance State & Logs
+let serverActiveQrToken: {
+  token: string;
+  secretHash: string;
+  createdAt: number;
+  expiresAt: number;
+  dateStr: string;
+  intervalSeconds: number;
+} | null = null;
+
+let recentValidTokens = new Map<string, number>();
+
+let serverQrLogs: Array<{
+  id: string;
+  siswaId: string;
+  nisn: string;
+  namaSiswa: string;
+  namaKelas: string;
+  tanggal: string;
+  status: string;
+  time: string;
+  method: string;
+  isServerVerified: boolean;
+}> = [];
+
+let cachedQrImageDataUrl = "";
+
+// Fast In-Memory Lookup Indexes for 1000+ Concurrent Students
+let siswaIdMap = new Map<string, any>();
+let siswaNisnMap = new Map<string, any>();
+let siswaNameMap = new Map<string, any>();
+let kelasIdMap = new Map<string, any>();
+let appDataVersion = Date.now();
+
+function rebuildFastIndices(appData: any) {
+  if (!appData || typeof appData !== "object") return;
+  const newSiswaIdMap = new Map<string, any>();
+  const newSiswaNisnMap = new Map<string, any>();
+  const newSiswaNameMap = new Map<string, any>();
+  const newKelasIdMap = new Map<string, any>();
+
+  if (Array.isArray(appData.siswa)) {
+    for (const s of appData.siswa) {
+      if (s.id) newSiswaIdMap.set(String(s.id).toLowerCase(), s);
+      if (s.nisn) newSiswaNisnMap.set(String(s.nisn).trim().toUpperCase(), s);
+      if (s.nama) newSiswaNameMap.set(String(s.nama).trim().toLowerCase(), s);
+    }
+  }
+
+  if (Array.isArray(appData.kelas)) {
+    for (const k of appData.kelas) {
+      if (k.id) newKelasIdMap.set(String(k.id), k);
+    }
+  }
+
+  siswaIdMap = newSiswaIdMap;
+  siswaNisnMap = newSiswaNisnMap;
+  siswaNameMap = newSiswaNameMap;
+  kelasIdMap = newKelasIdMap;
+}
+
+function getIndonesianDateTime() {
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+
+  const timeStr = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(now).replace(/\./g, ':');
+
+  return { dateStr, timeStr };
+}
+
+function getOrCreateServerQrToken(force = false, intervalSeconds = 60) {
+  const { dateStr: todayStr } = getIndonesianDateTime();
+  const now = Date.now();
+  const validDurationMs = Math.max(10, Number(intervalSeconds) || 60) * 1000;
+
+  if (!force && serverActiveQrToken && serverActiveQrToken.dateStr === todayStr && now < serverActiveQrToken.expiresAt) {
+    return serverActiveQrToken;
+  }
+  const randomSegment = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const token = `PRESENSI-${todayStr}-${randomSegment}`;
+  serverActiveQrToken = {
+    token,
+    secretHash: `HASH-${now}-${randomSegment}`,
+    createdAt: now,
+    expiresAt: now + validDurationMs,
+    dateStr: todayStr,
+    intervalSeconds: Number(intervalSeconds) || 60
+  };
+
+  if (!recentValidTokens) recentValidTokens = new Map();
+  recentValidTokens.set(token, serverActiveQrToken.expiresAt + 5 * 60 * 1000);
+
+  // Clean up old expired tokens from recentValidTokens (older than 10 mins)
+  for (const [t, exp] of recentValidTokens.entries()) {
+    if (now > exp) {
+      recentValidTokens.delete(t);
+    }
+  }
+
+  cachedQrImageDataUrl = "";
+  return serverActiveQrToken;
+}
+
+async function generateQrDataUrl(tokenObj: typeof serverActiveQrToken) {
+  if (!tokenObj) return "";
+  try {
+    const schoolName = inMemoryAppDataCache?.sekolah?.nama || "Absensi Siswa";
+    const qrPayload = JSON.stringify({
+      type: "SCHOOL_PRESENSI_QR",
+      school: schoolName,
+      token: tokenObj.token,
+      hash: tokenObj.secretHash,
+      date: tokenObj.dateStr,
+      expiresAt: tokenObj.expiresAt
+    });
+    return await QRCode.toDataURL(qrPayload, {
+      width: 360,
+      margin: 2,
+      color: {
+        dark: "#1e1b4b",
+        light: "#ffffff"
+      }
+    });
+  } catch (err: any) {
+    console.error("Error generating QR code image on server:", err?.message || err);
+    return "";
+  }
+}
+
+const MYSQL_CONFIG_FILE = path.join(process.cwd(), "mysql_config.json");
+const MYSQL_CONFIG_FILE_TMP = "/tmp/mysql_config.json";
+const APP_DATA_CACHE_FILE = path.join(process.cwd(), "app_data_cache.json");
+const APP_DATA_CACHE_FILE_TMP = "/tmp/app_data_cache.json";
+
+let activePool: mysql.Pool | null = null;
+let currentPoolKey: string | null = null;
+
+let inMemoryAppDataCache: any = loadSavedAppDataCache() || null;
+if (inMemoryAppDataCache) {
+  rebuildFastIndices(inMemoryAppDataCache);
+}
+let lastMySQLSyncTime = 0;
+const MYSQL_SYNC_THROTTLE_MS = 15000; // Throttle to 15s to protect MySQL resource limit and prevent queue limit failures
+
+// Cooldown mechanism when hosting provider's max_connections_per_hour (limit: 500) is exceeded
+let mysqlCooldownUntil = 0;
+const COOLDOWN_DURATION_MS = 10 * 60 * 1000; // 10 minutes cooldown before retrying MySQL
+
+function isMySQLRateLimitError(err: any): boolean {
+  if (!err) return false;
+  const msg = String(err.message || err.sqlMessage || err || '');
+  const code = String(err.code || '');
+  const errno = err.errno;
+  return (
+    msg.includes("max_connections_per_hour") ||
+    msg.includes("ER_USER_LIMIT_REACHED") ||
+    code === "ER_USER_LIMIT_REACHED" ||
+    errno === 1226
+  );
+}
+
+function setMySQLCooldown(reason?: string) {
+  mysqlCooldownUntil = Date.now() + COOLDOWN_DURATION_MS;
+  if (activePool) {
+    activePool.end().catch(() => {});
+    activePool = null;
+    currentPoolKey = null;
+  }
+  console.info(`[MySQL Notice] ${reason || 'Connection limit reached.'} Activating 10-minute cooldown. Operating on server cache.`);
+}
+
+function loadSavedServerConfig() {
+  try {
+    // 1. Check workspace persistent file
+    if (fs.existsSync(MYSQL_CONFIG_FILE)) {
+      const content = fs.readFileSync(MYSQL_CONFIG_FILE, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.host) return parsed;
+    }
+    // 2. Check /tmp file
+    if (fs.existsSync(MYSQL_CONFIG_FILE_TMP)) {
+      const content = fs.readFileSync(MYSQL_CONFIG_FILE_TMP, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.host) return parsed;
+    }
+    // 3. Check process environment variables
+    if (process.env.DB_HOST || process.env.MYSQL_HOST) {
+      return {
+        host: process.env.DB_HOST || process.env.MYSQL_HOST,
+        port: process.env.DB_PORT || process.env.MYSQL_PORT || "3306",
+        user: process.env.DB_USER || process.env.MYSQL_USER || "root",
+        password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || "",
+        database: process.env.DB_NAME || process.env.MYSQL_DATABASE || "sistem_presensi_sekolah"
+      };
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveServerConfig(config: any) {
+  try {
+    if (config && config.host && config.database && config.user) {
+      const content = JSON.stringify(config, null, 2);
+      fs.writeFileSync(MYSQL_CONFIG_FILE, content);
+      try { fs.writeFileSync(MYSQL_CONFIG_FILE_TMP, content); } catch (e) {}
+    }
+  } catch (e) {}
+}
+
+function normalizeWeeklyShiftPeriods(rawPeriods: any[]): any[] {
+  if (!rawPeriods || !Array.isArray(rawPeriods) || rawPeriods.length === 0) return [];
+  const result: any[] = [];
+  let newId = 1;
+  for (const p of rawPeriods) {
+    const s = new Date(p.startDate);
+    const e = new Date(p.endDate);
+    const diffDays = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays > 8) {
+      let curr = new Date(s);
+      while (curr <= e) {
+        const segStart = new Date(curr);
+        const segEnd = new Date(curr);
+        segEnd.setDate(segEnd.getDate() + 6);
+        if (segEnd > e) {
+          segEnd.setTime(e.getTime());
+        }
+        const fmt = (dt: Date) => {
+          const y = dt.getFullYear();
+          const m = String(dt.getMonth() + 1).padStart(2, '0');
+          const day = String(dt.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
+        result.push({
+          id: newId++,
+          startDate: fmt(segStart),
+          endDate: fmt(segEnd),
+          kelompok1Type: p.kelompok1Type || 'pagi',
+          kelompok2Type: p.kelompok2Type || 'siang'
+        });
+        curr.setDate(curr.getDate() + 7);
+      }
+    } else {
+      result.push({
+        ...p,
+        id: newId++
+      });
+    }
+  }
+  return result;
+}
+
+function loadSavedAppDataCache() {
+  try {
+    let parsed: any = null;
+    if (fs.existsSync(APP_DATA_CACHE_FILE)) {
+      const content = fs.readFileSync(APP_DATA_CACHE_FILE, "utf-8");
+      parsed = JSON.parse(content);
+    } else if (fs.existsSync(APP_DATA_CACHE_FILE_TMP)) {
+      const content = fs.readFileSync(APP_DATA_CACHE_FILE_TMP, "utf-8");
+      parsed = JSON.parse(content);
+    }
+    if (parsed && parsed.shiftConfig && Array.isArray(parsed.shiftConfig.periods)) {
+      parsed.shiftConfig.periods = normalizeWeeklyShiftPeriods(parsed.shiftConfig.periods);
+    }
+    return parsed;
+  } catch (e) {}
+  return null;
+}
+
+let appDataSaveTimeout: any = null;
+let backgroundPersistTimeout: any = null;
+let isPersistingToMySQL = false;
+let hasPendingMySQLPersist = false;
+
+function normalizeServerPresensiStatus(status: any): string {
+  if (!status) return '';
+  const str = String(status).trim().toUpperCase();
+  if (str === 'I' || str === 'IZIN') return 'I';
+  if (str === 'S' || str === 'SAKIT') return 'S';
+  if (str === 'A' || str === 'ALPA' || str === 'ALFA' || str === 'ALPHA') return 'A';
+  if (str === 'K' || str === 'KESIANGAN' || str === 'TERLAMBAT' || str === 'LATE') return 'K';
+  if (str === 'D' || str === 'DISPENSASI' || str === 'DISPENS') return 'D';
+  if (str === 'H' || str === 'HADIR') return 'H';
+  if (str === 'TAP') return 'TAP';
+  return '';
+}
+
+function sanitizeAndDeduplicatePresensiMap(rawPresensi: any): Record<string, any[]> {
+  if (!rawPresensi || typeof rawPresensi !== 'object') return {};
+  const cleaned: Record<string, any[]> = {};
+
+  for (const [key, rawList] of Object.entries(rawPresensi)) {
+    if (!key || typeof key !== 'string') continue;
+    if (!Array.isArray(rawList)) continue;
+
+    const studentMap = new Map<string, any>();
+    for (const item of rawList) {
+      if (!item || typeof item !== 'object') continue;
+      const sId = item.siswaId ? String(item.siswaId).trim() : '';
+      if (!sId) continue;
+
+      const normStatus = normalizeServerPresensiStatus(item.status);
+      const isPresent = ['H', 'K'].includes(normStatus);
+      const pulangStatus = isPresent ? (item.pulangStatus === 'H' ? 'H' : 'TAP') : '';
+      const cleanItem: any = {
+        siswaId: sId,
+        status: normStatus,
+        time: item.time ? String(item.time).trim() : (isPresent ? '07:00' : ''),
+        pulangTime: pulangStatus === 'H' ? (item.pulangTime ? String(item.pulangTime).trim() : '12:00') : '',
+        pulangStatus,
+      };
+      if (item.suratBukti && typeof item.suratBukti === 'string') {
+        cleanItem.suratBukti = item.suratBukti;
+      }
+      if (item.catatan && typeof item.catatan === 'string') {
+        cleanItem.catatan = item.catatan.trim();
+      }
+      studentMap.set(sId, cleanItem);
+    }
+    cleaned[key] = Array.from(studentMap.values());
+  }
+  return cleaned;
+}
+
+function saveAppDataCache(data: any) {
+  if (!data || typeof data !== "object") return;
+  if (data.deletedPelanggaranIds && Array.isArray(data.deletedPelanggaranIds) && Array.isArray(data.pelanggaran)) {
+    const deletedSet = new Set(data.deletedPelanggaranIds);
+    data.pelanggaran = data.pelanggaran.filter((p: any) => !deletedSet.has(p.id));
+  }
+  if (data.deletedHomeVisitIds && Array.isArray(data.deletedHomeVisitIds) && Array.isArray(data.homeVisits)) {
+    const deletedSet = new Set(data.deletedHomeVisitIds);
+    data.homeVisits = data.homeVisits.filter((h: any) => !deletedSet.has(h.id));
+  }
+  if (data.shiftConfig && Array.isArray(data.shiftConfig.periods)) {
+    data.shiftConfig.periods = normalizeWeeklyShiftPeriods(data.shiftConfig.periods);
+  }
+  if (data.presensi && typeof data.presensi === 'object') {
+    data.presensi = sanitizeAndDeduplicatePresensiMap(data.presensi);
+  }
+  inMemoryAppDataCache = data;
+  rebuildFastIndices(data);
+  appDataVersion = Date.now();
+
+  if (appDataSaveTimeout) {
+    clearTimeout(appDataSaveTimeout);
+  }
+  appDataSaveTimeout = setTimeout(() => {
+    try {
+      const content = JSON.stringify(data);
+      fs.writeFile(APP_DATA_CACHE_FILE, content, () => {});
+      try { fs.writeFile(APP_DATA_CACHE_FILE_TMP, content, () => {}); } catch (e) {}
+    } catch (e) {}
+  }, 500);
+}
+
+// Ultra-fast non-blocking persistence queue that coalesces 1000s of requests during rush hours
+function queueAppDataPersist(options?: { immediateMySQL?: boolean }) {
+  appDataVersion = Date.now();
+
+  if (appDataSaveTimeout) {
+    clearTimeout(appDataSaveTimeout);
+  }
+  appDataSaveTimeout = setTimeout(() => {
+    try {
+      if (inMemoryAppDataCache) {
+        const content = JSON.stringify(inMemoryAppDataCache);
+        fs.writeFile(APP_DATA_CACHE_FILE, content, () => {});
+        try { fs.writeFile(APP_DATA_CACHE_FILE_TMP, content, () => {}); } catch (e) {}
+      }
+    } catch (e) {}
+  }, 1000);
+
+  const mysqlConfig = loadSavedServerConfig();
+  const hasDeletions = (inMemoryAppDataCache?.deletedPelanggaranIds && inMemoryAppDataCache.deletedPelanggaranIds.length > 0) ||
+                       (inMemoryAppDataCache?.deletedHomeVisitIds && inMemoryAppDataCache.deletedHomeVisitIds.length > 0);
+  if (mysqlConfig && (Date.now() >= mysqlCooldownUntil || hasDeletions || options?.immediateMySQL)) {
+    if (backgroundPersistTimeout) {
+      clearTimeout(backgroundPersistTimeout);
+    }
+    const delay = options?.immediateMySQL || hasDeletions ? 200 : 5000;
+    backgroundPersistTimeout = setTimeout(async () => {
+      if (isPersistingToMySQL) {
+        hasPendingMySQLPersist = true;
+        return;
+      }
+      isPersistingToMySQL = true;
+      try {
+        await performMySQLSave(mysqlConfig, inMemoryAppDataCache, Boolean(hasDeletions || options?.immediateMySQL));
+        lastMySQLSyncTime = Date.now();
+      } catch (err: any) {
+        if (isMySQLRateLimitError(err)) {
+          setMySQLCooldown(err.message);
+        }
+      } finally {
+        isPersistingToMySQL = false;
+        if (hasPendingMySQLPersist) {
+          hasPendingMySQLPersist = false;
+          queueAppDataPersist();
+        }
+      }
+    }, delay);
+  }
+}
+
+function getMySQLPool(config: any, ignoreCooldown = false): mysql.Pool | null {
+  if (!config || !config.host || !config.database || !config.user) return null;
+
+  if (!ignoreCooldown && Date.now() < mysqlCooldownUntil) {
+    return null;
+  }
+
+  const configKey = `${config.host}:${config.port || 3306}:${config.database}:${config.user}:${config.password || ""}`;
+
+  if (activePool && currentPoolKey === configKey) {
+    return activePool;
+  }
+
+  if (activePool) {
+    activePool.end().catch(() => {});
+    activePool = null;
+  }
+
+  try {
+    activePool = mysql.createPool({
+      host: config.host,
+      port: Number(config.port) || 3306,
+      user: config.user,
+      password: config.password || "",
+      database: config.database,
+      waitForConnections: true,
+      connectionLimit: 10, // Up to 10 concurrent connections for high-volume attendance
+      queueLimit: 200, // Queue up to 200 requests safely during peaks
+      connectTimeout: 5000,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
+    });
+    currentPoolKey = configKey;
+    return activePool;
+  } catch (e: any) {
+    if (isMySQLRateLimitError(e)) {
+      setMySQLCooldown(e.message);
+    } else {
+      console.warn("Failed to create MySQL pool:", e?.message || e);
+    }
+    return null;
+  }
+}
+
+async function performMySQLSave(config: any, appData: any, ignoreCooldown = false) {
+  const pool = getMySQLPool(config, ignoreCooldown);
+  if (!pool || !appData) return;
+
+  if (appData.deletedPelanggaranIds && Array.isArray(appData.deletedPelanggaranIds) && Array.isArray(appData.pelanggaran)) {
+    const deletedSet = new Set(appData.deletedPelanggaranIds);
+    appData.pelanggaran = appData.pelanggaran.filter((p: any) => !deletedSet.has(p.id));
+  }
+  if (appData.deletedHomeVisitIds && Array.isArray(appData.deletedHomeVisitIds) && Array.isArray(appData.homeVisits)) {
+    const deletedSet = new Set(appData.deletedHomeVisitIds);
+    appData.homeVisits = appData.homeVisits.filter((h: any) => !deletedSet.has(h.id));
+  }
+
+  let db: mysql.PoolConnection | null = null;
+
+  try {
+    db = await pool.getConnection();
+
+    await db.execute(`SET FOREIGN_KEY_CHECKS = 0;`);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        config_key VARCHAR(100) UNIQUE,
+        config_value LONGTEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      );
+    `);
+
+    const appDataForSettings = { ...appData };
+    delete appDataForSettings.presensi;
+
+    await db.execute(
+      `INSERT INTO app_settings (config_key, config_value) VALUES ('full_app_data', ?)
+       ON DUPLICATE KEY UPDATE config_value = ?;`,
+      [JSON.stringify(appDataForSettings), JSON.stringify(appDataForSettings)]
+    );
+
+    if (appData.sekolah) {
+      const s = appData.sekolah;
+      await db.execute(
+        `INSERT INTO sekolah_config (id, nama, alamat, tahun_ajaran, tanggal_mulai, logo, favicon, nama_kepala_sekolah, nip_kepala_sekolah, theme, font_theme)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+         nama=?, alamat=?, tahun_ajaran=?, tanggal_mulai=?, logo=?, favicon=?, nama_kepala_sekolah=?, nip_kepala_sekolah=?, theme=?, font_theme=?;`,
+        [
+          s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern',
+          s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern'
+        ]
+      );
+    }
+
+    if (appData.admin) {
+      const a = appData.admin;
+      await db.execute(
+        `INSERT INTO admin_account (id, username, password, nama, foto)
+         VALUES (1, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE username=?, password=?, nama=?, foto=?;`,
+        [
+          a.username || 'admin', a.password || 'admin', a.nama || 'Administrator', a.foto || '',
+          a.username || 'admin', a.password || 'admin', a.nama || 'Administrator', a.foto || ''
+        ]
+      );
+    }
+
+    if (Array.isArray(appData.jurusan)) {
+      await db.execute(`DELETE FROM jurusan;`);
+      if (appData.jurusan.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < appData.jurusan.length; i += CHUNK_SIZE) {
+          const chunk = appData.jurusan.slice(i, i + CHUNK_SIZE);
+          const batchValues: any[] = [];
+          const placeholdersVal: string[] = [];
+          for (const j of chunk) {
+            placeholdersVal.push('(?, ?, ?)');
+            batchValues.push(j.id, j.kode, j.nama);
+          }
+          if (placeholdersVal.length > 0) {
+            await db.execute(
+              `INSERT INTO jurusan (id, kode, nama) VALUES ${placeholdersVal.join(', ')}
+               ON DUPLICATE KEY UPDATE kode = VALUES(kode), nama = VALUES(nama);`,
+              batchValues
+            ).catch((err) => console.warn('Chunk jurusan save warning:', err?.message || err));
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(appData.waliKelas)) {
+      await db.execute(`DELETE FROM wali_kelas;`);
+      if (appData.waliKelas.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < appData.waliKelas.length; i += CHUNK_SIZE) {
+          const chunk = appData.waliKelas.slice(i, i + CHUNK_SIZE);
+          const batchValues: any[] = [];
+          const placeholdersVal: string[] = [];
+          for (const w of chunk) {
+            placeholdersVal.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            batchValues.push(
+              w.id,
+              w.nip || '',
+              w.nama,
+              w.username || `guru_${String(w.nip || w.nama).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
+              w.password || '123',
+              w.noHp || '',
+              w.role || 'wali',
+              w.foto || '',
+              w.nuptk || '',
+              w.jenisKelamin || '',
+              w.tempatLahir || '',
+              w.tanggalLahir || '',
+              w.nik || '',
+              w.agamaId || '',
+              w.alamat || '',
+              w.rt || '',
+              w.rw || '',
+              w.desaKelurahan || '',
+              w.kecamatan || '',
+              w.kodeWilayah || '',
+              w.kodePos || '',
+              w.email || '',
+              w.gelarBelakang || '',
+              w.tugasTambahan || '',
+              w.mataPelajaran || '',
+              Array.isArray(w.hariMengajar) ? JSON.stringify(w.hariMengajar) : '[]'
+            );
+          }
+          if (placeholdersVal.length > 0) {
+            await db.execute(
+              `INSERT INTO wali_kelas (
+                id, nip, nama, username, password, no_hp, role, foto,
+                nuptk, jenis_kelamin, tempat_lahir, tanggal_lahir, nik, agama_id,
+                alamat, rt, rw, desa_kelurahan, kecamatan, kode_wilayah, kode_pos,
+                email, gelar_belakang, tugas_tambahan, mata_pelajaran, hari_mengajar
+              ) VALUES ${placeholdersVal.join(', ')}
+               ON DUPLICATE KEY UPDATE
+                nip = VALUES(nip),
+                nama = VALUES(nama),
+                username = VALUES(username),
+                password = VALUES(password),
+                no_hp = VALUES(no_hp),
+                role = VALUES(role),
+                foto = VALUES(foto),
+                nuptk = VALUES(nuptk),
+                jenis_kelamin = VALUES(jenis_kelamin),
+                tempat_lahir = VALUES(tempat_lahir),
+                tanggal_lahir = VALUES(tanggal_lahir),
+                nik = VALUES(nik),
+                agama_id = VALUES(agama_id),
+                alamat = VALUES(alamat),
+                rt = VALUES(rt),
+                rw = VALUES(rw),
+                desa_kelurahan = VALUES(desa_kelurahan),
+                kecamatan = VALUES(kecamatan),
+                kode_wilayah = VALUES(kode_wilayah),
+                kode_pos = VALUES(kode_pos),
+                email = VALUES(email),
+                gelar_belakang = VALUES(gelar_belakang),
+                tugas_tambahan = VALUES(tugas_tambahan),
+                mata_pelajaran = VALUES(mata_pelajaran),
+                hari_mengajar = VALUES(hari_mengajar);`,
+              batchValues
+            ).catch((err) => console.warn('Chunk waliKelas save warning:', err?.message || err));
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(appData.kelas)) {
+      await db.execute(`DELETE FROM kelas;`);
+      if (appData.kelas.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < appData.kelas.length; i += CHUNK_SIZE) {
+          const chunk = appData.kelas.slice(i, i + CHUNK_SIZE);
+          const batchValues: any[] = [];
+          const placeholdersVal: string[] = [];
+          for (const k of chunk) {
+            placeholdersVal.push('(?, ?, ?, ?)');
+            batchValues.push(k.id, k.nama, k.jurusanId, k.waliKelasId);
+          }
+          if (placeholdersVal.length > 0) {
+            await db.execute(
+              `INSERT INTO kelas (id, nama, jurusan_id, wali_kelas_id) VALUES ${placeholdersVal.join(', ')}
+               ON DUPLICATE KEY UPDATE nama = VALUES(nama), jurusan_id = VALUES(jurusan_id), wali_kelas_id = VALUES(wali_kelas_id);`,
+              batchValues
+            ).catch((err) => console.warn('Chunk kelas save warning:', err?.message || err));
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(appData.siswa)) {
+      // Ensure columns exist in siswa table if it was created previously without them
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS siswa (
+          id VARCHAR(50) PRIMARY KEY,
+          nisn VARCHAR(50),
+          nama VARCHAR(255) NOT NULL,
+          gender VARCHAR(10) NOT NULL,
+          kelas_id VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'aktif',
+          no_wa VARCHAR(50),
+          nama_orang_tua VARCHAR(255),
+          no_wa_orang_tua VARCHAR(50),
+          username VARCHAR(100),
+          password VARCHAR(255),
+          foto LONGTEXT,
+          tempat_lahir VARCHAR(100),
+          tanggal_lahir VARCHAR(50),
+          alamat TEXT
+        );
+      `).catch(() => {});
+
+      // Add columns safely if not yet present
+      const addColumnQueries = [
+        "ALTER TABLE siswa ADD COLUMN username VARCHAR(100);",
+        "ALTER TABLE siswa ADD COLUMN password VARCHAR(255);",
+        "ALTER TABLE siswa ADD COLUMN foto LONGTEXT;",
+        "ALTER TABLE siswa ADD COLUMN tempat_lahir VARCHAR(100);",
+        "ALTER TABLE siswa ADD COLUMN tanggal_lahir VARCHAR(50);",
+        "ALTER TABLE siswa ADD COLUMN alamat TEXT;",
+      ];
+      for (const q of addColumnQueries) {
+        await db.execute(q).catch(() => {});
+      }
+
+      await db.execute(`DELETE FROM siswa;`);
+      if (appData.siswa.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < appData.siswa.length; i += CHUNK_SIZE) {
+          const chunk = appData.siswa.slice(i, i + CHUNK_SIZE);
+          const batchValues: any[] = [];
+          const placeholdersVal: string[] = [];
+          for (const s of chunk) {
+            placeholdersVal.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            batchValues.push(
+              s.id,
+              s.nisn || '',
+              s.nama,
+              s.gender || 'L',
+              s.kelasId || '',
+              s.status || 'aktif',
+              s.noWa || '',
+              s.namaOrangTua || '',
+              s.noWaOrangTua || '',
+              s.username || s.nisn || '',
+              s.password || s.nisn || '',
+              s.foto || '',
+              s.tempatLahir || '',
+              s.tanggalLahir || '',
+              s.alamat || ''
+            );
+          }
+          if (placeholdersVal.length > 0) {
+            await db.execute(
+              `INSERT INTO siswa (id, nisn, nama, gender, kelas_id, status, no_wa, nama_orang_tua, no_wa_orang_tua, username, password, foto, tempat_lahir, tanggal_lahir, alamat)
+               VALUES ${placeholdersVal.join(', ')}
+               ON DUPLICATE KEY UPDATE 
+                 nisn=VALUES(nisn), nama=VALUES(nama), gender=VALUES(gender), kelas_id=VALUES(kelas_id), 
+                 status=VALUES(status), no_wa=VALUES(no_wa), nama_orang_tua=VALUES(nama_orang_tua), no_wa_orang_tua=VALUES(no_wa_orang_tua),
+                 username=VALUES(username), password=VALUES(password), foto=VALUES(foto), tempat_lahir=VALUES(tempat_lahir),
+                 tanggal_lahir=VALUES(tanggal_lahir), alamat=VALUES(alamat);`,
+              batchValues
+            ).catch((err) => console.warn('Chunk siswa save warning:', err?.message || err));
+          }
+        }
+      }
+    }
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS user (
+        id VARCHAR(100) PRIMARY KEY,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        nama VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        nip VARCHAR(100),
+        no_hp VARCHAR(50),
+        foto LONGTEXT,
+        kelas_nama VARCHAR(100),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      );
+    `);
+
+    await db.execute(`DELETE FROM user;`);
+    const allUsersList: any[] = [];
+    if (appData.admin) {
+      allUsersList.push({
+        id: 'admin_1',
+        username: appData.admin.username || 'admin',
+        password: appData.admin.password || 'admin123',
+        nama: appData.admin.nama || 'Administrator Utama',
+        role: 'admin',
+        nip: '-',
+        noHp: '',
+        foto: appData.admin.foto || '',
+        kelasNama: '-'
+      });
+    }
+    if (Array.isArray(appData.waliKelas)) {
+      for (const w of appData.waliKelas) {
+        allUsersList.push({
+          id: w.id,
+          username: w.username,
+          password: w.password,
+          nama: w.nama,
+          role: w.role || 'wali',
+          nip: w.nip || '-',
+          noHp: w.noHp || '',
+          foto: w.foto || '',
+          kelasNama: appData.kelas?.find((k: any) => k.waliKelasId === w.id)?.nama || '-'
+        });
+      }
+    }
+    if (Array.isArray(appData.siswa)) {
+      for (const s of appData.siswa) {
+        const studentUsername = s.username || s.nisn;
+        const studentPassword = s.password || s.nisn;
+        if (studentUsername) {
+          allUsersList.push({
+            id: s.id,
+            username: studentUsername,
+            password: studentPassword || studentUsername,
+            nama: s.nama,
+            role: 'murid',
+            nip: s.nisn || '-',
+            noHp: s.noWa || '',
+            foto: s.foto || '',
+            kelasNama: appData.kelas?.find((k: any) => k.id === s.kelasId)?.nama || '-'
+          });
+        }
+      }
+    }
+
+    if (allUsersList.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < allUsersList.length; i += CHUNK_SIZE) {
+        const chunk = allUsersList.slice(i, i + CHUNK_SIZE);
+        const batchValuesUser: any[] = [];
+        const placeholdersValUser: string[] = [];
+        for (const u of chunk) {
+          placeholdersValUser.push('(?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchValuesUser.push(u.id, u.username, u.password, u.nama, u.role, u.nip, u.noHp, u.foto, u.kelasNama);
+        }
+        if (placeholdersValUser.length > 0) {
+          await db.execute(
+            `INSERT INTO user (id, username, password, nama, role, nip, no_hp, foto, kelas_nama) VALUES ${placeholdersValUser.join(', ')}
+             ON DUPLICATE KEY UPDATE username=VALUES(username), password=VALUES(password), nama=VALUES(nama), role=VALUES(role), nip=VALUES(nip), no_hp=VALUES(no_hp), foto=VALUES(foto), kelas_nama=VALUES(kelas_nama);`,
+            batchValuesUser
+          ).catch((err) => console.warn('Chunk user save warning:', err?.message || err));
+        }
+      }
+    }
+
+    if (appData.presensi && typeof appData.presensi === 'object') {
+      const entries = Object.entries(appData.presensi);
+      if (entries.length > 0) {
+        // Batch insert in chunks of 50 items to avoid MySQL placeholder limit
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+          const chunk = entries.slice(i, i + CHUNK_SIZE);
+          const batchValues: any[] = [];
+          const placeholdersVal: string[] = [];
+          for (const [tanggalKelas, items] of chunk) {
+            const parts = tanggalKelas.split('_');
+            const tanggal = parts[0] || '';
+            const kelasId = parts[1] || '';
+            const presensiJson = JSON.stringify(items);
+            placeholdersVal.push('(?, ?, ?, ?)');
+            batchValues.push(tanggalKelas, tanggal, kelasId, presensiJson);
+          }
+          if (placeholdersVal.length > 0) {
+            await db.execute(
+              `INSERT INTO presensi (tanggal_kelas, tanggal, kelas_id, data_presensi) VALUES ${placeholdersVal.join(', ')}
+               ON DUPLICATE KEY UPDATE tanggal = VALUES(tanggal), kelas_id = VALUES(kelas_id), data_presensi = VALUES(data_presensi);`,
+              batchValues
+            ).catch((err) => console.warn('Chunk presensi save warning:', err?.message || err));
+          }
+        }
+      } else {
+        await db.execute(`DELETE FROM presensi;`).catch(() => {});
+      }
+    } else {
+      await db.execute(`DELETE FROM presensi;`);
+    }
+
+    // 1. Table & Data Pelanggaran Siswa
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS pelanggaran (
+        id VARCHAR(50) PRIMARY KEY,
+        tanggal VARCHAR(50) NOT NULL,
+        siswa_id VARCHAR(50) NOT NULL,
+        kelas_id VARCHAR(50),
+        kategori VARCHAR(50) NOT NULL,
+        nama_pelanggaran VARCHAR(255) NOT NULL,
+        poin INT DEFAULT 0,
+        keterangan TEXT,
+        pelapor VARCHAR(255),
+        tindakan TEXT,
+        status VARCHAR(50) DEFAULT 'proses',
+        foto LONGTEXT,
+        created_at VARCHAR(50),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_pelanggaran_siswa (siswa_id),
+        INDEX idx_pelanggaran_tanggal (tanggal),
+        INDEX idx_pelanggaran_kelas (kelas_id)
+      );
+    `).catch(() => {});
+
+    if (Array.isArray(appData.pelanggaran)) {
+      await db.execute(`DELETE FROM pelanggaran;`);
+      if (appData.pelanggaran.length > 0) {
+        const batchValuesPelanggaran: any[] = [];
+        const placeholdersValPelanggaran: string[] = [];
+        for (const p of appData.pelanggaran) {
+          placeholdersValPelanggaran.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchValuesPelanggaran.push(
+            p.id,
+            p.tanggal || '',
+            p.siswaId || '',
+            p.kelasId || '',
+            p.kategori || 'ringan',
+            p.namaPelanggaran || '',
+            Number(p.poin) || 0,
+            p.keterangan || '',
+            p.pelapor || '',
+            p.tindakan || '',
+            p.status || 'proses',
+            p.foto || '',
+            p.createdAt || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO pelanggaran (id, tanggal, siswa_id, kelas_id, kategori, nama_pelanggaran, poin, keterangan, pelapor, tindakan, status, foto, created_at)
+           VALUES ${placeholdersValPelanggaran.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             tanggal=VALUES(tanggal), siswa_id=VALUES(siswa_id), kelas_id=VALUES(kelas_id),
+             kategori=VALUES(kategori), nama_pelanggaran=VALUES(nama_pelanggaran), poin=VALUES(poin),
+             keterangan=VALUES(keterangan), pelapor=VALUES(pelapor), tindakan=VALUES(tindakan),
+             status=VALUES(status), foto=VALUES(foto), created_at=VALUES(created_at);`,
+          batchValuesPelanggaran
+        );
+      }
+    }
+
+    // 2. Table & Data Home Visit (Kunjungan Rumah)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS home_visit (
+        id VARCHAR(50) PRIMARY KEY,
+        tanggal VARCHAR(50) NOT NULL,
+        siswa_id VARCHAR(50) NOT NULL,
+        kelas_id VARCHAR(50),
+        petugas VARCHAR(255) NOT NULL,
+        alasan TEXT,
+        catatan TEXT,
+        hasil TEXT,
+        tindak_lanjut TEXT,
+        foto LONGTEXT,
+        status VARCHAR(50) DEFAULT 'proses',
+        created_at VARCHAR(50),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_home_visit_siswa (siswa_id),
+        INDEX idx_home_visit_tanggal (tanggal),
+        INDEX idx_home_visit_kelas (kelas_id)
+      );
+    `).catch(() => {});
+
+    if (Array.isArray(appData.homeVisits)) {
+      await db.execute(`DELETE FROM home_visit;`);
+      if (appData.homeVisits.length > 0) {
+        const batchValuesHV: any[] = [];
+        const placeholdersValHV: string[] = [];
+        for (const hv of appData.homeVisits) {
+          placeholdersValHV.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchValuesHV.push(
+            hv.id,
+            hv.tanggal || '',
+            hv.siswaId || '',
+            hv.kelasId || '',
+            hv.petugas || '',
+            hv.alasan || '',
+            hv.catatan || '',
+            hv.hasil || '',
+            hv.tindakLanjut || '',
+            hv.foto || '',
+            hv.status || 'proses',
+            hv.createdAt || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO home_visit (id, tanggal, siswa_id, kelas_id, petugas, alasan, catatan, hasil, tindak_lanjut, foto, status, created_at)
+           VALUES ${placeholdersValHV.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             tanggal=VALUES(tanggal), siswa_id=VALUES(siswa_id), kelas_id=VALUES(kelas_id),
+             petugas=VALUES(petugas), alasan=VALUES(alasan), catatan=VALUES(catatan),
+             hasil=VALUES(hasil), tindak_lanjut=VALUES(tindak_lanjut), foto=VALUES(foto),
+             status=VALUES(status), created_at=VALUES(created_at);`,
+          batchValuesHV
+        );
+      }
+    }
+
+    // 3. Table & Data Template Pelanggaran (Violation Templates)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS violation_templates (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        kategori VARCHAR(50) NOT NULL,
+        poin INT DEFAULT 0,
+        tindakan TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      );
+    `).catch(() => {});
+
+    if (Array.isArray(appData.violationTemplates)) {
+      await db.execute(`DELETE FROM violation_templates;`);
+      if (appData.violationTemplates.length > 0) {
+        const batchValuesTemplates: any[] = [];
+        const placeholdersValTemplates: string[] = [];
+        for (const vt of appData.violationTemplates) {
+          placeholdersValTemplates.push('(?, ?, ?, ?, ?)');
+          batchValuesTemplates.push(
+            vt.id,
+            vt.name || '',
+            vt.kategori || 'ringan',
+            Number(vt.poin) || 0,
+            vt.tindakan || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO violation_templates (id, name, kategori, poin, tindakan)
+           VALUES ${placeholdersValTemplates.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             name=VALUES(name), kategori=VALUES(kategori), poin=VALUES(poin), tindakan=VALUES(tindakan);`,
+          batchValuesTemplates
+        );
+      }
+    }
+
+    await db.execute(`SET FOREIGN_KEY_CHECKS = 1;`);
+  } catch (err: any) {
+    if (isMySQLRateLimitError(err)) {
+      setMySQLCooldown(err?.message || 'max_connections_per_hour');
+    } else {
+      console.info("[MySQL Save Status]", err?.message || err);
+    }
+  } finally {
+    if (db) {
+      try { db.release(); } catch (e) {}
+    }
+  }
+}
+
+async function performMySQLLoad(config: any) {
+  const pool = getMySQLPool(config);
+  if (!pool) return null;
+
+  let db: mysql.PoolConnection | null = null;
+
+  try {
+    db = await pool.getConnection();
+
+    const [settingsRows]: any = await db.execute(
+      `SELECT config_value FROM app_settings WHERE config_key = 'full_app_data';`
+    ).catch(() => [[]]);
+
+    let appData: any = null;
+    if (settingsRows && settingsRows.length > 0 && settingsRows[0].config_value) {
+      try {
+        appData = JSON.parse(settingsRows[0].config_value);
+      } catch (e) {}
+    }
+
+    const [sekolahRows]: any = await db.execute(`SELECT * FROM sekolah_config WHERE id = 1;`).catch(() => [[]]);
+    const [adminRows]: any = await db.execute(`SELECT * FROM admin_account WHERE id = 1;`).catch(() => [[]]);
+    const [jurusanRows]: any = await db.execute(`SELECT * FROM jurusan;`).catch(() => [[]]);
+    const [waliRows]: any = await db.execute(`SELECT * FROM wali_kelas;`).catch(() => [[]]);
+    const [kelasRows]: any = await db.execute(`SELECT * FROM kelas;`).catch(() => [[]]);
+    const [siswaRows]: any = await db.execute(`SELECT * FROM siswa;`).catch(() => [[]]);
+    const [presensiRows]: any = await db.execute(`SELECT * FROM presensi;`).catch(() => [[]]);
+    const [pelanggaranRows]: any = await db.execute(`SELECT * FROM pelanggaran ORDER BY tanggal DESC;`).catch(() => [[]]);
+    const [homeVisitRows]: any = await db.execute(`SELECT * FROM home_visit ORDER BY tanggal DESC;`).catch(() => [[]]);
+    const [templateRows]: any = await db.execute(`SELECT * FROM violation_templates;`).catch(() => [[]]);
+
+    if (!appData) {
+      appData = {};
+    }
+
+    if (sekolahRows && sekolahRows.length > 0) {
+      const s = sekolahRows[0];
+      appData.sekolah = {
+        ...(appData.sekolah || {}),
+        nama: s.nama || appData.sekolah?.nama,
+        alamat: s.alamat || appData.sekolah?.alamat,
+        tahunAjaran: s.tahun_ajaran || appData.sekolah?.tahunAjaran,
+        tanggalMulai: s.tanggal_mulai || appData.sekolah?.tanggalMulai,
+        logo: s.logo || appData.sekolah?.logo,
+        favicon: s.favicon || appData.sekolah?.favicon,
+        namaKepalaSekolah: s.nama_kepala_sekolah || appData.sekolah?.namaKepalaSekolah,
+        nipKepalaSekolah: s.nip_kepala_sekolah || appData.sekolah?.nipKepalaSekolah,
+        theme: s.theme || appData.sekolah?.theme,
+        fontTheme: s.font_theme || appData.sekolah?.fontTheme
+      };
+    }
+
+    if (adminRows && adminRows.length > 0) {
+      const a = adminRows[0];
+      appData.admin = {
+        username: a.username,
+        password: a.password,
+        nama: a.nama,
+        foto: a.foto
+      };
+    }
+
+    if (jurusanRows && jurusanRows.length > 0) {
+      appData.jurusan = jurusanRows.map((j: any) => ({
+        id: j.id,
+        kode: j.kode,
+        nama: j.nama
+      }));
+    }
+
+    if (waliRows && waliRows.length > 0) {
+      appData.waliKelas = waliRows.map((w: any) => {
+        let hariMengajarArr = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+        if (w.hari_mengajar) {
+          try {
+            hariMengajarArr = typeof w.hari_mengajar === 'string' ? JSON.parse(w.hari_mengajar) : w.hari_mengajar;
+          } catch {
+            hariMengajarArr = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+          }
+        }
+        return {
+          id: w.id,
+          nip: w.nip || '',
+          nama: w.nama,
+          nuptk: w.nuptk || '',
+          jenisKelamin: w.jenis_kelamin || '',
+          tempatLahir: w.tempat_lahir || '',
+          tanggalLahir: w.tanggal_lahir || '',
+          nik: w.nik || '',
+          agamaId: w.agama_id || '',
+          alamat: w.alamat || '',
+          rt: w.rt || '',
+          rw: w.rw || '',
+          desaKelurahan: w.desa_kelurahan || '',
+          kecamatan: w.kecamatan || '',
+          kodeWilayah: w.kode_wilayah || '',
+          kodePos: w.kode_pos || '',
+          noHp: w.no_hp || '',
+          email: w.email || '',
+          gelarBelakang: w.gelar_belakang || '',
+          username: w.username || `guru_${String(w.nip || w.nama).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
+          password: w.password || '123',
+          role: w.role || 'wali',
+          foto: w.foto || '',
+          tugasTambahan: w.tugas_tambahan || '',
+          jabatan: w.jabatan || w.tugas_tambahan || '',
+          mataPelajaran: w.mata_pelajaran || '',
+          hariMengajar: hariMengajarArr,
+          batasiLoginHariMengajar: Boolean(w.batasi_login_hari_mengajar)
+        };
+      });
+    }
+
+    if (kelasRows && kelasRows.length > 0) {
+      appData.kelas = kelasRows.map((k: any) => ({
+        id: k.id,
+        nama: k.nama,
+        jurusanId: k.jurusan_id,
+        waliKelasId: k.wali_kelas_id
+      }));
+    }
+
+    if (siswaRows && siswaRows.length > 0) {
+      const prevSiswaMap = new Map<string, any>((appData.siswa || []).map((s: any) => [s.id, s]));
+      appData.siswa = siswaRows.map((s: any) => {
+        const prev = prevSiswaMap.get(s.id) || {};
+        return {
+          id: s.id,
+          nisn: s.nisn || prev.nisn || '',
+          nama: s.nama || prev.nama || '',
+          gender: s.gender || prev.gender || 'L',
+          kelasId: s.kelas_id || prev.kelasId || '',
+          status: s.status || prev.status || 'aktif',
+          noWa: s.no_wa || prev.noWa || '',
+          namaOrangTua: s.nama_orang_tua || prev.namaOrangTua || '',
+          noWaOrangTua: s.no_wa_orang_tua || prev.noWaOrangTua || '',
+          username: s.username || prev.username || s.nisn || '',
+          password: s.password || prev.password || s.nisn || '',
+          foto: s.foto || prev.foto || '',
+          tempatLahir: s.tempat_lahir || prev.tempatLahir || '',
+          tanggalLahir: s.tanggal_lahir || prev.tanggalLahir || '',
+          alamat: s.alamat || prev.alamat || ''
+        };
+      });
+    }
+
+    if (Array.isArray(presensiRows) && presensiRows.length > 0) {
+      if (!appData.presensi) {
+        appData.presensi = {};
+      }
+      for (const p of presensiRows) {
+        try {
+          appData.presensi[p.tanggal_kelas] = typeof p.data_presensi === 'string' ? JSON.parse(p.data_presensi) : p.data_presensi;
+        } catch (e) {
+          // ignore broken row
+        }
+      }
+    }
+
+    if (Array.isArray(pelanggaranRows)) {
+      const deletedPelanggaranSet = new Set(appData.deletedPelanggaranIds || []);
+      appData.pelanggaran = pelanggaranRows
+        .filter((p: any) => p && p.id && !deletedPelanggaranSet.has(p.id))
+        .map((p: any) => ({
+          id: p.id,
+          tanggal: p.tanggal,
+          siswaId: p.siswa_id,
+          kelasId: p.kelas_id,
+          kategori: p.kategori,
+          namaPelanggaran: p.nama_pelanggaran,
+          poin: Number(p.poin) || 0,
+          keterangan: p.keterangan || '',
+          pelapor: p.pelapor || '',
+          tindakan: p.tindakan || '',
+          status: p.status || 'proses',
+          foto: p.foto || '',
+          createdAt: p.created_at || ''
+        }));
+    }
+
+    if (Array.isArray(homeVisitRows)) {
+      const deletedHomeVisitSet = new Set(appData.deletedHomeVisitIds || []);
+      appData.homeVisits = homeVisitRows
+        .filter((h: any) => h && h.id && !deletedHomeVisitSet.has(h.id))
+        .map((h: any) => ({
+          id: h.id,
+          tanggal: h.tanggal,
+          siswaId: h.siswa_id,
+          kelasId: h.kelas_id,
+          petugas: h.petugas || '',
+          alasan: h.alasan || '',
+          catatan: h.catatan || '',
+          hasil: h.hasil || '',
+          tindakLanjut: h.tindak_lanjut || '',
+          foto: h.foto || '',
+          status: h.status || 'proses',
+          createdAt: h.created_at || ''
+        }));
+    }
+
+    if (Array.isArray(templateRows)) {
+      appData.violationTemplates = templateRows.map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        kategori: t.kategori,
+        poin: Number(t.poin) || 0,
+        tindakan: t.tindakan || ''
+      }));
+    }
+
+    return appData;
+  } catch (err: any) {
+    if (isMySQLRateLimitError(err)) {
+      setMySQLCooldown(err?.message || 'max_connections_per_hour');
+    } else {
+      console.info("[MySQL Load Status]", err?.message || err);
+    }
+    return null;
+  } finally {
+    if (db) {
+      try { db.release(); } catch (e) {}
+    }
+  }
+}
+
+// API: Health Check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ==========================================
+// API FITUR ABSEN QR CODE PADA SERVER
+// ==========================================
+
+// 1. API: Get Server Active QR Code Token & Image
+app.get("/api/qr/token", async (req, res) => {
+  const isForce = req.query.force === "true" || req.query.refresh === "true";
+  const intervalSec = parseInt(String(req.query.interval || "60"), 10) || 60;
+
+  const tokenObj = getOrCreateServerQrToken(isForce, intervalSec);
+  if (!cachedQrImageDataUrl) {
+    cachedQrImageDataUrl = await generateQrDataUrl(tokenObj);
+  }
+
+  const now = Date.now();
+  const timeRemainingSeconds = Math.max(0, Math.ceil((tokenObj.expiresAt - now) / 1000));
+
+  res.json({
+    success: true,
+    token: tokenObj.token,
+    date: tokenObj.dateStr,
+    createdAt: tokenObj.createdAt,
+    expiresAt: tokenObj.expiresAt,
+    intervalSeconds: tokenObj.intervalSeconds || intervalSec,
+    timeRemainingSeconds,
+    qrDataUrl: cachedQrImageDataUrl,
+    schoolName: inMemoryAppDataCache?.sekolah?.nama || "Absensi Siswa"
+  });
+});
+
+// 2. API: Force Generate New Dynamic Server QR Token
+app.post("/api/qr/generate-new", async (req, res) => {
+  const intervalSec = parseInt(String(req.body?.interval || req.query?.interval || "60"), 10) || 60;
+  const tokenObj = getOrCreateServerQrToken(true, intervalSec);
+  cachedQrImageDataUrl = await generateQrDataUrl(tokenObj);
+
+  const now = Date.now();
+  const timeRemainingSeconds = Math.max(0, Math.ceil((tokenObj.expiresAt - now) / 1000));
+
+  res.json({
+    success: true,
+    message: "Token QR Presensi Server berhasil diperbarui!",
+    token: tokenObj.token,
+    date: tokenObj.dateStr,
+    createdAt: tokenObj.createdAt,
+    expiresAt: tokenObj.expiresAt,
+    intervalSeconds: tokenObj.intervalSeconds || intervalSec,
+    timeRemainingSeconds,
+    qrDataUrl: cachedQrImageDataUrl,
+    schoolName: inMemoryAppDataCache?.sekolah?.nama || "Absensi Siswa"
+  });
+});
+
+// Helper to determine shift timing for student on server-side
+function getShiftTimingForStudent(appData: any, siswa: any, dateStr: string) {
+  const shiftConfig = appData?.shiftConfig;
+  const isPagiActive = shiftConfig?.isJamMasukPagiActive ?? appData?.sekolah?.isJamMasukActive ?? true;
+  const pagiMulai = shiftConfig?.pagiJamMasukMulai || appData?.sekolah?.jamMasukMulai || '06:30';
+  const pagiSelesai = shiftConfig?.pagiJamMasukSelesai || appData?.sekolah?.jamMasukSelesai || '06:45';
+  const pagiPulang = shiftConfig?.pagiJamPulang || '12:00';
+
+  const isSiangActive = shiftConfig?.isJamMasukSiangActive ?? true;
+  const siangMulai = shiftConfig?.siangJamMasukMulai || '12:45';
+  const siangSelesai = shiftConfig?.siangJamMasukSelesai || '13:00';
+  const siangPulang = shiftConfig?.siangJamPulang || '16:50';
+
+  if (!siswa) {
+    return {
+      shiftType: 'pagi',
+      jamMasukMulai: pagiMulai,
+      jamMasukSelesai: pagiSelesai,
+      jamPulang: pagiPulang,
+      isJamMasukActive: isPagiActive,
+    };
+  }
+
+  const kelasObj = (appData?.kelas || []).find((k: any) => k.id === siswa.kelasId);
+  const namaKelas = (kelasObj?.nama || '').toUpperCase();
+  const isKelompok2 = namaKelas.startsWith('XII') || namaKelas.includes('12') || namaKelas.includes('XII');
+
+  const today = dateStr ? new Date(dateStr) : new Date();
+  const periods = shiftConfig?.periods || [];
+  const activePeriod = periods.find((p: any) => {
+    const s = new Date(p.startDate);
+    const e = new Date(p.endDate);
+    return today >= s && today <= e;
+  });
+
+  let shiftType = 'pagi';
+  if (activePeriod) {
+    shiftType = isKelompok2 ? (activePeriod.kelompok2Type || 'siang') : (activePeriod.kelompok1Type || 'pagi');
+  } else {
+    shiftType = isKelompok2 ? 'siang' : 'pagi';
+  }
+
+  if (shiftType === 'siang') {
+    return {
+      shiftType: 'siang',
+      jamMasukMulai: siangMulai,
+      jamMasukSelesai: siangSelesai,
+      jamPulang: siangPulang,
+      isJamMasukActive: isSiangActive,
+    };
+  }
+
+  return {
+    shiftType: 'pagi',
+    jamMasukMulai: pagiMulai,
+    jamMasukSelesai: pagiSelesai,
+    jamPulang: pagiPulang,
+    isJamMasukActive: isPagiActive,
+  };
+}
+
+// 3. API: Process Attendance via QR Code on Server
+app.post("/api/qr/absen", async (req, res) => {
+  try {
+    const { scannedCode, siswaId, nisn, dateStr, clientAppData, scanMode } = req.body;
+    const { dateStr: todayWib, timeStr: timeWib } = getIndonesianDateTime();
+    const today = dateStr || todayWib;
+    const nowTimeStr = timeWib;
+
+    if (!scannedCode && !siswaId && !nisn) {
+      return res.status(400).json({
+        success: false,
+        message: "Parameter scannedCode atau Identitas Siswa (ID / NISN) wajib diisi."
+      });
+    }
+
+    // Sync clientAppData if provided
+    if (clientAppData && typeof clientAppData === 'object' && Array.isArray(clientAppData.siswa)) {
+      if (!inMemoryAppDataCache) {
+        inMemoryAppDataCache = clientAppData;
+      } else {
+        inMemoryAppDataCache.siswa = clientAppData.siswa;
+        if (Array.isArray(clientAppData.kelas)) inMemoryAppDataCache.kelas = clientAppData.kelas;
+        if (clientAppData.sekolah) inMemoryAppDataCache.sekolah = clientAppData.sekolah;
+        if (clientAppData.shiftConfig) inMemoryAppDataCache.shiftConfig = clientAppData.shiftConfig;
+        if (clientAppData.presensi) {
+          inMemoryAppDataCache.presensi = { ...inMemoryAppDataCache.presensi, ...clientAppData.presensi };
+        }
+      }
+      saveAppDataCache(inMemoryAppDataCache);
+    }
+
+    // Ensure cache is loaded
+    if (!inMemoryAppDataCache) {
+      inMemoryAppDataCache = loadSavedAppDataCache() || {};
+    }
+
+    const siswaList: any[] = inMemoryAppDataCache?.siswa || [];
+    const kelasList: any[] = inMemoryAppDataCache?.kelas || [];
+    let targetSiswa: any = null;
+
+    // Clean scannedCode string (strip control chars, exterior quotes, spaces)
+    let rawCodeStr = String(scannedCode || '').trim();
+    if ((rawCodeStr.startsWith('"') && rawCodeStr.endsWith('"')) || (rawCodeStr.startsWith("'") && rawCodeStr.endsWith("'"))) {
+      rawCodeStr = rawCodeStr.slice(1, -1).trim();
+    }
+
+    // Try parsing scannedCode if it's JSON (e.g. Student Card QR or Server School QR)
+    let parsedPayload: any = null;
+    if (rawCodeStr) {
+      try {
+        parsedPayload = JSON.parse(rawCodeStr);
+      } catch (e) {
+        try {
+          // Fallback JSON parse with single quotes replaced
+          parsedPayload = JSON.parse(rawCodeStr.replace(/'/g, '"'));
+        } catch (err2) {}
+      }
+    }
+
+    const isSchoolQr = (parsedPayload && parsedPayload.type === 'SCHOOL_PRESENSI_QR') || 
+                       (typeof rawCodeStr === 'string' && rawCodeStr.toUpperCase().startsWith('PRESENSI-'));
+
+    // Resolve Student in O(1) time using in-memory indexed hash maps
+    if (siswaId) {
+      targetSiswa = siswaIdMap.get(String(siswaId).toLowerCase());
+    }
+    if (!targetSiswa && nisn) {
+      targetSiswa = siswaNisnMap.get(String(nisn).trim().toUpperCase());
+    }
+    
+    // Resolve via parsed JSON payload
+    if (!targetSiswa && parsedPayload) {
+      const targetId = parsedPayload.id || parsedPayload.siswaId;
+      const targetNisn = parsedPayload.nisn;
+      const targetNama = parsedPayload.nama;
+
+      if (targetId) {
+        targetSiswa = siswaIdMap.get(String(targetId).toLowerCase());
+      }
+      if (!targetSiswa && targetNisn) {
+        targetSiswa = siswaNisnMap.get(String(targetNisn).trim().toUpperCase());
+      }
+      if (!targetSiswa && targetNama) {
+        targetSiswa = siswaNameMap.get(String(targetNama).trim().toLowerCase());
+      }
+
+      // Deep array fallback search if maps missed
+      if (!targetSiswa) {
+        targetSiswa = siswaList.find((s) => {
+          if (targetId && String(s.id).toLowerCase() === String(targetId).toLowerCase()) return true;
+          if (targetNisn && s.nisn && String(s.nisn).trim().toUpperCase() === String(targetNisn).trim().toUpperCase()) return true;
+          if (targetNama && s.nama && String(s.nama).trim().toLowerCase() === String(targetNama).trim().toLowerCase()) return true;
+          return false;
+        });
+      }
+    }
+
+    // Resolve via raw text string
+    if (!targetSiswa && !isSchoolQr && rawCodeStr) {
+      const codeClean = rawCodeStr.toUpperCase();
+      targetSiswa = siswaNisnMap.get(codeClean) || siswaIdMap.get(codeClean.toLowerCase()) || siswaNameMap.get(codeClean.toLowerCase());
+      if (!targetSiswa) {
+        targetSiswa = siswaList.find((s) =>
+          (s.nisn && String(s.nisn).trim().toUpperCase() === codeClean) ||
+          (s.id && String(s.id).trim().toUpperCase() === codeClean) ||
+          (s.nama && String(s.nama).trim().toUpperCase() === codeClean) ||
+          (s.nisn && codeClean.includes(String(s.nisn).trim().toUpperCase()))
+        );
+      }
+    }
+
+    if (!targetSiswa) {
+      if (isSchoolQr) {
+        return res.status(400).json({
+          success: false,
+          message: "QR Code Sekolah/Token dipindai. Silakan gunakan akun siswa di Portal Murid untuk melakukan presensi."
+        });
+      }
+      return res.status(404).json({
+        success: false,
+        message: `Siswa dengan Kartu QR / NISN / Kode '${rawCodeStr.slice(0, 30)}' tidak ditemukan di database server.`
+      });
+    }
+
+    // Find class name in O(1)
+    const kelasObj = kelasIdMap.get(targetSiswa.kelasId) || kelasList.find((k) => k.id === targetSiswa.kelasId);
+    const namaKelas = kelasObj ? kelasObj.nama : "Tanpa Kelas";
+
+    // Validation for Teacher Session QR Code
+    if (parsedPayload && parsedPayload.type === 'PRESENSI_GURU_SESSION' && parsedPayload.kelasId) {
+      if (targetSiswa.kelasId !== parsedPayload.kelasId) {
+        return res.status(400).json({
+          success: false,
+          message: `Gagal Presensi: QR Sesi Guru ini khusus untuk ${parsedPayload.kelasNama || 'Kelas Lain'}. Anda terdaftar di ${namaKelas}.`
+        });
+      }
+    }
+
+    // Update Presensi in Server Memory Cache
+    if (!inMemoryAppDataCache.presensi) {
+      inMemoryAppDataCache.presensi = {};
+    }
+
+    const presensiKey = `${today}_${targetSiswa.kelasId}`;
+    const currentList: any[] = inMemoryAppDataCache.presensi[presensiKey]
+      ? [...inMemoryAppDataCache.presensi[presensiKey]]
+      : [];
+
+    const timing = getShiftTimingForStudent(inMemoryAppDataCache, targetSiswa, today);
+    const isJamMasukActive = timing.isJamMasukActive;
+    const jamMasukSelesai = timing.jamMasukSelesai;
+
+    const [nowH, nowM] = nowTimeStr.split(':').map(Number);
+    const nowTotalMins = nowH * 60 + nowM;
+    const [pulangH, pulangM] = timing.jamPulang.split(':').map(Number);
+    const pulangTotalMins = pulangH * 60 + pulangM;
+
+    const existingIdx = currentList.findIndex((item) => item.siswaId === targetSiswa.id);
+    const hasCheckedIn = existingIdx >= 0 && currentList[existingIdx].time && currentList[existingIdx].status !== 'A';
+
+    if (nowTotalMins > pulangTotalMins && !hasCheckedIn) {
+      return res.status(400).json({
+        success: false,
+        message: `Gagal Absen: Waktu Absen Masuk telah berakhir dan sudah melewati jam pulang (${timing.jamPulang}). Anda tidak tercatat melakukan absen masuk hari ini dan tidak dapat melakukan absen masuk. Silakan hubungi wali kelas.`
+      });
+    }
+
+    // Determine scan mode (masuk vs pulang)
+    let effectiveScanMode = scanMode || 'auto';
+
+    if (effectiveScanMode === 'auto') {
+      if (!isJamMasukActive) {
+        effectiveScanMode = 'masuk';
+      } else {
+        if (nowTotalMins >= pulangTotalMins - 30 || nowTotalMins > pulangTotalMins) {
+          effectiveScanMode = 'pulang';
+        } else {
+          effectiveScanMode = 'masuk';
+        }
+      }
+    }
+
+    let assignedStatus = "H";
+
+    if (effectiveScanMode === 'masuk') {
+      const scanHHmm = nowTimeStr.trim().slice(0, 5);
+      const cutoffHHmm = jamMasukSelesai.trim().slice(0, 5);
+      assignedStatus = (!isJamMasukActive || scanHHmm <= cutoffHHmm) ? "H" : "K";
+    } else {
+      const scanHHmm = nowTimeStr.trim().slice(0, 5);
+      const cutoffHHmm = jamMasukSelesai.trim().slice(0, 5);
+      assignedStatus = (!isJamMasukActive || scanHHmm <= cutoffHHmm) ? "H" : "K";
+    }
+    
+    let statusLabel = "";
+    let isAlreadyRecorded = false;
+    let recordedItem: any = null;
+
+    if (effectiveScanMode === 'pulang') {
+      if (existingIdx < 0 || !currentList[existingIdx].time || currentList[existingIdx].status === 'A') {
+        return res.status(400).json({
+          success: false,
+          message: "Gagal Absen Pulang: Anda belum melakukan Absen Masuk hari ini!"
+        });
+      }
+      statusLabel = "PULANG (H)";
+      if (existingIdx >= 0) {
+        if (currentList[existingIdx].pulangTime) {
+          isAlreadyRecorded = true;
+        }
+        recordedItem = {
+          ...currentList[existingIdx],
+          pulangTime: nowTimeStr,
+          pulangStatus: 'H'
+        };
+        currentList[existingIdx] = recordedItem;
+      } else {
+        recordedItem = {
+          siswaId: targetSiswa.id,
+          status: 'H',
+          time: '',
+          pulangTime: nowTimeStr,
+          pulangStatus: 'H'
+        };
+        currentList.push(recordedItem);
+      }
+    } else {
+      // Masuk
+      statusLabel = assignedStatus === "K" ? "KESIANGAN (K)" : "HADIR (H)";
+
+      if (existingIdx >= 0) {
+        if (currentList[existingIdx].status === assignedStatus) {
+          isAlreadyRecorded = true;
+        }
+        recordedItem = {
+          ...currentList[existingIdx],
+          status: assignedStatus,
+          time: nowTimeStr,
+          method: 'qr_server'
+        };
+        currentList[existingIdx] = recordedItem;
+      } else {
+        recordedItem = {
+          siswaId: targetSiswa.id,
+          status: assignedStatus,
+          time: nowTimeStr,
+          method: 'qr_server'
+        };
+        currentList.push(recordedItem);
+      }
+    }
+
+    inMemoryAppDataCache.presensi[presensiKey] = currentList;
+
+    // Queue asynchronous non-blocking persist (coalesced)
+    queueAppDataPersist();
+
+    // Record server QR log
+    const logItem = {
+      id: "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+      siswaId: targetSiswa.id,
+      nisn: targetSiswa.nisn || "-",
+      namaSiswa: targetSiswa.nama,
+      namaKelas,
+      tanggal: today,
+      status: effectiveScanMode === 'pulang' ? 'PULANG' : assignedStatus,
+      time: nowTimeStr,
+      method: "qr_server",
+      isServerVerified: true
+    };
+
+    serverQrLogs.unshift(logItem);
+    if (serverQrLogs.length > 300) serverQrLogs.pop();
+
+    const namaSekolah = inMemoryAppDataCache?.sekolah?.nama || "Sekolah";
+    const rawWaOrtu = targetSiswa.noWaOrangTua || targetSiswa.noWa || "";
+    const cleanWaOrtu = rawWaOrtu.replace(/\D/g, "");
+    const formattedWaOrtu = cleanWaOrtu.startsWith("0") ? `62${cleanWaOrtu.slice(1)}` : cleanWaOrtu;
+    const namaOrtu = targetSiswa.namaOrangTua || "Bapak/Ibu Orang Tua/Wali";
+    
+    let notifWaText = "";
+    if (effectiveScanMode === 'pulang') {
+      notifWaText = `Halo ${namaOrtu}, Diberitahukan bahwa Ananda ${targetSiswa.nama} (Kelas ${namaKelas}) telah melakukan PRESENSI PULANG pada hari ini (${today}) pukul ${nowTimeStr} WIB. Terima kasih. - ${namaSekolah}`;
+    } else {
+      notifWaText = `Halo ${namaOrtu}, Diberitahukan bahwa Ananda ${targetSiswa.nama} (Kelas ${namaKelas}) telah berhasil melakukan PRESENSI MASUK pada hari ini (${today}) pukul ${nowTimeStr} WIB dengan status: ${statusLabel}. Terima kasih. - ${namaSekolah}`;
+    }
+    const notifWaUrl = formattedWaOrtu ? `https://wa.me/${formattedWaOrtu}?text=${encodeURIComponent(notifWaText)}` : null;
+
+    res.json({
+      success: true,
+      message: isAlreadyRecorded
+        ? `Presensi ${effectiveScanMode === 'pulang' ? 'Pulang' : 'Masuk'} berhasil diperbarui! ${targetSiswa.nama} (${namaKelas}) - Status: ${statusLabel} (${nowTimeStr} WIB)`
+        : `Presensi ${effectiveScanMode === 'pulang' ? 'Pulang' : 'Masuk'} berhasil dicatat! ${targetSiswa.nama} (${namaKelas}) - Status: ${statusLabel} (${nowTimeStr} WIB)`,
+      siswa: {
+        id: targetSiswa.id,
+        nama: targetSiswa.nama,
+        nisn: targetSiswa.nisn,
+        kelasId: targetSiswa.kelasId,
+        namaKelas,
+        noWaOrangTua: targetSiswa.noWaOrangTua || "",
+        namaOrangTua: targetSiswa.namaOrangTua || ""
+      },
+      status: effectiveScanMode === 'pulang' ? 'PULANG' : assignedStatus,
+      tanggal: today,
+      time: nowTimeStr,
+      presensiKey,
+      item: recordedItem,
+      isAlreadyRecorded,
+      noWaOrangTua: formattedWaOrtu,
+      namaOrangTua: namaOrtu,
+      notifWaText,
+      notifWaUrl,
+      updatedAppData: req.body?.includeAppData ? inMemoryAppDataCache : undefined
+    });
+  } catch (err: any) {
+    console.error("Error in /api/qr/absen:", err?.message || err);
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan internal server saat memproses presensi QR Code."
+    });
+  }
+});
+
+// 4. API: Get Live QR Code Attendance Logs from Server
+app.get("/api/qr/logs", (req, res) => {
+  const { dateStr: todayWib } = getIndonesianDateTime();
+  const dateQuery = (req.query.date as string) || todayWib;
+  const logsForDate = serverQrLogs.filter((l) => l.tanggal === dateQuery);
+
+  res.json({
+    success: true,
+    date: dateQuery,
+    count: logsForDate.length,
+    logs: logsForDate
+  });
+});
+
+// API: Reset / Clear QR Attendance Logs for Date
+app.delete("/api/qr/logs", (req, res) => {
+  const { dateStr: todayWib } = getIndonesianDateTime();
+  const dateQuery = (req.query.date as string) || todayWib;
+  serverQrLogs = serverQrLogs.filter((l) => l.tanggal !== dateQuery);
+
+  res.json({
+    success: true,
+    message: `Feed presensi QR untuk tanggal ${dateQuery} berhasil direset.`,
+    count: serverQrLogs.length
+  });
+});
+
+// API: Get Current Server MySQL Config
+app.get("/api/mysql/config", (req, res) => {
+  const config = loadSavedServerConfig();
+  res.json({
+    success: !!config,
+    config: config || null
+  });
+});
+
+// API: Global Sync Endpoint for Dev & Shared Run Preview Links (with ETag conditional 304 caching)
+app.get("/api/global-state", async (req, res) => {
+  const currentEtag = `"v${appDataVersion}"`;
+  res.setHeader("ETag", currentEtag);
+  res.setHeader("Cache-Control", "public, no-cache");
+
+  const queryHost = (req.query.host as string) || (req.headers["x-mysql-host"] as string);
+  const queryDb = (req.query.database as string) || (req.headers["x-mysql-database"] as string);
+  const queryUser = (req.query.user as string) || (req.headers["x-mysql-user"] as string);
+  const queryPass = (req.query.password !== undefined ? req.query.password : req.headers["x-mysql-password"]) as string;
+  const queryPort = (req.query.port as string) || (req.headers["x-mysql-port"] as string) || "3306";
+
+  let config = loadSavedServerConfig();
+  if (!config && queryHost && queryDb && queryUser) {
+    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort };
+    saveServerConfig(config);
+  }
+
+  const force = req.query.force === "true";
+  const ifNoneMatch = req.headers["if-none-match"];
+
+  // Fast 304 check: If client version matches server version and not forced, return 304 with zero body transfer!
+  if (!force && ifNoneMatch && (ifNoneMatch === currentEtag || ifNoneMatch === String(appDataVersion))) {
+    return res.status(304).end();
+  }
+
+  const now = Date.now();
+
+  // 1. If memory cache exists and isn't expired (and no forced sync requested), serve memory cache instantly!
+  if (inMemoryAppDataCache && !force && (now - lastMySQLSyncTime < MYSQL_SYNC_THROTTLE_MS)) {
+    return res.json({
+      success: true,
+      appData: inMemoryAppDataCache,
+      mysqlConfig: config,
+      version: appDataVersion,
+      source: "memory"
+    });
+  }
+
+  // 2. If config exists and not in MySQL cooldown, attempt MySQL fetch
+  if (config && Date.now() >= mysqlCooldownUntil) {
+    try {
+      const mysqlData = await performMySQLLoad(config);
+      if (mysqlData && (mysqlData.sekolah || (mysqlData.jurusan && mysqlData.jurusan.length > 0))) {
+        saveAppDataCache(mysqlData);
+        lastMySQLSyncTime = now;
+        return res.json({
+          success: true,
+          appData: mysqlData,
+          mysqlConfig: config,
+          version: appDataVersion,
+          source: "mysql"
+        });
+      }
+    } catch (err: any) {
+      // Handled silently
+    }
+  }
+
+  // 3. Fallback to memory or disk cache
+  return res.json({
+    success: true,
+    appData: inMemoryAppDataCache,
+    mysqlConfig: config,
+    version: appDataVersion,
+    source: "cache"
+  });
+});
+
+app.post("/api/global-state", async (req, res) => {
+  const { appData, mysqlConfig } = req.body;
+
+  if (mysqlConfig && mysqlConfig.host) {
+    saveServerConfig(mysqlConfig);
+  }
+
+  if (appData) {
+    saveAppDataCache(appData);
+    lastMySQLSyncTime = Date.now();
+    queueAppDataPersist({ immediateMySQL: true });
+  }
+
+  res.json({ success: true, message: "Global state updated", version: appDataVersion });
+});
+
+// ==========================================
+// DEDICATED REAL-TIME CHAT API ENDPOINTS
+// ==========================================
+
+// 1. Get Chat Messages
+app.get("/api/chat/messages", (req, res) => {
+  const messages = (inMemoryAppDataCache && Array.isArray(inMemoryAppDataCache.chatMessages))
+    ? inMemoryAppDataCache.chatMessages
+    : [];
+  res.json({
+    success: true,
+    chatMessages: messages,
+    version: appDataVersion,
+    timestamp: Date.now()
+  });
+});
+
+// 2. Send Message Atomically
+app.post("/api/chat/send", (req, res) => {
+  const { message } = req.body;
+  if (!message || !message.id || (!message.text && !message.image)) {
+    return res.status(400).json({ success: false, message: "Data pesan tidak valid" });
+  }
+
+  if (!inMemoryAppDataCache) {
+    inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
+  }
+  if (!Array.isArray(inMemoryAppDataCache.chatMessages)) {
+    inMemoryAppDataCache.chatMessages = [];
+  }
+
+  // Check if message already exists
+  const existingIdx = inMemoryAppDataCache.chatMessages.findIndex((m: any) => m.id === message.id);
+  if (existingIdx >= 0) {
+    inMemoryAppDataCache.chatMessages[existingIdx] = { ...inMemoryAppDataCache.chatMessages[existingIdx], ...message };
+  } else {
+    inMemoryAppDataCache.chatMessages.push(message);
+  }
+
+  appDataVersion = Date.now();
+  saveAppDataCache(inMemoryAppDataCache);
+  queueAppDataPersist({ immediateMySQL: true });
+
+  res.json({
+    success: true,
+    message: "Pesan berhasil dikirim",
+    chatMessages: inMemoryAppDataCache.chatMessages,
+    version: appDataVersion
+  });
+});
+
+// 3. Delete Message(s) Atomically (for everyone or for me only)
+app.post("/api/chat/delete", (req, res) => {
+  const { messageId, messageIds, deleteType, username, myIdVariants } = req.body;
+  const targetIds: string[] = messageIds && Array.isArray(messageIds)
+    ? messageIds
+    : messageId ? [messageId] : [];
+
+  if (targetIds.length === 0) {
+    return res.status(400).json({ success: false, message: "ID pesan tidak ditemukan" });
+  }
+
+  if (!inMemoryAppDataCache) {
+    inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
+  }
+  if (!Array.isArray(inMemoryAppDataCache.chatMessages)) {
+    inMemoryAppDataCache.chatMessages = [];
+  }
+
+  const idSet = new Set(targetIds);
+  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
+    ? myIdVariants.map((v: string) => String(v).toLowerCase())
+    : [String(username || "").toLowerCase()].filter(Boolean);
+
+  if (deleteType === "for_everyone") {
+    // Validate if any message being deleted is older than 2 minutes (120,000 ms)
+    const nowEpoch = Date.now();
+    const invalidMsgs = inMemoryAppDataCache.chatMessages.filter((m: any) => {
+      if (!idSet.has(m.id)) return false;
+      const idNum = parseInt(m.id.replace('CHAT_', ''), 10);
+      if (isNaN(idNum)) return true; // treat unparseable IDs as old/expired
+      return (nowEpoch - idNum) > 120000;
+    });
+
+    if (invalidMsgs.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Hapus untuk semua orang gagal: Batas waktu 2 menit telah habis."
+      });
+    }
+
+    // Completely remove message from global storage for all participants
+    inMemoryAppDataCache.chatMessages = inMemoryAppDataCache.chatMessages.filter(
+      (m: any) => !idSet.has(m.id)
+    );
+  } else {
+    // "for_me": Add user's identity to deletedFor array so it only disappears for this user
+    inMemoryAppDataCache.chatMessages = inMemoryAppDataCache.chatMessages.map((m: any) => {
+      if (idSet.has(m.id)) {
+        const existingDeletedFor = Array.isArray(m.deletedFor) ? m.deletedFor : [];
+        const mergedDeletedFor = Array.from(new Set([...existingDeletedFor, ...userVariants]));
+        return { ...m, deletedFor: mergedDeletedFor };
+      }
+      return m;
+    });
+  }
+
+  appDataVersion = Date.now();
+  saveAppDataCache(inMemoryAppDataCache);
+  queueAppDataPersist({ immediateMySQL: true });
+
+  res.json({
+    success: true,
+    message: deleteType === "for_everyone" ? "Pesan dihapus untuk semua orang" : "Pesan dihapus untuk Anda",
+    chatMessages: inMemoryAppDataCache.chatMessages,
+    version: appDataVersion
+  });
+});
+
+// 4. Clear Chat History
+app.post("/api/chat/clear-history", (req, res) => {
+  const { selectedThreadUser, currentUsername, deleteType, isAdmin, myIdVariants } = req.body;
+
+  if (!inMemoryAppDataCache) {
+    inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
+  }
+  if (!Array.isArray(inMemoryAppDataCache.chatMessages)) {
+    inMemoryAppDataCache.chatMessages = [];
+  }
+
+  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
+    ? myIdVariants.map((v: string) => String(v).toLowerCase())
+    : [String(currentUsername || "").toLowerCase()].filter(Boolean);
+
+  const isThreadMatch = (m: any) => {
+    const s = String(m.senderUsername || "").toLowerCase();
+    const r = String(m.recipientUsername || "").toLowerCase();
+    const target = String(selectedThreadUser || "").toLowerCase();
+
+    if (isAdmin && target) {
+      return (s === target && (r === "admin" || r === "administrator")) ||
+             ((s === "admin" || s === "administrator") && r === target);
+    } else {
+      return userVariants.includes(s) || userVariants.includes(r);
+    }
+  };
+
+  if (deleteType === "for_everyone") {
+    inMemoryAppDataCache.chatMessages = inMemoryAppDataCache.chatMessages.filter(
+      (m: any) => !isThreadMatch(m)
+    );
+  } else {
+    inMemoryAppDataCache.chatMessages = inMemoryAppDataCache.chatMessages.map((m: any) => {
+      if (isThreadMatch(m)) {
+        const existingDeletedFor = Array.isArray(m.deletedFor) ? m.deletedFor : [];
+        const mergedDeletedFor = Array.from(new Set([...existingDeletedFor, ...userVariants]));
+        return { ...m, deletedFor: mergedDeletedFor };
+      }
+      return m;
+    });
+  }
+
+  appDataVersion = Date.now();
+  saveAppDataCache(inMemoryAppDataCache);
+  queueAppDataPersist({ immediateMySQL: true });
+
+  res.json({
+    success: true,
+    message: deleteType === "for_everyone" ? "Riwayat obrolan dihapus untuk semua orang" : "Riwayat obrolan dibersihkan untuk Anda",
+    chatMessages: inMemoryAppDataCache.chatMessages,
+    version: appDataVersion
+  });
+});
+
+// 5. Mark Messages as Read
+app.post("/api/chat/mark-read", (req, res) => {
+  const { threadUser, currentUsername, myIdVariants } = req.body;
+
+  if (!inMemoryAppDataCache || !Array.isArray(inMemoryAppDataCache.chatMessages)) {
+    return res.json({ success: true, chatMessages: [] });
+  }
+
+  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
+    ? myIdVariants.map((v: string) => String(v).toLowerCase())
+    : [String(currentUsername || "").toLowerCase()].filter(Boolean);
+
+  let hasChanges = false;
+  inMemoryAppDataCache.chatMessages = inMemoryAppDataCache.chatMessages.map((m: any) => {
+    const s = String(m.senderUsername || "").toLowerCase();
+    const r = String(m.recipientUsername || "").toLowerCase();
+    const target = String(threadUser || "").toLowerCase();
+
+    const isFromThread = target ? s === target : true;
+    const isToMe = userVariants.includes(r) || r === "all";
+
+    if (isFromThread && isToMe && (!m.isRead || m.status !== "read")) {
+      hasChanges = true;
+      return { ...m, isRead: true, status: "read" };
+    }
+    return m;
+  });
+
+  if (hasChanges) {
+    appDataVersion = Date.now();
+    saveAppDataCache(inMemoryAppDataCache);
+    queueAppDataPersist({ immediateMySQL: false });
+  }
+
+  res.json({
+    success: true,
+    chatMessages: inMemoryAppDataCache.chatMessages,
+    version: appDataVersion
+  });
+});
+
+// API: Test MySQL Connection & Auto-Setup Tables
+app.post("/api/mysql/test", async (req, res) => {
+  const { host, port, user, password, database } = req.body;
+  if (!host || !user || !database) {
+    return res.status(400).json({ success: false, message: "Host, user, dan nama database wajib diisi." });
+  }
+
+  try {
+    const config = { host, port, user, password, database };
+    const pool = getMySQLPool(config, true); // force ignore cooldown to test user click
+    if (!pool) {
+      throw new Error("Gagal membuat koneksi pool MySQL.");
+    }
+
+    let db: mysql.PoolConnection | null = null;
+
+    try {
+      db = await pool.getConnection();
+
+      await db.execute(`CREATE DATABASE IF NOT EXISTS \`${database}\`;`);
+      await db.execute(`SET FOREIGN_KEY_CHECKS = 0;`);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          config_key VARCHAR(100) UNIQUE,
+          config_value LONGTEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS sekolah_config (
+          id INT PRIMARY KEY,
+          nama VARCHAR(255) NOT NULL,
+          alamat TEXT,
+          tahun_ajaran VARCHAR(50),
+          tanggal_mulai VARCHAR(50),
+          logo LONGTEXT,
+          favicon LONGTEXT,
+          nama_kepala_sekolah VARCHAR(255),
+          nip_kepala_sekolah VARCHAR(100),
+          theme VARCHAR(50) DEFAULT 'ocean',
+          font_theme VARCHAR(50) DEFAULT 'modern'
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS admin_account (
+          id INT PRIMARY KEY,
+          username VARCHAR(100) NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          nama VARCHAR(255) NOT NULL,
+          foto LONGTEXT
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS jurusan (
+          id VARCHAR(50) PRIMARY KEY,
+          kode VARCHAR(50) NOT NULL,
+          nama VARCHAR(255) NOT NULL
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS wali_kelas (
+          id VARCHAR(50) PRIMARY KEY,
+          nip VARCHAR(100),
+          nama VARCHAR(255) NOT NULL,
+          nuptk VARCHAR(100),
+          jenis_kelamin VARCHAR(20),
+          tempat_lahir VARCHAR(100),
+          tanggal_lahir VARCHAR(50),
+          nik VARCHAR(50),
+          agama_id VARCHAR(50),
+          alamat TEXT,
+          rt VARCHAR(20),
+          rw VARCHAR(20),
+          desa_kelurahan VARCHAR(100),
+          kecamatan VARCHAR(100),
+          kode_wilayah VARCHAR(50),
+          kode_pos VARCHAR(20),
+          no_hp VARCHAR(50),
+          email VARCHAR(150),
+          gelar_belakang VARCHAR(50),
+          username VARCHAR(100) NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          role VARCHAR(50) DEFAULT 'wali',
+          foto LONGTEXT,
+          tugas_tambahan VARCHAR(100),
+          jabatan VARCHAR(100),
+          mata_pelajaran VARCHAR(255),
+          hari_mengajar JSON,
+          batasi_login_hari_mengajar BOOLEAN DEFAULT FALSE
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS kelas (
+          id VARCHAR(50) PRIMARY KEY,
+          nama VARCHAR(100) NOT NULL,
+          jurusan_id VARCHAR(50),
+          wali_kelas_id VARCHAR(50)
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS siswa (
+          id VARCHAR(50) PRIMARY KEY,
+          nisn VARCHAR(50),
+          nama VARCHAR(255) NOT NULL,
+          gender VARCHAR(10) NOT NULL,
+          kelas_id VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'aktif',
+          no_wa VARCHAR(50),
+          nama_orang_tua VARCHAR(255),
+          no_wa_orang_tua VARCHAR(50),
+          username VARCHAR(100),
+          password VARCHAR(255),
+          foto LONGTEXT,
+          tempat_lahir VARCHAR(100),
+          tanggal_lahir VARCHAR(50),
+          alamat TEXT
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS presensi (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tanggal_kelas VARCHAR(100) UNIQUE NOT NULL,
+          tanggal VARCHAR(50) NOT NULL,
+          kelas_id VARCHAR(50) NOT NULL,
+          data_presensi JSON NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS user (
+          id VARCHAR(100) PRIMARY KEY,
+          username VARCHAR(100) UNIQUE NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          nama VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          nip VARCHAR(100),
+          no_hp VARCHAR(50),
+          foto LONGTEXT,
+          kelas_nama VARCHAR(100),
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS pelanggaran (
+          id VARCHAR(50) PRIMARY KEY,
+          tanggal VARCHAR(50) NOT NULL,
+          siswa_id VARCHAR(50) NOT NULL,
+          kelas_id VARCHAR(50),
+          kategori VARCHAR(50) NOT NULL,
+          nama_pelanggaran VARCHAR(255) NOT NULL,
+          poin INT DEFAULT 0,
+          keterangan TEXT,
+          pelapor VARCHAR(255),
+          tindakan TEXT,
+          status VARCHAR(50) DEFAULT 'proses',
+          foto LONGTEXT,
+          created_at VARCHAR(50),
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_pelanggaran_siswa (siswa_id),
+          INDEX idx_pelanggaran_tanggal (tanggal),
+          INDEX idx_pelanggaran_kelas (kelas_id)
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS home_visit (
+          id VARCHAR(50) PRIMARY KEY,
+          tanggal VARCHAR(50) NOT NULL,
+          siswa_id VARCHAR(50) NOT NULL,
+          kelas_id VARCHAR(50),
+          petugas VARCHAR(255) NOT NULL,
+          alasan TEXT,
+          catatan TEXT,
+          hasil TEXT,
+          tindak_lanjut TEXT,
+          foto LONGTEXT,
+          status VARCHAR(50) DEFAULT 'proses',
+          created_at VARCHAR(50),
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_home_visit_siswa (siswa_id),
+          INDEX idx_home_visit_tanggal (tanggal),
+          INDEX idx_home_visit_kelas (kelas_id)
+        );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS violation_templates (
+          id VARCHAR(50) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          kategori VARCHAR(50) NOT NULL,
+          poin INT DEFAULT 0,
+          tindakan TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        );
+      `);
+
+      await db.execute(`SET FOREIGN_KEY_CHECKS = 1;`);
+    } finally {
+      if (db) {
+        try { db.release(); } catch (e) {}
+      }
+    }
+
+    saveServerConfig(config);
+
+    res.json({ success: true, message: "Koneksi ke MySQL berhasil dan struktur tabel relasional telah dikonfigurasi!" });
+  } catch (error: any) {
+    const isLimit = isMySQLRateLimitError(error);
+    if (isLimit) {
+      setMySQLCooldown(error.message);
+    }
+    res.status(200).json({
+      success: isLimit ? true : false,
+      isRateLimited: isLimit,
+      message: isLimit
+        ? "Batas koneksi per jam MySQL pada akun hosting Anda tercapai (max_connections_per_hour = 500). Kredensial MySQL berhasil disimpan, dan aplikasi secara otomatis menggunakan cache server internal agar tetap berjalan normal."
+        : error.message || "Gagal terhubung ke MySQL."
+    });
+  }
+});
+
+// API: Save App Data to Relational MySQL Tables
+app.post("/api/mysql/save", async (req, res) => {
+  const { host, port, user, password, database, appData } = req.body;
+  if (!host || !user || !database || !appData) {
+    return res.status(400).json({ success: false, message: "Parameter koneksi dan data aplikasi wajib diisi." });
+  }
+
+  try {
+    const config = { host, port, user, password, database };
+    saveServerConfig(config);
+    saveAppDataCache(appData);
+    lastMySQLSyncTime = Date.now();
+
+    const hasDeletions = (appData.deletedPelanggaranIds && appData.deletedPelanggaranIds.length > 0) ||
+                         (appData.deletedHomeVisitIds && appData.deletedHomeVisitIds.length > 0);
+
+    if (Date.now() >= mysqlCooldownUntil || hasDeletions) {
+      await performMySQLSave(config, appData, Boolean(hasDeletions));
+      lastMySQLSyncTime = Date.now();
+    }
+
+    res.json({ success: true, message: "Data berhasil disimpan dan disinkronkan!" });
+  } catch (error: any) {
+    const isLimit = isMySQLRateLimitError(error);
+    if (isLimit) {
+      setMySQLCooldown(error.message);
+    }
+    res.json({
+      success: true,
+      message: isLimit
+        ? "Data telah tersimpan di cache server internal. Batas koneksi per jam MySQL tercapai (max_connections_per_hour)."
+        : error.message || "Gagal menyimpan data ke MySQL."
+    });
+  }
+});
+
+// API: Load App Data from MySQL
+app.post("/api/mysql/load", async (req, res) => {
+  const { host, port, user, password, database } = req.body;
+  if (!host || !user || !database) {
+    return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
+  }
+
+  try {
+    const config = { host, port, user, password, database };
+    saveServerConfig(config);
+
+    let appData: any = null;
+    if (Date.now() >= mysqlCooldownUntil) {
+      appData = await performMySQLLoad(config);
+    }
+
+    if (!appData && inMemoryAppDataCache) {
+      appData = inMemoryAppDataCache;
+    }
+
+    if (appData && (appData.sekolah || (appData.jurusan && appData.jurusan.length > 0))) {
+      saveAppDataCache(appData);
+      res.json({ success: true, appData, message: "Data presensi dan relasional berhasil dimuat!" });
+    } else {
+      res.status(404).json({ success: false, message: "Belum ada data tersimpan di MySQL/Cache untuk aplikasi ini." });
+    }
+  } catch (error: any) {
+    const isLimit = isMySQLRateLimitError(error);
+    if (isLimit) {
+      setMySQLCooldown(error.message);
+    }
+    res.json({
+      success: !!inMemoryAppDataCache,
+      appData: inMemoryAppDataCache,
+      message: "Batas koneksi per jam MySQL tercapai. Menggunakan data cache server."
+    });
+  }
+});
+
+// API: Preview Database Statistics & Sample Rows
+app.post("/api/mysql/preview", async (req, res) => {
+  const { host, port, user, password, database } = req.body;
+  if (!host || !user || !database) {
+    return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
+  }
+
+  try {
+    const config = { host, port, user, password, database };
+    const pool = getMySQLPool(config, true);
+    if (!pool) throw new Error("Gagal membuat koneksi MySQL.");
+
+    let db: mysql.PoolConnection | null = null;
+    let sekolahRows: any[] = [];
+    let adminRows: any[] = [];
+    let jurusanRows: any[] = [];
+    let waliRows: any[] = [];
+    let kelasRows: any[] = [];
+    let siswaRows: any[] = [];
+    let presensiRows: any[] = [];
+    let pelanggaranRows: any[] = [];
+    let homeVisitRows: any[] = [];
+
+    try {
+      db = await pool.getConnection();
+      [sekolahRows] = await db.execute(`SELECT * FROM sekolah_config LIMIT 5;`).catch(() => [[]]) as any;
+      [adminRows] = await db.execute(`SELECT * FROM admin_account LIMIT 5;`).catch(() => [[]]) as any;
+      [jurusanRows] = await db.execute(`SELECT * FROM jurusan;`).catch(() => [[]]) as any;
+      [waliRows] = await db.execute(`SELECT * FROM wali_kelas;`).catch(() => [[]]) as any;
+      [kelasRows] = await db.execute(`SELECT * FROM kelas;`).catch(() => [[]]) as any;
+      [siswaRows] = await db.execute(`SELECT * FROM siswa;`).catch(() => [[]]) as any;
+      [presensiRows] = await db.execute(`SELECT * FROM presensi;`).catch(() => [[]]) as any;
+      [pelanggaranRows] = await db.execute(`SELECT * FROM pelanggaran;`).catch(() => [[]]) as any;
+      [homeVisitRows] = await db.execute(`SELECT * FROM home_visit;`).catch(() => [[]]) as any;
+    } finally {
+      if (db) {
+        try { db.release(); } catch (e) {}
+      }
+    }
+
+    res.json({
+      success: true,
+      counts: {
+        sekolah: sekolahRows?.length || 0,
+        admin: adminRows?.length || 0,
+        jurusan: jurusanRows?.length || 0,
+        waliKelas: waliRows?.length || 0,
+        kelas: kelasRows?.length || 0,
+        siswa: siswaRows?.length || 0,
+        presensi: presensiRows?.length || 0,
+        pelanggaran: pelanggaranRows?.length || 0,
+        homeVisit: homeVisitRows?.length || 0,
+      },
+      samples: {
+        jurusan: jurusanRows || [],
+        waliKelas: waliRows || [],
+        kelas: kelasRows || [],
+        siswa: siswaRows || [],
+        pelanggaran: (pelanggaranRows || []).slice(0, 5),
+        homeVisit: (homeVisitRows || []).slice(0, 5),
+      },
+      message: "Preview database berhasil dimuat!"
+    });
+  } catch (error: any) {
+    const isLimit = isMySQLRateLimitError(error);
+    if (isLimit) {
+      setMySQLCooldown(error.message);
+    }
+    res.status(200).json({
+      success: false,
+      message: isLimit
+        ? "Batas koneksi per jam MySQL pada hosting Anda tercapai (max_connections_per_hour = 500). Silakan tunggu atau tingkatkan limit pada hosting Anda."
+        : error.message || "Gagal mengambil preview database dari MySQL."
+    });
+  }
+});
+
+// ==========================================
+// DEDICATED BACKUP, RESTORE & AUTO-SCHEDULER ENGINE
+// ==========================================
+
+const BACKUP_DIR = path.resolve(process.cwd(), "backups");
+const BACKUP_CONFIG_FILE = path.join(BACKUP_DIR, "backup-config.json");
+
+try {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+} catch (e) {}
+
+interface ServerBackupConfig {
+  autoBackupEnabled: boolean;
+  frequency: "daily" | "weekly" | "monthly" | "all";
+  dailyTime: string; // e.g. "23:00"
+  weeklyDay: number; // 0 = Minggu, 6 = Sabtu
+  weeklyTime: string; // e.g. "22:00"
+  monthlyDay: number; // 1 - 31
+  monthlyTime: string; // e.g. "23:00"
+  retentionDaily: number; // default 7
+  retentionWeekly: number; // default 4
+  retentionMonthly: number; // default 12
+  includePresensiOnlyInDaily?: boolean;
+  lastDailyBackup?: string;
+  lastWeeklyBackup?: string;
+  lastMonthlyBackup?: string;
+  lastManualBackup?: string;
+}
+
+const defaultBackupConfig: ServerBackupConfig = {
+  autoBackupEnabled: true,
+  frequency: "all",
+  dailyTime: "23:00",
+  weeklyDay: 6, // Sabtu
+  weeklyTime: "22:00",
+  monthlyDay: 1, // Tanggal 1 tiap bulan
+  monthlyTime: "23:00",
+  retentionDaily: 7,
+  retentionWeekly: 4,
+  retentionMonthly: 12,
+  includePresensiOnlyInDaily: false,
+};
+
+function loadServerBackupConfig(): ServerBackupConfig {
+  try {
+    if (fs.existsSync(BACKUP_CONFIG_FILE)) {
+      const raw = fs.readFileSync(BACKUP_CONFIG_FILE, "utf-8");
+      return { ...defaultBackupConfig, ...JSON.parse(raw) };
+    }
+  } catch (e) {}
+  return { ...defaultBackupConfig };
+}
+
+function saveServerBackupConfig(config: ServerBackupConfig) {
+  try {
+    fs.writeFileSync(BACKUP_CONFIG_FILE, JSON.stringify(config, null, 2));
+  } catch (e) {}
+}
+
+let activeBackupConfig: ServerBackupConfig = loadServerBackupConfig();
+
+// Helper to count presensi entries
+function countPresensiEntries(presensiMap: any): { datesCount: number; recordsCount: number } {
+  if (!presensiMap || typeof presensiMap !== "object") return { datesCount: 0, recordsCount: 0 };
+  const keys = Object.keys(presensiMap);
+  let recordsCount = 0;
+  for (const k of keys) {
+    if (Array.isArray(presensiMap[k])) {
+      recordsCount += presensiMap[k].length;
+    }
+  }
+  return { datesCount: keys.length, recordsCount };
+}
+
+// Prune snapshots by category retention limit
+function pruneSnapshotsByCategory() {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) return;
+    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith("SNAP_") && f.endsWith(".json"));
+
+    const grouped: Record<string, { filename: string; timestamp: number }[]> = {
+      daily: [],
+      weekly: [],
+      monthly: [],
+      manual: [],
+    };
+
+    for (const f of files) {
+      try {
+        const filePath = path.join(BACKUP_DIR, f);
+        const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+        const category = parsed?.metadata?.category || (f.includes("DAILY") ? "daily" : f.includes("WEEKLY") ? "weekly" : f.includes("MONTHLY") ? "monthly" : "manual");
+        const ts = parsed?.metadata?.timestamp || fs.statSync(filePath).mtimeMs;
+        if (!grouped[category]) grouped[category] = [];
+        grouped[category].push({ filename: f, timestamp: ts });
+      } catch (e) {}
+    }
+
+    const limits: Record<string, number> = {
+      daily: activeBackupConfig.retentionDaily || 7,
+      weekly: activeBackupConfig.retentionWeekly || 4,
+      monthly: activeBackupConfig.retentionMonthly || 12,
+      manual: 20,
+    };
+
+    for (const cat of Object.keys(grouped)) {
+      const list = grouped[cat];
+      list.sort((a, b) => b.timestamp - a.timestamp); // newest first
+      const maxLimit = limits[cat] || 10;
+      if (list.length > maxLimit) {
+        const toDelete = list.slice(maxLimit);
+        for (const item of toDelete) {
+          try {
+            fs.unlinkSync(path.join(BACKUP_DIR, item.filename));
+          } catch (e) {}
+        }
+      }
+    }
+  } catch (err) {}
+}
+
+// Core Engine to Create Snapshot
+function createServerSnapshot(category: "daily" | "weekly" | "monthly" | "manual", note?: string) {
+  const currentData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
+  const { dateStr, timeStr } = getIndonesianDateTime();
+  const timestamp = Date.now();
+  const snapshotId = `SNAP_${category.toUpperCase()}_${timestamp}`;
+
+  const defaultNote =
+    category === "daily"
+      ? `Cadangan Otomatis Harian (${dateStr})`
+      : category === "weekly"
+      ? `Cadangan Otomatis Mingguan (Minggu ke-${Math.ceil(new Date().getDate() / 7)}, ${dateStr})`
+      : category === "monthly"
+      ? `Cadangan Otomatis Bulanan (${dateStr.slice(0, 7)})`
+      : `Snapshot Manual (${dateStr} ${timeStr})`;
+
+  const finalNote = note?.trim() || defaultNote;
+
+  const snapshotMetadata = {
+    id: snapshotId,
+    timestamp,
+    createdAt: `${dateStr} ${timeStr}`,
+    category,
+    note: finalNote,
+    schoolName: currentData?.sekolah?.nama || "",
+    stats: {
+      totalSiswa: Array.isArray(currentData?.siswa) ? currentData.siswa.length : 0,
+      totalKelas: Array.isArray(currentData?.kelas) ? currentData.kelas.length : 0,
+      totalWaliKelas: Array.isArray(currentData?.waliKelas) ? currentData.waliKelas.length : 0,
+      ...countPresensiEntries(currentData?.presensi),
+    },
+  };
+
+  const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
+  const fullSnapshot = {
+    metadata: snapshotMetadata,
+    data: currentData,
+  };
+
+  fs.writeFileSync(snapshotFile, JSON.stringify(fullSnapshot, null, 2));
+
+  // Update timestamps
+  if (category === "daily") activeBackupConfig.lastDailyBackup = `${dateStr} ${timeStr}`;
+  if (category === "weekly") activeBackupConfig.lastWeeklyBackup = `${dateStr} ${timeStr}`;
+  if (category === "monthly") activeBackupConfig.lastMonthlyBackup = `${dateStr} ${timeStr}`;
+  if (category === "manual") activeBackupConfig.lastManualBackup = `${dateStr} ${timeStr}`;
+
+  saveServerBackupConfig(activeBackupConfig);
+  pruneSnapshotsByCategory();
+
+  return snapshotMetadata;
+}
+
+// Background Cron-like Runner for Automatic Backups (Every 60s)
+setInterval(() => {
+  if (!activeBackupConfig.autoBackupEnabled) return;
+
+  try {
+    const now = new Date();
+    // Use Indonesian UTC+7 time calculation
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const indoTime = new Date(utc + 7 * 3600000);
+
+    const year = indoTime.getFullYear();
+    const month = String(indoTime.getMonth() + 1).padStart(2, "0");
+    const date = String(indoTime.getDate()).padStart(2, "0");
+    const dayOfWeek = indoTime.getDay(); // 0 = Sunday, 6 = Saturday
+
+    const hours = String(indoTime.getHours()).padStart(2, "0");
+    const minutes = String(indoTime.getMinutes()).padStart(2, "0");
+    const currentHHMM = `${hours}:${minutes}`;
+    const todayYMD = `${year}-${month}-${date}`;
+    const thisMonthYM = `${year}-${month}`;
+
+    // 1. Daily Auto-Backup Check
+    if (activeBackupConfig.dailyTime === currentHHMM) {
+      const lastDaily = activeBackupConfig.lastDailyBackup || "";
+      if (!lastDaily.startsWith(todayYMD)) {
+        createServerSnapshot("daily");
+        console.log(`[AUTO-BACKUP] Daily snapshot created for ${todayYMD} at ${currentHHMM}`);
+      }
+    }
+
+    // 2. Weekly Auto-Backup Check
+    if (dayOfWeek === activeBackupConfig.weeklyDay && activeBackupConfig.weeklyTime === currentHHMM) {
+      const lastWeekly = activeBackupConfig.lastWeeklyBackup || "";
+      if (!lastWeekly.startsWith(todayYMD)) {
+        createServerSnapshot("weekly");
+        console.log(`[AUTO-BACKUP] Weekly snapshot created for day ${dayOfWeek} at ${currentHHMM}`);
+      }
+    }
+
+    // 3. Monthly Auto-Backup Check
+    if (Number(date) === activeBackupConfig.monthlyDay && activeBackupConfig.monthlyTime === currentHHMM) {
+      const lastMonthly = activeBackupConfig.lastMonthlyBackup || "";
+      if (!lastMonthly.startsWith(thisMonthYM)) {
+        createServerSnapshot("monthly");
+        console.log(`[AUTO-BACKUP] Monthly snapshot created for month ${thisMonthYM} at ${currentHHMM}`);
+      }
+    }
+  } catch (err) {
+    console.error("[AUTO-BACKUP] Error running scheduled backup timer:", err);
+  }
+}, 60000);
+
+// ==========================================
+// BACKUP API ENDPOINTS
+// ==========================================
+
+// 1. Get Auto-Backup Schedule Config
+app.get("/api/backup/schedule-config", (req, res) => {
+  res.json({
+    success: true,
+    config: activeBackupConfig,
+  });
+});
+
+// 2. Update Auto-Backup Schedule Config
+app.post("/api/backup/schedule-config", (req, res) => {
+  try {
+    const newConfig = { ...activeBackupConfig, ...(req.body || {}) };
+    activeBackupConfig = newConfig;
+    saveServerBackupConfig(newConfig);
+
+    // Sync to in-memory AppData if present
+    if (inMemoryAppDataCache) {
+      inMemoryAppDataCache.backupConfig = newConfig;
+      saveAppDataCache(inMemoryAppDataCache);
+    }
+
+    res.json({
+      success: true,
+      message: "Konfigurasi jadwal backup otomatis berhasil disimpan!",
+      config: activeBackupConfig,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `Gagal menyimpan konfigurasi: ${err.message}` });
+  }
+});
+
+// 3. Trigger Immediate Manual Run of Daily / Weekly / Monthly Cycle
+app.post("/api/backup/trigger-cycle", (req, res) => {
+  try {
+    const { category = "daily", note } = req.body;
+    if (!["daily", "weekly", "monthly", "manual"].includes(category)) {
+      return res.status(400).json({ success: false, message: "Kategori siklus backup tidak valid." });
+    }
+
+    const snapshot = createServerSnapshot(category as any, note);
+    res.json({
+      success: true,
+      message: `Proses pencadangan [${category.toUpperCase()}] berhasil dieksekusi!`,
+      snapshot,
+      config: activeBackupConfig,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `Gagal menjalankan pencadangan: ${err.message}` });
+  }
+});
+
+// 4. Export / Download System Backup (Full, Daily, Weekly, Monthly, Master, Presensi)
+app.get("/api/backup/export", (req, res) => {
+  const currentData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
+  const backupType = (req.query.type as string) || "full"; // 'full' | 'daily' | 'weekly' | 'monthly' | 'presensi_only' | 'master_only'
+  const isDownload = req.query.download === "true";
+
+  const { dateStr, timeStr } = getIndonesianDateTime();
+  const schoolName = currentData?.sekolah?.nama || "Presensi_Sekolah";
+  const cleanSchoolName = schoolName.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  let payload: any = {
+    _backupMetadata: {
+      system: "Sistem Presensi Siswa",
+      version: "3.5",
+      type: backupType,
+      exportedAt: `${dateStr} ${timeStr}`,
+      timestamp: Date.now(),
+      schoolName: currentData?.sekolah?.nama || "",
+      stats: {
+        totalSiswa: Array.isArray(currentData?.siswa) ? currentData.siswa.length : 0,
+        totalKelas: Array.isArray(currentData?.kelas) ? currentData.kelas.length : 0,
+        totalJurusan: Array.isArray(currentData?.jurusan) ? currentData.jurusan.length : 0,
+        totalWaliKelas: Array.isArray(currentData?.waliKelas) ? currentData.waliKelas.length : 0,
+        totalPelanggaran: Array.isArray(currentData?.pelanggaran) ? currentData.pelanggaran.length : 0,
+        totalHomeVisits: Array.isArray(currentData?.homeVisits) ? currentData.homeVisits.length : 0,
+        ...countPresensiEntries(currentData?.presensi),
+      },
+    },
+  };
+
+  if (backupType === "daily") {
+    // Filter presensi to only today and yesterday
+    const presensiFiltered: any = {};
+    const allPresensi = currentData.presensi || {};
+    const todayKey = dateStr;
+    if (allPresensi[todayKey]) presensiFiltered[todayKey] = allPresensi[todayKey];
+    payload = {
+      ...payload,
+      ...currentData,
+      presensi: presensiFiltered,
+    };
+  } else if (backupType === "weekly") {
+    // Filter presensi to last 7 days
+    const presensiFiltered: any = {};
+    const allPresensi = currentData.presensi || {};
+    const dates = Object.keys(allPresensi).sort().slice(-7);
+    for (const d of dates) {
+      presensiFiltered[d] = allPresensi[d];
+    }
+    payload = {
+      ...payload,
+      ...currentData,
+      presensi: presensiFiltered,
+    };
+  } else if (backupType === "monthly") {
+    // Filter presensi to last 30 days
+    const presensiFiltered: any = {};
+    const allPresensi = currentData.presensi || {};
+    const dates = Object.keys(allPresensi).sort().slice(-31);
+    for (const d of dates) {
+      presensiFiltered[d] = allPresensi[d];
+    }
+    payload = {
+      ...payload,
+      ...currentData,
+      presensi: presensiFiltered,
+    };
+  } else if (backupType === "presensi_only") {
+    payload.presensi = currentData.presensi || {};
+    payload.siswa = (currentData.siswa || []).map((s: any) => ({ id: s.id, nisn: s.nisn, nama: s.nama, kelasId: s.kelasId }));
+    payload.kelas = currentData.kelas || [];
+  } else if (backupType === "master_only") {
+    payload = {
+      ...payload,
+      sekolah: currentData.sekolah,
+      admin: currentData.admin,
+      jurusan: currentData.jurusan,
+      waliKelas: currentData.waliKelas,
+      kelas: currentData.kelas,
+      siswa: currentData.siswa,
+      shiftConfig: currentData.shiftConfig,
+      jadwalMengajar: currentData.jadwalMengajar,
+      violationTemplates: currentData.violationTemplates,
+    };
+  } else {
+    // Full system backup
+    payload = {
+      ...payload,
+      ...currentData,
+    };
+  }
+
+  const filename = `Backup_${cleanSchoolName}_${backupType}_${dateStr.replace(/-/g, "")}_${timeStr.replace(/:/g, "")}.bak`;
+
+  if (isDownload) {
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+  }
+
+  res.json({
+    success: true,
+    filename,
+    backupType,
+    data: payload,
+  });
+});
+
+// 5. Restore System Backup (Replace, Merge, or Presensi-Only)
+app.post("/api/backup/restore", async (req, res) => {
+  const { backupData, mode = "replace" } = req.body;
+  if (!backupData || typeof backupData !== "object") {
+    return res.status(400).json({ success: false, message: "Data backup tidak valid atau kosong." });
+  }
+
+  // Handle wrapped payloads (e.g. { data: ... } or { appData: ... } or raw AppData)
+  let incoming: any = backupData.data || backupData.appData || backupData;
+
+  // Basic validation check
+  const hasSchoolOrStudents = incoming.sekolah || Array.isArray(incoming.siswa) || Array.isArray(incoming.kelas) || (incoming.presensi && typeof incoming.presensi === "object");
+  if (!hasSchoolOrStudents) {
+    return res.status(400).json({
+      success: false,
+      message: "Format file cadangan tidak dikenali. File harus memiliki data sekolah, kelas, siswa, atau presensi.",
+    });
+  }
+
+  let baseData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
+  let targetData: any = {};
+
+  if (mode === "presensi_only") {
+    targetData = {
+      ...baseData,
+      presensi: sanitizeAndDeduplicatePresensiMap(incoming.presensi || {}),
+    };
+  } else if (mode === "merge") {
+    // Smart merge arrays by ID / NISN / Code
+    const mergeArrays = (arrBase: any[] = [], arrInc: any[] = [], idKey = "id") => {
+      const map = new Map<string, any>();
+      for (const item of (arrBase || [])) {
+        if (item && item[idKey]) map.set(String(item[idKey]), item);
+      }
+      for (const item of (arrInc || [])) {
+        if (item && item[idKey]) map.set(String(item[idKey]), { ...(map.get(String(item[idKey])) || {}), ...item });
+      }
+      return Array.from(map.values());
+    };
+
+    targetData = {
+      ...baseData,
+      sekolah: { ...(baseData.sekolah || {}), ...(incoming.sekolah || {}) },
+      admin: incoming.admin || baseData.admin,
+      jurusan: mergeArrays(baseData.jurusan, incoming.jurusan, "id"),
+      waliKelas: mergeArrays(baseData.waliKelas, incoming.waliKelas, "id"),
+      kelas: mergeArrays(baseData.kelas, incoming.kelas, "id"),
+      siswa: mergeArrays(baseData.siswa, incoming.siswa, "id"),
+      pelanggaran: mergeArrays(baseData.pelanggaran, incoming.pelanggaran, "id"),
+      homeVisits: mergeArrays(baseData.homeVisits, incoming.homeVisits, "id"),
+      violationTemplates: mergeArrays(baseData.violationTemplates, incoming.violationTemplates, "id"),
+      presensi: sanitizeAndDeduplicatePresensiMap({
+        ...(baseData.presensi || {}),
+        ...(incoming.presensi || {}),
+      }),
+      shiftConfig: incoming.shiftConfig || baseData.shiftConfig,
+      jadwalMengajar: incoming.jadwalMengajar || baseData.jadwalMengajar,
+      chatMessages: Array.isArray(incoming.chatMessages) ? incoming.chatMessages : baseData.chatMessages,
+      backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig,
+    };
+  } else {
+    // Full Replace
+    targetData = {
+      ...incoming,
+      sekolah: incoming.sekolah || baseData.sekolah,
+      admin: incoming.admin || baseData.admin,
+      jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : baseData.jurusan || [],
+      waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : baseData.waliKelas || [],
+      kelas: Array.isArray(incoming.kelas) ? incoming.kelas : baseData.kelas || [],
+      siswa: Array.isArray(incoming.siswa) ? incoming.siswa : baseData.siswa || [],
+      presensi: sanitizeAndDeduplicatePresensiMap(incoming.presensi || {}),
+      pelanggaran: Array.isArray(incoming.pelanggaran) ? incoming.pelanggaran : [],
+      homeVisits: Array.isArray(incoming.homeVisits) ? incoming.homeVisits : [],
+      violationTemplates: Array.isArray(incoming.violationTemplates) ? incoming.violationTemplates : (baseData.violationTemplates || []),
+      shiftConfig: incoming.shiftConfig || baseData.shiftConfig,
+      jadwalMengajar: incoming.jadwalMengajar || baseData.jadwalMengajar,
+      chatMessages: Array.isArray(incoming.chatMessages) ? incoming.chatMessages : (baseData.chatMessages || []),
+      auditLogs: Array.isArray(incoming.auditLogs) ? incoming.auditLogs : (baseData.auditLogs || []),
+      securityConfig: incoming.securityConfig || baseData.securityConfig,
+      backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig,
+    };
+  }
+
+  // Record audit log for restore action
+  const { dateStr, timeStr } = getIndonesianDateTime();
+  const restoreLog = {
+    id: `LOG_RESTORE_${Date.now()}`,
+    waktu: `${dateStr} ${timeStr}`,
+    role: "admin",
+    namaUser: "Administrator Utama",
+    aksi: `RESTORE_DATABASE: Pemulihan database sistem mode [${mode}] berhasil`,
+    ip: req.ip || "127.0.0.1",
+  };
+  if (!Array.isArray(targetData.auditLogs)) targetData.auditLogs = [];
+  targetData.auditLogs.unshift(restoreLog);
+
+  // Save to memory cache & trigger disk + MySQL persist
+  saveAppDataCache(targetData);
+  lastMySQLSyncTime = Date.now();
+  queueAppDataPersist({ immediateMySQL: true });
+
+  const presensiStats = countPresensiEntries(targetData.presensi);
+
+  res.json({
+    success: true,
+    message: `Database sistem berhasil dipulihkan dengan mode [${mode.toUpperCase()}]!`,
+    version: appDataVersion,
+    appData: targetData,
+    stats: {
+      totalSiswa: (targetData.siswa || []).length,
+      totalKelas: (targetData.kelas || []).length,
+      totalJurusan: (targetData.jurusan || []).length,
+      totalWaliKelas: (targetData.waliKelas || []).length,
+      totalPresensiHari: presensiStats.datesCount,
+      totalPresensiEntri: presensiStats.recordsCount,
+      totalPelanggaran: (targetData.pelanggaran || []).length,
+      totalHomeVisits: (targetData.homeVisits || []).length,
+    },
+  });
+});
+
+// 6. Create Server-Side Snapshot (Manual or Triggered)
+app.post("/api/backup/snapshot", (req, res) => {
+  try {
+    const { note, category = "manual" } = req.body;
+    const snapshotMetadata = createServerSnapshot(category, note);
+
+    res.json({
+      success: true,
+      message: `Snapshot cadangan server "${snapshotMetadata.note}" berhasil dibuat!`,
+      snapshot: snapshotMetadata,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `Gagal membuat snapshot server: ${err.message}` });
+  }
+});
+
+// 7. List Server-Side Snapshots
+app.get("/api/backup/snapshots", (req, res) => {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) {
+      return res.json({ success: true, snapshots: [] });
+    }
+
+    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith("SNAP_") && f.endsWith(".json"));
+    const snapshots: any[] = [];
+
+    for (const f of files) {
+      try {
+        const filePath = path.join(BACKUP_DIR, f);
+        const stat = fs.statSync(filePath);
+        const content = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(content);
+        const meta = parsed.metadata || {
+          id: f.replace(".json", ""),
+          createdAt: stat.mtime.toISOString(),
+          note: "Snapshot",
+          category: "manual",
+        };
+        meta.fileSize = `${Math.round(stat.size / 1024)} KB`;
+        if (!meta.category) {
+          meta.category = f.includes("DAILY") ? "daily" : f.includes("WEEKLY") ? "weekly" : f.includes("MONTHLY") ? "monthly" : "manual";
+        }
+        snapshots.push(meta);
+      } catch (e) {}
+    }
+
+    // Sort newest first
+    snapshots.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    res.json({
+      success: true,
+      snapshots,
+    });
+  } catch (err: any) {
+    res.json({ success: true, snapshots: [] });
+  }
+});
+
+// 8. Download a Server Snapshot File directly
+app.get("/api/backup/snapshot/:id/download", (req, res) => {
+  try {
+    const snapshotId = req.params.id;
+    const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
+    if (!fs.existsSync(snapshotFile)) {
+      return res.status(404).json({ success: false, message: "Berkas snapshot tidak ditemukan." });
+    }
+
+    res.setHeader("Content-Disposition", `attachment; filename="${snapshotId}.bak"`);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    fs.createReadStream(snapshotFile).pipe(res);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 9. Restore from Server Snapshot
+app.post("/api/backup/snapshot/restore", (req, res) => {
+  try {
+    const { snapshotId } = req.body;
+    if (!snapshotId) {
+      return res.status(400).json({ success: false, message: "ID Snapshot tidak valid." });
+    }
+
+    const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
+    if (!fs.existsSync(snapshotFile)) {
+      return res.status(404).json({ success: false, message: "Berkas snapshot server tidak ditemukan." });
+    }
+
+    const content = fs.readFileSync(snapshotFile, "utf-8");
+    const parsed = JSON.parse(content);
+    const restoredData = parsed.data || parsed;
+
+    saveAppDataCache(restoredData);
+    lastMySQLSyncTime = Date.now();
+    queueAppDataPersist({ immediateMySQL: true });
+
+    res.json({
+      success: true,
+      message: `Database berhasil dipulihkan dari snapshot server [${parsed.metadata?.note || snapshotId}]!`,
+      appData: restoredData,
+      version: appDataVersion,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: `Gagal memulihkan snapshot: ${err.message}` });
+  }
+});
+
+// 10. Delete Server Snapshot
+app.delete("/api/backup/snapshot/:id", (req, res) => {
+  try {
+    const snapshotId = req.params.id;
+    const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
+    if (fs.existsSync(snapshotFile)) {
+      fs.unlinkSync(snapshotFile);
+      return res.json({ success: true, message: "Snapshot server berhasil dihapus." });
+    }
+    res.status(404).json({ success: false, message: "Snapshot tidak ditemukan." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Vite middleware for development or static serving for production
+async function startServer() {
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+
+    app.get("*", async (req, res, next) => {
+      if (req.originalUrl.startsWith("/api/")) {
+        return next();
+      }
+      try {
+        let template = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf-8");
+        template = await vite.transformIndexHtml(req.originalUrl, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e: any) {
+        if (vite) {
+          vite.ssrFixStacktrace(e);
+        }
+        next(e);
+      }
+    });
+  } else {
+    const distPath = fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
+      ? path.join(process.cwd(), "dist")
+      : (fs.existsSync(path.join(__dirname, "index.html")) ? __dirname : path.join(process.cwd(), "dist"));
+    app.use(express.static(distPath));
+    app.get("*", (req, res, next) => {
+      if (req.originalUrl.startsWith("/api/")) {
+        return next();
+      }
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Application build in progress, please refresh in a few seconds.");
+      }
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();
