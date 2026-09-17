@@ -4,8 +4,6 @@ import {
   Search,
   PieChart,
   SlidersHorizontal,
-  QrCode,
-  ClipboardCheck,
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { sortKelasList } from '../../data/initialData';
@@ -21,6 +19,7 @@ import { KesiswaanDashboardView } from '../dashboard/KesiswaanDashboardView';
 import { WaliKelasDashboardView } from '../dashboard/WaliKelasDashboardView';
 import { GuruDashboardView } from '../dashboard/GuruDashboardView';
 import { KurikulumDashboardView } from '../dashboard/KurikulumDashboardView';
+import { StafJadwalDashboardView } from '../dashboard/StafJadwalDashboardView';
 
 interface DashboardViewProps {
   appData: AppData;
@@ -353,6 +352,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           />
         );
 
+      case 'staf_jadwal':
+        return (
+          <StafJadwalDashboardView
+            appData={appData}
+            currentUser={currentUser}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            onNavigateView={onNavigateView}
+          />
+        );
+
       case 'guru':
       default:
         return (
@@ -375,26 +385,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {renderRoleDashboard()}
-
-      {/* Floating Action Button for Mobile */}
-      <div className="fixed bottom-6 right-5 z-40 lg:hidden flex flex-col items-end gap-2.5">
-        {(currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'murid') && (
-          <button
-            onClick={() => onNavigateView('absen_qr')}
-            className="flex items-center gap-2 px-4 py-3 rounded-full bg-theme-primary text-white font-extrabold shadow-xl hover:bg-theme-primary-dark transition cursor-pointer"
-          >
-            <QrCode className="w-5 h-5" />
-            <span className="text-xs font-bold">Scan QR</span>
-          </button>
-        )}
-        <button
-          onClick={() => onNavigateToInput()}
-          className="flex items-center gap-2 px-4 py-3 rounded-full bg-amber-500 text-slate-950 font-extrabold shadow-xl hover:bg-amber-400 transition cursor-pointer"
-        >
-          <ClipboardCheck className="w-5 h-5 stroke-[2.5]" />
-          <span className="text-xs font-black">Input Presensi</span>
-        </button>
-      </div>
 
       {/* Customization Modal */}
       {isWidgetModalOpen && (

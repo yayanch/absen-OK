@@ -108,7 +108,7 @@ const STATUS_CONFIG: Array<{
   },
 ];
 
-export const StudentAttendanceRow: React.FC<StudentAttendanceRowProps> = ({
+export const StudentAttendanceRow: React.FC<StudentAttendanceRowProps> = React.memo(({
   index,
   siswa,
   currentStatus,
@@ -418,4 +418,4 @@ export const StudentAttendanceRow: React.FC<StudentAttendanceRowProps> = ({
       </div>
     </div>
   );
-};
+});

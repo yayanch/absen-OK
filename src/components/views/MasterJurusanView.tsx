@@ -27,7 +27,7 @@ export const MasterJurusanView: React.FC<MasterJurusanViewProps> = ({
   onShowToast,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<'kode' | 'nama' | 'jumlahKelas' | 'jumlahSiswa'>('kode');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');

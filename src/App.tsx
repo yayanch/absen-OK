@@ -56,10 +56,12 @@ const DatabaseTrafficView = React.lazy(() => import('./components/views/Database
 const CetakKartuQrView = React.lazy(() => import('./components/views/CetakKartuQrView').then(m => ({ default: m.CetakKartuQrView })));
 const LiveChatView = React.lazy(() => import('./components/views/LiveChatView').then(m => ({ default: m.LiveChatView })));
 import { LiveChatWidget } from './components/chat/LiveChatWidget';
-const OfflineView = React.lazy(() => import('./components/views/OfflineView').then(m => ({ default: m.OfflineView })));
+import { OfflineView } from './components/views/OfflineView';
 const PortalMuridView = React.lazy(() => import('./components/views/PortalMuridView').then(m => ({ default: m.PortalMuridView })));
 const JadwalShiftView = React.lazy(() => import('./components/views/JadwalShiftView').then(m => ({ default: m.JadwalShiftView })));
 const JadwalMengajarView = React.lazy(() => import('./components/views/JadwalMengajarView').then(m => ({ default: m.JadwalMengajarView })));
+const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
+const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
 const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
 const IntrusionDetectionView = React.lazy(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
 
@@ -220,9 +222,15 @@ export default function App() {
     const handleOnline = () => {
       setIsOnline(true);
       setIgnoreOffline(false);
+      if (appData.sekolah?.showOfflineToastWarning !== false) {
+        showToast('Koneksi internet kembali pulih. Sistem tersambung ke server.', 'info');
+      }
     };
     const handleOffline = () => {
       setIsOnline(false);
+      if (appData.sekolah?.showOfflineToastWarning !== false) {
+        showToast('Koneksi internet terputus. Sistem beralih ke mode offline lokal.', 'warning');
+      }
     };
 
     window.addEventListener('online', handleOnline);
@@ -232,7 +240,7 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [appData.sekolah?.showOfflineToastWarning]);
 
   // Global Realtime Sync with Server & MySQL for Dev and Preview links (with conditional 304 caching)
   const lastEtagRef = useRef<string>('');
@@ -293,9 +301,8 @@ export default function App() {
                 deletedPelanggaranIds: allDeletedPelanggaran,
                 deletedHomeVisitIds: allDeletedHomeVisits,
               };
-              const currentStr = JSON.stringify(prev);
               const newStr = JSON.stringify(targetAppData);
-              if (currentStr !== newStr) {
+              if (!prev || newStr.length !== JSON.stringify(prev).length || newStr !== JSON.stringify(prev)) {
                 try {
                   localStorage.setItem('presensi_app_data', newStr);
                 } catch (e) {}
@@ -378,7 +385,13 @@ export default function App() {
           setAppData((prev) => {
             const currentMsgs = prev.chatMessages || [];
             const merged = mergeChatMessages(currentMsgs, data.chatMessages);
-            if (JSON.stringify(currentMsgs) !== JSON.stringify(merged)) {
+            const isDifferent =
+              currentMsgs.length !== merged.length ||
+              (merged.length > 0 && (
+                currentMsgs[currentMsgs.length - 1]?.id !== merged[merged.length - 1]?.id ||
+                currentMsgs[currentMsgs.length - 1]?.status !== merged[merged.length - 1]?.status
+              ));
+            if (isDifferent) {
               return {
                 ...prev,
                 chatMessages: merged,
@@ -714,9 +727,9 @@ export default function App() {
   };
 
   // Login & Logout
-  const handleLogin = (session: UserSession) => {
+  const handleLogin = (session: UserSession, rememberMe: boolean = true) => {
     setCurrentUser(session);
-    saveSessionUser(session);
+    saveSessionUser(session, rememberMe);
     handleNavigate('dashboard', true);
   };
 
@@ -832,18 +845,28 @@ export default function App() {
     );
   }
 
-  // If offline and not ignored, show Offline page with description and troubleshooting
-  if (!isOnline && !ignoreOffline) {
+  // Offline mode evaluation
+  const offlineModeEnabled = appData.sekolah?.enableOfflineMode !== false;
+  const allowOfflineBypass = appData.sekolah?.allowOfflineBypass !== false;
+
+  // If offline and not ignored (or if offline mode is disabled entirely, block strictly)
+  if (!isOnline && (!offlineModeEnabled || !ignoreOffline)) {
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col justify-center">
         <OfflineView
+          isStrictBlocked={!offlineModeEnabled}
+          customMessage={appData.sekolah?.offlineNoticeMessage}
           onRetry={() => {
             if (navigator.onLine) {
               setIsOnline(true);
               setIgnoreOffline(false);
             }
           }}
-          onContinueOffline={() => setIgnoreOffline(true)}
+          onContinueOffline={
+            offlineModeEnabled && allowOfflineBypass
+              ? () => setIgnoreOffline(true)
+              : undefined
+          }
         />
         <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
@@ -868,53 +891,65 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors relative overflow-x-clip">
-      {/* Sidebar Container */}
-      <Sidebar
-        currentView={currentView}
-        currentUser={currentUser}
-        sekolah={appData.sekolah}
-        appData={appData}
-        isOpen={sidebarOpen}
-        enableLiveChat={appData.enableLiveChat ?? appData.sekolah?.enableLiveChat ?? true}
-        adminPassword={appData.admin?.password || 'admin123'}
-        onSwitchView={(v) => handleNavigate(v)}
-        onCloseMobile={() => setSidebarOpen(false)}
-        onRestoreDemo={handleRestoreDemoData}
-        onResetPresensi={handleResetPresensiData}
-        onResetAll={handleResetAllData}
-        onOpenBackupModal={handleOpenBackupModal}
-        onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
-      />
+  const isStudentRole = currentUser.role === 'murid' || currentUser.role === 'siswa';
+  const isStudentPortal = isStudentRole || currentView === 'portal_murid' || currentView === 'absen_qr' || currentView === 'kartu_pelajar' || currentView === 'rekap_siswa';
 
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        <Header
+  return (
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors relative">
+      {/* Sidebar Container - Hidden on mobile and for student accounts */}
+      <div className={isStudentPortal ? 'hidden' : ''}>
+        <Sidebar
+          currentView={currentView}
           currentUser={currentUser}
           sekolah={appData.sekolah}
           appData={appData}
-          isDarkMode={isDarkMode}
-          isOnline={isOnline}
-          isSidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
-          onLogout={handleLogout}
-          onToggleTheme={toggleTheme}
-          onSelectColorTheme={handleSelectColorTheme}
-          onNavigate={(v) => handleNavigate(v)}
+          isOpen={sidebarOpen}
+          enableLiveChat={appData.enableLiveChat ?? appData.sekolah?.enableLiveChat ?? true}
+          adminPassword={appData.admin?.password || 'admin123'}
+          onSwitchView={(v) => handleNavigate(v)}
+          onCloseMobile={() => setSidebarOpen(false)}
+          onRestoreDemo={handleRestoreDemoData}
+          onResetPresensi={handleResetPresensiData}
+          onResetAll={handleResetAllData}
+          onOpenBackupModal={handleOpenBackupModal}
           onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
-          saveStatus={saveStatus}
-          onOpenChat={() => setIsLiveChatOpen((prev) => !prev)}
-          unreadChatCount={unreadChatCount}
         />
+      </div>
 
-        <main className="flex-1 p-4 md:p-6 pb-2 md:pb-4">
+      {/* Main Area */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Header - Hidden for student accounts, Sticky on all other accounts */}
+        <div className={isStudentPortal ? 'hidden' : 'sticky top-0 z-30 w-full'}>
+          <Header
+            currentUser={currentUser}
+            sekolah={appData.sekolah}
+            appData={appData}
+            isDarkMode={isDarkMode}
+            isOnline={isOnline}
+            isSidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+            onLogout={handleLogout}
+            onToggleTheme={toggleTheme}
+            onSelectColorTheme={handleSelectColorTheme}
+            onNavigate={(v) => handleNavigate(v)}
+            onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
+            saveStatus={saveStatus}
+            onOpenChat={() => setIsLiveChatOpen((prev) => !prev)}
+            unreadChatCount={unreadChatCount}
+          />
+        </div>
+
+        <main
+          className={`flex-1 overflow-x-clip min-w-0 ${isStudentPortal ? 'student-portal-main !p-0 !pt-0 !px-0 !m-0 !mx-0 pb-16 sm:pb-12 w-full' : 'p-3 sm:p-5 md:p-6 pb-3 md:pb-6'}`}
+          style={isStudentPortal ? { paddingLeft: 0, paddingRight: 0, paddingTop: 0, marginLeft: 0, marginRight: 0, width: '100%' } : undefined}
+        >
           <motion.div
             key={currentView}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="w-full h-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="w-full h-full min-w-full"
+            style={isStudentPortal ? { paddingLeft: 0, paddingRight: 0, paddingTop: 0, marginLeft: 0, marginRight: 0, width: '100%' } : undefined}
           >
             <React.Suspense fallback={
               <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
@@ -928,7 +963,8 @@ export default function App() {
               currentView === 'portal_murid' ||
               currentView === 'absen_qr' ||
               currentView === 'kartu_pelajar' ||
-              currentView === 'rekap_siswa') ? (
+              currentView === 'rekap_siswa' ||
+              (currentUser.role === 'murid' && currentView === 'jadwal_mengajar')) ? (
               <PortalMuridView
                 appData={appData}
                 currentUser={currentUser}
@@ -939,6 +975,8 @@ export default function App() {
                     ? 'kartu_pelajar'
                     : currentView === 'rekap_siswa'
                     ? 'rekap_siswa'
+                    : currentView === 'jadwal_mengajar'
+                    ? 'jadwal_pelajaran'
                     : 'overview'
                 }
                 onUpdateAppData={handleUpdateAppData}
@@ -948,6 +986,7 @@ export default function App() {
                 }}
                 onShowToast={showToast}
                 onNavigate={(v) => handleNavigate(v)}
+                onLogout={handleLogout}
               />
             ) : (
               <>
@@ -978,6 +1017,7 @@ export default function App() {
                 appData={appData}
                 currentUser={currentUser}
                 initialKelasId={selectedInputKelasId}
+                readOnly={currentUser.role === 'guru' || currentUser.role === 'user'}
                 onSavePresensi={handleSavePresensiFromView}
                 onShowToast={showToast}
                 onConfirmModal={openConfirmModal}
@@ -1026,7 +1066,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_jurusan' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin') && (
+            {currentView === 'master_jurusan' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
               <MasterJurusanView
                 appData={appData}
                 readOnly={currentUser.role !== 'admin'}
@@ -1038,7 +1078,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_guru' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin') && (
+            {currentView === 'master_guru' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
               <MasterGuruView
                 appData={appData}
                 currentUser={currentUser}
@@ -1051,11 +1091,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_mapel' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin') && (
+            {currentView === 'master_mapel' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
               <MasterMataPelajaranView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={currentUser.role !== 'admin' && currentUser.role !== 'kurikulum'}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
@@ -1064,7 +1104,25 @@ export default function App() {
               />
             )}
 
-            {currentView === 'jadwal_mengajar' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali') && (
+            {currentView === 'mapel_kelas_guru' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
+              <GuruMapelKelasView
+                appData={appData}
+                currentUser={currentUser}
+                readOnly={false}
+                onUpdateAppData={handleUpdateAppData}
+                onOpenModal={openGeneralModal}
+                onCloseModal={closeGeneralModal}
+                onConfirmModal={openConfirmModal}
+                onShowToast={showToast}
+                onNavigateToInput={(kelasId) => {
+                  setSelectedInputKelasId(kelasId);
+                  handleNavigate('presensi_input');
+                }}
+                onNavigateView={handleNavigate}
+              />
+            )}
+
+            {currentView === 'jadwal_mengajar' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
               <JadwalMengajarView
                 appData={appData}
                 currentUser={currentUser}
@@ -1075,6 +1133,19 @@ export default function App() {
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
                 onNavigateView={handleNavigate}
+              />
+            )}
+
+            {currentView === 'jadwal_minggu_ini' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
+              <JadwalMengajarMingguIniView
+                appData={appData}
+                currentUser={currentUser}
+                onNavigateToInput={(kelasId) => {
+                  setSelectedInputKelasId(kelasId);
+                  handleNavigate('presensi_input');
+                }}
+                onNavigateView={handleNavigate}
+                onShowToast={showToast}
               />
             )}
 
@@ -1091,7 +1162,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_kelas' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin') && (
+            {currentView === 'master_kelas' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
               <MasterKelasView
                 appData={appData}
                 readOnly={currentUser.role !== 'admin'}
@@ -1103,7 +1174,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_siswa' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali') && (
+            {currentView === 'master_siswa' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
               <MasterSiswaView
                 appData={appData}
                 currentUser={currentUser}

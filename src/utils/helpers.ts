@@ -1074,6 +1074,7 @@ export function getShiftTimingForStudent(
 
 const LOCAL_STORAGE_KEY = 'presensi_app_data';
 const SESSION_STORAGE_KEY = 'presensi_session_user';
+const PERSISTENT_SESSION_KEY = 'presensi_persistent_user';
 
 export function loadAppData(): AppData {
   try {
@@ -1082,9 +1083,6 @@ export function loadAppData(): AppData {
       const parsed = JSON.parse(stored);
       const merged = { ...DEMO_DATASET, ...parsed };
       if (merged.sekolah) {
-        merged.sekolah.bgImage = '';
-        merged.sekolah.loginBgImage = '';
-        merged.sekolah.appMobileBgType = 'default';
         if (!merged.sekolah.nama || merged.sekolah.nama === 'Absensi Siswa') {
           merged.sekolah.nama = 'SMKN 6 Garut';
         }
@@ -1107,6 +1105,9 @@ export function loadAppData(): AppData {
         if (merged.shiftConfig.periods && Array.isArray(merged.shiftConfig.periods)) {
           merged.shiftConfig.periods = normalizeWeeklyShiftPeriods(merged.shiftConfig.periods);
         }
+        if (merged.shiftConfig.isJamMasukSiangActive === undefined || merged.shiftConfig.isJamMasukSiangActive === false) {
+          merged.shiftConfig.isJamMasukSiangActive = true;
+        }
       }
       if (!merged.securityConfig) {
         merged.securityConfig = DEFAULT_SECURITY_CONFIG;
@@ -1119,6 +1120,35 @@ export function loadAppData(): AppData {
       }
       if (!Array.isArray(merged.lockedAccounts)) {
         merged.lockedAccounts = [];
+      }
+      if (merged.jadwalMengajar && Array.isArray(merged.jadwalMengajar)) {
+        // Filter out legacy demo schedules (JADWAL_1 - JADWAL_10, JADWAL_S1 - JADWAL_S8, FALLBACK_*)
+        const DEMO_JADWAL_IDS = new Set([
+          'JADWAL_1', 'JADWAL_2', 'JADWAL_3', 'JADWAL_4', 'JADWAL_5',
+          'JADWAL_6', 'JADWAL_7', 'JADWAL_8', 'JADWAL_9', 'JADWAL_10',
+          'JADWAL_S1', 'JADWAL_S2', 'JADWAL_S3', 'JADWAL_S4', 'JADWAL_S5',
+          'JADWAL_S6', 'JADWAL_S7', 'JADWAL_S8'
+        ]);
+        merged.jadwalMengajar = merged.jadwalMengajar.filter((j: any) => {
+          if (!j || !j.id) return false;
+          const idStr = String(j.id);
+          if (DEMO_JADWAL_IDS.has(idStr)) return false;
+          if (idStr.startsWith('FALLBACK_')) return false;
+          return true;
+        });
+      } else {
+        merged.jadwalMengajar = [];
+      }
+
+      if (merged.presensiMengajarGuru && Array.isArray(merged.presensiMengajarGuru)) {
+        const DEMO_LOG_IDS = new Set(['LOG_GURU_1', 'LOG_GURU_2']);
+        merged.presensiMengajarGuru = merged.presensiMengajarGuru.filter((p: any) => {
+          if (!p || !p.id) return false;
+          if (DEMO_LOG_IDS.has(String(p.id))) return false;
+          return true;
+        });
+      } else {
+        merged.presensiMengajarGuru = [];
       }
       return merged;
     }
@@ -1335,9 +1365,15 @@ export async function compressBase64Image(
 
 export function loadSessionUser(): UserSession | null {
   try {
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
+    const sessionStored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (sessionStored) {
+      return JSON.parse(sessionStored);
+    }
+    const persistentStored = localStorage.getItem(PERSISTENT_SESSION_KEY);
+    if (persistentStored) {
+      const parsed = JSON.parse(persistentStored);
+      sessionStorage.setItem(SESSION_STORAGE_KEY, persistentStored);
+      return parsed;
     }
   } catch (e) {
     console.error('Failed to load session user', e);
@@ -1345,12 +1381,19 @@ export function loadSessionUser(): UserSession | null {
   return null;
 }
 
-export function saveSessionUser(session: UserSession | null): void {
+export function saveSessionUser(session: UserSession | null, rememberMe: boolean = true): void {
   try {
     if (session) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+      const jsonStr = JSON.stringify(session);
+      sessionStorage.setItem(SESSION_STORAGE_KEY, jsonStr);
+      if (rememberMe) {
+        localStorage.setItem(PERSISTENT_SESSION_KEY, jsonStr);
+      } else {
+        localStorage.removeItem(PERSISTENT_SESSION_KEY);
+      }
     } else {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      localStorage.removeItem(PERSISTENT_SESSION_KEY);
     }
   } catch (e) {
     console.error('Failed to save session user', e);
@@ -1638,5 +1681,239 @@ export function cleanMapelName(name?: string | null): string {
   cleaned = cleaned.replace(/^\s*(?:MP|Mapel|KD|CP|Elemen)[\w\s\-_./]*[:\-–]\s*/i, '');
   return cleaned.trim();
 }
+
+/**
+ * Ekstraksi tingkat kelas ('X', 'XI', 'XII', atau 'LAIN') secara presisi
+ * Mengakomodasi format Romawi (X, XI, XII), Angka (10, 11, 12), serta berbagai variasi penulisan sekolah.
+ */
+export function extractKelasTingkat(namaKelas?: string): 'X' | 'XI' | 'XII' | 'LAIN' {
+  if (!namaKelas || typeof namaKelas !== 'string') return 'LAIN';
+  const raw = namaKelas.trim();
+  if (!raw) return 'LAIN';
+
+  // Hapus awalan umum seperti "ROMBEL", "KELAS", "TINGKAT", "KLS", "RUANG"
+  const clean = raw
+    .toUpperCase()
+    .replace(/^(?:ROMBONGAN\s*BELAJAR|ROMBEL|KELAS|TINGKAT|KLS|RUANG)\s*[:.\-_/]?\s*/i, '')
+    .trim();
+
+  // Pola 1: Tingkat XII / 12 di awal nama kelas (diuji sebelum XI dan X agar tidak tertimpa)
+  // Contoh: XII RPL 1, XII-1, XII.A, XII/TKJ, 12 RPL 1, 12-1, 12.1, 12A, 12_TKJ
+  if (
+    /^(?:XII)(?:[\s.\-_/()]+|[A-Z0-9]|$)/i.test(clean) ||
+    /^(?:12)(?:[\s.\-_/()]+|[A-Z]|$)/i.test(clean) ||
+    clean === 'XII' ||
+    clean === '12'
+  ) {
+    return 'XII';
+  }
+
+  // Pola 2: Tingkat XI / 11 di awal nama kelas (diuji sebelum X)
+  // Contoh: XI RPL 1, XI-1, XI.A, XI/TKJ, 11 RPL 1, 11-1, 11.1, 11A, 11_TKJ
+  if (
+    /^(?:XI)(?:[\s.\-_/()]+|[A-Z0-9]|$)/i.test(clean) ||
+    /^(?:11)(?:[\s.\-_/()]+|[A-Z]|$)/i.test(clean) ||
+    clean === 'XI' ||
+    clean === '11'
+  ) {
+    return 'XI';
+  }
+
+  // Pola 3: Tingkat X / 10 di awal nama kelas
+  // Contoh: X RPL 1, X-1, X.A, X/TKJ, 10 RPL 1, 10-1, 10.1, 10A, 10_TKJ
+  if (
+    /^(?:X)(?:[\s.\-_/()]+|[A-Z0-9]|$)/i.test(clean) ||
+    /^(?:10)(?:[\s.\-_/()]+|[A-Z]|$)/i.test(clean) ||
+    clean === 'X' ||
+    clean === '10'
+  ) {
+    return 'X';
+  }
+
+  // Fallback Pola 4: Cek token kata terpisah di seluruh nama (misal: "RPL XII A", "TKJ 12 1")
+  const tokens = clean.split(/[\s.\-_/()]+/);
+  if (tokens.includes('XII') || tokens.includes('12')) return 'XII';
+  if (tokens.includes('XI') || tokens.includes('11')) return 'XI';
+  if (tokens.includes('X') || tokens.includes('10')) return 'X';
+
+  return 'LAIN';
+}
+
+/**
+ * Menentukan pembagian kelompok shift untuk kelas secara akurat:
+ * - Kelompok 1: Kelas X & XI (dan kelas tingkat X/XI/LAIN)
+ * - Kelompok 2: Kelas XII
+ */
+export function determineKelasKelompok(namaKelas?: string): 1 | 2 {
+  const tingkat = extractKelasTingkat(namaKelas);
+  if (tingkat === 'XII') {
+    return 2; // Kelompok 2: Kelas XII
+  }
+  return 1; // Kelompok 1: Kelas X & XI
+}
+
+/**
+ * Waktu Jam Pelajaran Standar:
+ * - Shift Pagi: Mulai 06:30, 1 JP = 30 Menit, Istirahat 08:30 - 09:00 (setelah Jam 4)
+ * - Shift Siang: Mulai 13:00, 1 JP = 20 Menit, Istirahat 15:00 - 15:30 (setelah Jam 6)
+ */
+export const JAM_TIMES_PAGI: Record<number, string> = {
+  1: '06.30 - 07.00',
+  2: '07.00 - 07.30',
+  3: '07.30 - 08.00',
+  4: '08.00 - 08.30',
+  5: '09.00 - 09.30',
+  6: '09.30 - 10.00',
+  7: '10.00 - 10.30',
+  8: '10.30 - 11.00',
+  9: '11.00 - 11.30',
+  10: '11.30 - 12.00',
+};
+
+export const JAM_TIMES_SIANG: Record<number, string> = {
+  1: '13.00 - 13.20',
+  2: '13.20 - 13.40',
+  3: '13.40 - 14.00',
+  4: '14.00 - 14.20',
+  5: '14.20 - 14.40',
+  6: '14.40 - 15.00',
+  7: '15.30 - 15.50',
+  8: '15.50 - 16.10',
+  9: '16.10 - 16.30',
+  10: '16.30 - 16.50',
+};
+
+export const ISTIRAHAT_PAGI = {
+  label: 'Istirahat Pagi',
+  range: '08.30 - 09.00',
+  durasiMenit: 30,
+  setelahJam: 4,
+};
+
+export const ISTIRAHAT_SIANG = {
+  label: 'Istirahat Siang',
+  range: '15.00 - 15.30',
+  durasiMenit: 30,
+  setelahJam: 6,
+};
+
+export interface LiveJamStatus {
+  detectedJam: number | null;
+  detectedShift: 'Pagi' | 'Siang' | 'Di luar KBM';
+  isIstirahat: boolean;
+  istirahatShift?: 'Pagi' | 'Siang';
+  statusLabel: string;
+  timeString: string;
+  dateString: string;
+}
+
+export function calculateLiveJamStatus(now: Date = new Date()): LiveJamStatus {
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+
+  let detectedJam: number | null = null;
+  let detectedShift: 'Pagi' | 'Siang' | 'Di luar KBM' = 'Di luar KBM';
+  let isIstirahat = false;
+  let istirahatShift: 'Pagi' | 'Siang' | undefined = undefined;
+  let statusLabel = 'Di luar Jam KBM';
+
+  // Shift Pagi (06:30 - 12:00 -> 390 - 720)
+  if (totalMinutes >= 390 && totalMinutes < 720) {
+    detectedShift = 'Pagi';
+    if (totalMinutes >= 390 && totalMinutes < 420) {
+      detectedJam = 1;
+      statusLabel = 'Jam ke-1 (06.30 - 07.00)';
+    } else if (totalMinutes >= 420 && totalMinutes < 450) {
+      detectedJam = 2;
+      statusLabel = 'Jam ke-2 (07.00 - 07.30)';
+    } else if (totalMinutes >= 450 && totalMinutes < 480) {
+      detectedJam = 3;
+      statusLabel = 'Jam ke-3 (07.30 - 08.00)';
+    } else if (totalMinutes >= 480 && totalMinutes < 510) {
+      detectedJam = 4;
+      statusLabel = 'Jam ke-4 (08.00 - 08.30)';
+    } else if (totalMinutes >= 510 && totalMinutes < 540) {
+      isIstirahat = true;
+      istirahatShift = 'Pagi';
+      statusLabel = '☕ Istirahat Pagi (08.30 - 09.00)';
+    } else if (totalMinutes >= 540 && totalMinutes < 570) {
+      detectedJam = 5;
+      statusLabel = 'Jam ke-5 (09.00 - 09.30)';
+    } else if (totalMinutes >= 570 && totalMinutes < 600) {
+      detectedJam = 6;
+      statusLabel = 'Jam ke-6 (09.30 - 10.00)';
+    } else if (totalMinutes >= 600 && totalMinutes < 630) {
+      detectedJam = 7;
+      statusLabel = 'Jam ke-7 (10.00 - 10.30)';
+    } else if (totalMinutes >= 630 && totalMinutes < 660) {
+      detectedJam = 8;
+      statusLabel = 'Jam ke-8 (10.30 - 11.00)';
+    } else if (totalMinutes >= 660 && totalMinutes < 690) {
+      detectedJam = 9;
+      statusLabel = 'Jam ke-9 (11.00 - 11.30)';
+    } else if (totalMinutes >= 690 && totalMinutes < 720) {
+      detectedJam = 10;
+      statusLabel = 'Jam ke-10 (11.30 - 12.00)';
+    }
+  }
+  // Shift Siang (13:00 - 16:50 -> 780 - 1010)
+  else if (totalMinutes >= 780 && totalMinutes < 1010) {
+    detectedShift = 'Siang';
+    if (totalMinutes >= 780 && totalMinutes < 800) {
+      detectedJam = 1;
+      statusLabel = 'Jam ke-1 (13.00 - 13.20)';
+    } else if (totalMinutes >= 800 && totalMinutes < 820) {
+      detectedJam = 2;
+      statusLabel = 'Jam ke-2 (13.20 - 13.40)';
+    } else if (totalMinutes >= 820 && totalMinutes < 840) {
+      detectedJam = 3;
+      statusLabel = 'Jam ke-3 (13.40 - 14.00)';
+    } else if (totalMinutes >= 840 && totalMinutes < 860) {
+      detectedJam = 4;
+      statusLabel = 'Jam ke-4 (14.00 - 14.20)';
+    } else if (totalMinutes >= 860 && totalMinutes < 880) {
+      detectedJam = 5;
+      statusLabel = 'Jam ke-5 (14.20 - 14.40)';
+    } else if (totalMinutes >= 880 && totalMinutes < 900) {
+      detectedJam = 6;
+      statusLabel = 'Jam ke-6 (14.40 - 15.00)';
+    } else if (totalMinutes >= 900 && totalMinutes < 930) {
+      isIstirahat = true;
+      istirahatShift = 'Siang';
+      statusLabel = '☕ Istirahat Siang (15.00 - 15.30)';
+    } else if (totalMinutes >= 930 && totalMinutes < 950) {
+      detectedJam = 7;
+      statusLabel = 'Jam ke-7 (15.30 - 15.50)';
+    } else if (totalMinutes >= 950 && totalMinutes < 970) {
+      detectedJam = 8;
+      statusLabel = 'Jam ke-8 (15.50 - 16.10)';
+    } else if (totalMinutes >= 970 && totalMinutes < 990) {
+      detectedJam = 9;
+      statusLabel = 'Jam ke-9 (16.10 - 16.30)';
+    } else if (totalMinutes >= 990 && totalMinutes < 1010) {
+      detectedJam = 10;
+      statusLabel = 'Jam ke-10 (16.30 - 16.50)';
+    }
+  } else if (totalMinutes >= 720 && totalMinutes < 780) {
+    detectedShift = 'Di luar KBM';
+    statusLabel = 'Jeda Transisi Shift (12.00 - 13.00)';
+  } else {
+    detectedShift = 'Di luar KBM';
+    statusLabel = 'Di luar Jam KBM Sekolah';
+  }
+
+  return {
+    detectedJam,
+    detectedShift,
+    isIstirahat,
+    istirahatShift,
+    statusLabel,
+    timeString: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    dateString: formatDateIndo(getTodayString()),
+  };
+}
+
+
 
 

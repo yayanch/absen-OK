@@ -128,11 +128,9 @@ export const inspectInputPayload = (input: string): PayloadInspectionResult => {
 
   const lower = input.toLowerCase();
 
-  // 1. SQL Injection Signatures
+  // 1. SQL Injection Signatures (Targeted exploit patterns, avoid matching single characters)
   const sqliPatterns = [
-    /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,
-    /((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;))/i,
-    /\w*((\%27)|(\'))(\s)*((\%6F)|o|(\%4F))((\%72)|r|(\%52))/i,
+    /(\%27)|(\')\s*(or|and)\s*[\'\d]/i,
     /union(\s)+select/i,
     /insert(\s)+into/i,
     /drop(\s)+table/i,
@@ -143,6 +141,7 @@ export const inspectInputPayload = (input: string): PayloadInspectionResult => {
     /or\s+1\s*=\s*1/i,
     /'\s*or\s*'[^']*'\s*=\s*'[^']*/i,
     /admin'--/i,
+    /--\s*$/m,
   ];
 
   for (const pattern of sqliPatterns) {

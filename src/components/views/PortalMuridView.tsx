@@ -39,19 +39,32 @@ import {
   CalendarCheck,
   Home,
   Printer,
-  ShieldAlert
+  ShieldAlert,
+  LogOut,
+  Megaphone,
+  X,
+  ExternalLink,
+  BookOpen,
+  CalendarDays,
+  Search,
+  ArrowLeft,
+  Sun,
+  Sunset
 } from 'lucide-react';
-import { AppData, SekolahConfig, Siswa, UserSession, SiswaPresensiItem, ViewType, PresensiStatus } from '../../types';
+import { AppData, SekolahConfig, Siswa, UserSession, SiswaPresensiItem, ViewType, PresensiStatus, PengumumanSekolah, JadwalMengajarGuru } from '../../types';
+import { INITIAL_PENGUMUMAN } from '../../data/initialData';
+import { CurrentWeeklyShiftCard } from '../dashboard/CurrentWeeklyShiftCard';
 import { getTodayString, compressBase64Image, saveSessionUser, normalizePresensiStatus, determinePresensiStatusByTime, getShiftTimingForStudent, formatDateIndo, getEffectiveSchoolDays } from '../../utils/helpers';
 
 interface PortalMuridViewProps {
   appData: AppData;
   currentUser: UserSession;
-  activeTab?: 'overview' | 'absen_qr' | 'kartu_pelajar' | 'rekap_siswa' | 'home_visit' | 'pelanggaran' | 'profil';
+  activeTab?: 'overview' | 'absen_qr' | 'kartu_pelajar' | 'rekap_siswa' | 'home_visit' | 'pelanggaran' | 'profil' | 'jadwal_pelajaran';
   onUpdateAppData: (updated: AppData) => void;
   onUpdateCurrentUser?: (session: UserSession) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onNavigate?: (view: ViewType) => void;
+  onLogout?: () => void;
 }
 
 export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
@@ -62,12 +75,16 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
   onUpdateCurrentUser,
   onShowToast,
   onNavigate,
+  onLogout,
 }) => {
   const sessionSiswa = currentUser.data as Siswa;
   const siswaFromApp = (appData.siswa || []).find((s) => s.id === sessionSiswa?.id);
   const siswa = siswaFromApp || sessionSiswa;
   const today = getTodayString();
-  const [currentSubTab, setCurrentSubTab] = useState<'overview' | 'absen_qr' | 'kartu_pelajar' | 'rekap_siswa' | 'home_visit' | 'pelanggaran' | 'profil'>(
+  const currentStudentTiming = React.useMemo(() => {
+    return getShiftTimingForStudent(appData, siswa, today);
+  }, [appData, siswa, today]);
+  const [currentSubTab, setCurrentSubTab] = useState<'overview' | 'absen_qr' | 'kartu_pelajar' | 'rekap_siswa' | 'home_visit' | 'pelanggaran' | 'profil' | 'jadwal_pelajaran'>(
     activeTab
   );
 
@@ -123,6 +140,120 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
     notifWaUrl?: string | null;
     isPulang?: boolean;
   } | null>(null);
+
+  // Announcements State & Filtering
+  const [showAllPengumumanModal, setShowAllPengumumanModal] = useState(false);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [notifDropdownFilter, setNotifDropdownFilter] = useState<'semua' | 'unread'>('semua');
+  const [selectedPengumuman, setSelectedPengumuman] = useState<PengumumanSekolah | null>(null);
+  const [announcementCategoryFilter, setAnnouncementCategoryFilter] = useState<'semua' | 'penting' | 'kegiatan' | 'info' | 'peringatan'>('semua');
+
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`read_announcements_${siswa?.id || 'default'}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const studentAnnouncements = useMemo(() => {
+    const rawList = appData.pengumuman && appData.pengumuman.length > 0 
+      ? appData.pengumuman 
+      : INITIAL_PENGUMUMAN;
+    
+    return rawList.filter((p) => p.aktif && (p.target === 'semua' || p.target === 'siswa'));
+  }, [appData.pengumuman]);
+
+  const filteredStudentAnnouncements = useMemo(() => {
+    if (announcementCategoryFilter === 'semua') return studentAnnouncements;
+    return studentAnnouncements.filter((p) => p.kategori === announcementCategoryFilter);
+  }, [studentAnnouncements, announcementCategoryFilter]);
+
+  const dropdownAnnouncements = useMemo(() => {
+    if (notifDropdownFilter === 'unread') {
+      return studentAnnouncements.filter((p) => !readAnnouncementIds.includes(p.id));
+    }
+    return studentAnnouncements;
+  }, [studentAnnouncements, notifDropdownFilter, readAnnouncementIds]);
+
+  const unreadAnnouncementsCount = useMemo(() => {
+    return studentAnnouncements.filter((p) => !readAnnouncementIds.includes(p.id)).length;
+  }, [studentAnnouncements, readAnnouncementIds]);
+
+  const handleMarkAllAsRead = () => {
+    const allIds = studentAnnouncements.map((p) => p.id);
+    const updated = Array.from(new Set([...readAnnouncementIds, ...allIds]));
+    setReadAnnouncementIds(updated);
+    try {
+      localStorage.setItem(`read_announcements_${siswa?.id || 'default'}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSelectNotifItem = (item: PengumumanSekolah) => {
+    if (!readAnnouncementIds.includes(item.id)) {
+      const updated = [...readAnnouncementIds, item.id];
+      setReadAnnouncementIds(updated);
+      try {
+        localStorage.setItem(`read_announcements_${siswa?.id || 'default'}`, JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setSelectedPengumuman(item);
+    setShowNotifDropdown(false);
+  };
+
+  const getRelativeTimeDisplay = (item: PengumumanSekolah) => {
+    if (!item) return '';
+    const now = new Date();
+    
+    if (item.createdAt) {
+      const createdDate = new Date(item.createdAt);
+      if (!isNaN(createdDate.getTime())) {
+        const diffMs = now.getTime() - createdDate.getTime();
+        if (diffMs >= 0) {
+          const diffMinutes = Math.floor(diffMs / (1000 * 60));
+          const diffHours = Math.floor(diffMinutes / 60);
+          const diffDays = Math.floor(diffHours / 24);
+
+          if (diffMinutes < 5) return 'Baru saja';
+          if (diffMinutes < 60) return `${diffMinutes} menit lalu`;
+          if (diffHours < 24) return `${diffHours} jam lalu`;
+          if (diffDays === 1) return 'Kemarin';
+          if (diffDays < 7) return `${diffDays} hari lalu`;
+        }
+      }
+    }
+
+    if (item.tanggal) {
+      return formatDateIndo(item.tanggal);
+    }
+
+    return 'Baru saja';
+  };
+
+  // Jadwal Pelajaran State & Computation
+  const activeWeeklyShift: 'pagi' | 'siang' = currentStudentTiming.shiftType === 'siang' ? 'siang' : 'pagi';
+  const [selectedShiftView, setSelectedShiftView] = useState<'pagi' | 'siang'>(activeWeeklyShift);
+  const [selectedHariJadwal, setSelectedHariJadwal] = useState<string>('Hari Ini');
+  const [searchJadwal, setSearchJadwal] = useState<string>('');
+
+  useEffect(() => {
+    setSelectedShiftView(activeWeeklyShift);
+  }, [activeWeeklyShift]);
+
+  const todayDayName = useMemo(() => {
+    try {
+      const d = new Date(today + 'T00:00:00');
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      return days[d.getDay()] || 'Senin';
+    } catch {
+      return 'Senin';
+    }
+  }, [today]);
 
   const playSuccessBeep = () => {
     try {
@@ -243,6 +374,77 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
   const waliKelas = (appData.waliKelas || []).find((w) => w.id === kelas?.waliKelasId);
   const sekolah: Partial<SekolahConfig> = appData.sekolah || {};
 
+  // Schedule for student's class, strictly filtered by selected shift view
+  const studentJadwalList: JadwalMengajarGuru[] = useMemo(() => {
+    const rawList = appData.jadwalMengajar || [];
+    const studentKelasNama = (kelas?.nama || (siswa as any).kelas || '').trim().toLowerCase();
+    const studentKelasId = (siswa.kelasId || kelas?.id || '').trim();
+
+    // 1. Filter by class ID or name
+    const classMatched = rawList.filter((j) => {
+      const matchId = Boolean(studentKelasId && j.kelasId && j.kelasId === studentKelasId);
+      const matchName = Boolean(
+        studentKelasNama && j.kelasNama && j.kelasNama.trim().toLowerCase() === studentKelasNama
+      );
+      return matchId || matchName;
+    });
+
+    // 2. Filter strictly by the chosen shift ('pagi' | 'siang')
+    return classMatched.filter((j) => {
+      const itemShift = (j.shift || 'Pagi').toLowerCase().trim();
+      return itemShift === selectedShiftView;
+    });
+  }, [appData.jadwalMengajar, kelas, siswa.kelasId, (siswa as any).kelas, selectedShiftView]);
+
+  // Today's schedule for student: strictly displays schedule for the CURRENT ACTIVE SHIFT today
+  const todayJadwalList = useMemo(() => {
+    const rawList = appData.jadwalMengajar || [];
+    const studentKelasNama = (kelas?.nama || (siswa as any).kelas || '').trim().toLowerCase();
+    const studentKelasId = (siswa.kelasId || kelas?.id || '').trim();
+    const activeShift = activeWeeklyShift;
+
+    const classMatched = rawList.filter((j) => {
+      const matchId = Boolean(studentKelasId && j.kelasId && j.kelasId === studentKelasId);
+      const matchName = Boolean(
+        studentKelasNama && j.kelasNama && j.kelasNama.trim().toLowerCase() === studentKelasNama
+      );
+      return matchId || matchName;
+    });
+
+    const shiftMatched = classMatched.filter((j) => {
+      const itemShift = (j.shift || 'Pagi').toLowerCase().trim();
+      return itemShift === activeShift;
+    });
+
+    return shiftMatched
+      .filter((j) => j.hari.toLowerCase() === todayDayName.toLowerCase())
+      .sort((a, b) => {
+        const timeA = a.jamMulai || (a.jamKeList && a.jamKeList[0] ? `0${a.jamKeList[0]}:00` : '00:00');
+        const timeB = b.jamMulai || (b.jamKeList && b.jamKeList[0] ? `0${b.jamKeList[0]}:00` : '00:00');
+        return timeA.localeCompare(timeB);
+      });
+  }, [appData.jadwalMengajar, kelas, siswa.kelasId, (siswa as any).kelas, activeWeeklyShift, todayDayName]);
+
+    const getSubjectStatus = (item: JadwalMengajarGuru, isToday: boolean) => {
+    if (!isToday) return null;
+    if (!item.jamMulai || !item.jamSelesai) return null;
+
+    try {
+      const now = new Date();
+      const currentHourMin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      if (currentHourMin >= item.jamMulai && currentHourMin <= item.jamSelesai) {
+        return 'ongoing';
+      }
+      if (currentHourMin > item.jamSelesai) {
+        return 'finished';
+      }
+      return 'upcoming';
+    } catch {
+      return null;
+    }
+  };
+
   // Find presensi today
   const presensiTodayKey = `${today}_${siswa.kelasId}`;
   const todayItems: SiswaPresensiItem[] = (appData.presensi || {})[presensiTodayKey] || [];
@@ -290,9 +492,17 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
         scanner = new Html5QrcodeScanner(
           'qr-reader-container',
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
+            fps: 12,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              // Expanded scanning target area for scanning student cards easily
+              const width = Math.min(Math.floor(viewfinderWidth * 0.90), 500);
+              const height = Math.min(Math.floor(viewfinderHeight * 0.80), 380);
+              return {
+                width: Math.max(width, 280),
+                height: Math.max(height, 220),
+              };
+            },
+            aspectRatio: 1.25,
             showTorchButtonIfSupported: true,
             rememberLastUsedCamera: true,
           },
@@ -683,92 +893,298 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
   };
 
   return (
-    <div className="space-y-5 animate-fade-in select-none pb-32 sm:pb-12 max-w-4xl mx-auto px-2 sm:px-4">
-      {/* Top Banner & Profile Info Matching Reference Image */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden space-y-5">
-        {/* Top Header Row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl p-1 border border-white/30 flex items-center justify-center shrink-0 shadow">
+    <div className="animate-fade-in select-none pb-32 sm:pb-16 w-full overflow-x-hidden">
+      {/* Top Banner & Profile Info Matching Reference Image - FULL AT TOP & SIDES, STRAIGHT BOTTOM CORNERS */}
+      <div className="w-full bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-none shadow-xl shadow-blue-950/25 relative text-white left-0 right-0">
+        {/* Subtle decorative glow accents encapsulated in overflow-hidden */}
+        <div className="absolute inset-0 rounded-none overflow-hidden pointer-events-none">
+          <div className="absolute -top-12 -right-12 w-52 h-52 bg-white/10 rounded-full blur-2xl" />
+          <div className="absolute bottom-0 -left-12 w-48 h-48 bg-indigo-400/15 rounded-full blur-xl" />
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4 pt-4 sm:pt-6 pb-6 sm:pb-7 space-y-4 sm:space-y-5 relative z-10">
+          {/* Top Header Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl p-1.5 border border-white/30 flex items-center justify-center shrink-0 shadow overflow-hidden">
+                {sekolah.logo ? (
+                  <img src={sekolah.logo} alt={sekolah.nama || 'Logo Sekolah'} className="w-full h-full object-contain" />
+                ) : (
+                  <School className="w-6 h-6 text-white stroke-[1.75]" />
+                )}
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-blue-200 uppercase tracking-wider">Aplikasi</div>
+                <h2 className="text-base font-black text-white tracking-tight leading-snug">Absensi Siswa</h2>
+                <div className="text-[11px] text-blue-100 font-medium">{sekolah.nama || 'SMKN 6 Garut'}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Tombol Notifikasi Pengumuman dengan Popover Dropdown Facebook Style */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowNotifDropdown((prev) => !prev)}
+                  className="relative w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-white transition cursor-pointer group"
+                  title="Notifikasi & Pengumuman Sekolah"
+                >
+                  <Bell className="w-5 h-5 stroke-[1.75] group-hover:scale-110 transition" />
+                  {unreadAnnouncementsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 bg-rose-500 text-white font-black text-[10px] rounded-full flex items-center justify-center border-2 border-blue-700 shadow-md animate-pulse">
+                      {unreadAnnouncementsCount > 9 ? '9+' : unreadAnnouncementsCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifDropdown && (
+                  <>
+                    {/* Transparent backdrop for clicking outside */}
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowNotifDropdown(false)} 
+                    />
+
+                    {/* Facebook Style Dropdown Card - Perfectly aligned & floating without truncation */}
+                    <div className="absolute -right-12 sm:right-0 top-full mt-2.5 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 z-[100] overflow-hidden text-slate-900 dark:text-white animate-fade-in flex flex-col max-h-[75vh]">
+                      {/* Header Dropdown like FB */}
+                      <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 sticky top-0 z-10">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">Notifikasi</h3>
+                          {unreadAnnouncementsCount > 0 && (
+                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[11px] font-black rounded-full">
+                              {unreadAnnouncementsCount} baru
+                            </span>
+                          )}
+                        </div>
+                        {unreadAnnouncementsCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleMarkAllAsRead}
+                            className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition cursor-pointer"
+                          >
+                            Tandai semua dibaca
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Filter Pills like FB (Semua / Belum Dibaca) */}
+                      <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800/60 flex items-center gap-2 bg-slate-50/70 dark:bg-slate-900/70">
+                        <button
+                          type="button"
+                          onClick={() => setNotifDropdownFilter('semua')}
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                            notifDropdownFilter === 'semua'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          Semua
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNotifDropdownFilter('unread')}
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                            notifDropdownFilter === 'unread'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>Belum Dibaca</span>
+                          {unreadAnnouncementsCount > 0 && (
+                            <span className="px-1.5 py-0.2 bg-rose-500 text-white text-[10px] rounded-full font-black">
+                              {unreadAnnouncementsCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Notification Items List */}
+                      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/50">
+                        {dropdownAnnouncements.length > 0 ? (
+                          dropdownAnnouncements.map((item) => {
+                            const isUnread = !readAnnouncementIds.includes(item.id);
+                            const isCategoryPenting = item.kategori === 'penting';
+                            const isCategoryKegiatan = item.kategori === 'kegiatan';
+                            const isCategoryPeringatan = item.kategori === 'peringatan';
+
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => handleSelectNotifItem(item)}
+                                className={`p-3.5 sm:p-4 flex items-start gap-3 transition cursor-pointer group relative ${
+                                  isUnread
+                                    ? 'bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100/60 dark:hover:bg-blue-900/50'
+                                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                }`}
+                              >
+                                {/* Left Icon / Avatar Circle with Bell Badge */}
+                                <div className="relative shrink-0 mt-0.5">
+                                  <div className={`w-11 h-11 rounded-full flex items-center justify-center border shadow-xs ${
+                                    isCategoryPenting
+                                      ? 'bg-amber-100 dark:bg-amber-950 border-amber-200 dark:border-amber-900 text-amber-600 dark:text-amber-400'
+                                      : isCategoryKegiatan
+                                      ? 'bg-emerald-100 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400'
+                                      : isCategoryPeringatan
+                                      ? 'bg-rose-100 dark:bg-rose-950 border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400'
+                                      : 'bg-blue-100 dark:bg-blue-950 border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400'
+                                  }`}>
+                                    <Megaphone className="w-5 h-5 stroke-[1.8]" />
+                                  </div>
+                                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center border-2 border-white dark:border-slate-900">
+                                    <Bell className="w-2 h-2" />
+                                  </div>
+                                </div>
+
+                                {/* Text Body */}
+                                <div className="flex-1 min-w-0 pr-1">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className={`px-1.5 py-0.2 text-[9px] font-black uppercase tracking-wider rounded ${
+                                      isCategoryPenting
+                                        ? 'bg-amber-200/80 text-amber-900 dark:bg-amber-900 dark:text-amber-200'
+                                        : isCategoryKegiatan
+                                        ? 'bg-emerald-200/80 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200'
+                                        : isCategoryPeringatan
+                                        ? 'bg-rose-200/80 text-rose-900 dark:bg-rose-900 dark:text-rose-200'
+                                        : 'bg-blue-200/80 text-blue-900 dark:bg-blue-900 dark:text-blue-200'
+                                    }`}>
+                                      {item.kategori || 'info'}
+                                    </span>
+                                  </div>
+                                  <h5 className={`text-xs sm:text-sm leading-snug line-clamp-2 ${
+                                    isUnread
+                                      ? 'font-black text-slate-900 dark:text-white'
+                                      : 'font-semibold text-slate-700 dark:text-slate-300'
+                                  }`}>
+                                    {item.judul}
+                                  </h5>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                                    {item.isi}
+                                  </p>
+                                  <span className={`text-[10px] font-bold mt-1 block ${
+                                    isUnread ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'
+                                  }`}>
+                                    {getRelativeTimeDisplay(item)}
+                                  </span>
+                                </div>
+
+                                {/* Unread Indicator Blue Dot */}
+                                {isUnread && (
+                                  <div className="shrink-0 self-center">
+                                    <div className="w-2.5 h-2.5 bg-blue-600 rounded-full shadow-xs" />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-8 text-center text-slate-400 text-xs">
+                            Tidak ada notifikasi {notifDropdownFilter === 'unread' ? 'belum dibaca' : ''}.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="p-3 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-100 dark:border-slate-800 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNotifDropdown(false);
+                            setShowAllPengumumanModal(true);
+                          }}
+                          className="w-full py-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          Lihat Semua Pengumuman
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="w-10 h-10 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-300/30 flex items-center justify-center text-white transition cursor-pointer"
+                  title="Keluar / Logout"
+                >
+                  <LogOut className="w-5 h-5 text-rose-200 stroke-[1.75]" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Student Greeting Card with Glassmorphism */}
+          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl p-4 sm:p-5 text-slate-900 dark:text-white shadow-xl shadow-blue-950/20 flex items-center justify-between gap-4 border border-white/50 dark:border-white/10">
+            <div className="space-y-1 min-w-0">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">{getGreeting()}</div>
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight truncate">{siswa.nama}</h1>
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-blue-50/80 dark:bg-blue-950/60 backdrop-blur-sm text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-200/60 dark:border-blue-800">
+                  <span>{kelas?.nama || 'Kelas Siswa'}</span>
+                </div>
+                {siswa.nisn && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200/80 dark:border-slate-700">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">NISN</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{siswa.nisn}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/40 dark:bg-blue-950/60 backdrop-blur-md rounded-2xl p-1 border-2 border-white/60 dark:border-blue-500/30 flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
               {siswa.foto ? (
                 <img src={siswa.foto} alt={siswa.nama} className="w-full h-full object-cover rounded-xl" />
               ) : (
-                <GraduationCap className="w-6 h-6 text-white" />
+                <User className="w-10 h-10 text-blue-600 dark:text-blue-400 stroke-[1.75]" />
               )}
             </div>
-            <div>
-              <div className="text-[10px] font-bold text-blue-200 uppercase tracking-wider">Aplikasi</div>
-              <h2 className="text-base font-black text-white tracking-tight leading-snug">Absensi Siswa</h2>
-              <div className="text-[11px] text-blue-100 font-medium">{sekolah.nama || 'SMKN 6 Garut'}</div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleOpenEditModal}
-            className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-white transition cursor-pointer"
-            title="Menu & Pengaturan Profil"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Student Greeting Card */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 text-slate-900 dark:text-white shadow-lg flex items-center justify-between gap-4 border border-white/20">
-          <div className="space-y-1">
-            <div className="text-xs font-bold text-slate-500 dark:text-slate-400">{getGreeting()}</div>
-            <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">{siswa.nama}</h1>
-            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-200 dark:border-blue-800">
-              <span>{kelas?.nama || 'Kelas Siswa'}</span>
-            </div>
-          </div>
-          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-100 dark:bg-blue-950 rounded-2xl p-1 border-2 border-blue-500/30 flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
-            {siswa.foto ? (
-              <img src={siswa.foto} alt={siswa.nama} className="w-full h-full object-cover rounded-xl" />
-            ) : (
-              <User className="w-10 h-10 text-blue-600 dark:text-blue-400" />
-            )}
           </div>
         </div>
       </div>
 
+      {/* Main Content Body Container */}
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 space-y-5 mt-4 sm:mt-5">
       {/* Sub-tab navigation removed as requested */}
 
       {/* TAB 1: OVERVIEW / DASHBOARD SISWA */}
       {currentSubTab === 'overview' && (
         <div className="space-y-5">
-          {/* Status Absen Hari Ini Card (Vibrant Blue Banner matching reference) */}
-          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-3xl p-5 text-white shadow-xl space-y-4">
+          {/* Card Shift Pekan Ini */}
+          <CurrentWeeklyShiftCard appData={appData} siswa={siswa} onNavigateView={onNavigate} />
+
+          {/* Status Absen Hari Ini Card with Glassmorphism */}
+          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/80 dark:border-slate-800/80 rounded-3xl p-5 text-slate-900 dark:text-white shadow-xl shadow-blue-900/5 space-y-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white shrink-0 shadow-lg ${
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white shrink-0 shadow-md ${
                   myPresensiToday?.pulangTime 
-                    ? 'bg-indigo-500 ring-4 ring-indigo-400/40' 
+                    ? 'bg-indigo-600 ring-4 ring-indigo-100 dark:ring-indigo-950' 
                     : myPresensiToday 
-                    ? (myPresensiToday.status === 'H' ? 'bg-emerald-500 ring-4 ring-emerald-400/40' : myPresensiToday.status === 'K' ? 'bg-amber-500 ring-4 ring-amber-400/40' : 'bg-blue-500') 
-                    : 'bg-slate-700/60'
+                    ? (myPresensiToday.status === 'H' ? 'bg-emerald-600 ring-4 ring-emerald-100 dark:ring-emerald-950' : myPresensiToday.status === 'K' ? 'bg-amber-500 ring-4 ring-amber-100 dark:ring-amber-950' : 'bg-blue-600') 
+                    : 'bg-slate-700'
                 }`}>
                   {myPresensiToday?.pulangTime ? (
-                    <Home className="w-7 h-7 stroke-[2.5]" />
+                    <Home className="w-7 h-7 stroke-[1.75]" />
                   ) : (
-                    <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
+                    <CheckCircle2 className="w-8 h-8 stroke-[1.75]" />
                   )}
                 </div>
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-black tracking-tight">
+                    <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
                       {myPresensiToday ? (myPresensiToday.status === 'H' ? 'Hadir' : myPresensiToday.status === 'K' ? 'Kesiangan' : myPresensiToday.status === 'I' ? 'Izin' : myPresensiToday.status === 'S' ? 'Sakit' : myPresensiToday.status === 'D' ? 'Dispensasi' : 'Alpha') : 'Belum Absen'}
                     </span>
                     {myPresensiToday?.pulangTime && (
-                      <span className="px-2 py-0.5 bg-emerald-400 text-emerald-950 font-black text-[10px] rounded-full uppercase tracking-wider">
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-[10px] rounded-full uppercase tracking-wider">
                         Sudah Pulang
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-blue-100 font-medium">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                     {formatDateIndo(today)}
                   </div>
-                  <div className="flex items-center gap-1 text-[11px] text-blue-100 pt-0.5 font-medium">
-                    <MapPin className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 pt-0.5 font-medium">
+                    <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0 stroke-[1.75]" />
                     <span>{sekolah.nama || 'SMKN 6 Garut'}</span>
                   </div>
                 </div>
@@ -781,29 +1197,30 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
                     setStudentScanMode('auto');
                     setCurrentSubTab('absen_qr');
                   }}
-                  className="px-4 py-2.5 bg-white text-blue-600 font-black rounded-2xl text-xs shadow-md hover:bg-blue-50 active:scale-95 transition cursor-pointer shrink-0"
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-sm active:scale-95 transition cursor-pointer shrink-0 flex items-center gap-1.5"
                 >
-                  Scan QR
+                  <QrCode className="w-4 h-4 stroke-[1.75]" />
+                  <span>Scan QR</span>
                 </button>
               </div>
             </div>
 
-            {/* Sub Detail Info Masuk & Pulang */}
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/20 text-xs">
-              <div className="bg-white/10 rounded-2xl p-2.5 backdrop-blur-sm">
-                <div className="text-[10px] text-blue-200 uppercase font-black tracking-wider flex items-center gap-1">
-                  <span>☀️ Jam Masuk</span>
+            {/* Sub Detail Info Masuk & Pulang with Glassmorphism */}
+            <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 text-xs">
+              <div className="bg-white/70 dark:bg-slate-800/60 backdrop-blur-md border border-white/80 dark:border-slate-700/60 rounded-2xl p-3 shadow-xs">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-black tracking-wider flex items-center gap-1">
+                  <span>{currentStudentTiming.shiftType === 'siang' ? '🌅 Jam Masuk (Siang)' : '☀️ Jam Masuk (Pagi)'}</span>
                 </div>
-                <div className="text-sm font-black mt-0.5">
+                <div className="text-sm font-black mt-0.5 text-slate-900 dark:text-white">
                   {myPresensiToday?.time ? `${myPresensiToday.time} WIB` : 'Belum Absen'}
                 </div>
               </div>
 
-              <div className="bg-white/10 rounded-2xl p-2.5 backdrop-blur-sm">
-                <div className="text-[10px] text-blue-200 uppercase font-black tracking-wider flex items-center gap-1">
+              <div className="bg-white/70 dark:bg-slate-800/60 backdrop-blur-md border border-white/80 dark:border-slate-700/60 rounded-2xl p-3 shadow-xs">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-black tracking-wider flex items-center gap-1">
                   <span>🏠 Jam Pulang</span>
                 </div>
-                <div className="text-sm font-black mt-0.5 flex items-center justify-between">
+                <div className="text-sm font-black mt-0.5 text-slate-900 dark:text-white flex items-center justify-between">
                   <span>{myPresensiToday?.pulangTime ? `${myPresensiToday.pulangTime} WIB` : 'Belum Pulang'}</span>
                   {!myPresensiToday?.pulangTime && (
                     <button
@@ -816,7 +1233,7 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
                         setStudentScanMode('pulang');
                         setCurrentSubTab('absen_qr');
                       }}
-                      className="px-2 py-0.5 bg-amber-400 hover:bg-amber-300 text-amber-950 font-black text-[10px] rounded-lg transition active:scale-95 cursor-pointer"
+                      className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] rounded-lg transition active:scale-95 cursor-pointer shadow-xs"
                     >
                       Absen Pulang
                     </button>
@@ -826,44 +1243,47 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
             </div>
           </div>
 
-          {/* Grid of 6 Feature Menu Buttons */}
-          <div className="grid grid-cols-3 gap-3.5">
+          {/* Aksi Cepat Grid with Deep Saturated (Pekat) Backgrounds */}
+          <div className="grid grid-cols-4 gap-2.5 sm:gap-3.5">
             <button
               type="button"
               onClick={() => setCurrentSubTab('absen_qr')}
-              className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition flex flex-col items-center text-center gap-2 cursor-pointer group"
+              className="p-3 sm:p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-emerald-500/30"
             >
-              <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition">
-                <CalendarCheck className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Absensi</span>
+              <CalendarCheck className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Absensi</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentSubTab('rekap_siswa')}
-              className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition flex flex-col items-center text-center gap-2 cursor-pointer group"
+              className="p-3 sm:p-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-indigo-500/30"
             >
-              <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition">
-                <Clock className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Riwayat</span>
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Riwayat</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentSubTab('jadwal_pelajaran')}
+              className="p-3 sm:p-4 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-violet-500/30"
+            >
+              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Jadwal Pelajaran</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentSubTab('pelanggaran')}
-              className="relative bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition flex flex-col items-center text-center gap-2 cursor-pointer group"
+              className="relative p-3 sm:p-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-amber-400/30"
             >
               {myPelanggaran.length > 0 && (
-                <span className="absolute top-2.5 right-2.5 px-2 py-0.5 bg-amber-500 text-white font-black text-[10px] rounded-full shadow-sm animate-pulse">
+                <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 py-0.5 bg-rose-600 text-white font-black text-[10px] rounded-full shadow-xs ring-2 ring-white animate-pulse">
                   {myPelanggaran.length}
                 </span>
               )}
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition">
-                <ShieldAlert className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Catatan Pelanggaran</span>
+              <ShieldAlert className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Catatan Pelanggaran</span>
             </button>
 
             <button
@@ -871,44 +1291,240 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
               onClick={() => {
                 setShowFormIzin(true);
               }}
-              className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition flex flex-col items-center text-center gap-2 cursor-pointer group"
+              className="p-3 sm:p-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-purple-500/30"
             >
-              <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 transition">
-                <FileText className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Pengajuan</span>
+              <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Pengajuan</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentSubTab('home_visit')}
-              className="relative bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition flex flex-col items-center text-center gap-2 cursor-pointer group"
+              className="relative p-3 sm:p-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-rose-500/30"
             >
               {myHomeVisits.length > 0 && (
-                <span className="absolute top-2.5 right-2.5 px-2 py-0.5 bg-rose-500 text-white font-black text-[10px] rounded-full shadow-sm animate-pulse">
+                <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 py-0.5 bg-amber-400 text-slate-900 font-black text-[10px] rounded-full shadow-xs ring-2 ring-white animate-pulse">
                   {myHomeVisits.length}
                 </span>
               )}
-              <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:scale-110 transition">
-                <MapPin className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Home Visit</span>
+              <MapPin className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Home Visit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentSubTab('kartu_pelajar')}
+              className="p-3 sm:p-4 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-cyan-500/30"
+            >
+              <CreditCard className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Kartu Pelajar</span>
             </button>
 
             <button
               type="button"
               onClick={() => setCurrentSubTab('profil')}
-              className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition flex flex-col items-center text-center gap-2 cursor-pointer group"
+              className="p-3 sm:p-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-blue-500/30"
             >
-              <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition">
-                <User className="w-6 h-6" />
-              </div>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Profil</span>
+              <User className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Profil</span>
             </button>
           </div>
 
-          {/* Rekap Kehadiran Section */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-lg space-y-4">
+          {/* Jadwal Pelajaran Section on Overview */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Jadwal Pelajaran</h3>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border border-violet-200/80 dark:border-violet-900/60">
+                  {todayDayName}
+                </span>
+                <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border ${
+                  activeWeeklyShift === 'pagi'
+                    ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                    : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                }`}>
+                  {activeWeeklyShift === 'pagi' ? '☀️ Shift Pagi' : '🌅 Shift Siang'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedHariJadwal('Hari Ini');
+                  setCurrentSubTab('jadwal_pelajaran');
+                }}
+                className="text-xs sm:text-sm font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 flex items-center gap-0.5 transition cursor-pointer"
+              >
+                <span>Lihat Jadwal Lengkap</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {todayJadwalList.length > 0 ? (
+              <div className="space-y-2.5">
+                {todayJadwalList.map((item) => {
+                  const status = getSubjectStatus(item, true);
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedHariJadwal(item.hari);
+                        setCurrentSubTab('jadwal_pelajaran');
+                      }}
+                      className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 border border-slate-100 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-violet-200 dark:hover:border-violet-900/60 transition cursor-pointer flex items-center justify-between gap-3 group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-violet-50 dark:bg-violet-950/60 border border-violet-100/80 dark:border-violet-900/60 flex items-center justify-center shrink-0 group-hover:scale-105 transition text-violet-600 dark:text-violet-400">
+                          <BookOpen className="w-6 h-6 stroke-[1.8]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition">
+                              {item.mataPelajaran}
+                            </h4>
+                            {status === 'ongoing' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 animate-pulse shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Sedang KBM
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            {item.guruNama} {item.catatan ? `• ${item.catatan}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="text-xs sm:text-sm font-black text-violet-600 dark:text-violet-400">
+                          {item.jamMulai && item.jamSelesai ? `${item.jamMulai} - ${item.jamSelesai}` : item.jamKe || 'Jam KBM'}
+                        </div>
+                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
+                          {item.jamKe || `Shift ${item.shift || 'Pagi'}`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl p-5 border border-slate-100 dark:border-slate-800 text-center space-y-2">
+                <BookOpen className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
+                <div>
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Tidak ada jadwal KBM pada hari {todayDayName}.</p>
+                  <p className="text-[11px] text-slate-400">Anda dapat melihat jadwal hari lain atau jadwal mingguan lengkap.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedHariJadwal('Semua');
+                    setCurrentSubTab('jadwal_pelajaran');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/60 dark:hover:bg-violet-900/60 text-violet-600 dark:text-violet-400 text-xs font-bold transition cursor-pointer"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  <span>Buka Jadwal Mingguan</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Pengumuman Terbaru Section */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Pengumuman Terbaru</h3>
+              <button
+                type="button"
+                onClick={() => setShowAllPengumumanModal(true)}
+                className="text-xs sm:text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-0.5 transition cursor-pointer"
+              >
+                <span>Lihat Semua</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {studentAnnouncements.length > 0 ? (
+              <div className="space-y-3">
+                {studentAnnouncements.slice(0, 1).map((item) => {
+                  const isCategoryPenting = item.kategori === 'penting';
+                  const isCategoryKegiatan = item.kategori === 'kegiatan';
+                  const isCategoryPeringatan = item.kategori === 'peringatan';
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedPengumuman(item)}
+                      className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900/60 transition cursor-pointer flex items-start gap-3.5 sm:gap-4 group relative"
+                    >
+                      {/* Left Icon Container */}
+                      <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl border flex items-center justify-center shrink-0 group-hover:scale-105 transition mt-0.5 ${
+                        isCategoryPenting
+                          ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-200/80 dark:border-amber-900/60 text-amber-600 dark:text-amber-400'
+                          : isCategoryKegiatan
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200/80 dark:border-emerald-900/60 text-emerald-600 dark:text-emerald-400'
+                          : isCategoryPeringatan
+                          ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-200/80 dark:border-rose-900/60 text-rose-600 dark:text-rose-400'
+                          : 'bg-blue-50 dark:bg-blue-950/60 border-blue-200/80 dark:border-blue-900/60 text-blue-600 dark:text-blue-400'
+                      }`}>
+                        <Megaphone className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
+                      </div>
+
+                      {/* Announcement Main Content */}
+                      <div className="flex-1 min-w-0">
+                        {/* Meta Bar: Category Badge, Penulis, and Date */}
+                        <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md ${
+                              isCategoryPenting
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : isCategoryKegiatan
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : isCategoryPeringatan
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            }`}>
+                              {item.kategori || 'info'}
+                            </span>
+                            {item.penulis && (
+                              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 truncate max-w-[120px]">
+                                &bull; {item.penulis}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 shrink-0">
+                            {getRelativeTimeDisplay(item)}
+                          </span>
+                        </div>
+
+                        {/* Title - Full width without vertical squishing */}
+                        <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition mb-1.5">
+                          {item.judul}
+                        </h4>
+
+                        {/* Content snippet */}
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
+                          {item.isi}
+                        </p>
+
+                        {/* Footer Link Indicator */}
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                          <span>Baca Pengumuman Selengkapnya</span>
+                          <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl p-6 border border-slate-100 dark:border-slate-800 text-center space-y-1 text-slate-400">
+                <Megaphone className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-1" />
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">Belum ada pengumuman terbaru saat ini.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Rekap Kehadiran Section with Glassmorphism */}
+          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl p-5 border border-white/80 dark:border-slate-800/80 shadow-xl shadow-blue-900/5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Rekap Kehadiran</h3>
               <div
@@ -921,22 +1537,22 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
             </div>
 
             <div className="grid grid-cols-4 gap-2.5">
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+              <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-md p-3 rounded-2xl border border-white/60 dark:border-slate-800 text-center shadow-xs">
                 <div className="text-lg sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.totalH}</div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-0.5">Hadir</div>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+              <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-md p-3 rounded-2xl border border-white/60 dark:border-slate-800 text-center shadow-xs">
                 <div className="text-lg sm:text-2xl font-black text-amber-500 dark:text-amber-400">{stats.totalS}</div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-0.5">Sakit</div>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+              <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-md p-3 rounded-2xl border border-white/60 dark:border-slate-800 text-center shadow-xs">
                 <div className="text-lg sm:text-2xl font-black text-blue-600 dark:text-blue-400">{stats.totalI}</div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-0.5">Izin</div>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+              <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-md p-3 rounded-2xl border border-white/60 dark:border-slate-800 text-center shadow-xs">
                 <div className="text-lg sm:text-2xl font-black text-rose-600 dark:text-rose-400">{stats.totalA}</div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-0.5">Alpa</div>
               </div>
@@ -998,7 +1614,7 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                       }`}
                     >
-                      <span>☀️ Absen Masuk</span>
+                      <span>{currentStudentTiming.shiftType === 'siang' ? '🌅 Absen Masuk (Siang)' : '☀️ Absen Masuk (Pagi)'}</span>
                     </button>
                     <button
                       type="button"
@@ -1261,6 +1877,368 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB JADWAL PELAJARAN SISWA */}
+      {currentSubTab === 'jadwal_pelajaran' && (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-lg space-y-6">
+          {/* Header & Actions */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => setCurrentSubTab('overview')}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition cursor-pointer mb-1 print:hidden"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Kembali ke Beranda</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                    Jadwal Pelajaran Kelas {kelas?.nama || '-'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Jadwal kegiatan belajar mengajar (KBM) mingguan semester berjalan
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 print:hidden w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Cetak Jadwal</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Info Meta Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200/70 dark:border-slate-700/60">
+              <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Kelas</div>
+              <div className="text-sm font-black text-slate-900 dark:text-white mt-0.5 truncate">
+                {kelas?.nama || '-'}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {kelas?.jurusanId || 'Kejuruan / Umum'}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200/70 dark:border-slate-700/60">
+              <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Wali Kelas</div>
+              <div className="text-sm font-black text-slate-900 dark:text-white mt-0.5 truncate">
+                {waliKelas?.nama || 'Belum Ditentukan'}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {waliKelas?.nip ? `NIP: ${waliKelas.nip}` : 'Koordinator Kelas'}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200/70 dark:border-slate-700/60">
+              <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Sesi KBM</div>
+              <div className="text-sm font-black text-violet-600 dark:text-violet-400 mt-0.5">
+                {studentJadwalList.length} Mata Pelajaran
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                Shift {selectedShiftView === 'siang' ? 'Siang' : 'Pagi'}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200/70 dark:border-slate-700/60">
+              <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Shift KBM Ditampilkan</div>
+              <div className="text-sm font-black text-slate-900 dark:text-white mt-0.5 flex items-center gap-1.5">
+                <span>{selectedShiftView === 'siang' ? '🌅 Shift Siang' : '☀️ Shift Pagi'}</span>
+                {selectedShiftView === activeWeeklyShift ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                    Aktif
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                    Rotasi
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {selectedShiftView === 'siang'
+                  ? `${appData.shiftConfig?.siangJamMasukMulai || '12:45'} - ${appData.shiftConfig?.siangJamPulang || '16:50'} WIB`
+                  : `${appData.shiftConfig?.pagiJamMasukMulai || '06:30'} - ${appData.shiftConfig?.pagiJamPulang || '12:00'} WIB`}
+              </div>
+            </div>
+          </div>
+
+          {/* Shift Filter Switcher Segmented Control */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-slate-50/90 dark:bg-slate-850/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 print:hidden">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-black text-slate-700 dark:text-slate-300">Pilih Shift:</span>
+              <div className="inline-flex p-1 bg-slate-200/80 dark:bg-slate-800 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedShiftView('pagi')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    selectedShiftView === 'pagi'
+                      ? 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Shift Pagi (06:30 - 12:00)</span>
+                  {activeWeeklyShift === 'pagi' && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                      Aktif Minggu Ini
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedShiftView('siang')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    selectedShiftView === 'siang'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Sunset className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Shift Siang (12:45 - 16:50)</span>
+                  {activeWeeklyShift === 'siang' && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-800">
+                      Aktif Minggu Ini
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <span className="font-semibold text-slate-600 dark:text-slate-400">Jadwal Aktif Siswa:</span>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
+                activeWeeklyShift === 'pagi'
+                  ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                  : 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+              }`}>
+                {activeWeeklyShift === 'pagi' ? '☀️ Shift Pagi' : '🌅 Shift Siang'}
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Bar: Day Pills & Search */}
+          <div className="space-y-3 print:hidden">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Day Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {['Semua', 'Hari Ini', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map((day) => {
+                  const isActive = selectedHariJadwal === day;
+                  const dayCount = day === 'Semua' 
+                    ? studentJadwalList.length 
+                    : day === 'Hari Ini' 
+                    ? todayJadwalList.length 
+                    : studentJadwalList.filter((j) => j.hari.toLowerCase() === day.toLowerCase()).length;
+
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setSelectedHariJadwal(day)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-violet-600 text-white shadow-sm shadow-violet-600/20'
+                          : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      <span>{day}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                        isActive 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {dayCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search Box */}
+              <div className="relative shrink-0 sm:w-64">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchJadwal}
+                  onChange={(e) => setSearchJadwal(e.target.value)}
+                  placeholder="Cari mapel atau guru..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Schedule List Grouped by Day */}
+          <div className="space-y-6">
+            {(() => {
+              const daysToIterate = selectedHariJadwal === 'Hari Ini'
+                ? [todayDayName]
+                : selectedHariJadwal !== 'Semua'
+                ? [selectedHariJadwal]
+                : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+              let totalShown = 0;
+
+              const renderedDays = daysToIterate.map((day) => {
+                const dayItems = studentJadwalList
+                  .filter((j) => j.hari.toLowerCase() === day.toLowerCase())
+                  .filter((j) => {
+                    if (!searchJadwal.trim()) return true;
+                    const q = searchJadwal.toLowerCase();
+                    return (
+                      j.mataPelajaran.toLowerCase().includes(q) ||
+                      j.guruNama.toLowerCase().includes(q) ||
+                      (j.catatan && j.catatan.toLowerCase().includes(q))
+                    );
+                  })
+                  .sort((a, b) => {
+                    const timeA = a.jamMulai || (a.jamKeList && a.jamKeList[0] ? `0${a.jamKeList[0]}:00` : '00:00');
+                    const timeB = b.jamMulai || (b.jamKeList && b.jamKeList[0] ? `0${b.jamKeList[0]}:00` : '00:00');
+                    return timeA.localeCompare(timeB);
+                  });
+
+                totalShown += dayItems.length;
+
+                if (dayItems.length === 0) return null;
+
+                const isToday = day.toLowerCase() === todayDayName.toLowerCase();
+
+                return (
+                  <div key={day} className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>📅</span>
+                          <span>{day}</span>
+                        </span>
+                        {isToday && (
+                          <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                            Hari Ini
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-slate-400">
+                        {dayItems.length} Sesi Pembelajaran
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {dayItems.map((item) => {
+                        const status = getSubjectStatus(item, isToday);
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-4 rounded-2xl border transition ${
+                              status === 'ongoing'
+                                ? 'bg-violet-50/60 dark:bg-violet-950/30 border-violet-300 dark:border-violet-700 shadow-sm'
+                                : 'bg-white dark:bg-slate-850 border-slate-200 dark:border-slate-800 hover:border-violet-200 dark:hover:border-violet-900/60 shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                                    {item.mataPelajaran}
+                                  </h4>
+                                  {status === 'ongoing' && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 animate-pulse">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                      Sedang KBM
+                                    </span>
+                                  )}
+                                  {status === 'finished' && isToday && (
+                                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                      Selesai
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1">
+                                  <span className="text-slate-400">Guru:</span>
+                                  <span className="font-semibold">{item.guruNama}</span>
+                                </p>
+
+                                {item.catatan && (
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 italic pt-0.5">
+                                    Ruangan / Materi: {item.catatan}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className={`inline-block px-2.5 py-1 rounded-xl font-black text-xs ${
+                                  (item.shift || selectedShiftView).toLowerCase() === 'siang'
+                                    ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+                                    : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                                }`}>
+                                  {item.jamMulai && item.jamSelesai ? `${item.jamMulai} - ${item.jamSelesai}` : item.jamKe || 'Jam KBM'}
+                                </span>
+                                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 flex items-center justify-end gap-1">
+                                  <span>{item.jamKe || ''}</span>
+                                  <span className="opacity-75">• Shift {item.shift || (selectedShiftView === 'siang' ? 'Siang' : 'Pagi')}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              });
+
+              if (totalShown === 0) {
+                return (
+                  <div className="text-center py-12 text-slate-400 space-y-2">
+                    <BookOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      Tidak ada jadwal pelajaran ditemukan.
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {searchJadwal ? 'Coba gunakan kata kunci pencarian yang lain.' : 'Pilih tab hari lain untuk melihat jadwal KBM.'}
+                    </p>
+                    {searchJadwal && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchJadwal('')}
+                        className="px-3 py-1 bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-300 text-xs font-bold rounded-lg transition"
+                      >
+                        Reset Pencarian
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
+              return renderedDays;
+            })()}
+          </div>
+
+          {/* School Guidelines / Notes Card */}
+          <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1.5 print:hidden">
+            <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <span>💡</span>
+              <span>Informasi & Tata Tertib KBM</span>
+            </div>
+            <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <li>Siswa wajib hadir di kelas 10 menit sebelum jam pelajaran pertama dimulai.</li>
+              <li>Pastikan membawa perlengkapan belajar, buku paket, dan seragam sesuai jadwal harian.</li>
+              <li>Jika guru mata pelajaran berhalangan hadir, lapor segera ke Guru Piket atau Wali Kelas.</li>
+            </ul>
+          </div>
         </div>
       )}
 
@@ -1616,6 +2594,7 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* MODAL EDIT BIODATA SISWA */}
       {showEditBiodataModal && (
@@ -2135,27 +3114,212 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
           </div>
         </div>
       )}
-      {/* Mobile Bottom Navigation Bar Matching Reference Image */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 shadow-2xl px-3 py-2 flex items-center justify-around">
+
+      {/* Detail Pengumuman Modal */}
+      {selectedPengumuman && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
+                  <Megaphone className="w-6 h-6 text-blue-600 dark:text-blue-400 stroke-[1.8]" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                    {selectedPengumuman.kategori || 'Pengumuman'}
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug">
+                    {selectedPengumuman.judul}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPengumuman(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-blue-600 dark:text-blue-400">
+                {getRelativeTimeDisplay(selectedPengumuman)}
+              </span>
+              {selectedPengumuman.tanggal && (
+                <span>&bull; {formatDateIndo(selectedPengumuman.tanggal)}</span>
+              )}
+              {selectedPengumuman.penulis && (
+                <span>&bull; Oleh: <strong className="text-slate-700 dark:text-slate-300">{selectedPengumuman.penulis}</strong></span>
+              )}
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+              {selectedPengumuman.isi}
+            </div>
+
+            {selectedPengumuman.linkUrl && (
+              <a
+                href={selectedPengumuman.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 px-4 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 text-xs font-bold flex items-center justify-center gap-2 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition"
+              >
+                <span>{selectedPengumuman.linkText || 'Buka Tautan Lampiran'}</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setSelectedPengumuman(null)}
+              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold transition cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Semua Pengumuman / Notifikasi Modal */}
+      {showAllPengumumanModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4 max-h-[88vh] flex flex-col">
+            <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Bell className="w-5 h-5 stroke-[1.75]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">Notifikasi & Pengumuman</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Informasi, agenda, dan edaran resmi sekolah</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAllPengumumanModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+              {(['semua', 'penting', 'kegiatan', 'info', 'peringatan'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setAnnouncementCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-full font-bold capitalize transition shrink-0 cursor-pointer ${
+                    announcementCategoryFilter === cat
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {filteredStudentAnnouncements.length > 0 ? (
+                filteredStudentAnnouncements.map((item) => {
+                  const isCategoryPenting = item.kategori === 'penting';
+                  const isCategoryKegiatan = item.kategori === 'kegiatan';
+                  const isCategoryPeringatan = item.kategori === 'peringatan';
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedPengumuman(item);
+                      }}
+                      className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition cursor-pointer flex items-start gap-3.5 group relative"
+                    >
+                      <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 group-hover:scale-105 transition ${
+                        isCategoryPenting
+                          ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900 text-amber-600 dark:text-amber-400'
+                          : isCategoryKegiatan
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400'
+                          : isCategoryPeringatan
+                          ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400'
+                          : 'bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400'
+                      }`}>
+                        <Megaphone className="w-5 h-5 stroke-[1.8]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md ${
+                            isCategoryPenting
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              : isCategoryKegiatan
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                              : isCategoryPeringatan
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                          }`}>
+                            {item.kategori || 'info'}
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                            {getRelativeTimeDisplay(item)}
+                          </span>
+                          {item.penulis && (
+                            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                              &bull; {item.penulis}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                          {item.judul}
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mt-1 whitespace-pre-line line-clamp-2">
+                          {item.isi}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-10 text-slate-400 text-xs">
+                  Tidak ada pengumuman yang sesuai kategori ini.
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowAllPengumumanModal(false)}
+                className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold transition cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Mobile Bottom Navigation Bar with Glassmorphism */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 shadow-2xl px-3 py-2 flex items-center justify-around">
         <button
           type="button"
           onClick={() => setCurrentSubTab('overview')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition cursor-pointer ${
             currentSubTab === 'overview' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
           }`}
         >
-          <Home className="w-5 h-5" />
+          <Home className="w-5 h-5 stroke-[1.75]" />
           <span className="text-[10px]">Beranda</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCurrentSubTab('rekap_siswa')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition cursor-pointer ${
             currentSubTab === 'rekap_siswa' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
           }`}
         >
-          <Clock className="w-5 h-5" />
+          <Clock className="w-5 h-5 stroke-[1.75]" />
           <span className="text-[10px]">Riwayat</span>
         </button>
 
@@ -2166,30 +3330,30 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
             onClick={() => setCurrentSubTab('absen_qr')}
             className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-xl shadow-blue-500/40 flex flex-col items-center justify-center transition active:scale-95 cursor-pointer border-4 border-white dark:border-slate-900"
           >
-            <QrCode className="w-6 h-6" />
+            <QrCode className="w-6 h-6 stroke-[1.75]" />
           </button>
           <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">Scan</span>
         </div>
 
         <button
           type="button"
-          onClick={() => setCurrentSubTab('rekap_siswa')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
-            currentSubTab === 'rekap_siswa' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+          onClick={() => setCurrentSubTab('jadwal_pelajaran')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition cursor-pointer ${
+            currentSubTab === 'jadwal_pelajaran' ? 'text-violet-600 dark:text-violet-400 font-black' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
           }`}
         >
-          <BarChart3 className="w-5 h-5" />
-          <span className="text-[10px]">Laporan</span>
+          <BookOpen className="w-5 h-5 stroke-[1.75]" />
+          <span className="text-[10px]">Jadwal</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCurrentSubTab('profil')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition cursor-pointer ${
             currentSubTab === 'profil' ? 'text-blue-600 dark:text-blue-400 font-black' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
           }`}
         >
-          <User className="w-5 h-5" />
+          <User className="w-5 h-5 stroke-[1.75]" />
           <span className="text-[10px]">Profil</span>
         </button>
       </div>

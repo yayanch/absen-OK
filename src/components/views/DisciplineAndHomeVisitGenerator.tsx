@@ -389,7 +389,7 @@ export const DisciplineAndHomeVisitGenerator: React.FC<DisciplineAndHomeVisitGen
                 <option value="all">🌐 Semua Kelas (Acak ke Seluruh Siswa)</option>
                 {appData.kelas?.map((k) => (
                   <option key={k.id} value={k.id}>
-                    Kelas {k.nama} ({k.jurusanId})
+                    Kelas {k.nama}
                   </option>
                 ))}
               </select>
@@ -525,7 +525,7 @@ export const DisciplineAndHomeVisitGenerator: React.FC<DisciplineAndHomeVisitGen
                 <option value="all">🌐 Semua Kelas (Acak ke Seluruh Siswa)</option>
                 {appData.kelas?.map((k) => (
                   <option key={k.id} value={k.id}>
-                    Kelas {k.nama} ({k.jurusanId})
+                    Kelas {k.nama}
                   </option>
                 ))}
               </select>

@@ -5,7 +5,7 @@ import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, Al
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppData, Siswa, Kelas, UserSession } from '../../types';
 import { randomizeWaForStudents, generateRandomWaNumber, sortKelasList } from '../../data/initialData';
-import { compressBase64Image, addAuditLog, formatTTL } from '../../utils/helpers';
+import { compressBase64Image, addAuditLog, formatTTL, extractKelasTingkat } from '../../utils/helpers';
 import { Pagination } from '../Pagination';
 import { ImportSiswaModal } from './ImportSiswaModal';
 import { PageHeader } from '../common/UIComponents';
@@ -259,7 +259,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
   const [activeTingkatDetail, setActiveTingkatDetail] = useState<'X' | 'XI' | 'XII' | null>(null);
   const [showImportModal, setShowImportModal] = useState<boolean>(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState<boolean>(false);
@@ -1410,27 +1410,19 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     (s) => s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif'
   );
 
-  const getTingkatFromKelasName = (namaKelas: string): 'X' | 'XI' | 'XII' | 'LAIN' => {
-    const u = (namaKelas || '').trim().toUpperCase();
-    if (u.startsWith('XII') || /^XII[\s\-_]/i.test(u)) return 'XII';
-    if (u.startsWith('XI') || /^XI[\s\-_]/i.test(u)) return 'XI';
-    if (u.startsWith('X') || /^X[\s\-_]/i.test(u)) return 'X';
-    return 'LAIN';
-  };
-
   const siswaTingkatX = activeStudentsList.filter((s) => {
     const k = appData.kelas.find((kl) => kl.id === s.kelasId);
-    return k && getTingkatFromKelasName(k.nama) === 'X';
+    return k && extractKelasTingkat(k.nama) === 'X';
   });
 
   const siswaTingkatXI = activeStudentsList.filter((s) => {
     const k = appData.kelas.find((kl) => kl.id === s.kelasId);
-    return k && getTingkatFromKelasName(k.nama) === 'XI';
+    return k && extractKelasTingkat(k.nama) === 'XI';
   });
 
   const siswaTingkatXII = activeStudentsList.filter((s) => {
     const k = appData.kelas.find((kl) => kl.id === s.kelasId);
-    return k && getTingkatFromKelasName(k.nama) === 'XII';
+    return k && extractKelasTingkat(k.nama) === 'XII';
   });
 
   const countLakiX = siswaTingkatX.filter((s) => s.gender === 'L').length;
@@ -1460,7 +1452,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
 
     return listJurusan.map((jur) => {
       const matchingClasses = appData.kelas.filter((k) => {
-        if (getTingkatFromKelasName(k.nama) !== tingkat) return false;
+        if (extractKelasTingkat(k.nama) !== tingkat) return false;
         if (k.jurusanId === jur.id) return true;
         const kn = k.nama.toUpperCase();
         return (
@@ -1593,7 +1585,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                     </div>
 
                     {/* Middle: Statistik Total, Laki-laki, Perempuan (Memanfaatkan space penuh) */}
-                    <div className="grid grid-cols-3 gap-3 flex-1 max-w-2xl bg-white dark:bg-slate-900/90 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 flex-1 max-w-2xl bg-white dark:bg-slate-900/90 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
                       {/* Total Siswa */}
                       <div className="text-center px-2 py-1 border-r border-slate-100 dark:border-slate-800">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">

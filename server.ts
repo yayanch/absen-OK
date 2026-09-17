@@ -7,7 +7,7 @@ import QRCode from "qrcode";
 import compression from "compression";
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Enable gzip/brotli response compression for ultra-fast multi-client throughput
 app.use(compression());
@@ -3048,7 +3048,9 @@ app.delete("/api/backup/snapshot/:id", (req, res) => {
 
 // Vite middleware for development or static serving for production
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.join(process.cwd(), "dist", "index.html"));
+
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -3071,9 +3073,7 @@ async function startServer() {
       }
     });
   } else {
-    const distPath = fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
-      ? path.join(process.cwd(), "dist")
-      : (fs.existsSync(path.join(__dirname, "index.html")) ? __dirname : path.join(process.cwd(), "dist"));
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res, next) => {
       if (req.originalUrl.startsWith("/api/")) {

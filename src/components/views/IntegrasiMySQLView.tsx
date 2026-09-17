@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, CheckCircle2, AlertCircle, Terminal, Copy, Check, Server, RefreshCw, ShieldCheck, Cpu, FileText, Download } from 'lucide-react';
+import { Database, CheckCircle2, AlertCircle, Terminal, Copy, Check, Server, RefreshCw, ShieldCheck, Cpu, FileText, Download, X, ExternalLink, Globe, Lock, BookOpen } from 'lucide-react';
 import { AppData, UserSession } from '../../types';
 import { PageHeader } from '../common/UIComponents';
 
@@ -26,6 +26,9 @@ export const IntegrasiMySQLView: React.FC<IntegrasiMySQLViewProps> = ({
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isPreviewing, setIsPreviewing] = useState<boolean>(false);
+  const [showVpsModal, setShowVpsModal] = useState<boolean>(false);
+  const [vpsWebServer, setVpsWebServer] = useState<'nginx' | 'apache'>('nginx');
+  const [copiedCmd, setCopiedCmd] = useState<string>('');
 
   // Auto-fetch server MySQL config on mount so new devices get settings immediately
   useEffect(() => {
@@ -336,17 +339,27 @@ CREATE TABLE IF NOT EXISTS violation_templates (
         description="Hubungkan Aplikasi Sistem Presensi & Manajemen Sekolah ini ke database MySQL eksternal (Localhost XAMPP, Hosting cPanel, Cloud Server, RDS) dengan aman."
         badge="Integrasi Database Relasional & Server VPS"
         actions={
-          <a
-            href="/Panduan_Instalasi_Presensi_Siswa_V3_Apache_VPS.pdf"
-            download="Panduan_Instalasi_Presensi_Siswa_V3_Apache_VPS.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-extrabold rounded-2xl text-xs md:text-sm transition-all shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95"
-          >
-            <FileText className="w-4 h-4 text-slate-950" />
-            <span>Unduh Panduan PDF (VPS & Apache)</span>
-            <Download className="w-3.5 h-3.5 opacity-80" />
-          </a>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowVpsModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-extrabold rounded-2xl text-xs md:text-sm transition-all shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95"
+            >
+              <Terminal className="w-4 h-4" />
+              <span>Panduan Instalasi VPS (Terminal)</span>
+            </button>
+            <a
+              href="/Panduan_Instalasi_Presensi_Siswa_V3_Apache_VPS.pdf"
+              download="Panduan_Instalasi_Presensi_Siswa_V3_Apache_VPS.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-extrabold rounded-2xl text-xs md:text-sm transition-all shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95"
+            >
+              <FileText className="w-4 h-4 text-slate-950" />
+              <span>Unduh PDF (VPS & Apache)</span>
+              <Download className="w-3.5 h-3.5 opacity-80" />
+            </a>
+          </div>
         }
       />
 
@@ -651,6 +664,325 @@ DB_NAME=${database}`}
           </pre>
         </div>
       </div>
+
+      {/* Modal Panduan Instalasi VPS */}
+      {showVpsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-lg">
+                    Panduan Lengkap Instalasi & Deployment di VPS
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Ubuntu 22.04 / 24.04 LTS • Node.js v20 • PM2 • Reverse Proxy • SSL HTTPS
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVpsModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-sm">
+              {/* Alert Camera & SSL */}
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-start gap-3">
+                <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                  <strong>Penting untuk Fitur Kamera & Scan QR:</strong> Browser ponsel dan desktop hanya mengizinkan akses kamera jika aplikasi diakses melalui protokol <strong>HTTPS (SSL)</strong>. Pastikan Anda menyelesaikan langkah SSL (Certbot) di bawah ini.
+                </div>
+              </div>
+
+              {/* Web Server Switcher */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Pilih Reverse Proxy Server:
+                </span>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setVpsWebServer('nginx')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      vpsWebServer === 'nginx'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    Nginx (Rekomendasi)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVpsWebServer('apache')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                      vpsWebServer === 'apache'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    }`}
+                  >
+                    Apache2
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 1 */}
+              <div className="space-y-2">
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">1</span>
+                  Update Sistem & Instal Node.js v20 LTS + PM2
+                </h4>
+                <div className="relative">
+                  <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
+{`# 1. Update paket Ubuntu/Debian
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl git unzip ufw ${vpsWebServer === 'nginx' ? 'nginx' : 'apache2'}
+
+# 2. Instal Node.js v20 LTS resmi
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 3. Instal PM2 global
+sudo npm install -g pm2`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cmd = `sudo apt update && sudo apt upgrade -y\nsudo apt install -y curl git unzip ufw ${vpsWebServer === 'nginx' ? 'nginx' : 'apache2'}\ncurl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -\nsudo apt install -y nodejs\nsudo npm install -g pm2`;
+                      navigator.clipboard.writeText(cmd);
+                      setCopiedCmd('step1');
+                      onShowToast('Perintah Langkah 1 disalin ke clipboard!', 'success');
+                      setTimeout(() => setCopiedCmd(''), 2500);
+                    }}
+                    className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                  >
+                    {copiedCmd === 'step1' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCmd === 'step1' ? 'Disalin' : 'Salin'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="space-y-2">
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">2</span>
+                  Upload & Kompilasi (Build) Aplikasi di VPS
+                </h4>
+                <div className="relative">
+                  <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
+{`# 1. Buat folder aplikasi
+sudo mkdir -p /var/www/presensi
+sudo chown -R $USER:$USER /var/www/presensi
+cd /var/www/presensi
+
+# 2. Salin kode (via Git atau upload file ZIP dari menu Settings > Export to ZIP)
+# Jika upload ZIP: unzip presensi.zip
+
+# 3. Instal dependensi dan build
+npm install
+npm run build`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cmd = `sudo mkdir -p /var/www/presensi\nsudo chown -R $USER:$USER /var/www/presensi\ncd /var/www/presensi\nnpm install\nnpm run build`;
+                      navigator.clipboard.writeText(cmd);
+                      setCopiedCmd('step2');
+                      onShowToast('Perintah Langkah 2 disalin ke clipboard!', 'success');
+                      setTimeout(() => setCopiedCmd(''), 2500);
+                    }}
+                    className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                  >
+                    {copiedCmd === 'step2' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCmd === 'step2' ? 'Disalin' : 'Salin'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="space-y-2">
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">3</span>
+                  Jalankan Server dengan PM2 (Background Daemon)
+                </h4>
+                <div className="relative">
+                  <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
+{`# Jalankan server aplikasi di port 3000
+NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah"
+
+# Simpan dan aktifkan auto-start saat VPS reboot
+pm2 save
+pm2 startup`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cmd = `NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah"\npm2 save\npm2 startup`;
+                      navigator.clipboard.writeText(cmd);
+                      setCopiedCmd('step3');
+                      onShowToast('Perintah Langkah 3 disalin ke clipboard!', 'success');
+                      setTimeout(() => setCopiedCmd(''), 2500);
+                    }}
+                    className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                  >
+                    {copiedCmd === 'step3' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCmd === 'step3' ? 'Disalin' : 'Salin'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="space-y-2">
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">4</span>
+                  Konfigurasi Web Server ({vpsWebServer === 'nginx' ? 'Nginx Reverse Proxy' : 'Apache2 Reverse Proxy'})
+                </h4>
+                {vpsWebServer === 'nginx' ? (
+                  <div className="relative">
+                    <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
+{`# 1. Buat file virtual host Nginx
+sudo nano /etc/nginx/sites-available/presensi
+
+# 2. Masukkan konfigurasi ini (ganti domain dengan milik Anda):
+server {
+    listen 80;
+    server_name presensi.sekolah.sch.id; # atau IP VPS Anda
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# 3. Aktifkan dan reload Nginx
+sudo ln -s /etc/nginx/sites-available/presensi /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl restart nginx`}
+                    </pre>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cmd = `sudo ln -s /etc/nginx/sites-available/presensi /etc/nginx/sites-enabled/\nsudo rm -f /etc/nginx/sites-enabled/default\nsudo nginx -t\nsudo systemctl restart nginx`;
+                        navigator.clipboard.writeText(cmd);
+                        setCopiedCmd('step4');
+                        onShowToast('Perintah Nginx disalin ke clipboard!', 'success');
+                        setTimeout(() => setCopiedCmd(''), 2500);
+                      }}
+                      className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                    >
+                      {copiedCmd === 'step4' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedCmd === 'step4' ? 'Disalin' : 'Salin'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
+{`# 1. Aktifkan modul proxy Apache
+sudo a2enmod proxy proxy_http proxy_wstunnel rewrite headers ssl
+
+# 2. Buat konfigurasi vhost
+sudo nano /etc/apache2/sites-available/presensi.conf
+
+# 3. Isi konfigurasi vhost:
+<VirtualHost *:80>
+    ServerName presensi.sekolah.sch.id
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:3000/
+    ProxyPassReverse / http://127.0.0.1:3000/
+</VirtualHost>
+
+# 4. Aktifkan site dan reload Apache
+sudo a2ensite presensi.conf
+sudo apache2ctl configtest
+sudo systemctl restart apache2`}
+                    </pre>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cmd = `sudo a2enmod proxy proxy_http proxy_wstunnel rewrite headers ssl\nsudo a2ensite presensi.conf\nsudo apache2ctl configtest\nsudo systemctl restart apache2`;
+                        navigator.clipboard.writeText(cmd);
+                        setCopiedCmd('step4');
+                        onShowToast('Perintah Apache disalin ke clipboard!', 'success');
+                        setTimeout(() => setCopiedCmd(''), 2500);
+                      }}
+                      className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                    >
+                      {copiedCmd === 'step4' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedCmd === 'step4' ? 'Disalin' : 'Salin'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 5 */}
+              <div className="space-y-2">
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">5</span>
+                  Pasang SSL Gratis (HTTPS) dengan Certbot
+                </h4>
+                <div className="relative">
+                  <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
+{vpsWebServer === 'nginx'
+  ? `sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d presensi.sekolah.sch.id`
+  : `sudo apt install -y certbot python3-certbot-apache
+sudo certbot --apache -d presensi.sekolah.sch.id`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cmd = vpsWebServer === 'nginx'
+                        ? `sudo apt install -y certbot python3-certbot-nginx\nsudo certbot --nginx -d presensi.sekolah.sch.id`
+                        : `sudo apt install -y certbot python3-certbot-apache\nsudo certbot --apache -d presensi.sekolah.sch.id`;
+                      navigator.clipboard.writeText(cmd);
+                      setCopiedCmd('step5');
+                      onShowToast('Perintah Certbot SSL disalin ke clipboard!', 'success');
+                      setTimeout(() => setCopiedCmd(''), 2500);
+                    }}
+                    className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                  >
+                    {copiedCmd === 'step5' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCmd === 'step5' ? 'Disalin' : 'Salin'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-blue-600" />
+                <span>Dokumentasi lengkap juga tersedia di <strong>PANDUAN_INSTALL_VPS.md</strong></span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVpsModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold transition"
+              >
+                Tutup Panduan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -490,8 +490,16 @@ export const StudentQrScannerModal: React.FC<StudentQrScannerModalProps> = ({
           'class-qr-scanner-viewport',
           {
             fps: 12,
-            qrbox: { width: 220, height: 220 },
-            aspectRatio: 1.0,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              // Expanded scanning target area for scanning student cards easily
+              const width = Math.min(Math.floor(viewfinderWidth * 0.90), 500);
+              const height = Math.min(Math.floor(viewfinderHeight * 0.80), 380);
+              return {
+                width: Math.max(width, 280),
+                height: Math.max(height, 220),
+              };
+            },
+            aspectRatio: 1.25,
             showTorchButtonIfSupported: true,
             rememberLastUsedCamera: true,
           },

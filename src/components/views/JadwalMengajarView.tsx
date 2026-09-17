@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Calendar,
+  CalendarRange,
   Clock,
   BookOpen,
   Users,
@@ -23,15 +24,24 @@ import {
   Sun,
   Sunset,
   Sparkles,
+  Flag,
+  HeartHandshake,
   Info,
   X,
   FileSpreadsheet,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType } from '../../types';
+import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
 import { Pagination } from '../Pagination';
-import { addAuditLog, cleanMapelName } from '../../utils/helpers';
+import { addAuditLog, cleanMapelName, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
 import { DEFAULT_MATA_PELAJARAN } from '../../data/initialData';
+
+export { determineKelasKelompok, extractKelasTingkat };
 
 interface JadwalMengajarViewProps {
   appData: AppData;
@@ -56,6 +66,98 @@ export type HariKerja = (typeof HARI_SENIN_JUMAT)[number];
 
 // Standard lesson periods 1 to 10 (Both Shift Pagi and Shift Siang have 10 jam pelajaran)
 export const LIST_JAM_ANGKA = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
+// Jam Pelajaran timing configuration per shift
+// Shift Pagi: Mulai 06.30, 30 menit/JP, Istirahat 08.30-09.00, Berakhir 12.00
+// Shift Siang: Mulai 13.00, 20 menit/JP, Istirahat 15.00-15.30, Berakhir 16.50
+export const JAM_PELAJARAN_TIMES = {
+  Pagi: {
+    1: '06.30 - 07.00',
+    2: '07.00 - 07.30',
+    3: '07.30 - 08.00',
+    4: '08.00 - 08.30',
+    5: '09.00 - 09.30',
+    6: '09.30 - 10.00',
+    7: '10.00 - 10.30',
+    8: '10.30 - 11.00',
+    9: '11.00 - 11.30',
+    10: '11.30 - 12.00',
+  },
+  Siang: {
+    1: '13.00 - 13.20',
+    2: '13.20 - 13.40',
+    3: '13.40 - 14.00',
+    4: '14.00 - 14.20',
+    5: '14.20 - 14.40',
+    6: '14.40 - 15.00',
+    7: '15.30 - 15.50',
+    8: '15.50 - 16.10',
+    9: '16.10 - 16.30',
+    10: '16.30 - 16.50',
+  },
+} as const;
+
+export function getJamPelajaranTime(jamNum: number, shift: 'Pagi' | 'Siang' = 'Pagi'): string {
+  const normShift = shift === 'Siang' ? 'Siang' : 'Pagi';
+  return JAM_PELAJARAN_TIMES[normShift]?.[jamNum as keyof (typeof JAM_PELAJARAN_TIMES)['Pagi']] || '';
+}
+
+// 4 Matrix Shift & Kelompok Configurations
+export type MatrixShiftOptionId = 'pagi_k1' | 'siang_k2' | 'pagi_k2' | 'siang_k1';
+
+export interface MatrixShiftOption {
+  id: MatrixShiftOptionId;
+  label: string;
+  shift: 'Pagi' | 'Siang';
+  kelompok: 1 | 2;
+  kelompokLabel: string;
+  tingkatLabel: string;
+  icon: typeof Sun;
+  activeColor: string;
+}
+
+export const MATRIX_SHIFT_OPTIONS: MatrixShiftOption[] = [
+  {
+    id: 'pagi_k1',
+    label: 'Shift Pagi Kelas X & XI',
+    shift: 'Pagi',
+    kelompok: 1,
+    kelompokLabel: 'Kelas X & XI',
+    tingkatLabel: 'Kelas X & XI',
+    icon: Sun,
+    activeColor: 'bg-amber-500 text-white shadow-xs',
+  },
+  {
+    id: 'siang_k1',
+    label: 'Shift Siang Kelas X & XI',
+    shift: 'Siang',
+    kelompok: 1,
+    kelompokLabel: 'Kelas X & XI',
+    tingkatLabel: 'Kelas X & XI',
+    icon: Sunset,
+    activeColor: 'bg-indigo-600 text-white shadow-xs',
+  },
+  {
+    id: 'pagi_k2',
+    label: 'Shift Pagi Kelas XII',
+    shift: 'Pagi',
+    kelompok: 2,
+    kelompokLabel: 'Kelas XII',
+    tingkatLabel: 'Kelas XII',
+    icon: Sun,
+    activeColor: 'bg-amber-500 text-white shadow-xs',
+  },
+  {
+    id: 'siang_k2',
+    label: 'Shift Siang Kelas XII',
+    shift: 'Siang',
+    kelompok: 2,
+    kelompokLabel: 'Kelas XII',
+    tingkatLabel: 'Kelas XII',
+    icon: Sunset,
+    activeColor: 'bg-indigo-600 text-white shadow-xs',
+  },
+];
 
 // Helper to parse jamKe string (e.g. "1 - 3" or "1,2,3") to numbers array
 export function parseJamKeList(jamKeStr?: string, existingList?: number[]): number[] {
@@ -110,12 +212,16 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active Main Tab: 'tabel' (Daftar & Kelola) vs 'matriks' (Grid Jadwal Mingguan) vs 'form' (Input Jadwal)
-  const [activeTab, setActiveTab] = useState<'tabel' | 'matriks' | 'form'>('tabel');
+  // Active Main Tab: 'matriks' (Grid Jadwal Mingguan) vs 'tabel' (Daftar & Kelola)
+  const [activeTab, setActiveTab] = useState<'matriks' | 'tabel'>('matriks');
+  // Modal state untuk formulir input/edit jadwal (hanya muncul saat klik "+ Isi" pada matriks atau edit)
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   // Master Data collections
   const guruList: WaliKelas[] = useMemo(() => {
-    return appData.waliKelas || [];
+    return [...(appData.waliKelas || [])].sort((a, b) =>
+      (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' })
+    );
   }, [appData.waliKelas]);
 
   const kelasList: Kelas[] = useMemo(() => {
@@ -136,11 +242,15 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
   // User Role & Teacher Identity Detection
   const isAdmin = currentUser.role === 'admin';
-  const isTeacher = !isAdmin;
+  const isKurikulum = currentUser.role === 'kurikulum';
+  const isStafJadwal = currentUser.role === 'staf_jadwal';
+  const isGuruMapel = currentUser.role === 'guru' || currentUser.role === 'wali' || currentUser.role === 'user';
+  const canManageAll = isAdmin || isKurikulum || isStafJadwal;
+  const isTeacher = !canManageAll;
 
   // Resolve current logged-in teacher's profile
   const currentTeacherProfile = useMemo(() => {
-    if (isAdmin || !currentUser) return null;
+    if (canManageAll || !currentUser) return null;
     const d = (currentUser.data || {}) as any;
     const rawUser = String((currentUser as any)?.username || d.username || '').toLowerCase().trim();
     const uid = String(d.id || '').trim();
@@ -164,12 +274,12 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       nama: matchedInWali?.nama || d.nama || rawUser || 'Guru',
       mataPelajaran: matchedInWali?.mataPelajaran || d.mataPelajaran || '',
     };
-  }, [isAdmin, currentUser, appData.waliKelas]);
+  }, [canManageAll, currentUser, appData.waliKelas]);
 
   // Predicate: Does this schedule belong to the logged-in teacher?
   const isMySchedule = useCallback(
     (j: JadwalMengajarGuru) => {
-      if (isAdmin) return true;
+      if (canManageAll) return true;
       if (!currentTeacherProfile) return false;
 
       const profId = currentTeacherProfile.id?.toLowerCase().trim();
@@ -202,7 +312,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
       return false;
     },
-    [isAdmin, currentTeacherProfile, currentUser]
+    [canManageAll, currentTeacherProfile, currentUser]
   );
 
   // Raw master schedules
@@ -210,11 +320,11 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     return appData.jadwalMengajar || [];
   }, [appData.jadwalMengajar]);
 
-  // Active schedules: strictly only current teacher's schedules if teacher, or all if admin
+  // Active schedules: strictly only current teacher's schedules if teacher, or all if admin/kurikulum
   const jadwalList: JadwalMengajarGuru[] = useMemo(() => {
-    if (isAdmin) return allJadwalList;
+    if (canManageAll) return allJadwalList;
     return allJadwalList.filter(isMySchedule);
-  }, [isAdmin, allJadwalList, isMySchedule]);
+  }, [canManageAll, allJadwalList, isMySchedule]);
 
   /* =========================================================================
      FORM STATE: Specific format requested by User
@@ -238,7 +348,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     isTeacher && currentTeacherProfile?.mataPelajaran ? currentTeacherProfile.mataPelajaran : mapelList[0]?.nama || ''
   );
   const [formKodeMapel, setFormKodeMapel] = useState<string>(mapelList[0]?.kode || '');
-  const [formRuangan, setFormRuangan] = useState<string>('Ruang Kelas');
   const [formCatatan, setFormCatatan] = useState<string>('');
 
   /* =========================================================================
@@ -249,16 +358,115 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   const [filterHari, setFilterHari] = useState<string>('semua');
   const [filterKelas, setFilterKelas] = useState<string>('semua');
   const [filterGuru, setFilterGuru] = useState<string>('semua');
+  const [filterAcuan, setFilterAcuan] = useState<'semua' | 'sesuai' | 'di_luar'>('semua');
+  const [sortField, setSortField] = useState<'hari' | 'mapel' | 'guru' | 'kelas' | 'jam'>('hari');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Matrix Filter State (per Kelas atau per Guru) & Shift Matrix
+  const handleHeaderSort = (field: 'hari' | 'mapel' | 'guru' | 'kelas' | 'jam') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  // Matrix Filter State (per Kelas atau per Guru) & 4 Shift/Kelompok Matrix
   const [matrixMode, setMatrixMode] = useState<'kelas' | 'guru'>('guru');
-  const [matrixSelectedKelasId, setMatrixSelectedKelasId] = useState<string>(kelasList[0]?.id || '');
+  const [matrixShiftOption, setMatrixShiftOption] = useState<MatrixShiftOptionId>('pagi_k1');
+
+  // Helper to resolve kelompok for a class (with fallback to lookup by id)
+  const getKelasKelompok = (kelasNama?: string, kelasId?: string): 1 | 2 => {
+    if (kelasNama) return determineKelasKelompok(kelasNama);
+    if (kelasId) {
+      const found = kelasList.find((k) => k.id === kelasId);
+      if (found) return determineKelasKelompok(found.nama);
+    }
+    return 1;
+  };
+
+  const activeMatrixOption = useMemo(() => {
+    return MATRIX_SHIFT_OPTIONS.find((o) => o.id === matrixShiftOption) || MATRIX_SHIFT_OPTIONS[0];
+  }, [matrixShiftOption]);
+
+  const [matrixSelectedKelasId, setMatrixSelectedKelasId] = useState<string>(() => {
+    const firstMatching = kelasList.find((k) => determineKelasKelompok(k.nama) === 1);
+    return firstMatching?.id || kelasList[0]?.id || '';
+  });
   const [matrixSelectedGuruUsername, setMatrixSelectedGuruUsername] = useState<string>(
     isTeacher && currentTeacherProfile ? currentTeacherProfile.username : guruList[0]?.username || ''
   );
-  const [matrixShift, setMatrixShift] = useState<'Pagi' | 'Siang'>('Pagi');
+
+  const handleSelectMatrixOption = (optionId: MatrixShiftOptionId) => {
+    setMatrixShiftOption(optionId);
+    const targetOpt = MATRIX_SHIFT_OPTIONS.find((o) => o.id === optionId);
+    if (targetOpt && matrixMode === 'kelas') {
+      const curKelompok = getKelasKelompok(undefined, matrixSelectedKelasId);
+      if (curKelompok !== targetOpt.kelompok) {
+        const match = kelasList.find((k) => determineKelasKelompok(k.nama) === targetOpt.kelompok);
+        if (match) {
+          setMatrixSelectedKelasId(match.id);
+        }
+      }
+    }
+  };
+
+  // Horizontal Matrix Table Scroll Controls
+  const matrixScrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScrollPosition = useCallback(() => {
+    const el = matrixScrollContainerRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    const el = matrixScrollContainerRef.current;
+    if (!el) return;
+
+    checkScrollPosition();
+    el.addEventListener('scroll', checkScrollPosition, { passive: true });
+    window.addEventListener('resize', checkScrollPosition);
+
+    // Initial check after paint and after layout updates
+    const timer1 = setTimeout(checkScrollPosition, 50);
+    const timer2 = setTimeout(checkScrollPosition, 200);
+    const timer3 = setTimeout(checkScrollPosition, 500);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        checkScrollPosition();
+      });
+      resizeObserver.observe(el);
+    }
+
+    return () => {
+      el.removeEventListener('scroll', checkScrollPosition);
+      window.removeEventListener('resize', checkScrollPosition);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [checkScrollPosition, activeTab, matrixShiftOption, matrixMode, matrixSelectedKelasId, matrixSelectedGuruUsername]);
+
+  const handleScrollMatrix = (direction: 'left' | 'right') => {
+    const el = matrixScrollContainerRef.current;
+    if (!el) return;
+    const scrollAmount = 350;
+    el.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  };
 
   // Statistics Summary
   const shiftStats = useMemo(() => {
@@ -304,60 +512,290 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     }
   };
 
-  // Quick Preset Handlers
-  const selectJamRange = (start: number, end: number) => {
-    const list: number[] = [];
-    for (let i = start; i <= end; i++) list.push(i);
-    setFormSelectedJam(list);
+  // =========================================================================
+  // ACUAN MAPEL & KELAS GURU LOGIC & SYNCHRONIZATION
+  // =========================================================================
+
+  // Helper to get all assigned subject-class items for a specific teacher
+  const getGuruAssignedItems = useCallback(
+    (guruUsername?: string, guruId?: string, guruNama?: string, guruNip?: string): GuruMapelKelasItem[] => {
+      const list = appData.guruMapelKelas || [];
+      const gUser = String(guruUsername || '').toLowerCase().trim();
+      const gId = String(guruId || '').toLowerCase().trim();
+      const gNama = String(guruNama || '').toLowerCase().trim();
+      const gNip = String(guruNip || '').toLowerCase().trim();
+
+      const teacherInList = guruList.find(
+        (g) =>
+          (gUser && g.username.toLowerCase() === gUser) ||
+          (gId && g.id.toLowerCase() === gId) ||
+          (gNama && g.nama.toLowerCase() === gNama) ||
+          (gNip && g.nip && g.nip.toLowerCase() === gNip)
+      );
+
+      const refId = (teacherInList?.id || gId).toLowerCase();
+      const refUser = (teacherInList?.username || gUser).toLowerCase();
+      const refNama = (teacherInList?.nama || gNama).toLowerCase();
+      const refNip = (teacherInList?.nip || gNip).toLowerCase();
+
+      return list.filter((item) => {
+        const iId = String(item.guruId || '').toLowerCase().trim();
+        const iUser = String(item.guruUsername || '').toLowerCase().trim();
+        const iNama = String(item.guruNama || '').toLowerCase().trim();
+        const iNip = String(item.guruNip || '').toLowerCase().trim();
+
+        if (refId && iId && refId === iId) return true;
+        if (refUser && iUser && refUser === iUser) return true;
+        if (refNip && iNip && refNip === iNip) return true;
+        if (refNama && iNama && refNama === iNama) return true;
+        return false;
+      });
+    },
+    [appData.guruMapelKelas, guruList]
+  );
+
+  // Helper to check if a schedule row matches the teacher's official assignment (acuan)
+  const isJadwalMatchingAcuan = useCallback(
+    (item: JadwalMengajarGuru): boolean => {
+      const assigned = getGuruAssignedItems(item.guruUsername, item.guruId, item.guruNama, item.guruNip);
+      if (assigned.length === 0) return false;
+
+      const cleanItemMapel = cleanMapelName(item.mataPelajaran).toLowerCase().trim();
+      return assigned.some((a) => {
+        const cleanAssignedMapel = cleanMapelName(a.namaMapel).toLowerCase().trim();
+        const mapelMatches =
+          cleanItemMapel === cleanAssignedMapel ||
+          (a.kodeMapel && item.kodeMapel && a.kodeMapel.toLowerCase() === item.kodeMapel.toLowerCase());
+        const kelasMatches = (a.kelasIds || []).includes(item.kelasId);
+        return mapelMatches && kelasMatches;
+      });
+    },
+    [getGuruAssignedItems]
+  );
+
+  // Resolved teacher object for the current form
+  const formSelectedTeacherObj = useMemo(() => {
+    return guruList.find((g) => g.username === formGuruUsername);
+  }, [guruList, formGuruUsername]);
+
+  // Assigned mapels for the teacher currently selected in the form
+  const assignedMapelForFormGuru = useMemo(() => {
+    if (!formGuruUsername && !formSelectedTeacherObj) return [];
+    return getGuruAssignedItems(
+      formGuruUsername,
+      formSelectedTeacherObj?.id,
+      formSelectedTeacherObj?.nama,
+      formSelectedTeacherObj?.nip
+    );
+  }, [formGuruUsername, formSelectedTeacherObj, getGuruAssignedItems]);
+
+  // Matching assigned mapel item in form (if teacher is assigned to this mapel)
+  const matchingAcuanMapel = useMemo(() => {
+    const cleanInput = cleanMapelName(formMataPelajaran).toLowerCase().trim();
+    if (!cleanInput) return null;
+    return (
+      assignedMapelForFormGuru.find(
+        (m) =>
+          cleanMapelName(m.namaMapel).toLowerCase().trim() === cleanInput ||
+          (m.kodeMapel && formKodeMapel && m.kodeMapel.toLowerCase() === formKodeMapel.toLowerCase())
+      ) || null
+    );
+  }, [assignedMapelForFormGuru, formMataPelajaran, formKodeMapel]);
+
+  // Assigned classes for the selected teacher & mapel
+  const formAssignedKelasList = useMemo(() => {
+    if (matchingAcuanMapel && matchingAcuanMapel.kelasIds && matchingAcuanMapel.kelasIds.length > 0) {
+      return kelasList.filter((k) => matchingAcuanMapel.kelasIds.includes(k.id));
+    }
+    if (assignedMapelForFormGuru.length > 0) {
+      const allAssignedIds = new Set<string>();
+      assignedMapelForFormGuru.forEach((m) => {
+        (m.kelasIds || []).forEach((cId) => allAssignedIds.add(cId));
+      });
+      return kelasList.filter((k) => allAssignedIds.has(k.id));
+    }
+    return [];
+  }, [matchingAcuanMapel, assignedMapelForFormGuru, kelasList]);
+
+  // Classes outside the assigned list (if any)
+  const formOtherKelasList = useMemo(() => {
+    const assignedIds = new Set(formAssignedKelasList.map((k) => k.id));
+    return kelasList.filter((k) => !assignedIds.has(k.id));
+  }, [kelasList, formAssignedKelasList]);
+
+  // Ensure formKelasId is valid whenever formAssignedKelasList changes
+  useEffect(() => {
+    if (isFormModalOpen && formAssignedKelasList.length > 0) {
+      if (!formAssignedKelasList.some((k) => k.id === formKelasId)) {
+        setFormKelasId(formAssignedKelasList[0].id);
+      }
+    }
+  }, [isFormModalOpen, formAssignedKelasList, formKelasId]);
+
+  // Ensure formMataPelajaran is valid when modal opens with assigned items
+  useEffect(() => {
+    if (isFormModalOpen && assignedMapelForFormGuru.length > 0) {
+      const isCurrentValid = assignedMapelForFormGuru.some(
+        (a) => cleanMapelName(a.namaMapel).toLowerCase().trim() === cleanMapelName(formMataPelajaran).toLowerCase().trim()
+      );
+      if (!isCurrentValid && !editingId) {
+        const first = assignedMapelForFormGuru[0];
+        setFormMataPelajaran(cleanMapelName(first.namaMapel));
+        if (first.kodeMapel) setFormKodeMapel(first.kodeMapel);
+        if (first.kelasIds && first.kelasIds.length > 0) {
+          setFormKelasId(first.kelasIds[0]);
+        }
+      }
+    }
+  }, [isFormModalOpen, assignedMapelForFormGuru, formMataPelajaran, editingId]);
+
+  // Existing scheduled JP for this teacher, class, and mapel (excluding current editing item)
+  const existingScheduledJpForForm = useMemo(() => {
+    if (!formGuruUsername || !formKelasId || !formMataPelajaran) return 0;
+    const cleanInput = cleanMapelName(formMataPelajaran).toLowerCase().trim();
+    let totalJp = 0;
+    allJadwalList.forEach((j) => {
+      if (editingId && j.id === editingId) return;
+      if (j.guruUsername === formGuruUsername && j.kelasId === formKelasId) {
+        if (cleanMapelName(j.mataPelajaran).toLowerCase().trim() === cleanInput) {
+          const jList = parseJamKeList(j.jamKe, j.jamKeList);
+          totalJp += jList.length;
+        }
+      }
+    });
+    return totalJp;
+  }, [allJadwalList, editingId, formGuruUsername, formKelasId, formMataPelajaran]);
+
+  // Fast-select an assigned Mapel & its first Class as the Acuan
+  const handleSelectAcuanMapel = (item: GuruMapelKelasItem) => {
+    setFormMataPelajaran(cleanMapelName(item.namaMapel));
+    setFormKodeMapel(item.kodeMapel || '');
+    if (item.kelasIds && item.kelasIds.length > 0) {
+      if (!item.kelasIds.includes(formKelasId)) {
+        setFormKelasId(item.kelasIds[0]);
+      }
+    }
+    const targetJp = item.alokasiJp || 4;
+    if (formSelectedJam.length <= 1) {
+      const hours: number[] = [];
+      for (let i = 1; i <= Math.min(targetJp, 4); i++) {
+        hours.push(i);
+      }
+      setFormSelectedJam(hours.length > 0 ? hours : [1, 2]);
+    }
   };
 
-  const selectAllJam = () => {
-    setFormSelectedJam([...LIST_JAM_ANGKA]);
+  // Quick schedule directly from Acuan widget
+  const handleQuickScheduleFromAcuan = (item: GuruMapelKelasItem, targetKelasId: string) => {
+    setEditingId(null);
+    const teacherUser =
+      item.guruUsername ||
+      (guruList.find((g) => g.id === item.guruId)?.username) ||
+      formGuruUsername ||
+      guruList[0]?.username ||
+      '';
+    setFormGuruUsername(teacherUser);
+    setFormMataPelajaran(cleanMapelName(item.namaMapel));
+    setFormKodeMapel(item.kodeMapel || '');
+    setFormKelasId(targetKelasId);
+
+    const targetKelasObj = kelasList.find((k) => k.id === targetKelasId);
+    const targetKelompok = getKelasKelompok(targetKelasObj?.nama, targetKelasId);
+    setFormShift(activeMatrixOption.kelompok === targetKelompok ? activeMatrixOption.shift : 'Pagi');
+    setFormHari('Senin');
+
+    const targetJp = Math.min(item.alokasiJp || 3, 4);
+    const preJam: number[] = [];
+    for (let i = 1; i <= targetJp; i++) {
+      preJam.push(i);
+    }
+    setFormSelectedJam(preJam.length > 0 ? preJam : [1, 2, 3]);
+    setFormCatatan(`KBM ${cleanMapelName(item.namaMapel)}`);
+    setIsFormModalOpen(true);
   };
 
-  const resetJam = () => {
-    setFormSelectedJam([]);
-  };
-
-  // When teacher changes, auto-suggest their subject if available
+  // When teacher changes, auto-suggest their assigned subjects & classes from Acuan
   const handleGuruChange = (username: string) => {
     setFormGuruUsername(username);
-    const found = guruList.find((g) => g.username === username);
-    if (found && found.mataPelajaran && !formMataPelajaran) {
-      setFormMataPelajaran(cleanMapelName(found.mataPelajaran));
-      const mapelObj = mapelList.find((m) => m.nama === cleanMapelName(found.mataPelajaran));
+    const foundTeacher = guruList.find((g) => g.username === username);
+    const assigned = getGuruAssignedItems(
+      username,
+      foundTeacher?.id,
+      foundTeacher?.nama,
+      foundTeacher?.nip
+    );
+    if (assigned.length > 0) {
+      const firstItem = assigned[0];
+      setFormMataPelajaran(cleanMapelName(firstItem.namaMapel));
+      setFormKodeMapel(firstItem.kodeMapel || '');
+      if (firstItem.kelasIds && firstItem.kelasIds.length > 0) {
+        setFormKelasId(firstItem.kelasIds[0]);
+      }
+    } else if (foundTeacher && foundTeacher.mataPelajaran) {
+      setFormMataPelajaran(cleanMapelName(foundTeacher.mataPelajaran));
+      const mapelObj = mapelList.find((m) => m.nama === cleanMapelName(foundTeacher.mataPelajaran));
       if (mapelObj) setFormKodeMapel(mapelObj.kode);
     }
   };
 
-  // When mapel select changes
+  // When mapel select changes, synchronize code and check assigned classes
   const handleMapelChange = (mapelNama: string) => {
     const cleaned = cleanMapelName(mapelNama);
     setFormMataPelajaran(cleaned);
-    const found = mapelList.find((m) => m.nama === cleaned);
-    if (found) setFormKodeMapel(found.kode);
+    const foundInMaster = mapelList.find((m) => m.nama === cleaned);
+    if (foundInMaster) setFormKodeMapel(foundInMaster.kode);
+
+    const matchedAssigned = assignedMapelForFormGuru.find(
+      (item) => cleanMapelName(item.namaMapel).toLowerCase() === cleaned.toLowerCase()
+    );
+    if (matchedAssigned) {
+      if (matchedAssigned.kodeMapel) setFormKodeMapel(matchedAssigned.kodeMapel);
+      if (matchedAssigned.kelasIds && matchedAssigned.kelasIds.length > 0) {
+        if (!matchedAssigned.kelasIds.includes(formKelasId)) {
+          setFormKelasId(matchedAssigned.kelasIds[0]);
+        }
+      }
+    }
   };
 
-  // Reset form to clean state
+  // Reset form to clean state, prioritizing teacher's official Acuan
   const resetForm = () => {
     setEditingId(null);
     const teacherUser =
       isTeacher && currentTeacherProfile ? currentTeacherProfile.username : guruList[0]?.username || '';
     setFormGuruUsername(teacherUser);
     setFormHari('Senin');
-    setFormKelasId(kelasList[0]?.id || '');
     setFormShift('Pagi');
-    setFormSelectedJam([1, 2, 3]);
-    const defaultMapel = cleanMapelName(
-      isTeacher && currentTeacherProfile?.mataPelajaran
-        ? currentTeacherProfile.mataPelajaran
-        : mapelList[0]?.nama || ''
-    );
-    setFormMataPelajaran(defaultMapel);
-    const defaultKode =
-      mapelList.find((m) => m.nama === defaultMapel)?.kode || mapelList[0]?.kode || '';
-    setFormKodeMapel(defaultKode);
-    setFormRuangan('Ruang Kelas');
+
+    const teacherObj = guruList.find((g) => g.username === teacherUser);
+    const assigned = getGuruAssignedItems(teacherUser, teacherObj?.id, teacherObj?.nama, teacherObj?.nip);
+
+    if (assigned.length > 0) {
+      const firstItem = assigned[0];
+      setFormMataPelajaran(cleanMapelName(firstItem.namaMapel));
+      setFormKodeMapel(firstItem.kodeMapel || '');
+      if (firstItem.kelasIds && firstItem.kelasIds.length > 0) {
+        setFormKelasId(firstItem.kelasIds[0]);
+      } else {
+        setFormKelasId(kelasList[0]?.id || '');
+      }
+      const defaultHours: number[] = [];
+      const target = Math.min(firstItem.alokasiJp || 3, 4);
+      for (let i = 1; i <= target; i++) defaultHours.push(i);
+      setFormSelectedJam(defaultHours.length > 0 ? defaultHours : [1, 2, 3]);
+    } else {
+      setFormKelasId(kelasList[0]?.id || '');
+      setFormSelectedJam([1, 2, 3]);
+      const defaultMapel = cleanMapelName(
+        isTeacher && currentTeacherProfile?.mataPelajaran
+          ? currentTeacherProfile.mataPelajaran
+          : mapelList[0]?.nama || ''
+      );
+      setFormMataPelajaran(defaultMapel);
+      const defaultKode =
+        mapelList.find((m) => m.nama === defaultMapel)?.kode || mapelList[0]?.kode || '';
+      setFormKodeMapel(defaultKode);
+    }
     setFormCatatan('');
   };
 
@@ -374,10 +812,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
     setFormMataPelajaran(cleanMapelName(item.mataPelajaran) || '');
     setFormKodeMapel(item.kodeMapel || '');
-    setFormRuangan(item.ruangan || 'Ruang Kelas');
     setFormCatatan(item.catatan || '');
 
-    setActiveTab('form');
+    setIsFormModalOpen(true);
   };
 
   // Duplicate schedule handler
@@ -392,12 +829,86 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     setFormSelectedJam(parseJamKeList(item.jamKe, item.jamKeList));
     setFormMataPelajaran(cleanMapelName(item.mataPelajaran));
     setFormKodeMapel(item.kodeMapel || '');
-    setFormRuangan(item.ruangan || 'Ruang Kelas');
     setFormCatatan(item.catatan || '');
 
-    setActiveTab('form');
+    setIsFormModalOpen(true);
     onShowToast(`Duplikasi form jadwal: ${cleanMapelName(item.mataPelajaran)}. Silakan sesuaikan lalu simpan!`, 'info');
   };
+
+  // Open Form modal for specific cell in the Matrix
+  const handleOpenFormForCell = useCallback(
+    (hari: HariKerja, jamNum: number) => {
+      resetForm();
+      setFormHari(hari);
+      setFormShift(activeMatrixOption.shift);
+      if (matrixMode === 'kelas') {
+        setFormKelasId(matrixSelectedKelasId);
+        const classAcuan = (appData.guruMapelKelas || []).find((item) =>
+          (item.kelasIds || []).includes(matrixSelectedKelasId)
+        );
+        if (classAcuan && classAcuan.guruUsername) {
+          setFormGuruUsername(classAcuan.guruUsername);
+          setFormMataPelajaran(cleanMapelName(classAcuan.namaMapel));
+          setFormKodeMapel(classAcuan.kodeMapel || '');
+        }
+      } else {
+        const targetGuruUser =
+          isTeacher && currentTeacherProfile
+            ? currentTeacherProfile.username
+            : matrixSelectedGuruUsername;
+        setFormGuruUsername(targetGuruUser);
+        const tObj = guruList.find((g) => g.username === targetGuruUser);
+        const tAssigned = getGuruAssignedItems(
+          targetGuruUser,
+          tObj?.id,
+          tObj?.nama,
+          tObj?.nip
+        );
+        if (tAssigned.length > 0) {
+          let chosen = tAssigned[0];
+          let chosenClassId = chosen.kelasIds?.[0] || '';
+          for (const item of tAssigned) {
+            const matchCId = (item.kelasIds || []).find(
+              (cId) => getKelasKelompok(undefined, cId) === activeMatrixOption.kelompok
+            );
+            if (matchCId) {
+              chosen = item;
+              chosenClassId = matchCId;
+              break;
+            }
+          }
+          setFormMataPelajaran(cleanMapelName(chosen.namaMapel));
+          setFormKodeMapel(chosen.kodeMapel || '');
+          if (chosenClassId) {
+            setFormKelasId(chosenClassId);
+          }
+        } else {
+          const matchingKelas = kelasList.find(
+            (k) => determineKelasKelompok(k.nama) === activeMatrixOption.kelompok
+          );
+          if (matchingKelas) {
+            setFormKelasId(matchingKelas.id);
+          }
+        }
+      }
+      setFormSelectedJam([jamNum]);
+      setIsFormModalOpen(true);
+    },
+    [
+      resetForm,
+      activeMatrixOption,
+      matrixMode,
+      matrixSelectedKelasId,
+      appData.guruMapelKelas,
+      isTeacher,
+      currentTeacherProfile,
+      matrixSelectedGuruUsername,
+      guruList,
+      getGuruAssignedItems,
+      getKelasKelompok,
+      kelasList,
+    ]
+  );
 
   // Delete schedule handler
   const handleDelete = (item: JadwalMengajarGuru) => {
@@ -419,9 +930,30 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     );
   };
 
+  // Delete all schedules handler
+  const handleDeleteAll = () => {
+    if (readOnly || allJadwalList.length === 0) return;
+    onConfirmModal(
+      'Kosongkan Seluruh Jadwal Pelajaran',
+      `Apakah Anda yakin ingin menghapus seluruh (${allJadwalList.length}) jadwal pelajaran tiap kelas? Tindakan ini akan mengosongkan seluruh daftar jadwal.`,
+      'danger',
+      () => {
+        const updatedAppData = addAuditLog(
+          { ...appData, jadwalMengajar: [] },
+          'Kosongkan Jadwal Pelajaran',
+          `Menghapus seluruh ${allJadwalList.length} jadwal pelajaran tiap kelas.`
+        );
+        onUpdateAppData(updatedAppData);
+        onShowToast('Seluruh jadwal pelajaran berhasil dikosongkan.', 'success');
+      }
+    );
+  };
+
   /* =========================================================================
      SMART ANTI-BENTROK (CONFLICT DETECTION) REALTIME
-     Checks for collisions on the SAME Day, SAME Shift, and Overlapping Jam Ke (1-10)
+     Checks for collisions on the SAME Day, SAME Shift, SAME Kelompok, and Overlapping Jam Ke (1-10)
+     Note: Kelompok 1 (Kelas X & XI) and Kelompok 2 (Kelas XII) have different shift schedules,
+     so schedules across different Kelompok do not conflict!
      ========================================================================= */
   const conflictWarnings = useMemo(() => {
     if (formSelectedJam.length === 0) return [];
@@ -429,15 +961,27 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
     const otherSchedules = allJadwalList.filter((j) => j.id !== editingId);
 
-    // 1. Check Guru Bentrok (Teacher teaching another class at same day, same shift, and overlapping hour)
+    // Resolve Kelompok for the current form class
+    const selectedKelasObj = kelasList.find((k) => k.id === formKelasId);
+    const formKelompok = getKelasKelompok(selectedKelasObj?.nama, formKelasId);
+
+    // 1. Check Guru Bentrok (Teacher teaching another class in the SAME KELOMPOK at same day, same shift, and overlapping hour)
     for (const other of otherSchedules) {
+      const otherKelompok = getKelasKelompok(other.kelasNama, other.kelasId);
+
+      // CRITICAL FIX: Bentrok ONLY applies within the SAME KELOMPOK (Satu Kelompok)!
+      // Kelompok 1 and Kelompok 2 have different shift schedules, so a teacher teaching Kelompok 1 & 2 never collides!
+      if (otherKelompok !== formKelompok) {
+        continue;
+      }
+
       const otherShift = other.shift === 'Siang' ? 'Siang' : 'Pagi';
       if (other.guruUsername === formGuruUsername && other.hari === formHari && otherShift === formShift) {
         const otherJamList = parseJamKeList(other.jamKe, other.jamKeList);
         const overlap = formSelectedJam.filter((j) => otherJamList.includes(j));
         if (overlap.length > 0) {
           warnings.push(
-            `Guru Bentrok: ${other.guruNama} sudah dijadwalkan di kelas ${other.kelasNama} (${other.mataPelajaran}) pada hari ${formHari} Shift ${formShift} Jam ke-${overlap.join(', ')}!`
+            `Guru Bentrok (Kelompok ${formKelompok}): ${other.guruNama} sudah dijadwalkan di kelas ${other.kelasNama} (${other.mataPelajaran}) pada hari ${formHari} Shift ${formShift} Jam ke-${overlap.join(', ')}!`
           );
         }
       }
@@ -458,7 +1002,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     }
 
     return warnings;
-  }, [formSelectedJam, formGuruUsername, formHari, formKelasId, formShift, editingId, allJadwalList]);
+  }, [formSelectedJam, formGuruUsername, formHari, formKelasId, formShift, editingId, allJadwalList, kelasList]);
 
   // Form Submit Handler
   const handleSaveJadwal = (e: React.FormEvent) => {
@@ -506,7 +1050,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       jamKeList: sortedJam,
       jamKe: formattedJamKe,
       shift: formShift,
-      ruangan: formRuangan.trim() || 'Ruang Kelas',
       catatan: formCatatan.trim(),
     };
 
@@ -532,30 +1075,75 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     );
 
     resetForm();
-    setActiveTab('tabel');
+    setIsFormModalOpen(false);
   };
 
   /* =========================================================================
-     FILTERED JADWAL FOR TABLE
+     FILTERED & SORTED JADWAL FOR TABLE
      ========================================================================= */
   const filteredJadwal = useMemo(() => {
-    return jadwalList.filter((item) => {
+    const list = jadwalList.filter((item) => {
       const matchSearch =
         searchTerm === '' ||
         item.mataPelajaran.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.guruNama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.kelasNama.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.ruangan || '').toLowerCase().includes(searchTerm.toLowerCase());
+        item.kelasNama.toLowerCase().includes(searchTerm.toLowerCase());
 
       const itemShift = item.shift === 'Siang' ? 'Siang' : 'Pagi';
       const matchShift = filterShift === 'semua' || itemShift === filterShift;
       const matchHari = filterHari === 'semua' || item.hari === filterHari;
       const matchKelas = filterKelas === 'semua' || item.kelasId === filterKelas;
       const matchGuru = filterGuru === 'semua' || item.guruUsername === filterGuru;
+      const matchAcuan =
+        filterAcuan === 'semua' ||
+        (filterAcuan === 'sesuai' ? isJadwalMatchingAcuan(item) : !isJadwalMatchingAcuan(item));
 
-      return matchSearch && matchShift && matchHari && matchKelas && matchGuru;
+      return matchSearch && matchShift && matchHari && matchKelas && matchGuru && matchAcuan;
     });
-  }, [jadwalList, searchTerm, filterShift, filterHari, filterKelas, filterGuru]);
+
+    const dayOrderMap: Record<string, number> = {
+      Senin: 1,
+      Selasa: 2,
+      Rabu: 3,
+      Kamis: 4,
+      Jumat: 5,
+      Sabtu: 6,
+      Minggu: 7,
+    };
+
+    return [...list].sort((a, b) => {
+      let comp = 0;
+      if (sortField === 'hari') {
+        const orderA = dayOrderMap[a.hari] || 99;
+        const orderB = dayOrderMap[b.hari] || 99;
+        if (orderA !== orderB) {
+          comp = orderA - orderB;
+        } else {
+          const shiftA = (a.shift || 'Pagi') === 'Siang' ? 2 : 1;
+          const shiftB = (b.shift || 'Pagi') === 'Siang' ? 2 : 1;
+          if (shiftA !== shiftB) {
+            comp = shiftA - shiftB;
+          } else {
+            const jamA = parseJamKeList(a.jamKe, a.jamKeList)[0] || 1;
+            const jamB = parseJamKeList(b.jamKe, b.jamKeList)[0] || 1;
+            comp = jamA - jamB;
+          }
+        }
+      } else if (sortField === 'mapel') {
+        comp = cleanMapelName(a.mataPelajaran).localeCompare(cleanMapelName(b.mataPelajaran), 'id', { sensitivity: 'base' });
+      } else if (sortField === 'guru') {
+        comp = (a.guruNama || '').localeCompare(b.guruNama || '', 'id', { sensitivity: 'base' });
+      } else if (sortField === 'kelas') {
+        comp = (a.kelasNama || '').localeCompare(b.kelasNama || '', 'id', { numeric: true });
+      } else if (sortField === 'jam') {
+        const jamA = parseJamKeList(a.jamKe, a.jamKeList)[0] || 1;
+        const jamB = parseJamKeList(b.jamKe, b.jamKeList)[0] || 1;
+        comp = jamA - jamB;
+      }
+
+      return sortOrder === 'asc' ? comp : -comp;
+    });
+  }, [jadwalList, searchTerm, filterShift, filterHari, filterKelas, filterGuru, filterAcuan, isJadwalMatchingAcuan, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredJadwal.length / itemsPerPage) || 1;
   const paginatedJadwal = useMemo(() => {
@@ -585,7 +1173,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
         'Kode Mapel': j.kodeMapel || '-',
         'Jam Ke (1-10)': jamList.length > 0 ? jamList.join(', ') : j.jamKe || '-',
         'Total JP': jamList.length > 0 ? `${jamList.length} JP` : '-',
-        Ruangan: j.ruangan || 'Ruang Kelas',
         Catatan: j.catatan || '-',
       };
     });
@@ -615,7 +1202,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
         KELAS: kelasList[0]?.nama || 'X RPL 1',
         'MATA PELAJARAN': 'Pemrograman Web',
         'JAM KE (1-10)': '1, 2, 3',
-        RUANGAN: 'Lab Komputer 1',
         CATATAN: 'Materi Dasar HTML & CSS',
       },
       {
@@ -626,7 +1212,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
         KELAS: kelasList[1]?.nama || 'XI RPL 1',
         'MATA PELAJARAN': 'Matematika Wajib',
         'JAM KE (1-10)': '1, 2, 3, 4',
-        RUANGAN: 'Ruang Teori 2',
         CATATAN: 'Aljabar Linear',
       },
     ];
@@ -707,7 +1292,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             mataPelajaran: mapelStr,
             jamKeList: sorted,
             jamKe: formatJamKeDisplay(sorted),
-            ruangan: String(r['RUANGAN'] || r['Ruangan'] || 'Ruang Kelas').trim(),
             catatan: String(r['CATATAN'] || r['Catatan'] || '').trim(),
           });
           importedCount++;
@@ -736,20 +1320,39 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   };
 
   /* =========================================================================
-     RENDER MATRIX DATA (Per Kelas atau Per Guru, Filtered by Shift)
+     RENDER MATRIX DATA (Per Kelas atau Per Guru, Filtered by 4 Shift & Kelompok)
      ========================================================================= */
   const matrixSchedules = useMemo(() => {
+    const targetShift = activeMatrixOption.shift;
+    const targetKelompok = activeMatrixOption.kelompok;
+
     return jadwalList.filter((j) => {
       const matchesTarget =
-        !isAdmin
+        isTeacher
           ? true
           : matrixMode === 'kelas'
           ? j.kelasId === matrixSelectedKelasId
           : j.guruUsername === matrixSelectedGuruUsername;
-      const itemShift = j.shift === 'Siang' ? 'Siang' : 'Pagi';
-      return matchesTarget && itemShift === matrixShift;
+
+      if (!matchesTarget) return false;
+
+      const itemShift = (j.shift || 'Pagi').toLowerCase() === 'siang' ? 'Siang' : 'Pagi';
+      if (itemShift !== targetShift) return false;
+
+      const itemKelompok = getKelasKelompok(j.kelasNama, j.kelasId);
+      if (itemKelompok !== targetKelompok) return false;
+
+      return true;
     });
-  }, [jadwalList, matrixMode, matrixSelectedKelasId, matrixSelectedGuruUsername, matrixShift, isAdmin]);
+  }, [
+    jadwalList,
+    matrixMode,
+    matrixSelectedKelasId,
+    matrixSelectedGuruUsername,
+    activeMatrixOption,
+    isTeacher,
+    kelasList,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -768,181 +1371,84 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             : `${jadwalList.length} Jadwal Terjadwal`
         }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {!readOnly && (
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            {/* Group Excel Actions */}
+            <div className="inline-flex items-center p-0.5 bg-white/15 rounded-xl border border-white/20 backdrop-blur-xs">
               <button
                 type="button"
-                onClick={() => {
-                  resetForm();
-                  setActiveTab('form');
-                }}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition cursor-pointer"
+                onClick={handleExportExcel}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white hover:bg-white/15 transition cursor-pointer"
+                title={isTeacher ? 'Ekspor Jadwal Mengajar Saya ke Excel' : 'Ekspor Jadwal ke Excel'}
               >
-                <Plus className="w-4 h-4" />
-                <span>{isTeacher ? 'Tambah Jadwal Saya' : 'Tambah Jadwal Baru'}</span>
+                <Download className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Ekspor</span>
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
-              title={isTeacher ? 'Ekspor Jadwal Mengajar Saya ke Excel' : 'Ekspor Jadwal ke Excel'}
-            >
-              <Download className="w-4 h-4 text-emerald-600" />
-              <span className="hidden sm:inline">{isTeacher ? 'Ekspor Jadwal Saya' : 'Ekspor Excel'}</span>
-            </button>
+              {!readOnly && (
+                <>
+                  <div className="w-px h-3.5 bg-white/20 my-auto" />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white hover:bg-white/15 transition cursor-pointer"
+                    title="Import Jadwal dari Excel"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-blue-200" />
+                    <span>Import</span>
+                  </button>
+                  <div className="w-px h-3.5 bg-white/20 my-auto" />
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white hover:bg-white/15 transition cursor-pointer"
+                    title="Unduh Template Excel"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Template</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handleImportExcel}
+                    className="hidden"
+                  />
+                </>
+              )}
+            </div>
 
-            {!readOnly && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
-                  title="Import Jadwal dari Excel"
-                >
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  <span className="hidden sm:inline">Import Excel</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadTemplate}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
-                  title="Unduh Template Excel"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-amber-600" />
-                  <span className="hidden sm:inline">Template</span>
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx, .xls, .csv"
-                  onChange={handleImportExcel}
-                  className="hidden"
-                />
-              </>
-            )}
-
+            {/* Cetak */}
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-white/15 hover:bg-white/25 border border-white/20 transition cursor-pointer backdrop-blur-xs"
               title="Cetak Jadwal Pelajaran"
             >
-              <Printer className="w-4 h-4 text-purple-600" />
-              <span className="hidden sm:inline">{isTeacher ? 'Cetak Jadwal Saya' : 'Cetak'}</span>
+              <Printer className="w-3.5 h-3.5 text-white" />
+              <span>Cetak</span>
             </button>
+
+            {/* Kosongkan */}
+            {!readOnly && allJadwalList.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteAll}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-200 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 transition cursor-pointer"
+                title="Hapus / Kosongkan Seluruh Jadwal Pelajaran"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+                <span>Kosongkan</span>
+              </button>
+            )}
           </div>
         }
       />
 
-      {/* SHIFT OVERVIEW STATS CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Card 1: Total Jadwal / Sesi Mengajar Saya */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-              {isTeacher ? 'Total Sesi Mengajar Saya' : 'Total Jadwal'}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
-              <Calendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white">{shiftStats.total}</span>
-            <span className="text-xs font-medium text-slate-400">
-              {isTeacher ? `${shiftStats.totalJp} Total JP` : 'Sesi Pelajaran'}
-            </span>
-          </div>
-        </div>
 
-        {/* Card 2: Shift Pagi (10 Jam) */}
-        <div
-          onClick={() => {
-            setFilterShift('Pagi');
-            setActiveTab('tabel');
-          }}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-amber-200/70 dark:border-amber-900/40 p-4 shadow-xs hover:border-amber-400 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-              <Sun className="w-3.5 h-3.5" /> Shift Pagi
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
-              Jam 1 - 10
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{shiftStats.pagi}</span>
-            <span className="text-xs font-medium text-slate-400">
-              {isTeacher ? `${shiftStats.pagiJp} JP Terjadwal` : 'Sesi Terjadwal'}
-            </span>
-          </div>
-        </div>
-
-        {/* Card 3: Shift Siang (10 Jam) */}
-        <div
-          onClick={() => {
-            setFilterShift('Siang');
-            setActiveTab('tabel');
-          }}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-indigo-200/70 dark:border-indigo-900/40 p-4 shadow-xs hover:border-indigo-400 transition cursor-pointer"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
-              <Sunset className="w-3.5 h-3.5" /> Shift Siang
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
-              Jam 1 - 10
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{shiftStats.siang}</span>
-            <span className="text-xs font-medium text-slate-400">
-              {isTeacher ? `${shiftStats.siangJp} JP Terjadwal` : 'Sesi Terjadwal'}
-            </span>
-          </div>
-        </div>
-
-        {/* Card 4: Total Guru / Beban Mengajar */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-              {isTeacher ? 'Beban Mengajar (JP)' : 'Guru Terjadwal'}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600">
-              {isTeacher ? <BookOpen className="w-4 h-4" /> : <Users className="w-4 h-4" />}
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white">
-              {isTeacher ? `${shiftStats.totalJp} JP` : shiftStats.totalGuru}
-            </span>
-            <span className="text-xs font-medium text-slate-400">
-              {isTeacher
-                ? currentTeacherProfile?.mataPelajaran || 'Mata Pelajaran Aktif'
-                : `dari ${guruList.length} Guru`}
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* Main Tabs Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('tabel')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-              activeTab === 'tabel'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <List className="w-4 h-4" />
-            <span>{isTeacher ? `Jadwal Saya (${jadwalList.length})` : `Daftar Tabel (${jadwalList.length})`}</span>
-          </button>
-
           <button
             type="button"
             onClick={() => setActiveTab('matriks')}
@@ -956,20 +1462,18 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             <span>{isTeacher ? 'Matriks Mingguan Saya' : 'Matriks Mingguan (Senin - Jumat)'}</span>
           </button>
 
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('form')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                activeTab === 'form'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              <span>{editingId ? 'Edit Jadwal' : 'Form Input Jadwal'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setActiveTab('tabel')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              activeTab === 'tabel'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <List className="w-4 h-4" />
+            <span>{isTeacher ? `Jadwal Saya (${jadwalList.length})` : `Daftar Tabel (${jadwalList.length})`}</span>
+          </button>
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -979,45 +1483,79 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       </div>
 
       {/* =====================================================================
-          TAB 1: FORM INPUT JADWAL MENGAJAR
-          - Nama Guru (dropdown)
-          - Hari (dropdown senin-jumat)
-          - Kelas (dropdown)
-          - Shift (☀️ Shift Pagi / 🌤️ Shift Siang)
-          - Jam dengan angka 1-10 (bulatan biru)
+          MODAL: FORM INPUT / EDIT JADWAL MENGAJAR
+          Hanya muncul saat klik "+ Isi" pada Matriks (atau Edit)
           ===================================================================== */}
-      {activeTab === 'form' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-blue-600" />
-                <span>
-                  {editingId
-                    ? isTeacher
-                      ? `Edit Jadwal Mengajar: ${formMataPelajaran || 'Sesi Pelajaran'}`
-                      : `Edit Jadwal Mengajar Guru: ${formMataPelajaran || 'Sesi Pelajaran'}`
-                    : isTeacher
-                    ? 'Formulir Tambah Jadwal Mengajar Saya'
-                    : 'Formulir Jadwal Mengajar Guru'}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {isTeacher
-                  ? 'Sesuaikan Hari (Senin-Jumat), Kelas, Shift (Pagi/Siang), Jam Pelajaran 1-10 (Bulatan Biru), dan Mata Pelajaran Anda.'
-                  : 'Pilih Nama Guru, Hari (Senin-Jumat), Kelas, Shift (Pagi/Siang), dan Jam Pelajaran 1-10 (Bulatan Biru)'}
-              </p>
-            </div>
-            {editingId && (
+      {isFormModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+          <div
+            className="fixed inset-0"
+            onClick={() => {
+              resetForm();
+              setIsFormModalOpen(false);
+            }}
+          />
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-3xl my-6 overflow-hidden z-10 flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>
+                      {editingId
+                        ? isTeacher
+                          ? `Edit Jadwal Mengajar: ${formMataPelajaran || 'Sesi Pelajaran'}`
+                          : `Edit Jadwal Mengajar Guru: ${formMataPelajaran || 'Sesi Pelajaran'}`
+                        : isTeacher
+                        ? 'Isi Jadwal Mengajar Saya'
+                        : 'Isi Jadwal Mengajar Guru'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex flex-wrap items-center gap-1.5">
+                    <span>Hari {formHari}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">Shift {formShift}</span>
+                    <span>•</span>
+                    <span>Jam ke-{formSelectedJam.join(', ') || '-'}</span>
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={resetForm}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center gap-1 cursor-pointer"
+                onClick={() => {
+                  resetForm();
+                  setIsFormModalOpen(false);
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                title="Tutup (Batal)"
               >
-                <X className="w-4 h-4" /> Batal Edit
+                <X className="w-5 h-5" />
               </button>
-            )}
-          </div>
+            </div>
+
+            {/* Modal Body (Scrollable) */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-6">
+
+          {/* Special Routine Slot Notice (Senin Jam 1-2 Upacara, Jumat Jam 1-2 Pembiasaan Baik) */}
+          {formHari === 'Senin' && formSelectedJam.some((j) => j === 1 || j === 2) && (
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-800 dark:text-rose-200 flex items-center gap-2.5 text-xs font-semibold">
+              <Flag className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>
+                <strong>Informasi Rutinitas:</strong> Hari Senin Jam ke-1 &amp; 2 digunakan untuk <strong>Upacara Bendera</strong> (wajib seluruh guru &amp; siswa).
+              </span>
+            </div>
+          )}
+          {formHari === 'Jumat' && formSelectedJam.some((j) => j === 1 || j === 2) && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-200 flex items-center gap-2.5 text-xs font-semibold">
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                <strong>Informasi Rutinitas:</strong> Hari Jumat Jam ke-1 &amp; 2 digunakan untuk <strong>Pembiasaan Baik</strong> (Karakter, Literasi &amp; Rohis).
+              </span>
+            </div>
+          )}
 
           {/* Conflict Warnings Alert */}
           {conflictWarnings.length > 0 && (
@@ -1038,9 +1576,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           )}
 
           <form onSubmit={handleSaveJadwal} className="space-y-6">
-            {/* ROW 1: Guru, Hari, Kelas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* 1. NAMA GURU (Dropdown) */}
+            {/* ROW 1: Guru & Hari */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 1. NAMA GURU */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-blue-600" />
@@ -1062,7 +1600,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                     <option value="">-- Pilih Guru Pengampu --</option>
                     {guruList.map((g) => (
                       <option key={g.id} value={g.username}>
-                        {g.nama} {g.nip ? `(NIP: ${g.nip})` : ''} - [{g.username}]
+                        {g.nama}
                       </option>
                     ))}
                   </select>
@@ -1091,13 +1629,75 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 </select>
                 <p className="text-[11px] text-slate-400">Senin, Selasa, Rabu, Kamis, atau Jumat</p>
               </div>
+            </div>
 
-              {/* 3. KELAS (Dropdown) */}
+            {/* ROW 2: Mata Pelajaran & Kelas (Dibatasi Khusus Mapel & Kelas Ajar Terpilih) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 3. MATA PELAJARAN */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
-                  <span>3. Kelas</span>
-                  <span className="text-rose-500">*</span>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>3. Mata Pelajaran</span> <span className="text-rose-500">*</span>
+                  </span>
+                  {assignedMapelForFormGuru.length > 0 && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {assignedMapelForFormGuru.length} Mapel Ajar
+                    </span>
+                  )}
+                </label>
+
+                {assignedMapelForFormGuru.length > 0 ? (
+                  <select
+                    value={formMataPelajaran}
+                    onChange={(e) => handleMapelChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                    required
+                  >
+                    <option value="">-- Pilih Mata Pelajaran --</option>
+                    {assignedMapelForFormGuru.map((item) => (
+                      <option key={item.id} value={item.namaMapel}>
+                        {item.namaMapel} ({item.alokasiJp || 4} JP • {item.kelasIds?.length || 0} Kelas)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="space-y-1.5">
+                    <select
+                      value={formMataPelajaran}
+                      onChange={(e) => handleMapelChange(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                      required
+                    >
+                      <option value="">-- Pilih Mata Pelajaran --</option>
+                      {mapelList.map((m) => (
+                        <option key={m.id} value={m.nama}>
+                          {m.nama}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-400">
+                  {assignedMapelForFormGuru.length > 0
+                    ? 'Mata pelajaran yang ditugaskan kepada guru ini'
+                    : 'Pilih mata pelajaran dari katalog master'}
+                </p>
+              </div>
+
+              {/* 4. KELAS AJAR */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
+                    <span>4. Kelas</span>
+                    <span className="text-rose-500">*</span>
+                  </span>
+                  {formAssignedKelasList.length > 0 && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {formAssignedKelasList.length} Kelas Terpilih
+                    </span>
+                  )}
                 </label>
                 <select
                   value={formKelasId}
@@ -1106,156 +1706,131 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   required
                 >
                   <option value="">-- Pilih Kelas --</option>
-                  {kelasList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.nama}
+                  {formAssignedKelasList.length > 0 ? (
+                    formAssignedKelasList.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.nama}
+                      </option>
+                    ))
+                  ) : assignedMapelForFormGuru.length > 0 ? (
+                    <option value="" disabled>
+                      (Belum ada kelas yang ditentukan untuk mapel ini)
                     </option>
-                  ))}
+                  ) : (
+                    kelasList.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.nama}
+                      </option>
+                    ))
+                  )}
                 </select>
-                <p className="text-[11px] text-slate-400">Rombongan belajar siswa yang diajar</p>
+                <p className="text-[11px] text-slate-400">
+                  {formAssignedKelasList.length > 0
+                    ? 'Kelas ajar yang ditugaskan untuk mata pelajaran ini'
+                    : 'Rombongan belajar siswa yang diajar'}
+                </p>
               </div>
             </div>
 
-            {/* ROW 2: SHIFT SELECTION (Pagi vs Siang) */}
-            <div className="space-y-2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>4. Pilihan Shift Mengajar</span>
-                <span className="text-rose-500">*</span>
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Opsi Shift Pagi */}
-                <button
-                  type="button"
-                  onClick={() => setFormShift('Pagi')}
-                  className={`p-3.5 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
-                    formShift === 'Pagi'
-                      ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/30'
-                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-amber-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
-                        formShift === 'Pagi'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Sun className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="font-extrabold text-xs text-slate-900 dark:text-white">Shift Pagi</div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Jam ke-1 s.d. 10</div>
-                    </div>
-                  </div>
-                  {formShift === 'Pagi' && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
-                      Aktif
-                    </span>
-                  )}
-                </button>
-
-                {/* Opsi Shift Siang */}
-                <button
-                  type="button"
-                  onClick={() => setFormShift('Siang')}
-                  className={`p-3.5 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
-                    formShift === 'Siang'
-                      ? 'bg-indigo-500/10 border-indigo-500 ring-2 ring-indigo-500/30'
-                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
-                        formShift === 'Siang'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      <Sunset className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="font-extrabold text-xs text-slate-900 dark:text-white">Shift Siang</div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Jam ke-1 s.d. 10</div>
-                    </div>
-                  </div>
-                  {formShift === 'Siang' && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white">
-                      Aktif
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* ROW 3: JAM DENGAN ANGKA 1-10 (BULATAN BIRU) */}
-            <div className="p-5 rounded-2xl bg-blue-50/50 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-900/60 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Status Alokasi JP Acuan vs Terjadwal */}
+            {matchingAcuanMapel && formKelasId && (
+              <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-slate-700 dark:text-slate-300">
+                    Alokasi Target Mapel: <strong className="text-blue-700 dark:text-blue-300">{matchingAcuanMapel.alokasiJp || 4} JP/minggu</strong>
+                  </span>
+                  <span className="text-slate-400">•</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Di kelas ini: {existingScheduledJpForForm} JP terjadwal + {formSelectedJam.length} JP sesi ini = <strong className="text-slate-800 dark:text-slate-200">{existingScheduledJpForForm + formSelectedJam.length} JP</strong>
+                  </span>
+                </div>
                 <div>
-                  <label className="block text-xs font-extrabold text-blue-950 dark:text-blue-200 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span>5. Jam Pelajaran: Angka 1-10 (Bulatan Biru)</span>
-                    <span className="text-rose-500">*</span>
-                  </label>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Klik bulatan angka 1 sampai 10 di bawah untuk {formShift === 'Siang' ? 'Shift Siang' : 'Shift Pagi'}:
-                  </p>
+                  {existingScheduledJpForForm + formSelectedJam.length === (matchingAcuanMapel.alokasiJp || 4) ? (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                      ✓ Pas Target ({matchingAcuanMapel.alokasiJp || 4} JP)
+                    </span>
+                  ) : existingScheduledJpForForm + formSelectedJam.length < (matchingAcuanMapel.alokasiJp || 4) ? (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                      Kurang {(matchingAcuanMapel.alokasiJp || 4) - (existingScheduledJpForForm + formSelectedJam.length)} JP
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700">
+                      Lebih +{(existingScheduledJpForForm + formSelectedJam.length) - (matchingAcuanMapel.alokasiJp || 4)} JP
+                    </span>
+                  )}
                 </div>
+              </div>
+            )}
 
-                {/* Quick Preset Buttons */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => selectJamRange(1, 2)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
+            {/* SHIFT & KELOMPOK SELECTOR (Hanya menampilkan shift yang sesuai) */}
+            {(() => {
+              const currentFormKelasObj = kelasList.find((k) => k.id === formKelasId);
+              const currentFormKelompok = getKelasKelompok(currentFormKelasObj?.nama, formKelasId);
+              const isPagi = formShift === 'Pagi';
+              return (
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      {isPagi ? (
+                        <Sun className="w-4 h-4 text-amber-500" />
+                      ) : (
+                        <Sunset className="w-4 h-4 text-indigo-500" />
+                      )}
+                      <span>5. Shift Mengajar</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                  </div>
+
+                  {/* Single appropriate shift card with Kelompok badge inside */}
+                  <div
+                    className={`px-4 py-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs ${
+                      isPagi
+                        ? 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800/80 text-amber-900 dark:text-amber-200'
+                        : 'bg-sky-50/90 dark:bg-sky-950/40 border-sky-300 dark:border-sky-800/80 text-sky-900 dark:text-sky-200'
+                    }`}
                   >
-                    Jam 1-2
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectJamRange(3, 4)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
-                  >
-                    Jam 3-4
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectJamRange(5, 6)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
-                  >
-                    Jam 5-6
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectJamRange(7, 8)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
-                  >
-                    Jam 7-8
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => selectJamRange(9, 10)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
-                  >
-                    Jam 9-10
-                  </button>
-                  <button
-                    type="button"
-                    onClick={selectAllJam}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition cursor-pointer"
-                  >
-                    Pilih 1-10
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetJam}
-                    className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:text-rose-600 transition cursor-pointer"
-                  >
-                    Reset
-                  </button>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2 rounded-lg shrink-0 ${
+                        isPagi ? 'bg-amber-500 text-white' : 'bg-sky-500 text-white'
+                      }`}>
+                        {isPagi ? <Sun className="w-4 h-4" /> : <Sunset className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-xs sm:text-sm">
+                          {isPagi ? '☀️ Shift Pagi' : '🌤️ Shift Siang'}
+                        </div>
+                        <div className="text-[11px] font-medium opacity-80">
+                          {isPagi ? 'Sesi Jam Pelajaran Pagi (Jam 1 - 10)' : 'Sesi Jam Pelajaran Siang (Jam 1 - 10)'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center shrink-0">
+                      <span className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border ${
+                        currentFormKelompok === 1
+                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                          : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800'
+                      }`}>
+                        {currentFormKelompok === 1 ? 'Kelompok 1 (Kelas X & XI)' : 'Kelompok 2 (Kelas XII)'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
+              );
+            })()}
+
+            {/* ROW 4: JAM DENGAN ANGKA 1-10 (BULATAN BIRU) */}
+            <div className="p-5 rounded-2xl bg-blue-50/50 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-900/60 space-y-4">
+              <div>
+                <label className="block text-xs font-extrabold text-blue-950 dark:text-blue-200 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>6. Jam Pelajaran: Angka 1-10 (Bulatan Biru)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Klik bulatan angka 1 sampai 10 di bawah untuk {formShift === 'Siang' ? 'Shift Siang' : 'Shift Pagi'}:
+                </p>
               </div>
 
               {/* Bulatan Biru Angka 1 - 10 Container */}
@@ -1263,22 +1838,20 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                   {LIST_JAM_ANGKA.map((num) => {
                     const isSelected = formSelectedJam.includes(num);
+                    const timeStr = getJamPelajaranTime(num, formShift);
                     return (
                       <button
                         key={num}
                         type="button"
                         onClick={() => toggleJam(num)}
-                        className={`group relative w-11 h-11 sm:w-12 sm:h-12 rounded-full flex flex-col items-center justify-center font-black transition-all duration-150 cursor-pointer select-none ${
+                        className={`group relative w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center font-black transition-all duration-150 cursor-pointer select-none ${
                           isSelected
                             ? 'bg-blue-600 text-white shadow-md shadow-blue-500/40 ring-4 ring-blue-300 dark:ring-blue-800 scale-105 z-10'
                             : 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 border-2 border-blue-300 dark:border-blue-800 hover:bg-blue-100/70 hover:border-blue-500 hover:scale-105'
                         }`}
-                        title={`Jam ke-${num} (${formShift === 'Siang' ? 'Shift Siang' : 'Shift Pagi'})`}
+                        title={`Jam ke-${num} (${formShift}: ${timeStr})`}
                       >
                         <span className="text-sm sm:text-base">{num}</span>
-                        {isSelected && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-white absolute bottom-1"></span>
-                        )}
                       </button>
                     );
                   })}
@@ -1293,18 +1866,23 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   </span>
                   <span className="font-bold text-slate-800 dark:text-slate-200">
                     {formatJamKeDisplay(formSelectedJam)}
+                    {formSelectedJam.length > 0 && (
+                      <span className="ml-1 text-blue-600 dark:text-blue-400 font-extrabold">
+                        ({getJamPelajaranTime(Math.min(...formSelectedJam), formShift).split(' - ')[0]} - {getJamPelajaranTime(Math.max(...formSelectedJam), formShift).split(' - ')[1]})
+                      </span>
+                    )}
                   </span>
                   <span className="text-slate-400">•</span>
                   <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                     {formShift === 'Siang' ? (
                       <>
                         <Sunset className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Shift Siang</span>
+                        <span>Shift Siang (20 mnt/JP • Istirahat 15.00-15.30)</span>
                       </>
                     ) : (
                       <>
                         <Sun className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Shift Pagi</span>
+                        <span>Shift Pagi (30 mnt/JP • Istirahat 08.30-09.00)</span>
                       </>
                     )}
                   </span>
@@ -1312,58 +1890,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               </div>
             </div>
 
-            {/* ROW 4: Mata Pelajaran & Ruangan */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Mata Pelajaran (Dropdown / Manual) */}
-              <div className="md:col-span-2 space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Mata Pelajaran</span> <span className="text-rose-500">*</span>
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-normal">
-                    Pilih dari Master atau ketik manual
-                  </span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <select
-                    value={formMataPelajaran}
-                    onChange={(e) => handleMapelChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
-                  >
-                    <option value="">-- Pilih dari Master Mapel --</option>
-                    {mapelList.map((m) => (
-                      <option key={m.id} value={m.nama}>
-                        {m.nama}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={formMataPelajaran}
-                    onChange={(e) => setFormMataPelajaran(e.target.value)}
-                    placeholder="Atau ketik nama mapel kustom..."
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
-                    required
-                  />
-                </div>
-              </div>
 
-              {/* Ruangan / Tempat Belajar */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <DoorOpen className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Ruangan / Laboratorium</span>
-                </label>
-                <input
-                  type="text"
-                  value={formRuangan}
-                  onChange={(e) => setFormRuangan(e.target.value)}
-                  placeholder="Lab Komputer 1 / Ruang 10"
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
-                />
-              </div>
-            </div>
 
             {/* Catatan / Keterangan */}
             <div className="space-y-1.5">
@@ -1379,27 +1906,29 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               />
             </div>
 
-            {/* Form Submit & Cancel Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => {
-                  resetForm();
-                  setActiveTab('tabel');
-                }}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{editingId ? 'Simpan Perubahan Jadwal' : 'Simpan Jadwal Mengajar'}</span>
-              </button>
+                {/* Form Submit & Cancel Actions */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm();
+                      setIsFormModalOpen(false);
+                    }}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{editingId ? 'Simpan Perubahan Jadwal' : 'Simpan Jadwal Mengajar'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -1446,7 +1975,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
           {/* Filter Bar */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
               {/* Search Bar */}
               <div className="relative lg:col-span-1">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1525,9 +2054,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 </select>
               </div>
 
-              {/* Filter Guru (Admin) vs Profile Badge (Teacher) */}
+              {/* Filter Guru (Admin / Kurikulum) vs Profile Badge (Teacher) */}
               <div>
-                {isAdmin ? (
+                {canManageAll ? (
                   <select
                     value={filterGuru}
                     onChange={(e) => {
@@ -1550,6 +2079,60 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Filter Status Acuan Mapel & Kelas */}
+              <div>
+                <select
+                  value={filterAcuan}
+                  onChange={(e) => {
+                    setFilterAcuan(e.target.value as any);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                >
+                  <option value="semua">Semua Status Acuan</option>
+                  <option value="sesuai">✓ Sesuai Acuan Guru</option>
+                  <option value="di_luar">⚠️ Di Luar Acuan Guru</option>
+                </select>
+              </div>
+
+              {/* Urutan / Filter Sorting (ASC vs DESC) */}
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={sortField}
+                  onChange={(e) => {
+                    setSortField(e.target.value as any);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                  title="Pilih Kolom Urutan"
+                >
+                  <option value="hari">📅 Urut Hari & Shift</option>
+                  <option value="mapel">📚 Urut Mata Pelajaran</option>
+                  <option value="guru">👨‍🏫 Urut Guru Pengampu</option>
+                  <option value="kelas">🏫 Urut Kelas</option>
+                  <option value="jam">⏰ Urut Jam Ke</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="px-2.5 py-2 rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-xs flex items-center justify-center gap-1 shrink-0 transition active:scale-95 cursor-pointer"
+                  title={`Ganti Urutan: ${sortOrder === 'asc' ? 'ASC (A-Z / Lama ke Baru)' : 'DESC (Z-A / Baru ke Lama)'}`}
+                >
+                  {sortOrder === 'asc' ? (
+                    <>
+                      <ArrowUp className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">ASC</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDown className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">DESC</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1560,19 +2143,109 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <th className="py-3 px-4 font-bold text-center w-12">No</th>
-                    <th className="py-3 px-4 font-bold">Hari & Shift</th>
-                    <th className="py-3 px-4 font-bold">Mata Pelajaran</th>
-                    <th className="py-3 px-4 font-bold">Guru Pengampu</th>
-                    <th className="py-3 px-4 font-bold">Kelas</th>
-                    <th className="py-3 px-4 font-bold">Jam Ke (1 - 10)</th>
-                    <th className="py-3 px-4 font-bold">Ruangan</th>
+                    
+                    <th
+                      onClick={() => handleHeaderSort('hari')}
+                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                      title="Klik untuk mengurutkan berdasarkan Hari & Shift"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Hari & Shift</span>
+                        {sortField === 'hari' ? (
+                          sortOrder === 'asc' ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                        )}
+                      </div>
+                    </th>
+
+                    <th
+                      onClick={() => handleHeaderSort('mapel')}
+                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                      title="Klik untuk mengurutkan berdasarkan Mata Pelajaran"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Mata Pelajaran</span>
+                        {sortField === 'mapel' ? (
+                          sortOrder === 'asc' ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                        )}
+                      </div>
+                    </th>
+
+                    <th
+                      onClick={() => handleHeaderSort('guru')}
+                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                      title="Klik untuk mengurutkan berdasarkan Guru Pengampu"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Guru Pengampu</span>
+                        {sortField === 'guru' ? (
+                          sortOrder === 'asc' ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                        )}
+                      </div>
+                    </th>
+
+                    <th
+                      onClick={() => handleHeaderSort('kelas')}
+                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                      title="Klik untuk mengurutkan berdasarkan Kelas"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Kelas</span>
+                        {sortField === 'kelas' ? (
+                          sortOrder === 'asc' ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                        )}
+                      </div>
+                    </th>
+
+                    <th
+                      onClick={() => handleHeaderSort('jam')}
+                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                      title="Klik untuk mengurutkan berdasarkan Jam Ke"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Jam Ke (1 - 10)</span>
+                        {sortField === 'jam' ? (
+                          sortOrder === 'asc' ? (
+                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                        )}
+                      </div>
+                    </th>
+
                     <th className="py-3 px-4 font-bold text-center w-28">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {paginatedJadwal.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400 dark:text-slate-500">
+                      <td colSpan={7} className="py-12 text-center text-slate-400 dark:text-slate-500">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <Calendar className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                           <p className="font-semibold">
@@ -1587,13 +2260,10 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                           ) : !readOnly ? (
                             <button
                               type="button"
-                              onClick={() => {
-                                resetForm();
-                                setActiveTab('form');
-                              }}
+                              onClick={() => setActiveTab('matriks')}
                               className="text-xs text-blue-600 hover:underline font-bold mt-1"
                             >
-                              + Buat Jadwal Baru Sekarang
+                              Buka Matriks Mingguan untuk Mengisi Jadwal (+)
                             </button>
                           ) : null}
                         </div>
@@ -1618,7 +2288,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                             </div>
                             <div className="mt-1">
                               {isSiang ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                   <Sunset className="w-3 h-3" /> Shift Siang
                                 </span>
                               ) : (
@@ -1629,8 +2299,26 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            <div className="font-extrabold text-blue-600 dark:text-blue-400">
-                              {cleanMapelName(item.mataPelajaran)}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-blue-600 dark:text-blue-400">
+                                {cleanMapelName(item.mataPelajaran)}
+                              </span>
+                              {isJadwalMatchingAcuan(item) ? (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                  title="Sesuai penugasan resmi guru di menu Mapel & Kelas Ajar"
+                                >
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  <span>Acuan ✓</span>
+                                </span>
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                                  title="Di luar penugasan resmi guru di menu Mapel & Kelas Ajar"
+                                >
+                                  <span>Di Luar Acuan</span>
+                                </span>
+                              )}
                             </div>
                             {item.catatan && (
                               <div className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">
@@ -1674,9 +2362,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                 {item.jamKe || '-'}
                               </span>
                             )}
-                          </td>
-                          <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
-                            {item.ruangan || 'Ruang Kelas'}
                           </td>
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -1737,43 +2422,39 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
       {/* =====================================================================
           TAB 3: MATRIKS MINGGUAN (Senin - Jumat vs Jam 1 - 10)
-          Filtered by Shift (Shift Pagi / Shift Siang)
+          Filtered by 4 Bagian: Shift Pagi Kelompok 1, Shift Siang Kelompok 2,
+                               Shift Pagi Kelompok 2, Shift Siang Kelompok 1
           ===================================================================== */}
       {activeTab === 'matriks' && (
         <div className="space-y-4">
-          {/* Controls Bar: Mode Per Kelas / Per Guru & Shift Tab Selector */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          {/* Controls Bar: Mode Per Kelas / Per Guru & 4-Bagian Shift Tab Selector - Sticky Container */}
+          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 sticky top-14 sm:top-16 z-20 transition-all">
             <div className="flex flex-wrap items-center gap-3">
-              {/* Shift Switcher */}
-              <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
-                <button
-                  type="button"
-                  onClick={() => setMatrixShift('Pagi')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    matrixShift === 'Pagi'
-                      ? 'bg-amber-500 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                  }`}
-                >
-                  <Sun className="w-3.5 h-3.5" />
-                  <span>Shift Pagi (Jam 1-10)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMatrixShift('Siang')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    matrixShift === 'Siang'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                  }`}
-                >
-                  <Sunset className="w-3.5 h-3.5" />
-                  <span>Shift Siang (Jam 1-10)</span>
-                </button>
+              {/* 4 Shift & Kelompok Switcher */}
+              <div className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                {MATRIX_SHIFT_OPTIONS.map((opt) => {
+                  const Icon = opt.icon;
+                  const isActive = matrixShiftOption === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleSelectMatrixOption(opt.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        isActive
+                          ? opt.activeColor
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{opt.label}</span>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* View Mode Switcher for Admin */}
-              {isAdmin && (
+              {/* View Mode Switcher for Admin / Kurikulum */}
+              {canManageAll && (
                 <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
                   <button
                     type="button"
@@ -1803,18 +2484,31 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
             {/* Selector based on mode or Teacher badge */}
             <div className="flex-1 max-w-sm">
-              {isAdmin ? (
+              {canManageAll ? (
                 matrixMode === 'kelas' ? (
                   <select
                     value={matrixSelectedKelasId}
                     onChange={(e) => setMatrixSelectedKelasId(e.target.value)}
                     className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                   >
-                    {kelasList.map((k) => (
-                      <option key={k.id} value={k.id}>
-                        Jadwal Kelas: {k.nama}
-                      </option>
-                    ))}
+                    <optgroup label={`${activeMatrixOption.label} (${activeMatrixOption.tingkatLabel})`}>
+                      {kelasList
+                        .filter((k) => determineKelasKelompok(k.nama) === activeMatrixOption.kelompok)
+                        .map((k) => (
+                          <option key={k.id} value={k.id}>
+                            Jadwal Kelas: {k.nama}
+                          </option>
+                        ))}
+                    </optgroup>
+                    <optgroup label={activeMatrixOption.kelompok === 1 ? 'Kelas XII' : 'Kelas X & XI'}>
+                      {kelasList
+                        .filter((k) => determineKelasKelompok(k.nama) !== activeMatrixOption.kelompok)
+                        .map((k) => (
+                          <option key={k.id} value={k.id}>
+                            Jadwal Kelas: {k.nama}
+                          </option>
+                        ))}
+                    </optgroup>
                   </select>
                 ) : (
                   <select
@@ -1824,7 +2518,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   >
                     {guruList.map((g) => (
                       <option key={g.id} value={g.username}>
-                        Jadwal Guru: {g.nama}
+                        {g.nama}
                       </option>
                     ))}
                   </select>
@@ -1840,43 +2534,138 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             </div>
           </div>
 
+          {/* Contextual Information Badge for active matrix view & Routine Activities */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                Filter Matriks Aktif:
+              </span>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                  activeMatrixOption.shift === 'Pagi'
+                    ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                    : 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                }`}
+              >
+                {activeMatrixOption.shift === 'Pagi' ? (
+                  <Sun className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                ) : (
+                  <Sunset className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                )}
+                <span>{activeMatrixOption.label}</span>
+                <span className="font-medium opacity-80">({activeMatrixOption.tingkatLabel} • Jam 1-10)</span>
+              </span>
+
+              {/* Routine Activities Legend Badges */}
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 shadow-2xs">
+                <Flag className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                <span>Senin Jam 1-2: Upacara</span>
+              </span>
+
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60 shadow-2xs">
+                <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                <span>Jumat Jam 1-2: Pembiasaan Baik</span>
+              </span>
+
+              {/* Istirahat Info Badge */}
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/60 shadow-2xs">
+                <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Istirahat: {activeMatrixOption.shift === 'Pagi' ? '08.30 - 09.00 (setelah Jam 4)' : '15.00 - 15.30 (setelah Jam 6)'}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                {matrixSchedules.length} Sesi Terjadwal
+              </div>
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => handleScrollMatrix('left')}
+                  disabled={!canScrollLeft}
+                  className={`p-1.5 rounded-md transition flex items-center justify-center ${
+                    canScrollLeft
+                      ? 'text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-slate-700 shadow-2xs cursor-pointer'
+                      : 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50'
+                  }`}
+                  title="Geser tabel ke kiri"
+                  aria-label="Geser ke kiri"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleScrollMatrix('right')}
+                  disabled={!canScrollRight}
+                  className={`p-1.5 rounded-md transition flex items-center justify-center ${
+                    canScrollRight
+                      ? 'text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-slate-700 shadow-2xs cursor-pointer'
+                      : 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50'
+                  }`}
+                  title="Geser tabel ke kanan"
+                  aria-label="Geser ke kanan"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Matrix Timetable Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse min-w-[760px]">
+          <div className="relative group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div
+              ref={matrixScrollContainerRef}
+              className="overflow-x-auto scroll-smooth rounded-2xl"
+            >
+              <table className="w-full text-left text-xs border-collapse min-w-[1550px]">
                 <thead>
                   <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700">
-                    <th className="py-3 px-3 font-bold text-center w-24 border-r border-slate-200 dark:border-slate-700">
-                      Jam Ke
+                    <th className="py-3 px-4 font-bold text-slate-700 dark:text-slate-200 w-36 min-w-[130px] border-r border-slate-200 dark:border-slate-700 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 shadow-[1px_0_0_0_#cbd5e1] dark:shadow-[1px_0_0_0_#334155]">
+                      <div className="flex items-center gap-2">
+                        <CalendarRange className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span>Hari</span>
+                      </div>
                     </th>
-                    {HARI_SENIN_JUMAT.map((h) => (
-                      <th
-                        key={h}
-                        className="py-3 px-4 font-bold text-center border-r border-slate-200 dark:border-slate-700 last:border-r-0"
-                      >
-                        Hari {h}
-                      </th>
-                    ))}
+                    {LIST_JAM_ANGKA.map((jamNum) => {
+                      const timeStr = getJamPelajaranTime(jamNum, activeMatrixOption.shift);
+                      return (
+                        <th
+                          key={jamNum}
+                          className="py-3 px-2 font-bold text-center min-w-[145px] border-r border-slate-200 dark:border-slate-700 last:border-r-0"
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <span
+                              className="w-6 h-6 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0"
+                              title={`Jam ke-${jamNum} (${activeMatrixOption.shift}: ${timeStr})`}
+                            >
+                              {jamNum}
+                            </span>
+                            <span className="font-bold text-[11px] text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                              {timeStr}
+                            </span>
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {LIST_JAM_ANGKA.map((jamNum) => {
+                  {HARI_SENIN_JUMAT.map((hari) => {
                     return (
-                      <tr key={jamNum} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        {/* Jam Pelajaran Column with Bulatan Biru */}
-                        <td className="py-3 px-3 text-center bg-slate-50/80 dark:bg-slate-800/40 border-r border-slate-200 dark:border-slate-700">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
-                              {jamNum}
-                            </span>
-                            <span className="font-bold text-[11px] text-slate-600 dark:text-slate-300">
-                              Jam {jamNum}
-                            </span>
+                      <tr key={hari} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        {/* Hari Column (Sticky Left) - Clean, only day name */}
+                        <td className="py-3.5 px-4 bg-slate-50 dark:bg-slate-800/90 border-r border-slate-200 dark:border-slate-700 sticky left-0 z-10 shadow-[1px_0_0_0_#cbd5e1] dark:shadow-[1px_0_0_0_#334155] align-middle">
+                          <div className="font-black text-sm text-slate-900 dark:text-white">
+                            {hari}
                           </div>
                         </td>
 
-                        {/* Columns for Senin to Jumat */}
-                        {HARI_SENIN_JUMAT.map((hari) => {
+                        {/* Columns for Jam 1 s.d. 10 */}
+                        {LIST_JAM_ANGKA.map((jamNum) => {
+                          const isUpacara = hari === 'Senin' && (jamNum === 1 || jamNum === 2);
+                          const isPembiasaan = hari === 'Jumat' && (jamNum === 1 || jamNum === 2);
+
                           // Find schedule on this day covering this jamNum and matching shift
                           const matchedSchedule = matrixSchedules.find((item) => {
                             if (item.hari !== hari) return false;
@@ -1886,28 +2675,100 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
                           return (
                             <td
-                              key={hari}
-                              className="py-2 px-3 border-r border-slate-200 dark:border-slate-700 last:border-r-0 align-top"
+                              key={jamNum}
+                              className={`py-2 px-2.5 min-w-[135px] border-r border-slate-200 dark:border-slate-700 last:border-r-0 align-top ${
+                                !matchedSchedule && isUpacara
+                                  ? 'bg-rose-50/30 dark:bg-rose-950/15'
+                                  : !matchedSchedule && isPembiasaan
+                                  ? 'bg-emerald-50/30 dark:bg-emerald-950/15'
+                                  : ''
+                              }`}
                             >
                               {matchedSchedule ? (
                                 <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1">
-                                  <div className="font-extrabold text-blue-700 dark:text-blue-300 text-xs">
+                                  {isUpacara && (
+                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 mb-0.5">
+                                      <Flag className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                      <span>Upacara</span>
+                                    </div>
+                                  )}
+                                  {isPembiasaan && (
+                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 mb-0.5">
+                                      <Sparkles className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                      <span>Pembiasaan</span>
+                                    </div>
+                                  )}
+                                  <div className="font-extrabold text-blue-700 dark:text-blue-300 text-xs line-clamp-2">
                                     {cleanMapelName(matchedSchedule.mataPelajaran)}
                                   </div>
-                                  <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                  <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">
                                     {matrixMode === 'kelas'
                                       ? matchedSchedule.guruNama
                                       : matchedSchedule.kelasNama}
                                   </div>
-                                  <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between">
-                                    <span>{matchedSchedule.ruangan || 'R. Kelas'}</span>
-                                    {!readOnly && (
+                                  <div className="text-[10px] text-slate-400 font-mono flex items-center justify-end pt-0.5">
+                                    {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartEdit(matchedSchedule)}
+                                          className="p-1 rounded-md text-blue-600 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
+                                          title="Edit Jadwal"
+                                          aria-label="Edit Jadwal"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDelete(matchedSchedule)}
+                                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
+                                          title="Hapus Jadwal"
+                                          aria-label="Hapus Jadwal"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : isUpacara ? (
+                                <div className="p-2 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/70 space-y-1 shadow-2xs">
+                                  <div className="flex items-center gap-1 font-black text-rose-700 dark:text-rose-300 text-xs">
+                                    <Flag className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                                    <span className="truncate">Upacara</span>
+                                  </div>
+                                  <div className="text-[10px] font-medium text-rose-700/90 dark:text-rose-300/90 flex items-center justify-between gap-1">
+                                    <span className="truncate">Wajib Bersama</span>
+                                    {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
                                       <button
                                         type="button"
-                                        onClick={() => handleStartEdit(matchedSchedule)}
-                                        className="text-blue-600 hover:underline font-bold"
+                                        onClick={() => handleOpenFormForCell(hari, jamNum)}
+                                        className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-200 hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
+                                        title={`Isi penugasan / catatan Hari ${hari}, Jam ${jamNum}`}
                                       >
-                                        Edit
+                                        <Plus className="w-3 h-3" />
+                                        <span>Isi</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : isPembiasaan ? (
+                                <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-900/70 space-y-1 shadow-2xs">
+                                  <div className="flex items-center gap-1 font-black text-emerald-700 dark:text-emerald-300 text-xs">
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span className="truncate">Pembiasaan Baik</span>
+                                  </div>
+                                  <div className="text-[10px] font-medium text-emerald-700/90 dark:text-emerald-300/90 flex items-center justify-between gap-1">
+                                    <span className="truncate">Karakter/Rohis</span>
+                                    {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenFormForCell(hari, jamNum)}
+                                        className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200 hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
+                                        title={`Isi penugasan / catatan Hari ${hari}, Jam ${jamNum}`}
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        <span>Isi</span>
                                       </button>
                                     )}
                                   </div>
@@ -1917,21 +2778,12 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                   {!readOnly ? (
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        resetForm();
-                                        setFormHari(hari);
-                                        setFormShift(matrixShift);
-                                        if (matrixMode === 'kelas') {
-                                          setFormKelasId(matrixSelectedKelasId);
-                                        } else {
-                                          setFormGuruUsername(matrixSelectedGuruUsername);
-                                        }
-                                        setFormSelectedJam([jamNum]);
-                                        setActiveTab('form');
-                                      }}
-                                      className="opacity-0 hover:opacity-100 text-[10px] text-blue-600 font-bold px-2 py-1 rounded bg-blue-50 transition cursor-pointer"
+                                      onClick={() => handleOpenFormForCell(hari, jamNum)}
+                                      className="w-6 h-6 rounded-md inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition cursor-pointer"
+                                      title={`Isi jadwal hari ${hari}, Jam ke-${jamNum} (${activeMatrixOption.label})`}
+                                      aria-label={`Isi jadwal hari ${hari}, Jam ke-${jamNum}`}
                                     >
-                                      + Isi
+                                      <Plus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" strokeWidth={3} />
                                     </button>
                                   ) : (
                                     <span>-</span>

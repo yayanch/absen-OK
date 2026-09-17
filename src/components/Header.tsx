@@ -3,6 +3,7 @@ import {
   Menu,
   X,
   Sun,
+  Sunset,
   Moon,
   Wifi,
   WifiOff,
@@ -22,7 +23,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData } from '../types';
-import { DEFAULT_TOGA_LOGO } from '../data/initialData';
+import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString } from '../utils/helpers';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -89,6 +90,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { label: 'Tim Kesiswaan', icon: UserCheck, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300' };
       case 'kurikulum':
         return { label: 'Tim Kurikulum', icon: BookOpen, color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300' };
+      case 'staf_jadwal':
+        return { label: 'Staf Jadwal', icon: BookOpen, color: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300' };
       case 'wali':
         return { label: 'Wali Kelas', icon: User, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300' };
       case 'guru':
@@ -148,15 +151,55 @@ export const Header: React.FC<HeaderProps> = ({
   const userUsername = userData?.username || (userData?.nisn ? `NISN: ${userData.nisn}` : '');
   const userFoto = userData?.foto || (currentUser?.data as any)?.foto || '';
 
-  const schoolName = sekolah?.nama || 'SMKN 6 GARUT';
-  const schoolAppTitle = sekolah?.headerSubtitle || 'Sistem Presensi Siswa';
-  const schoolLogo = sekolah?.logo || DEFAULT_TOGA_LOGO;
+  // Current Weekly Shift calculation for Header
+  const shiftInfo = React.useMemo(() => {
+    if (!appData) return null;
+    const todayStr = getTodayString();
+    const rawPeriods = normalizeWeeklyShiftPeriods(appData.shiftConfig?.periods);
+    const periods = rawPeriods && rawPeriods.length > 0 ? rawPeriods : generateWeeklyShiftSchedules();
+
+    const matched = periods.find((p) => {
+      const s = p.startDate.slice(0, 10);
+      const e = p.endDate.slice(0, 10);
+      return todayStr >= s && todayStr <= e;
+    }) || periods[0];
+
+    if (!matched) return null;
+
+    const getPagiClasses = (k1Type: string, k2Type: string) => {
+      if (k1Type === 'pagi' && k2Type === 'pagi') return 'Kelas X, XI & XII';
+      if (k1Type === 'pagi') return 'Kelas X & XI';
+      if (k2Type === 'pagi') return 'Kelas XII';
+      if (k1Type === 'siang' && k2Type === 'siang') return 'Libur';
+      if (k1Type === 'siang') return 'Kelas XII';
+      if (k2Type === 'siang') return 'Kelas X & XI';
+      return 'Kelas XII';
+    };
+
+    const getSiangClasses = (k1Type: string, k2Type: string) => {
+      if (k1Type === 'siang' && k2Type === 'siang') return 'Kelas X, XI & XII';
+      if (k1Type === 'siang') return 'Kelas X & XI';
+      if (k2Type === 'siang') return 'Kelas XII';
+      if (k1Type === 'pagi' && k2Type === 'pagi') return 'Libur';
+      if (k1Type === 'pagi') return 'Kelas XII';
+      if (k2Type === 'pagi') return 'Kelas X & XI';
+      return 'Kelas X & XI';
+    };
+
+    const k1 = matched.kelompok1Type || 'pagi';
+    const k2 = matched.kelompok2Type || (k1 === 'pagi' ? 'siang' : 'pagi');
+
+    return {
+      pagiClass: getPagiClasses(k1, k2),
+      siangClass: getSiangClasses(k1, k2),
+    };
+  }, [appData]);
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-white dark:bg-[#111827] text-[#0F172A] dark:text-[#F8FAFC] shadow-xs border-b border-[#E2E8F0] dark:border-[#374151] transition-colors duration-200">
+    <header className="w-full bg-white/95 dark:bg-[#111827]/95 backdrop-blur-md text-[#0F172A] dark:text-[#F8FAFC] shadow-xs border-b border-[#E2E8F0] dark:border-[#374151] transition-colors duration-200">
       <div className="w-full px-2 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* LEFT SECTION: TOGGLE & SCHOOL BRANDING */}
+        {/* LEFT SECTION: TOGGLE & SHIFT SCHEDULE (VISIBLE ON MOBILE & DESKTOP) */}
         <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           <button
             type="button"
@@ -168,34 +211,38 @@ export const Header: React.FC<HeaderProps> = ({
             {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          {/* SCHOOL LOGO & BRAND TEXT (WHITE CONTAINER BADGE FOR LOGO) */}
-          <div
-            onClick={() => onNavigate('dashboard')}
-            className="flex items-center gap-2.5 cursor-pointer group select-none min-w-0"
-            title="Kembali ke Dashboard Utama"
-          >
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-50 dark:bg-slate-800 p-1.5 shadow-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <img
-                src={schoolLogo}
-                alt={`Logo ${schoolName}`}
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-            </div>
+          {/* JADWAL SHIFT PEKAN INI (TERLIHAT DI MOBILE & DESKTOP) */}
+          {shiftInfo && (
+            <div
+              onClick={() => onNavigate('jadwal_shift')}
+              className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/90 dark:hover:bg-slate-700/90 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer select-none shadow-2xs group shrink-0"
+              title="Klik untuk melihat Jadwal Shift Lengkap"
+            >
+              {/* Shift Pagi */}
+              <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs">
+                <span className="font-bold flex items-center gap-1 text-slate-700 dark:text-slate-200">
+                  <Sun className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 stroke-[2.2]" />
+                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide">PAGI:</span>
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
+                  {shiftInfo.pagiClass}
+                </span>
+              </div>
 
-            <div className="flex flex-col min-w-0">
-              {/* Nama Sekolah: Weight 700 */}
-              <span className="text-xs sm:text-sm font-bold text-[#0F172A] dark:text-[#F8FAFC] tracking-tight truncate group-hover:text-[#2563EB] transition-colors">
-                {schoolName}
-              </span>
-              {/* Nama Aplikasi: Weight 500 */}
-              <span className="text-[10px] sm:text-[11px] font-medium text-[#64748B] dark:text-[#94A3B8] truncate hidden sm:block">
-                {schoolAppTitle}
-              </span>
+              <span className="text-slate-300 dark:text-slate-600 text-xs font-semibold select-none">|</span>
+
+              {/* Shift Siang */}
+              <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs">
+                <span className="font-bold flex items-center gap-1 text-slate-700 dark:text-slate-200">
+                  <Sunset className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 stroke-[2.2]" />
+                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide">SIANG:</span>
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100 text-[11px] sm:text-xs whitespace-nowrap">
+                  {shiftInfo.siangClass}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* RIGHT SECTION: CONTROLS & USER PROFILE */}

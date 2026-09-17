@@ -341,6 +341,9 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
     sekolah.enableAnimations !== false
   );
 
+  // Tab navigation state
+  const [activeTab, setActiveTab] = useState<'tema' | 'navigasi_header' | 'tipografi_layout' | 'background_login'>('tema');
+
   // Auto-save notification status
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
@@ -549,7 +552,7 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
             <button
               type="button"
               onClick={() => handleSelectPreset(THEME_PRESETS[0])}
-              className="mt-2 text-[11px] font-bold text-blue-300 hover:text-white underline flex items-center gap-1"
+              className="mt-2 text-[11px] font-bold text-blue-300 hover:text-white underline flex items-center gap-1 cursor-pointer"
             >
               Gunakan Preset SMKN 6 Garut &rarr;
             </button>
@@ -557,833 +560,868 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
         </div>
       </div>
 
-      {/* MAIN 2-COLUMN GRID (SETTINGS & LIVE PREVIEW) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* LEFT COLUMN: CONTROLS (8 COLS) */}
-        <div className="lg:col-span-7 space-y-8">
-          
-          {/* 1. MODE TAMPILAN */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Sun className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Mode Tampilan
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Pilih skema pencahayaan antarmuka aplikasi.
-                </p>
+      {/* TAB NAVIGATION BAR */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-1.5 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-1.5 overflow-x-auto">
+        {[
+          { id: 'tema', label: 'Tema & Warna', icon: Palette, badge: 'Preset & Mode' },
+          { id: 'navigasi_header', label: 'Sidebar & Header', icon: Layout, badge: 'Navigasi & Hero' },
+          { id: 'tipografi_layout', label: 'Tipografi & Bentuk UI', icon: Type, badge: 'Font & Radius' },
+          { id: 'background_login', label: 'Background Login', icon: ImageIcon, badge: 'Wallpaper' },
+        ].map((tab) => {
+          const IconComp = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex-1 min-w-[170px] flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <IconComp className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
+                <span>{tab.label}</span>
               </div>
-            </div>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                isActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}>
+                {tab.badge}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { id: 'light', label: 'Light', desc: 'Terang', icon: Sun, color: 'text-amber-500' },
-                { id: 'dark', label: 'Dark', desc: 'Gelap', icon: Moon, color: 'text-indigo-400' },
-                { id: 'system', label: 'System', desc: 'Otomatis OS', icon: Laptop, color: 'text-blue-500' },
-              ].map((item) => {
-                const IconComp = item.icon;
-                const isActive = themeMode === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setThemeMode(item.id as any)}
-                    className={`p-3.5 rounded-2xl border text-left transition relative flex flex-col justify-between ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <IconComp className={`w-5 h-5 ${item.color}`} />
-                      {isActive && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
-                    </div>
-                    <div className="mt-3">
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">{item.desc}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+      {/* TAB CONTENT: BACKGROUND LOGIN (FULL WIDTH) */}
+      {activeTab === 'background_login' && (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 md:p-8 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Background Halaman Login
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Atur foto latar belakang, wallpaper resmi sekolah, gradasi warna, atau pola digital halaman login.
+            </p>
           </div>
 
-          {/* 2. WARNA SIDEBAR */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Layout className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Warna Sidebar
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Pilih warna sidebar yang paling nyaman untuk Anda. Header dan area konten akan selalu tetap netral.
-                </p>
-              </div>
-            </div>
+          <LoginBackgroundSettings
+            appData={appData}
+            readOnly={readOnly}
+            onUpdateAppData={onUpdateAppData}
+            onShowToast={onShowToast}
+          />
+        </div>
+      )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {SIDEBAR_COLOR_THEMES.map((item) => {
-                const isActive = sidebarTheme === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSidebarTheme(item.id as SidebarThemeOption)}
-                    className={`p-3.5 rounded-2xl border text-left transition relative flex flex-col justify-between ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div>
-                      {/* Mini preview */}
-                      <div className="w-full h-16 rounded-xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden mb-3 flex flex-col bg-white dark:bg-slate-950">
-                        {/* Mini Neutral Header */}
-                        <div className="h-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-1.5 justify-between">
-                          <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700" />
-                          <div className="w-8 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
-                        </div>
-                        {/* Mini Body */}
-                        <div className="flex-1 flex">
-                          {/* Mini Sidebar with exact primaryHex */}
-                          <div
-                            className="w-10 h-full p-1 flex flex-col gap-1"
-                            style={{ backgroundColor: item.primaryHex }}
-                          >
-                            <div className="w-full h-1 bg-white/40 rounded-xs" />
-                            <div className="w-full h-2 bg-white/20 border-l border-white rounded-xs" />
-                            <div className="w-full h-1 bg-white/20 rounded-xs" />
+      {/* TAB CONTENT: TEMA, NAVIGASI, ATAU TIPOGRAFI (2-COLUMN GRID WITH LIVE PREVIEW) */}
+      {activeTab !== 'background_login' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* LEFT COLUMN: CONTROLS (7 COLS) */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* === TAB 1: TEMA & WARNA === */}
+            {activeTab === 'tema' && (
+              <>
+                {/* 1. PRESET TEMA */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Preset Tema
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Pilih kombinasi warna dan gaya instan yang telah dikurasi secara profesional.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {THEME_PRESETS.map((preset) => {
+                      const isActive = activePreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleSelectPreset(preset)}
+                          className={`p-4 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                            isActive
+                              ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/30 dark:border-blue-500 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                {preset.name}
+                              </span>
+                              {isActive && (
+                                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-600 text-white rounded-full flex items-center gap-1">
+                                  <Check className="w-3 h-3" /> Aktif
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug line-clamp-2">
+                              {preset.desc}
+                            </p>
                           </div>
-                          {/* Mini Content Area (Neutral) */}
-                          <div className="flex-1 bg-slate-50 dark:bg-slate-900 p-1.5 space-y-1">
-                            <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-xs" />
-                            <div className="grid grid-cols-2 gap-1">
-                              <div className="h-4 bg-white dark:bg-slate-800 rounded-xs border border-slate-200/60 dark:border-slate-700" />
-                              <div className="h-4 bg-white dark:bg-slate-800 rounded-xs border border-slate-200/60 dark:border-slate-700" />
+
+                          <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-4 h-4 rounded-full shadow-xs border border-white/20" style={{ backgroundColor: preset.primaryHex }} />
+                              <span className="w-4 h-4 rounded-full shadow-xs border border-white/20" style={{ backgroundColor: preset.darkHex }} />
+                              <span className="w-4 h-4 rounded-full shadow-xs border border-white/20" style={{ backgroundColor: preset.lightHex }} />
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400">{preset.primaryHex}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. MODE TAMPILAN */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Sun className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Mode Tampilan
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Pilih skema pencahayaan antarmuka aplikasi.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { id: 'light', label: 'Light', desc: 'Terang', icon: Sun, color: 'text-amber-500' },
+                      { id: 'dark', label: 'Dark', desc: 'Gelap', icon: Moon, color: 'text-indigo-400' },
+                      { id: 'system', label: 'System', desc: 'Otomatis OS', icon: Laptop, color: 'text-blue-500' },
+                    ].map((item) => {
+                      const IconComp = item.icon;
+                      const isActive = themeMode === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setThemeMode(item.id as any)}
+                          className={`p-3.5 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                            isActive
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <IconComp className={`w-5 h-5 ${item.color}`} />
+                            {isActive && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
+                          </div>
+                          <div className="mt-3">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">{item.desc}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. WARNA UTAMA & SEMANTIC COLORS */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Warna Utama Brand
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Pilih aksen warna brand utama aplikasi.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    {COLOR_SWATCHES.map((swatch) => {
+                      const isActive = primaryColor.toLowerCase() === swatch.hex.toLowerCase();
+                      return (
+                        <button
+                          key={swatch.id}
+                          type="button"
+                          onClick={() => setPrimaryColor(swatch.hex)}
+                          className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition cursor-pointer ${
+                            isActive
+                              ? 'border-slate-900 dark:border-white bg-slate-100 dark:bg-slate-800 font-bold'
+                              : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <span
+                            className="w-4 h-4 rounded-full shadow-xs flex items-center justify-center text-white"
+                            style={{ backgroundColor: swatch.hex }}
+                          >
+                            {isActive && <Check className="w-2.5 h-2.5" />}
+                          </span>
+                          <span className="text-xs text-slate-800 dark:text-slate-200">{swatch.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* SEMANTIC COLORS EXPLANATION BOX */}
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
+                      <Info className="w-4 h-4 text-blue-500" />
+                      <span>Indikator Warna Semantik Presensi (Tetap &amp; Konsisten)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Warna status presensi tidak berubah ketika warna utama diganti demi kepatuhan visual standar:
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                        <span>Hadir</span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      </div>
+                      <div className="p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-300">
+                        <span>Sakit</span>
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      </div>
+                      <div className="p-2 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-cyan-700 dark:text-cyan-300">
+                        <span>Izin</span>
+                        <span className="w-2 h-2 rounded-full bg-cyan-500" />
+                      </div>
+                      <div className="p-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-rose-700 dark:text-rose-300">
+                        <span>Alpa</span>
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* === TAB 2: SIDEBAR & HEADER === */}
+            {activeTab === 'navigasi_header' && (
+              <>
+                {/* 1. WARNA SIDEBAR */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Layout className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Warna Sidebar
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Pilih warna sidebar yang paling nyaman untuk Anda. Header dan area konten akan selalu tetap netral.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {SIDEBAR_COLOR_THEMES.map((item) => {
+                      const isActive = sidebarTheme === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSidebarTheme(item.id as SidebarThemeOption)}
+                          className={`p-3.5 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                            isActive
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div>
+                            {/* Mini preview */}
+                            <div className="w-full h-16 rounded-xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden mb-3 flex flex-col bg-white dark:bg-slate-950">
+                              {/* Mini Neutral Header */}
+                              <div className="h-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-1.5 justify-between">
+                                <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700" />
+                                <div className="w-8 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
+                              </div>
+                              {/* Mini Body */}
+                              <div className="flex-1 flex">
+                                {/* Mini Sidebar with exact primaryHex */}
+                                <div
+                                  className="w-10 h-full p-1 flex flex-col gap-1"
+                                  style={{ backgroundColor: item.primaryHex }}
+                                >
+                                  <div className="w-full h-1 bg-white/40 rounded-xs" />
+                                  <div className="w-full h-2 bg-white/20 border-l border-white rounded-xs" />
+                                  <div className="w-full h-1 bg-white/20 rounded-xs" />
+                                </div>
+                                {/* Mini Content Area (Neutral) */}
+                                <div className="flex-1 bg-slate-50 dark:bg-slate-900 p-1.5 space-y-1">
+                                  <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-xs" />
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <div className="h-4 bg-white dark:bg-slate-800 rounded-xs border border-slate-200/60 dark:border-slate-700" />
+                                    <div className="h-4 bg-white dark:bg-slate-800 rounded-xs border border-slate-200/60 dark:border-slate-700" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full border border-white/20 shadow-xs" style={{ backgroundColor: item.primaryHex }} />
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">{item.name}</span>
+                              </div>
+                              {item.isDefault && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 rounded-md">
+                                  ✓ Default
+                                </span>
+                              )}
+                              {isActive && !item.isDefault && (
+                                <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                              {item.desc}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. BACKGROUND HEADER HALAMAN / HERO HEADER */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Background Header Halaman
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Pilih warna / gradient background untuk area Page Header / Hero Header.
+                      </p>
+                    </div>
+                    <span className="self-start sm:self-auto px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-extrabold border border-blue-200/60 dark:border-blue-800/60 shrink-0">
+                      Preset Selector
+                    </span>
+                  </div>
+
+                  {/* LIVE PAGE HEADER HERO PREVIEW CARD */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5 text-blue-600" /> Pratinjau Hero Header Real-Time
+                      </span>
+                      <span className="text-[10px] text-slate-400">Tampilan Langsung di Aplikasi</span>
+                    </div>
+
+                    {(() => {
+                      const currentPreset = PAGE_HEADER_BG_PRESETS.find((p) => p.id === pageHeaderBackground) || PAGE_HEADER_BG_PRESETS[0];
+                      return (
+                        <div
+                          className="rounded-2xl p-5 md:p-6 shadow-md relative overflow-hidden transition-all duration-300 border border-slate-200/30"
+                          style={{ background: currentPreset.bg }}
+                        >
+                          <div className="absolute right-3 top-3 bottom-3 opacity-10 pointer-events-none flex items-center pr-2">
+                            <Calendar className="w-32 h-32 text-current" style={{ color: currentPreset.titleColor }} />
+                          </div>
+                          <div className="relative z-10 space-y-2">
+                            <div
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border transition-colors"
+                              style={{
+                                backgroundColor: currentPreset.badgeBg,
+                                borderColor: currentPreset.badgeBorder,
+                                color: currentPreset.badgeText,
+                              }}
+                            >
+                              <Calendar className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Presensi Hari Ini (Jumat, 21 Agt 2026)</span>
+                            </div>
+                            <h1
+                              className="text-xl md:text-2xl font-black tracking-tight transition-colors duration-200"
+                              style={{ color: currentPreset.titleColor }}
+                            >
+                              Halaman Input &amp; Kelola Presensi Siswa
+                            </h1>
+                            <p
+                              className="text-xs md:text-sm max-w-xl leading-relaxed transition-colors duration-200"
+                              style={{ color: currentPreset.subtitleColor }}
+                            >
+                              Kelola data siswa dan pencatatan kehadiran harian secara cepat dan akurat.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* ACCESSIBILITY & CONTRAST NOTICE */}
+                  <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/40 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 flex items-start gap-2.5 text-xs text-blue-900 dark:text-blue-300">
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">✓ Kontras Otomatis:</span> Warna teks judul, deskripsi, dan badge dihitung secara otomatis untuk menjamin standar keterbacaan WCAG AAA.
+                    </div>
+                  </div>
+
+                  {/* COLOR PRESETS GRID */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {PAGE_HEADER_BG_PRESETS.map((preset) => {
+                      const isActive = pageHeaderBackground === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => setPageHeaderBackground(preset.id)}
+                          className={`p-3.5 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
+                            isActive
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div>
+                            {/* Mini Background Swatch Box */}
+                            <div
+                              className="w-full h-12 rounded-xl mb-3 border border-slate-200/80 dark:border-slate-700 shadow-xs relative overflow-hidden flex items-center justify-center p-2"
+                              style={{ background: preset.bg }}
+                            >
+                              <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md" style={{ color: preset.titleColor, backgroundColor: preset.badgeBg }}>
+                                Header Text
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                {preset.name}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {preset.isDefault && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 rounded-md">
+                                    Default
+                                  </span>
+                                )}
+                                {isActive && (
+                                  <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                                )}
+                              </div>
+                            </div>
+
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
+                              {preset.desc}
+                            </p>
+                          </div>
+
+                          <div className="mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                            <span className="truncate max-w-[110px]">{preset.bg.startsWith('linear') ? 'Gradient' : preset.bg}</span>
+                            <span className="font-bold px-1 rounded text-[9px]" style={{ color: preset.titleColor, backgroundColor: preset.isLight ? '#334155' : 'transparent' }}>
+                              Teks: {preset.isLight ? 'Gelap' : 'Putih'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. PERILAKU SIDEBAR DESKTOP */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Perilaku Sidebar Desktop
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Tentukan mode awal pembukaan sidebar saat aplikasi dimuat di layar desktop.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSidebarBehavior('expanded')}
+                      className={`p-3.5 rounded-2xl border text-center transition cursor-pointer ${
+                        sidebarBehavior === 'expanded'
+                          ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold ring-2 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">Expanded (Terbuka Penuh)</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Menampilkan teks menu &amp; ikon</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSidebarBehavior('collapsed')}
+                      className={`p-3.5 rounded-2xl border text-center transition cursor-pointer ${
+                        sidebarBehavior === 'collapsed'
+                          ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold ring-2 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">Collapsed (Ramping / Ikon Saja)</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Hemat ruang layar</div>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* === TAB 3: TIPOGRAFI & BENTUK UI === */}
+            {activeTab === 'tipografi_layout' && (
+              <>
+                {/* 1. TIPOGRAFI */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Type className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Tipografi (Font Family)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Pilih keluarga font antarmuka aplikasi.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {FONT_OPTIONS.map((font) => {
+                      const isActive = fontTheme === font.id;
+                      return (
+                        <button
+                          key={font.id}
+                          type="button"
+                          onClick={() => setFontTheme(font.id)}
+                          className={`w-full p-3.5 rounded-2xl border text-left transition flex items-center justify-between cursor-pointer ${
+                            isActive
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-black text-sm text-slate-700 dark:text-slate-200">
+                              Aa
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <span>{font.name}</span>
+                                {font.isRecommended && (
+                                  <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-full">
+                                    Rekomendasi
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">{font.desc}</div>
                             </div>
                           </div>
-                        </div>
-                      </div>
+                          {isActive && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full border border-white/20 shadow-xs" style={{ backgroundColor: item.primaryHex }} />
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">{item.name}</span>
-                        </div>
-                        {item.isDefault && (
-                          <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 rounded-md">
-                            ✓ Default
-                          </span>
-                        )}
-                        {isActive && !item.isDefault && (
-                          <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2">
-                        {item.desc}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                {/* 2. DENSITY, RADIUS & SHADOW */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Bentuk &amp; Kepadatan UI
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Atur kepadatan tata letak, kebulatan sudut komponen, dan tingkat kedalaman bayangan.
+                    </p>
+                  </div>
 
-          {/* 2.5 BACKGROUND HEADER HALAMAN */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Background Header Halaman
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Pilih warna / gradient background untuk area Page Header / Hero Header. Warna teks dan badge disesuaikan secara otomatis untuk kontras maksimal.
-                </p>
-              </div>
-              <span className="self-start sm:self-auto px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-extrabold border border-blue-200/60 dark:border-blue-800/60 shrink-0">
-                Preset Selector
-              </span>
-            </div>
-
-            {/* LIVE PAGE HEADER HERO PREVIEW CARD */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Eye className="w-3.5 h-3.5 text-blue-600" /> Pratinjau Hero Header Real-Time
-                </span>
-                <span className="text-[10px] text-slate-400">Tampilan Langsung di Aplikasi</span>
-              </div>
-
-              {(() => {
-                const currentPreset = PAGE_HEADER_BG_PRESETS.find((p) => p.id === pageHeaderBackground) || PAGE_HEADER_BG_PRESETS[0];
-                return (
-                  <div
-                    className="rounded-2xl p-5 md:p-6 shadow-md relative overflow-hidden transition-all duration-300 border border-slate-200/30"
-                    style={{ background: currentPreset.bg }}
-                  >
-                    <div className="absolute right-3 top-3 bottom-3 opacity-10 pointer-events-none flex items-center pr-2">
-                      <Calendar className="w-32 h-32 text-current" style={{ color: currentPreset.titleColor }} />
-                    </div>
-                    <div className="relative z-10 space-y-2">
-                      <div
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border transition-colors"
-                        style={{
-                          backgroundColor: currentPreset.badgeBg,
-                          borderColor: currentPreset.badgeBorder,
-                          color: currentPreset.badgeText,
-                        }}
-                      >
-                        <Calendar className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Presensi Hari Ini (Jumat, 21 Agt 2026)</span>
-                      </div>
-                      <h1
-                        className="text-xl md:text-2xl font-black tracking-tight transition-colors duration-200"
-                        style={{ color: currentPreset.titleColor }}
-                      >
-                        Halaman Input &amp; Kelola Presensi Siswa
-                      </h1>
-                      <p
-                        className="text-xs md:text-sm max-w-xl leading-relaxed transition-colors duration-200"
-                        style={{ color: currentPreset.subtitleColor }}
-                      >
-                        Kelola data siswa dan pencatatan kehadiran harian secara cepat dan akurat.
-                      </p>
+                  {/* DENSITY */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Kepadatan Layout (Density)</label>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        { id: 'compact', name: 'Compact', desc: 'Padding Ringkas' },
+                        { id: 'comfortable', name: 'Comfortable', desc: 'Default Seimbang' },
+                        { id: 'spacious', name: 'Spacious', desc: 'Padding Lapang' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setDensity(item.id as any)}
+                          className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                            density === item.id
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
+                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <div className="text-xs">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                );
-              })()}
-            </div>
 
-            {/* ACCESSIBILITY & CONTRAST NOTICE */}
-            <div className="p-3.5 bg-blue-50/70 dark:bg-blue-950/40 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 flex items-start gap-2.5 text-xs text-blue-900 dark:text-blue-300">
-              <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">✓ Kontras Otomatis:</span> Warna teks judul, deskripsi, dan badge dihitung secara otomatis (Putih pada background gelap / Gelap pada background terang) untuk menjamin standar keterbacaan WCAG AAA.
-              </div>
-            </div>
+                  {/* RADIUS */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Bentuk Komponen (Radius)</label>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        { id: 'standard', name: 'Standard', desc: '8px Standard' },
+                        { id: 'rounded', name: 'Rounded', desc: '12px Membulat' },
+                        { id: 'soft', name: 'Soft', desc: '16px Sangat Lembut' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setComponentRadius(item.id as any)}
+                          className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                            componentRadius === item.id
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
+                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <div className="text-xs">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-            {/* COLOR PRESETS GRID (7 PRESETS) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {PAGE_HEADER_BG_PRESETS.map((preset) => {
-                const isActive = pageHeaderBackground === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => setPageHeaderBackground(preset.id)}
-                    className={`p-3.5 rounded-2xl border text-left transition relative flex flex-col justify-between cursor-pointer ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div>
-                      {/* Mini Background Swatch Box */}
-                      <div
-                        className="w-full h-12 rounded-xl mb-3 border border-slate-200/80 dark:border-slate-700 shadow-xs relative overflow-hidden flex items-center justify-center p-2"
-                        style={{ background: preset.bg }}
+                  {/* SHADOW */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Gaya Bayangan (Shadow)</label>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        { id: 'minimal', name: 'Minimal', desc: 'Flat & Subtle' },
+                        { id: 'default', name: 'Default', desc: 'Sedang Normal' },
+                        { id: 'elevated', name: 'Elevated', desc: 'Tinggi Melayang' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setShadowStyle(item.id as any)}
+                          className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                            shadowStyle === item.id
+                              ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
+                              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <div className="text-xs">{item.name}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ANIMASI INTERAKSI */}
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Animasi Micro-Interaksi</label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setEnableAnimations(true)}
+                        className={`p-2.5 rounded-xl border text-xs text-center transition cursor-pointer ${
+                          enableAnimations
+                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                            : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
                       >
-                        <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-md" style={{ color: preset.titleColor, backgroundColor: preset.badgeBg }}>
-                          Header Text
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">
-                          {preset.name}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {preset.isDefault && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 rounded-md">
-                              Default
-                            </span>
-                          )}
-                          {isActive && (
-                            <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                          )}
-                        </div>
-                      </div>
-
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
-                        {preset.desc}
-                      </p>
+                        Aktif (Halus &amp; Responsif)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEnableAnimations(false)}
+                        className={`p-2.5 rounded-xl border text-xs text-center transition cursor-pointer ${
+                          !enableAnimations
+                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
+                            : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        Matikan (Performa Maksimal)
+                      </button>
                     </div>
+                  </div>
+                </div>
+              </>
+            )}
 
-                    <div className="mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                      <span className="truncate max-w-[120px]">{preset.bg.startsWith('linear') ? 'Gradient' : preset.bg}</span>
-                      <span className="font-bold px-1 rounded text-[9px]" style={{ color: preset.titleColor, backgroundColor: preset.isLight ? '#334155' : 'transparent' }}>
-                        Teks: {preset.isLight ? 'Gelap' : 'Putih'}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
-          {/* 3. PRESET TEMA */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Preset Tema
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Pilih kombinasi warna dan gaya instan yang telah dikurasi secara profesional.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {THEME_PRESETS.map((preset) => {
-                const isActive = activePreset === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => handleSelectPreset(preset)}
-                    className={`p-4 rounded-2xl border text-left transition relative flex flex-col justify-between ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/30 dark:border-blue-500 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                          {preset.name}
-                        </span>
-                        {isActive && (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-600 text-white rounded-full flex items-center gap-1">
-                            <Check className="w-3 h-3" /> Aktif
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug line-clamp-2">
-                        {preset.desc}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full shadow-xs border border-white/20" style={{ backgroundColor: preset.primaryHex }} />
-                        <span className="w-4 h-4 rounded-full shadow-xs border border-white/20" style={{ backgroundColor: preset.darkHex }} />
-                        <span className="w-4 h-4 rounded-full shadow-xs border border-white/20" style={{ backgroundColor: preset.lightHex }} />
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-400">{preset.primaryHex}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 3. WARNA UTAMA & SEMANTIC COLORS */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Warna Utama
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Pilih aksen warna brand utama aplikasi.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              {COLOR_SWATCHES.map((swatch) => {
-                const isActive = primaryColor.toLowerCase() === swatch.hex.toLowerCase();
-                return (
-                  <button
-                    key={swatch.id}
-                    type="button"
-                    onClick={() => setPrimaryColor(swatch.hex)}
-                    className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition ${
-                      isActive
-                        ? 'border-slate-900 dark:border-white bg-slate-100 dark:bg-slate-800 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <span
-                      className="w-4 h-4 rounded-full shadow-xs flex items-center justify-center text-white"
-                      style={{ backgroundColor: swatch.hex }}
-                    >
-                      {isActive && <Check className="w-2.5 h-2.5" />}
-                    </span>
-                    <span className="text-xs text-slate-800 dark:text-slate-200">{swatch.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* SEMANTIC COLORS EXPLANATION BOX */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
-                <Info className="w-4 h-4 text-blue-500" />
-                <span>Indikator Warna Semantik Presensi (Tetap &amp; Konsisten)</span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Warna status presensi tidak berubah ketika warna utama diganti demi kepatuhan visual standar:
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  <span>Hadir</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                </div>
-                <div className="p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-300">
-                  <span>Sakit</span>
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                </div>
-                <div className="p-2 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-cyan-700 dark:text-cyan-300">
-                  <span>Izin</span>
-                  <span className="w-2 h-2 rounded-full bg-cyan-500" />
-                </div>
-                <div className="p-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-xl flex items-center justify-between text-xs font-bold text-rose-700 dark:text-rose-300">
-                  <span>Alpa</span>
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. TYPOGRAPHY */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Type className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Tipografi (Font)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Pilih keluarga font antarmuka aplikasi.
-              </p>
-            </div>
-
-            <div className="space-y-2.5">
-              {FONT_OPTIONS.map((font) => {
-                const isActive = fontTheme === font.id;
-                return (
-                  <button
-                    key={font.id}
-                    type="button"
-                    onClick={() => setFontTheme(font.id)}
-                    className={`w-full p-3.5 rounded-2xl border text-left transition flex items-center justify-between ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 dark:border-blue-500 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-black text-sm text-slate-700 dark:text-slate-200">
-                        Aa
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          <span>{font.name}</span>
-                          {font.isRecommended && (
-                            <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-full">
-                              Rekomendasi
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400">{font.desc}</div>
-                      </div>
-                    </div>
-                    {isActive && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 5. DENSITY, RADIUS & SHADOW */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Bentuk &amp; Kepadatan UI
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Atur kepadatan tata letak, kebulatan sudut komponen, dan tingkat kedalaman bayangan.
-              </p>
-            </div>
-
-            {/* DENSITY */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Kepadatan Layout (Density)</label>
-              <div className="grid grid-cols-3 gap-2.5">
-                {[
-                  { id: 'compact', name: 'Compact', desc: 'Padding Ringkas' },
-                  { id: 'comfortable', name: 'Comfortable', desc: 'Default Seimbang' },
-                  { id: 'spacious', name: 'Spacious', desc: 'Padding Lapang' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setDensity(item.id as any)}
-                    className={`p-3 rounded-xl border text-center transition ${
-                      density === item.id
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs">{item.name}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* RADIUS */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Bentuk Komponent (Radius)</label>
-              <div className="grid grid-cols-3 gap-2.5">
-                {[
-                  { id: 'standard', name: 'Standard', desc: '8px Standard' },
-                  { id: 'rounded', name: 'Rounded', desc: '12px Membulat' },
-                  { id: 'soft', name: 'Soft', desc: '16px Sangat Lembut' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setComponentRadius(item.id as any)}
-                    className={`p-3 rounded-xl border text-center transition ${
-                      componentRadius === item.id
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs">{item.name}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* SHADOW */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Gaya Bayangan (Shadow)</label>
-              <div className="grid grid-cols-3 gap-2.5">
-                {[
-                  { id: 'minimal', name: 'Minimal', desc: 'Flat & Subtle' },
-                  { id: 'default', name: 'Default', desc: 'Sedang Normal' },
-                  { id: 'elevated', name: 'Elevated', desc: 'Tinggi Melayang' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setShadowStyle(item.id as any)}
-                    className={`p-3 rounded-xl border text-center transition ${
-                      shadowStyle === item.id
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    <div className="text-xs">{item.name}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{item.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 6. LAYOUT PREFERENCES & ANIMATION */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Layout className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Preferensi Layout &amp; Animasi
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Atur perilaku sidebar desktop, tampilan widget dashboard, dan transisi animasi.
-              </p>
-            </div>
-
-            {/* INFORMASI SOFT SLATE SIDEBAR */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
-                <Layout className="w-4 h-4 text-blue-500" />
-                <span>Standar Navigasi Sidebar: Soft Slate (Terkunci Netral)</span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Sidebar menggunakan warna netral <strong>Soft Slate (#F8FAFC / #111827)</strong> secara konsisten pada semua preset tema agar pengguna dapat bekerja berjam-jam tanpa kelelahan mata. Header tetap terkunci pada <strong>School Blue (#2563EB)</strong> sebagai identitas utama SMKN 6 Garut.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* SIDEBAR BEHAVIOR */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Sidebar Desktop Default</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSidebarBehavior('expanded')}
-                    className={`flex-1 p-2.5 rounded-xl border text-xs text-center transition ${
-                      sidebarBehavior === 'expanded'
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    Expanded (Terbuka)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarBehavior('collapsed')}
-                    className={`flex-1 p-2.5 rounded-xl border text-xs text-center transition ${
-                      sidebarBehavior === 'collapsed'
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    Collapsed (Ramping)
-                  </button>
-                </div>
-              </div>
-
-              {/* ANIMATIONS */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Animasi Micro-Interaksi</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEnableAnimations(true)}
-                    className={`flex-1 p-2.5 rounded-xl border text-xs text-center transition ${
-                      enableAnimations
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    On (Aktif)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEnableAnimations(false)}
-                    className={`flex-1 p-2.5 rounded-xl border text-xs text-center transition ${
-                      !enableAnimations
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    Off (Matikan)
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 7. BACKGROUND HALAMAN LOGIN */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Background Halaman Login
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Atur foto latar belakang, wallpaper sekolah, gradasi warna, atau pola digital halaman login.
-              </p>
-            </div>
-
-            <LoginBackgroundSettings
-              appData={appData}
-              readOnly={readOnly}
-              onUpdateAppData={onUpdateAppData}
-              onShowToast={onShowToast}
-            />
-          </div>
-
-        </div>
-
-        {/* RIGHT COLUMN: LIVE PREVIEW & COMPONENT SHOWCASE (5 COLS) */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="sticky top-6 space-y-6">
-            
-            {/* MINI DASHBOARD LIVE PREVIEW CARD */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-md space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">Live Dashboard Preview</span>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-mono text-slate-500">
-                  Real-Time
-                </span>
-              </div>
-
-              {/* MINI SIMULATED DASHBOARD */}
-              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs">
-                {/* 1. Neutral Header */}
-                <div className="bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between">
+          {/* RIGHT COLUMN: LIVE PREVIEW & COMPONENT SHOWCASE (5 COLS) */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="sticky top-6 space-y-6">
+              
+              {/* MINI DASHBOARD LIVE PREVIEW CARD */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-md space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                      <School className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <div className="text-[11px] font-bold text-[#0F172A] dark:text-[#F8FAFC] leading-none">{sekolah.nama || 'SMKN 6 GARUT'}</div>
-                      <div className="text-[9px] text-[#64748B] dark:text-[#94A3B8]">Header Netral</div>
-                    </div>
+                    <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">Live Dashboard Preview</span>
                   </div>
-                  <span className="px-2 py-0.5 text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-700">
-                    Mode: {themeMode.toUpperCase()}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-mono text-slate-500">
+                    Real-Time
                   </span>
                 </div>
 
-                {/* Body (Sidebar + Content) */}
-                <div className="flex h-56">
-                  {/* 2. Active Sidebar Theme */}
-                  <div
-                    className="w-24 p-2 flex flex-col justify-between shrink-0 text-white transition-colors duration-200"
-                    style={{
-                      backgroundColor:
-                        SIDEBAR_COLOR_THEMES.find((st) => st.id === sidebarTheme)?.primaryHex || '#2563EB',
-                    }}
-                  >
-                    <div className="space-y-2">
-                      <div className="text-[9px] font-bold text-white/60 uppercase tracking-wider">Menu</div>
-                      <div className="space-y-1">
-                        <div className="px-1.5 py-1 rounded bg-white/15 text-[10px] font-bold text-white border-l-[3px] border-white/90">
-                          Dashboard
+                {/* MINI SIMULATED DASHBOARD */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs">
+                  {/* 1. Neutral Header */}
+                  <div className="bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                        <School className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-bold text-[#0F172A] dark:text-[#F8FAFC] leading-none">{sekolah.nama || 'SMKN 6 GARUT'}</div>
+                        <div className="text-[9px] text-[#64748B] dark:text-[#94A3B8]">Header Netral</div>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-700">
+                      Mode: {themeMode.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Body (Sidebar + Content) */}
+                  <div className="flex h-56">
+                    {/* 2. Active Sidebar Theme */}
+                    <div
+                      className="w-24 p-2 flex flex-col justify-between shrink-0 text-white transition-colors duration-200"
+                      style={{
+                        backgroundColor:
+                          SIDEBAR_COLOR_THEMES.find((st) => st.id === sidebarTheme)?.primaryHex || '#2563EB',
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <div className="text-[9px] font-bold text-white/60 uppercase tracking-wider">Menu</div>
+                        <div className="space-y-1">
+                          <div className="px-1.5 py-1 rounded bg-white/15 text-[10px] font-bold text-white border-l-[3px] border-white/90">
+                            Dashboard
+                          </div>
+                          <div className="px-1.5 py-1 rounded text-[10px] text-white/75 hover:bg-white/10">
+                            Presensi
+                          </div>
+                          <div className="px-1.5 py-1 rounded text-[10px] text-white/75 hover:bg-white/10">
+                            Laporan
+                          </div>
+                          <div className="px-1.5 py-1 rounded text-[10px] text-white/75 hover:bg-white/10">
+                            Siswa
+                          </div>
                         </div>
-                        <div className="px-1.5 py-1 rounded text-[10px] text-white/75 hover:bg-white/10">
-                          Presensi
+                      </div>
+                      <div className="text-[8px] text-white/70 font-mono">
+                        Sidebar: {SIDEBAR_COLOR_THEMES.find((st) => st.id === sidebarTheme)?.name}
+                      </div>
+                    </div>
+
+                    {/* 3. Neutral Soft Slate Content Area */}
+                    <div className="flex-1 bg-[#F8FAFC] dark:bg-slate-950 p-2.5 space-y-2.5 overflow-y-auto">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100">Presensi Real-Time</div>
+                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
+                          96.8% Hadir
+                        </span>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                          <div className="text-[8px] text-slate-400 font-medium">Hadir</div>
+                          <div className="text-xs font-black text-emerald-600 dark:text-emerald-400">1,248</div>
                         </div>
-                        <div className="px-1.5 py-1 rounded text-[10px] text-white/75 hover:bg-white/10">
-                          Laporan
+                        <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                          <div className="text-[8px] text-slate-400 font-medium">Alpha</div>
+                          <div className="text-xs font-black text-rose-600 dark:text-rose-400">12</div>
                         </div>
-                        <div className="px-1.5 py-1 rounded text-[10px] text-white/75 hover:bg-white/10">
-                          Siswa
+                      </div>
+
+                      {/* Table Sample */}
+                      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 overflow-hidden text-[10px]">
+                        <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                          <div className="p-1.5 flex items-center justify-between">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Ahmad Fauzi</span>
+                            <span className="px-1.5 py-0.5 text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded">
+                              Hadir
+                            </span>
+                          </div>
+                          <div className="p-1.5 flex items-center justify-between">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Siti Rahma</span>
+                            <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 rounded">
+                              Sakit
+                            </span>
+                          </div>
+                          <div className="p-1.5 flex items-center justify-between">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Budi Santoso</span>
+                            <span className="px-1.5 py-0.5 text-[8px] font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 rounded">
+                              Izin
+                            </span>
+                          </div>
+                          <div className="p-1.5 flex items-center justify-between">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Riki Pratama</span>
+                            <span className="px-1.5 py-0.5 text-[8px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 rounded">
+                              Alpa
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    <div className="text-[8px] text-white/70 font-mono">
-                      Sidebar: {SIDEBAR_COLOR_THEMES.find((st) => st.id === sidebarTheme)?.name}
+                  </div>
+                </div>
+              </div>
+
+              {/* COMPONENT SHOWCASE */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">Pratinjau Komponen UI</span>
+                  <span className="text-[10px] text-slate-400">Design Tokens</span>
+                </div>
+
+                <div className="space-y-3">
+                  {/* BUTTONS SHOWCASE */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tombol (Buttons)</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-xs font-bold text-white rounded-xl shadow-xs"
+                        style={{ backgroundColor: primaryColor }}
+                      >
+                        Primary
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl"
+                      >
+                        Secondary
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 rounded-xl"
+                      >
+                        Success
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-rose-600 rounded-xl"
+                      >
+                        Danger
+                      </button>
                     </div>
                   </div>
 
-                  {/* 3. Neutral Soft Slate Content Area */}
-                  <div className="flex-1 bg-[#F8FAFC] dark:bg-slate-950 p-2.5 space-y-2.5 overflow-y-auto">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100">Presensi Real-Time</div>
-                      <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60">
-                        96.8% Hadir
+                  {/* INPUT SHOWCASE */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Form Input</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value="Cari NIS, Nama, atau Kelas..."
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* BADGES SHOWCASE */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lencana &amp; Tag Status</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-lg">
+                        Hadir (Success)
+                      </span>
+                      <span className="px-2.5 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 rounded-lg">
+                        Sakit (Warning)
+                      </span>
+                      <span className="px-2.5 py-1 text-[10px] font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-300 rounded-lg">
+                        Izin (Info)
+                      </span>
+                      <span className="px-2.5 py-1 text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300 rounded-lg">
+                        Alpa (Danger)
                       </span>
                     </div>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-                        <div className="text-[8px] text-slate-400 font-medium">Hadir</div>
-                        <div className="text-xs font-black text-emerald-600 dark:text-emerald-400">1,248</div>
-                      </div>
-                      <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-                        <div className="text-[8px] text-slate-400 font-medium">Alpha</div>
-                        <div className="text-xs font-black text-rose-600 dark:text-rose-400">12</div>
-                      </div>
-                    </div>
-
-                    {/* Table Sample */}
-                    <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 overflow-hidden text-[10px]">
-                      <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                        <div className="p-1.5 flex items-center justify-between">
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Ahmad Fauzi</span>
-                          <span className="px-1.5 py-0.5 text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded">
-                            Hadir
-                          </span>
-                        </div>
-                        <div className="p-1.5 flex items-center justify-between">
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Siti Rahma</span>
-                          <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 rounded">
-                            Sakit
-                          </span>
-                        </div>
-                        <div className="p-1.5 flex items-center justify-between">
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Budi Santoso</span>
-                          <span className="px-1.5 py-0.5 text-[8px] font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 rounded">
-                            Izin
-                          </span>
-                        </div>
-                        <div className="p-1.5 flex items-center justify-between">
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">Riki Pratama</span>
-                          <span className="px-1.5 py-0.5 text-[8px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 rounded">
-                            Alpa
-                          </span>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
+
             </div>
-
-            {/* COMPONENT SHOWCASE */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Pratinjau Komponen UI</span>
-                <span className="text-[10px] text-slate-400">Design Tokens</span>
-              </div>
-
-              <div className="space-y-3">
-                {/* BUTTONS SHOWCASE */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tombol (Buttons)</span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-xs font-bold text-white rounded-xl shadow-xs"
-                      style={{ backgroundColor: primaryColor }}
-                    >
-                      Primary
-                    </button>
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl"
-                    >
-                      Secondary
-                    </button>
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 rounded-xl"
-                    >
-                      Success
-                    </button>
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-rose-600 rounded-xl"
-                    >
-                      Danger
-                    </button>
-                  </div>
-                </div>
-
-                {/* INPUT SHOWCASE */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Form Input</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value="Cari NIS, Nama, atau Kelas..."
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none"
-                  />
-                </div>
-
-                {/* BADGES SHOWCASE */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lencana &amp; Tag Status</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 rounded-lg">
-                      Hadir (Success)
-                    </span>
-                    <span className="px-2.5 py-1 text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 rounded-lg">
-                      Sakit (Warning)
-                    </span>
-                    <span className="px-2.5 py-1 text-[10px] font-bold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-300 rounded-lg">
-                      Izin (Info)
-                    </span>
-                    <span className="px-2.5 py-1 text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300 rounded-lg">
-                      Alpa (Danger)
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
           </div>
+
         </div>
-
-      </div>
-
+      )}
+            
       {/* MODAL CONFIRMATION RESET */}
       {isResetModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">

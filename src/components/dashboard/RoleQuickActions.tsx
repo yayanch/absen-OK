@@ -1,9 +1,6 @@
 import React from 'react';
 import {
-  UserPlus,
-  FileSpreadsheet,
   FileText,
-  QrCode,
   AlertTriangle,
   Calendar,
   ShieldAlert,
@@ -13,6 +10,7 @@ import {
   Clock,
   ChevronRight,
   BookOpen,
+  Layers,
 } from 'lucide-react';
 import { UserRole, ViewType } from '../../types';
 
@@ -21,6 +19,7 @@ interface RoleQuickActionsProps {
   onNavigateView: (view: ViewType) => void;
   onNavigateToInput?: () => void;
   onOpenImportModal?: () => void;
+  onOpenWeeklyScheduleModal?: () => void;
 }
 
 export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
@@ -28,83 +27,22 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   onNavigateView,
   onNavigateToInput,
   onOpenImportModal,
+  onOpenWeeklyScheduleModal,
 }) => {
   if (role === 'admin') {
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
-          Aksi Cepat Admin
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <button
-            onClick={() => onNavigateView('master_siswa')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
-          >
-            <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-              <UserPlus className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-extrabold text-xs truncate">Tambah Siswa</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Kelola data siswa</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => {
-              if (onOpenImportModal) onOpenImportModal();
-              else onNavigateView('master_siswa');
-            }}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
-          >
-            <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-              <FileSpreadsheet className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-extrabold text-xs truncate">Import Excel</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Upload data masal</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onNavigateView('rekap_harian')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
-          >
-            <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-extrabold text-xs truncate">Rekap Presensi</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Laporan harian</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onNavigateView('absen_qr')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
-          >
-            <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-              <QrCode className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-extrabold text-xs truncate">Scan QR</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Pemindaian QR</div>
-            </div>
-          </button>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (role === 'kesiswaan') {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+      <div className="space-y-2">
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
           Aksi Cepat Tim Kesiswaan &amp; BP/BK
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <button
             onClick={() => onNavigateView('rekap_ketidakhadiran_tertinggi')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <AlertTriangle className="w-4 h-4" />
@@ -117,7 +55,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
           <button
             onClick={() => onNavigateView('rekap_bulanan')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <Calendar className="w-4 h-4" />
@@ -130,7 +68,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
           <button
             onClick={() => onNavigateView('catatan_pelanggaran')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <ShieldAlert className="w-4 h-4" />
@@ -143,7 +81,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
           <button
             onClick={() => onNavigateView('home_visit')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <Home className="w-4 h-4" />
@@ -160,17 +98,18 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
   if (role === 'wali') {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+      <div className="space-y-2">
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
           Aksi Cepat Wali Kelas
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          {/* 1. Presensi Hari Ini */}
           <button
             onClick={() => {
               if (onNavigateToInput) onNavigateToInput();
               else onNavigateView('presensi_input');
             }}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <ClipboardCheck className="w-4 h-4 stroke-[2.5]" />
@@ -181,22 +120,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             </div>
           </button>
 
-          <button
-            onClick={() => onNavigateView('jadwal_mengajar')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
-          >
-            <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-              <BookOpen className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-extrabold text-xs truncate">Jadwal Mengajar</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Jadwal mengajar saya</div>
-            </div>
-          </button>
-
+          {/* 2. Daftar Siswa */}
           <button
             onClick={() => onNavigateView('master_siswa')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <Users className="w-4 h-4" />
@@ -207,9 +134,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             </div>
           </button>
 
+          {/* 3. Rekap Kelas */}
           <button
             onClick={() => onNavigateView('rekap_harian')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <FileText className="w-4 h-4" />
@@ -220,9 +148,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             </div>
           </button>
 
+          {/* 4. Ketidakhadiran */}
           <button
             onClick={() => onNavigateView('rekap_ketidakhadiran_tertinggi')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <AlertTriangle className="w-4 h-4" />
@@ -232,6 +161,48 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
               <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Peringatan siswa</div>
             </div>
           </button>
+
+          {/* 5. Mapel & Kelas Ajar */}
+          <button
+            onClick={() => onNavigateView('mapel_kelas_guru')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate text-emerald-950 dark:text-emerald-100">Mapel &amp; Kelas Ajar</div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">Kelola mapel &amp; kelas</div>
+            </div>
+          </button>
+
+          {/* 6. Jadwal Mengajar */}
+          <button
+            onClick={() => onNavigateView('jadwal_mengajar')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-blue-200/80 dark:border-blue-800/60 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate text-blue-950 dark:text-blue-100">Jadwal Mengajar</div>
+              <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate">Matriks &amp; tabel jadwal</div>
+            </div>
+          </button>
+
+          {/* 7. Jadwal Minggu Ini */}
+          <button
+            onClick={() => onNavigateView('jadwal_minggu_ini')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-blue-200/80 dark:border-blue-800/60 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate text-blue-950 dark:text-blue-100">Jadwal Minggu Ini</div>
+              <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate">Ringkasan KBM sepekan</div>
+            </div>
+          </button>
         </div>
       </div>
     );
@@ -239,14 +210,14 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
   if (role === 'kurikulum') {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+      <div className="space-y-2">
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
           Aksi Cepat Tim Kurikulum &amp; Akademik
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={() => onNavigateView('jadwal_mengajar')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <Calendar className="w-4 h-4" />
@@ -259,7 +230,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
           <button
             onClick={() => onNavigateView('master_mapel')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <BookOpen className="w-4 h-4" />
@@ -272,7 +243,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
           <button
             onClick={() => onNavigateView('master_guru')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <Users className="w-4 h-4" />
@@ -285,7 +256,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
           <button
             onClick={() => onNavigateView('jadwal_shift')}
-            className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
           >
             <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
               <Clock className="w-4 h-4" />
@@ -300,36 +271,77 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
     );
   }
 
+  if (role === 'staf_jadwal') {
+    return (
+      <div className="space-y-2">
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+          Aksi Utama Pengelola Jadwal
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          {/* 1. Jadwal Mengajar Guru */}
+          <button
+            onClick={() => onNavigateView('jadwal_mengajar')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-sky-50/80 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-sky-200/80 dark:border-sky-800/60 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-sky-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate text-sky-950 dark:text-sky-100">Jadwal Mengajar Guru</div>
+              <div className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold truncate">Plotting, edit jadwal, dan cetak matriks jadwal KBM</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Guru Role
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
-      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+    <div className="space-y-2">
+      <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
         Aksi Cepat Guru Pengajar
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* 1. Mapel & Kelas Ajar */}
         <button
-          onClick={() => onNavigateView('jadwal_mengajar')}
-          className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+          onClick={() => onNavigateView('mapel_kelas_guru')}
+          className="flex items-center gap-3 p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs"
         >
-          <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-            <BookOpen className="w-4 h-4" />
+          <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+            <Layers className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <div className="font-extrabold text-xs truncate">Jadwal Mengajar</div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Jadwal mengajar saya</div>
+            <div className="font-extrabold text-xs truncate text-emerald-950 dark:text-emerald-100">Mapel &amp; Kelas Ajar</div>
+            <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">Kelola mapel &amp; kelas</div>
           </div>
         </button>
 
+        {/* 2. Jadwal Mengajar */}
         <button
-          onClick={() => onNavigateView('jadwal_shift')}
-          className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-700/60 shadow-xs"
+          onClick={() => onNavigateView('jadwal_mengajar')}
+          className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-blue-200/80 dark:border-blue-800/60 shadow-xs"
         >
-          <div className="p-2.5 rounded-xl theme-action-icon shrink-0 group-hover:scale-105 transition">
-            <Clock className="w-4 h-4" />
+          <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+            <BookOpen className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <div className="font-extrabold text-xs truncate">Jadwal Hari Ini</div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Lihat shift &amp; jam</div>
+            <div className="font-extrabold text-xs truncate text-blue-950 dark:text-blue-100">Jadwal Mengajar</div>
+            <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate">Matriks &amp; tabel jadwal</div>
+          </div>
+        </button>
+
+        {/* 3. Jadwal Mengajar Minggu Ini */}
+        <button
+          onClick={() => onNavigateView('jadwal_minggu_ini')}
+          className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-blue-200/80 dark:border-blue-800/60 shadow-xs"
+        >
+          <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-extrabold text-xs truncate text-blue-950 dark:text-blue-100">Jadwal Mengajar Minggu Ini</div>
+            <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate">Ringkasan KBM sepekan</div>
           </div>
         </button>
       </div>

@@ -82,7 +82,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
       .sort((a, b) => a.nama.localeCompare(b.nama, 'id', { sensitivity: 'base' }));
   }, [appData.mataPelajaran]);
 
-  const [mapelViewMode, setMapelViewMode] = useState<'list' | 'grid'>('list');
+  const [mapelViewMode, setMapelViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
   const [mapelSearch, setMapelSearch] = useState('');
   const [mapelFilterKategori, setMapelFilterKategori] = useState<string>('semua');
   const [mapelFilterTingkat, setMapelFilterTingkat] = useState<string>('semua');
@@ -640,7 +640,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
         {/* Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
@@ -650,7 +650,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
           </div>
 
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <Layers className="w-5 h-5" />
             </div>
             <div>
@@ -662,7 +662,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
           </div>
 
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
@@ -674,7 +674,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
           </div>
 
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
               <Clock className="w-5 h-5" />
             </div>
             <div>

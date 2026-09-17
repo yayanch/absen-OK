@@ -268,13 +268,13 @@ html[data-theme="warm"] {
 }
 
 .theme-action-icon {
-  background-color: color-mix(in srgb, var(--theme-primary) 12%, transparent);
-  color: var(--theme-primary);
+  background-color: var(--theme-primary);
+  color: #ffffff;
 }
 
 .dark .theme-action-icon {
-  background-color: color-mix(in srgb, var(--theme-primary) 22%, transparent);
-  color: var(--theme-primary);
+  background-color: var(--theme-primary);
+  color: #ffffff;
 }
 
 .bg-theme-primary-dark {
@@ -410,6 +410,7 @@ html[data-theme="warm"] {
 /* Custom styles for html5-qrcode scanner UI */
 #qr-reader-container,
 #server-qr-scanner-box,
+#class-qr-scanner-viewport,
 [id^="html5-qrcode"] {
   border: none !important;
   color: #ffffff !important;
@@ -417,6 +418,7 @@ html[data-theme="warm"] {
 
 #qr-reader-container *,
 #server-qr-scanner-box *,
+#class-qr-scanner-viewport *,
 [id^="html5-qrcode"] * {
   color: #f8fafc !important;
   font-family: inherit;
@@ -424,6 +426,7 @@ html[data-theme="warm"] {
 
 #qr-reader-container #qr-reader-container__dashboard,
 #server-qr-scanner-box #server-qr-scanner-box__dashboard,
+#class-qr-scanner-viewport #class-qr-scanner-viewport__dashboard,
 [id$="__dashboard"] {
   padding: 1rem 0.75rem !important;
   background-color: #0f172a !important;
@@ -434,6 +437,7 @@ html[data-theme="warm"] {
 
 #qr-reader-container #qr-reader-container__dashboard_section,
 #server-qr-scanner-box #server-qr-scanner-box__dashboard_section,
+#class-qr-scanner-viewport #class-qr-scanner-viewport__dashboard_section,
 [id$="__dashboard_section"] {
   color: #ffffff !important;
   font-size: 0.875rem !important;
@@ -442,16 +446,20 @@ html[data-theme="warm"] {
 
 #qr-reader-container span,
 #server-qr-scanner-box span,
+#class-qr-scanner-viewport span,
 #qr-reader-container label,
 #server-qr-scanner-box label,
+#class-qr-scanner-viewport label,
 #qr-reader-container div,
-#server-qr-scanner-box div {
+#server-qr-scanner-box div,
+#class-qr-scanner-viewport div {
   color: #f1f5f9 !important;
   font-weight: 700 !important;
 }
 
 #qr-reader-container select,
 #server-qr-scanner-box select,
+#class-qr-scanner-viewport select,
 #html5-qrcode-select-camera,
 [id$="__camera_selection"] {
   background-color: #1e293b !important;
@@ -471,6 +479,7 @@ html[data-theme="warm"] {
 
 #qr-reader-container button,
 #server-qr-scanner-box button,
+#class-qr-scanner-viewport button,
 [id^="html5-qrcode-button"] {
   background: #2563eb !important;
   color: #ffffff !important;
@@ -489,29 +498,34 @@ html[data-theme="warm"] {
 
 #qr-reader-container button:hover,
 #server-qr-scanner-box button:hover,
+#class-qr-scanner-viewport button:hover,
 [id^="html5-qrcode-button"]:hover {
   background: #1d4ed8 !important;
 }
 
 #qr-reader-container button#html5-qrcode-button-camera-stop,
-#server-qr-scanner-box button#html5-qrcode-button-camera-stop {
+#server-qr-scanner-box button#html5-qrcode-button-camera-stop,
+#class-qr-scanner-viewport button#html5-qrcode-button-camera-stop {
   background: #ef4444 !important;
 }
 
 #qr-reader-container button#html5-qrcode-button-camera-stop:hover,
-#server-qr-scanner-box button#html5-qrcode-button-camera-stop:hover {
+#server-qr-scanner-box button#html5-qrcode-button-camera-stop:hover,
+#class-qr-scanner-viewport button#html5-qrcode-button-camera-stop:hover {
   background: #dc2626 !important;
 }
 
 #qr-reader-container video,
-#server-qr-scanner-box video {
+#server-qr-scanner-box video,
+#class-qr-scanner-viewport video {
   border-radius: 0.75rem !important;
   object-fit: cover !important;
   width: 100% !important;
 }
 
 #qr-reader-container img[alt="Info icon"],
-#server-qr-scanner-box img[alt="Info icon"] {
+#server-qr-scanner-box img[alt="Info icon"],
+#class-qr-scanner-viewport img[alt="Info icon"] {
   display: none !important;
 }
 
@@ -772,8 +786,22 @@ main.flex-1 {
 
 /* Mobile refinements */
 @media (max-width: 767px) {
-  main.flex-1 {
+  main.flex-1:not(.student-portal-main) {
     padding: .75rem !important;
+  }
+
+  main.student-portal-main,
+  .student-portal-main {
+    padding: 0 !important;
+    padding-top: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 4rem !important;
+    margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
   }
 
   [style*="var(--page-header-bg)"] {
@@ -784,6 +812,16 @@ main.flex-1 {
   header.sticky {
     min-height: 58px;
   }
+}
+
+main.student-portal-main,
+.student-portal-main {
+  padding-top: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
 }
 
 /* Reduced motion */

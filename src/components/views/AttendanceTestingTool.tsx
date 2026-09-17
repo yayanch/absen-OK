@@ -409,7 +409,7 @@ export const AttendanceTestingTool: React.FC<AttendanceTestingToolProps> = ({
               <option value="all">🌐 Semua Kelas ({appData.kelas?.length || 0} Kelas Terdaftar)</option>
               {appData.kelas?.map((k) => (
                 <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Jurusan: {k.jurusanId})
+                  Kelas {k.nama}
                 </option>
               ))}
             </select>

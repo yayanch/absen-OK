@@ -1,10 +1,34 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { DoorOpen, Plus, Edit, Trash, Trash2, AlertTriangle, FileSpreadsheet, Download, Eye, Search, Shuffle, ArrowUpDown, ArrowUp, ArrowDown, Building, List, LayoutGrid, Users } from 'lucide-react';
+import {
+  DoorOpen,
+  Plus,
+  Edit,
+  Trash,
+  Trash2,
+  AlertTriangle,
+  FileSpreadsheet,
+  Download,
+  Upload,
+  Eye,
+  Search,
+  Shuffle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Building,
+  List,
+  LayoutGrid,
+  Users,
+  Settings,
+  ChevronDown,
+  FileDown,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { AppData, Kelas } from '../../types';
 import { randomizeWaliKelasForClasses, sortKelasList } from '../../data/initialData';
 import { Pagination } from '../Pagination';
-import { addAuditLog } from '../../utils/helpers';
+import { addAuditLog, extractKelasTingkat, determineKelasKelompok } from '../../utils/helpers';
 import { PageHeader } from '../common/UIComponents';
 
 interface MasterKelasViewProps {
@@ -32,14 +56,31 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
   onShowToast,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const hasJurusan = appData.jurusan && appData.jurusan.length > 0;
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
   const [searchTerm, setSearchTerm] = useState('');
   const [filterJurusanId, setFilterJurusanId] = useState('');
   const [sortField, setSortField] = useState<'nama' | 'jurusan' | 'wali' | 'jumlahSiswa'>('nama');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        settingsDropdownRef.current &&
+        !settingsDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   let filteredKelas = appData.kelas.filter((k) => {
     if (filterJurusanId && k.jurusanId !== filterJurusanId) return false;
@@ -187,11 +228,10 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
       const femaleCount = siswaInKelas.filter((s) => s.gender === 'P' || (s as any).jenisKelamin === 'P').length;
 
       // Extract tingkat (X, XI, XII)
-      let tingkat = '-';
-      const upperName = k.nama.toUpperCase();
-      if (upperName.startsWith('XII') || upperName.includes(' 12 ') || upperName.startsWith('12 ')) tingkat = 'XII';
-      else if (upperName.startsWith('XI') || upperName.includes(' 11 ') || upperName.startsWith('11 ')) tingkat = 'XI';
-      else if (upperName.startsWith('X') || upperName.includes(' 10 ') || upperName.startsWith('10 ')) tingkat = 'X';
+      const t = extractKelasTingkat(k.nama);
+      const tingkat = t !== 'LAIN' ? t : '-';
+      const kelompok = determineKelasKelompok(k.nama);
+      const kelompokLabel = kelompok === 1 ? 'Kelompok 1 (Kelas X & XI)' : 'Kelompok 2 (Kelas XII)';
 
       const waliNamaLengkap = wali ? wali.nama : '-';
 
@@ -199,6 +239,7 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
         'No': idx + 1,
         'Nama Kelas': k.nama,
         'Tingkat': tingkat,
+        'Kelompok Shift': kelompokLabel,
         'Jurusan': jur ? jur.nama : '-',
         'Kode Jurusan': jur ? jur.kode : '-',
         'Wali Kelas': waliNamaLengkap,
@@ -477,71 +518,18 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
         description={readOnly ? 'Daftar rombel/kelas beserta wali kelas dan informasi tingkat jurusan.' : 'Kelola data rombel/kelas, pembagian wali kelas, dan informasi tingkat jurusan.'}
         badge="Master Data Rombel"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleExportExcel}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-              title="Ekspor Data Kelas ke File Excel (.xlsx)"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
-
+          <div className="flex items-center gap-2">
             {!readOnly && (
-              <>
-                <button
-                  onClick={handleHapusSeluruh}
-                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl transition border border-rose-200 flex items-center gap-1.5 cursor-pointer"
-                  title="Hapus Seluruh Data Kelas"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Hapus Seluruh</span>
-                </button>
-                <button
-                  onClick={handleDownloadTemplate}
-                  className="px-3 py-2 bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
-                  title="Unduh Template Excel 54 Kelas"
-                >
-                  <Download className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span className="hidden sm:inline">Template Excel</span>
-                </button>
-                <button
-                  onClick={handleAcakWaliKelas}
-                  className="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Tetapkan Wali Kelas Acak untuk Semua Kelas"
-                >
-                  <Shuffle className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Acak Wali</span>
-                </button>
-                <button
-                  disabled={!hasJurusan}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
-                    !hasJurusan ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  title="Import Data Kelas dari File Excel"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Import Excel</span>
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept=".xlsx, .xls"
-                  onChange={handleExcelImport}
-                  className="hidden"
-                />
-                <button
-                  disabled={!hasJurusan}
-                  onClick={() => openFormKelas()}
-                  className={`px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
-                    !hasJurusan ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tambah Kelas</span>
-                </button>
-              </>
+              <button
+                disabled={!hasJurusan}
+                onClick={() => openFormKelas()}
+                className={`px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer ${
+                  !hasJurusan ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Kelas</span>
+              </button>
             )}
           </div>
         }
@@ -554,7 +542,7 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
         </div>
       )}
 
-      <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-end justify-between gap-4 relative z-30">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
           <div>
             <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">Filter Jurusan</label>
@@ -564,7 +552,7 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
                 setFilterJurusanId(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Semua Jurusan ({appData.jurusan.length})</option>
               {appData.jurusan.map((j) => (
@@ -581,7 +569,7 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
               <select
                 value={sortField}
                 onChange={(e) => handleSort(e.target.value as any)}
-                className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="nama">Nama Kelas</option>
                 <option value="jurusan">Jurusan</option>
@@ -591,7 +579,7 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-                className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200 transition cursor-pointer"
+                className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl font-bold text-xs flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                 title={`Urutan: ${sortDirection === 'asc' ? 'A-Z / Naik' : 'Z-A / Turun'}`}
               >
                 {sortDirection === 'asc' ? <ArrowUp className="w-4 h-4 text-blue-600" /> : <ArrowDown className="w-4 h-4 text-blue-600" />}
@@ -611,40 +599,189 @@ export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
                   setCurrentPage(1);
                 }}
                 placeholder="Cari nama kelas, jurusan, wali..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-semibold text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
               />
             </div>
           </div>
         </div>
 
-        {/* View Switcher: List & Grid */}
-        <div className="flex items-center self-end sm:self-auto bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-              viewMode === 'list'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
-            title="Tampilan Tabel / List"
-          >
-            <List className="w-4 h-4" />
-            <span>List</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-              viewMode === 'grid'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
-            title="Tampilan Kartu / Grid"
-          >
-            <LayoutGrid className="w-4 h-4" />
-            <span>Grid</span>
-          </button>
+        {/* Toolbar di Atas Tabel: Pengaturan & View Switcher */}
+        <div className="flex items-center gap-2 self-end md:self-end shrink-0">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".xlsx, .xls"
+            onChange={handleExcelImport}
+            className="hidden"
+          />
+
+          {readOnly ? (
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Ekspor Data Kelas ke File Excel (.xlsx)"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export Excel</span>
+            </button>
+          ) : (
+            <div className="relative z-50" ref={settingsDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen((prev) => !prev)}
+                className={`px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-bold text-xs rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs hover:shadow-md transition flex items-center gap-2 cursor-pointer ${
+                  isSettingsOpen ? 'ring-2 ring-blue-500 border-transparent bg-white dark:bg-slate-800' : ''
+                }`}
+                title="Menu Pengaturan & Alat Data Kelas"
+              >
+                <Settings className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                <span>Pengaturan</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                    isSettingsOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isSettingsOpen && (
+                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-2.5rem)] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-2xl z-[100] p-1.5 text-left text-xs divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in-50 zoom-in-95 duration-150">
+                  {/* Grup 1: Import & Export Excel */}
+                  <div className="p-1 space-y-0.5">
+                    <div className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      Import &amp; Export Excel
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!hasJurusan}
+                      onClick={() => {
+                        setIsSettingsOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left font-semibold text-slate-700 dark:text-slate-200 hover:bg-teal-50 dark:hover:bg-teal-950/50 hover:text-teal-700 dark:hover:text-teal-300 transition cursor-pointer ${
+                        !hasJurusan ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <div className="p-1.5 rounded-lg bg-teal-100 dark:bg-teal-950/80 text-teal-600 dark:text-teal-400 shrink-0">
+                        <Upload className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs">Import Excel</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500">Unggah berkas data rombel (.xlsx)</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSettingsOpen(false);
+                        handleExportExcel();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left font-semibold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 hover:text-emerald-700 dark:hover:text-emerald-300 transition cursor-pointer"
+                    >
+                      <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 shrink-0">
+                        <Download className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs">Export Excel</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500">Unduh data kelas saat ini</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSettingsOpen(false);
+                        handleDownloadTemplate();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left font-semibold text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-purple-950/50 hover:text-purple-700 dark:hover:text-purple-300 transition cursor-pointer"
+                    >
+                      <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 shrink-0">
+                        <FileDown className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs">Template Excel</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500">Format standar 54 rombel kelas</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Grup 2: Utilitas & Pembagian */}
+                  <div className="p-1 space-y-0.5">
+                    <div className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      Utilitas Kelas
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSettingsOpen(false);
+                        handleAcakWaliKelas();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left font-semibold text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-amber-950/50 hover:text-amber-700 dark:hover:text-amber-300 transition cursor-pointer"
+                    >
+                      <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 shrink-0">
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs">Acak Wali Kelas</div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500">Penetapan wali otomatis ke rombel</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Grup 3: Hapus Data */}
+                  <div className="p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSettingsOpen(false);
+                        handleHapusSeluruh();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                    >
+                      <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 shrink-0">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs">Hapus Seluruh Kelas</div>
+                        <div className="text-[10px] text-rose-400/80 dark:text-rose-400/70">Kosongkan seluruh master rombel</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* View Switcher: List & Grid */}
+          <div className="flex items-center self-end sm:self-auto bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+              title="Tampilan Tabel / List"
+            >
+              <List className="w-4 h-4" />
+              <span>List</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+              title="Tampilan Kartu / Grid"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span>Grid</span>
+            </button>
+          </div>
         </div>
       </div>
 

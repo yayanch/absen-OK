@@ -23,7 +23,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 }) => {
   return (
     <div
-      className="rounded-2xl md:rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors"
+      className="rounded-2xl md:rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors relative z-20"
       style={{ background: 'var(--page-header-bg)' }}
     >
       <div className="flex items-start md:items-center gap-3.5">
@@ -65,7 +65,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       </div>
 
       {(actions || children) && (
-        <div className="flex items-center gap-2.5 flex-wrap self-end md:self-auto shrink-0">
+        <div className="flex items-center gap-2.5 flex-wrap self-end md:self-auto shrink-0 relative z-30">
           {actions}
           {children}
         </div>
@@ -329,23 +329,23 @@ export const StatCard: React.FC<StatCardProps> = ({
   const displayTitle = label || title || '';
   const displaySubtitle = description || subtitle || '';
 
-  const variantColors: Record<string, string> = {
-    primary: 'var(--theme-primary)',
-    success: 'var(--color-success)',
-    warning: 'var(--color-warning)',
-    danger: 'var(--color-danger)',
-    info: 'var(--color-info)',
-    neutral: 'var(--color-text-secondary)',
+  const variantIconStyles: Record<string, { bg: string; text: string }> = {
+    primary: { bg: 'bg-blue-600', text: 'text-white' },
+    success: { bg: 'bg-emerald-600', text: 'text-white' },
+    warning: { bg: 'bg-amber-500', text: 'text-white' },
+    danger: { bg: 'bg-rose-600', text: 'text-white' },
+    info: { bg: 'bg-sky-600', text: 'text-white' },
+    neutral: { bg: 'bg-indigo-600', text: 'text-white' },
   };
 
-  const effectiveColor = accentColor || variantColors[variant] || variantColors.primary;
+  const iconStyle = variantIconStyles[variant] || variantIconStyles.primary;
 
   const badgeColors = {
-    success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-    warning: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
-    danger: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
-    info: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300',
-    neutral: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    success: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-bold',
+    warning: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 font-bold',
+    danger: 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 font-bold',
+    info: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 font-bold',
+    neutral: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 font-bold',
   };
 
   return (
@@ -356,8 +356,8 @@ export const StatCard: React.FC<StatCardProps> = ({
       className={onClick ? 'cursor-pointer' : ''}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{displayTitle}</p>
+        <div className="space-y-1 min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{displayTitle}</p>
           {loading ? (
             <div className="h-7 w-20 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md my-1" />
           ) : (
@@ -366,22 +366,22 @@ export const StatCard: React.FC<StatCardProps> = ({
             </p>
           )}
           {displaySubtitle && (
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">{displaySubtitle}</p>
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{displaySubtitle}</p>
           )}
           {trend && (
             <div className="flex items-center gap-1.5 pt-0.5">
               <span
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
                   trend.isPositive !== false
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                    : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
                 }`}
               >
                 {trend.isPositive !== false ? '+' : ''}
                 {trend.value}
               </span>
               {trend.label && (
-                <span className="text-[10px] text-slate-400">{trend.label}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{trend.label}</span>
               )}
             </div>
           )}
@@ -390,15 +390,17 @@ export const StatCard: React.FC<StatCardProps> = ({
         <div className="flex flex-col items-end gap-2 shrink-0">
           {Icon && (
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-xs"
-              style={{ backgroundColor: effectiveColor }}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-xs font-bold ${
+                accentColor ? '' : `${iconStyle.bg} ${iconStyle.text}`
+              }`}
+              style={accentColor ? { backgroundColor: accentColor, color: '#ffffff' } : undefined}
             >
               <Icon className="w-5 h-5" />
             </div>
           )}
           {badge && (
             <span
-              className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${
+              className={`px-2 py-0.5 text-[10px] rounded-md ${
                 badgeColors[badge.type || 'neutral']
               }`}
             >

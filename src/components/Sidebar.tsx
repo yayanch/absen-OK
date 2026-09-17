@@ -31,7 +31,8 @@ import {
   FileText,
   Clock,
   CalendarRange,
-  BookOpen
+  BookOpen,
+  Layers
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
@@ -74,11 +75,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isAdmin = currentUser.role === 'admin';
   const isKesiswaan = currentUser.role === 'kesiswaan';
   const isKurikulum = currentUser.role === 'kurikulum';
+  const isStafJadwal = currentUser.role === 'staf_jadwal';
   const isHubin = currentUser.role === 'hubin';
-  const isUserBiasa = currentUser.role === 'user' || currentUser.role === 'guru' || isKurikulum || isHubin;
+  const isUserBiasa = currentUser.role === 'user' || currentUser.role === 'guru' || isKurikulum || isHubin || isStafJadwal;
   const isWali = currentUser.role === 'wali';
   const isMurid = currentUser.role === 'murid';
-  const isGuruOnly = (currentUser.role === 'guru' || currentUser.role === 'user') && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali;
+  const isGuruOnly = (currentUser.role === 'guru' || currentUser.role === 'user') && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal;
   const canViewMaster = !isMurid;
   const isLiveChatEnabled = enableLiveChat ?? sekolah.enableLiveChat ?? true;
 
@@ -301,15 +303,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {isOpen && (
-        <div
-          onClick={onCloseMobile}
-          className="fixed inset-0 bg-[#0F172A]/25 backdrop-blur-xs z-20 md:hidden transition-opacity"
-          aria-hidden="true"
-        />
-      )}
       <aside
-        className={`fixed md:sticky md:top-0 inset-y-0 left-0 z-30 ${styles.aside} overflow-hidden transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] flex flex-col shrink-0 h-screen h-[100dvh] min-h-screen ${
+        className={`fixed md:sticky md:top-0 inset-y-0 left-0 z-50 md:z-30 ${styles.aside} overflow-hidden transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] flex flex-col shrink-0 h-screen h-[100dvh] min-h-screen ${
           isOpen
             ? 'w-[250px] translate-x-0 opacity-100'
             : '-translate-x-full md:translate-x-0 md:w-16 md:opacity-100 md:pointer-events-auto w-[250px]'
@@ -502,18 +497,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </nav>
                   </div>
 
-                  {/* 2. PRESENSI */}
-                  {!isMurid && !isGuruOnly && !isKurikulum && (
+                  {/* 2. PRESENSI & KBM */}
+                  {!isMurid && !isKurikulum && !isStafJadwal && (
                     <div>
-                      {renderSimpleHeading('PRESENSI')}
+                      {renderSimpleHeading(isGuruOnly ? 'PRESENSI & KBM' : 'PRESENSI')}
                       <nav className="space-y-1">
-                        {renderItem('presensi_input', <ClipboardCheck className="w-4 h-4 shrink-0" />, 'Input Presensi')}
+                        {renderItem('presensi_input', <ClipboardCheck className="w-4 h-4 shrink-0" />, isGuruOnly ? 'Presensi Kelas (Read-Only)' : 'Input Presensi')}
+                        {isGuruOnly && renderItem('mapel_kelas_guru', <Layers className="w-4 h-4 text-emerald-300 shrink-0" />, 'Mapel & Kelas Ajar')}
                       </nav>
                     </div>
                   )}
 
                   {/* 3. LAPORAN (Accordion dengan sub-menu) */}
-                  {!isMurid && !isGuruOnly && !isKurikulum && (
+                  {!isMurid && !isGuruOnly && !isKurikulum && !isStafJadwal && (
                     renderAccordionSection(
                       'LAPORAN',
                       'laporan',
@@ -531,30 +527,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )
                   )}
 
-                  {/* 4. DATA MASTER (Accordion dengan sub-menu) */}
+                  {/* 4. DATA MASTER / JADWAL KBM */}
                   {canViewMaster && (
-                    renderAccordionSection(
-                      'DATA MASTER',
-                      'masterData',
-                      <Users className="w-4 h-4 text-blue-300 shrink-0" />,
-                      ['master_siswa', 'master_guru', 'master_mapel', 'jadwal_mengajar', 'jadwal_shift', 'master_kelas', 'master_jurusan', 'hari_libur'],
-                      (
-                        <>
-                          {!isGuruOnly && renderItem('master_siswa', <Users className="w-4 h-4 shrink-0" />, 'Data Siswa', undefined, undefined, true)}
-                          {!isWali && !isGuruOnly && renderItem('master_guru', <UserCheck className="w-4 h-4 shrink-0" />, 'Data Guru & Pendidik', undefined, undefined, true)}
-                          {!isWali && !isGuruOnly && renderItem('master_mapel', <BookOpen className="w-4 h-4 shrink-0 text-emerald-300" />, 'Mata Pelajaran', undefined, undefined, true)}
-                          {renderItem('jadwal_mengajar', <Calendar className="w-4 h-4 text-blue-300 shrink-0" />, !isAdmin ? 'Jadwal Mengajar Saya' : 'Jadwal Mengajar Guru', undefined, undefined, true)}
-                          {renderItem('jadwal_shift', <Clock className="w-4 h-4 text-cyan-300 shrink-0" />, 'Jadwal Shift Pagi & Siang', undefined, undefined, true)}
-                          {!isWali && !isGuruOnly && renderItem('master_kelas', <DoorOpen className="w-4 h-4 shrink-0" />, 'Data Kelas', undefined, undefined, true)}
-                          {!isWali && !isGuruOnly && renderItem('master_jurusan', <GraduationCap className="w-4 h-4 shrink-0" />, 'Data Jurusan', undefined, undefined, true)}
-                          {!isWali && !isGuruOnly && renderItem('hari_libur', <CalendarDays className="w-4 h-4 shrink-0 text-purple-300" />, 'Hari Libur & Tanpa Presensi', undefined, undefined, true)}
-                        </>
+                    isStafJadwal ? (
+                      <div>
+                        {renderSimpleHeading('JADWAL')}
+                        <nav className="space-y-1">
+                          {renderItem(
+                            'jadwal_mengajar',
+                            <Calendar className="w-4 h-4 text-blue-300 shrink-0" />,
+                            'Jadwal Mengajar Guru'
+                          )}
+                        </nav>
+                      </div>
+                    ) : (
+                      renderAccordionSection(
+                        'DATA MASTER',
+                        'masterData',
+                        <Users className="w-4 h-4 text-blue-300 shrink-0" />,
+                        ['master_siswa', 'master_guru', 'master_mapel', 'mapel_kelas_guru', 'jadwal_mengajar', 'jadwal_minggu_ini', 'jadwal_shift', 'master_kelas', 'master_jurusan', 'hari_libur'],
+                        (
+                          <>
+                            {!isGuruOnly && renderItem('master_siswa', <Users className="w-4 h-4 shrink-0" />, 'Data Siswa', undefined, undefined, true)}
+                            {!isWali && !isGuruOnly && renderItem('master_guru', <UserCheck className="w-4 h-4 shrink-0" />, 'Data Guru & Pendidik', undefined, undefined, true)}
+                            {!isWali && !isGuruOnly && renderItem('master_mapel', <BookOpen className="w-4 h-4 shrink-0 text-emerald-300" />, 'Mata Pelajaran', undefined, undefined, true)}
+                            {renderItem('mapel_kelas_guru', <Layers className="w-4 h-4 text-emerald-300 shrink-0" />, isGuruOnly ? 'Mapel & Kelas Ajar' : 'Mapel & Kelas Guru', undefined, undefined, true)}
+                            {renderItem('jadwal_mengajar', <Calendar className="w-4 h-4 text-blue-300 shrink-0" />, (isAdmin || isKurikulum) ? 'Jadwal Mengajar Guru' : 'Jadwal Mengajar Saya', undefined, undefined, true)}
+                            {renderItem('jadwal_minggu_ini', <CalendarDays className="w-4 h-4 text-indigo-300 shrink-0" />, 'Jadwal Mengajar Minggu Ini', undefined, undefined, true)}
+                            {renderItem('jadwal_shift', <Clock className="w-4 h-4 text-cyan-300 shrink-0" />, 'Jadwal Shift Pagi & Siang', undefined, undefined, true)}
+                            {!isWali && !isGuruOnly && renderItem('master_kelas', <DoorOpen className="w-4 h-4 shrink-0" />, 'Data Kelas', undefined, undefined, true)}
+                            {!isWali && !isGuruOnly && renderItem('master_jurusan', <GraduationCap className="w-4 h-4 shrink-0" />, 'Data Jurusan', undefined, undefined, true)}
+                            {!isWali && !isGuruOnly && renderItem('hari_libur', <CalendarDays className="w-4 h-4 shrink-0 text-purple-300" />, 'Hari Libur & Tanpa Presensi', undefined, undefined, true)}
+                          </>
+                        )
                       )
                     )
                   )}
 
                   {/* 5. KEGIATAN */}
-                  {!isKurikulum && (
+                  {!isKurikulum && !isStafJadwal && (
                     <div>
                       {renderSimpleHeading('KEGIATAN')}
                       <nav className="space-y-1">
@@ -743,7 +754,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             onClick={onCloseMobile}
-            className="fixed inset-0 bg-slate-950/25 backdrop-blur-[2px] z-20 md:hidden"
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-40 md:hidden"
           />
         )}
       </AnimatePresence>

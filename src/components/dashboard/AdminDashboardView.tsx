@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, calculateDailyAttendanceStats } from '../../utils/helpers';
-import { RoleQuickActions } from './RoleQuickActions';
 import { SystemHealthWidget } from './SystemHealthWidget';
 import { AttendanceTrendChart } from './AttendanceTrendChart';
 import { PageHeader, StatCard } from '../common/UIComponents';
@@ -132,14 +131,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         }
       />
 
-      {/* Quick Actions Admin (Maks 4) */}
-      <RoleQuickActions
-        role="admin"
-        onNavigateView={onNavigateView}
-        onNavigateToInput={onNavigateToInput}
-        onOpenImportModal={onOpenImportModal}
-      />
-
       {/* Statistik Utama Admin */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -165,11 +156,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
         <StatCard
           label="Total Guru"
-          value={(appData as any).users?.filter((u: any) => u.role === 'guru' || u.role === 'wali').length || appData.waliKelas.length}
+          value={appData.waliKelas?.length || (appData as any).users?.filter((u: any) => u.role === 'guru' || u.role === 'wali').length || 0}
           subtitle="Tenaga Pendidik & Wali"
           icon={GraduationCap}
           variant="primary"
-          onClick={() => onNavigateView('master_user')}
+          onClick={() => onNavigateView('master_guru')}
         />
 
         <StatCard

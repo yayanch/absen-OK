@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Users,
@@ -22,7 +22,8 @@ import {
   BookOpen,
   Clock,
   List,
-  LayoutGrid
+  LayoutGrid,
+  ChevronDown
 } from 'lucide-react';
 import { AppData, UserRole, UserSession } from '../../types';
 import { Pagination } from '../Pagination';
@@ -77,8 +78,22 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node)) {
+        setShowSettingsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Compile full user list from appData
   const buildUserList = (): UserItem[] => {
@@ -143,6 +158,21 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         mataPelajaran: userBiasaObj.mataPelajaran,
         hariMengajar: userBiasaObj.hariMengajar,
         batasiLoginHariMengajar: userBiasaObj.batasiLoginHariMengajar,
+      });
+    }
+
+    // Staf Jadwal (Non-Guru Pengelola Jadwal)
+    if (appData.stafJadwal) {
+      list.push({
+        id: 'USER_STAF_JADWAL',
+        nama: appData.stafJadwal.nama || 'Staf Pengelola Jadwal',
+        username: appData.stafJadwal.username || 'jadwal',
+        nip: appData.stafJadwal.nip || 'STAF-JADWAL-01',
+        password: appData.stafJadwal.password || 'jadwal123',
+        role: 'staf_jadwal',
+        originalType: 'user',
+        noHp: appData.stafJadwal.noHp,
+        foto: appData.stafJadwal.foto,
       });
     }
 
@@ -388,6 +418,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         return 'WKS Kesiswaan / BP BK';
       case 'kurikulum':
         return 'WKS Kurikulum';
+      case 'staf_jadwal':
+        return 'Staf Pengelola Jadwal';
       case 'hubin':
         return 'WKS Hubin';
       case 'guru':
@@ -433,6 +465,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800';
       case 'kurikulum':
         return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800';
+      case 'staf_jadwal':
+        return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800';
       case 'hubin':
         return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800';
       case 'guru':
@@ -775,6 +809,31 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       return;
     }
 
+    // 2b. Staf Pengelola Jadwal (Non-Guru)
+    if (role === 'staf_jadwal' || editingUser?.id === 'USER_STAF_JADWAL' || editingUser?.role === 'staf_jadwal') {
+      const nextStafJadwal = {
+        ...(appData.stafJadwal || { jabatan: 'Staf Pengelola Jadwal' }),
+        nama,
+        username,
+        nip: nip && nip !== '-' ? nip : 'STAF-JADWAL-01',
+        password: password || 'jadwal123',
+        noHp,
+        foto: editingUser?.foto || appData.stafJadwal?.foto || '',
+      };
+      const nextAppData = addAuditLog(
+        {
+          ...appData,
+          stafJadwal: nextStafJadwal,
+        },
+        editingUser ? 'Ubah data staf jadwal' : 'Tambah akun staf jadwal',
+        `${editingUser ? 'Mengubah' : 'Menambahkan'} data akun Staf Jadwal: ${nama}`
+      );
+      onUpdateAppData(nextAppData);
+      onShowToast(`Data akun Staf Pengelola Jadwal "${nama}" berhasil ${editingUser ? 'diperbarui' : 'ditambahkan'}!`, 'success');
+      onCloseModal();
+      return;
+    }
+
     // 3. Wali / Kesiswaan / Guru / Kurikulum / Hubin
     let updatedWaliKelas = [...(appData.waliKelas || [])];
     let nextKesiswaan = appData.kesiswaan ? { ...appData.kesiswaan } : undefined;
@@ -1043,6 +1102,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               <option value="admin">Administrator</option>
               <option value="kesiswaan">WKS Kesiswaan / BP BK</option>
               <option value="kurikulum">WKS Kurikulum</option>
+              <option value="staf_jadwal">Staf Pengelola Jadwal (Non-Guru)</option>
               <option value="hubin">WKS Hubin</option>
               <option value="guru">Guru / Staf Pengajar</option>
               <option value="wali">Wali Kelas</option>
@@ -1079,6 +1139,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   const adminCount = allUsers.filter((u) => u.role === 'admin').length;
   const kesiswaanCount = allUsers.filter((u) => u.role === 'kesiswaan').length;
   const kurikulumCount = allUsers.filter((u) => u.role === 'kurikulum').length;
+  const stafJadwalCount = allUsers.filter((u) => u.role === 'staf_jadwal').length;
   const hubinCount = allUsers.filter((u) => u.role === 'hubin').length;
   const guruCount = allUsers.filter((u) => u.role === 'guru' || u.role === 'user').length;
   const waliCount = allUsers.filter((u) => u.role === 'wali').length;
@@ -1201,6 +1262,20 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setRoleTab('staf_jadwal');
+                  setCurrentPage(1);
+                }}
+                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                  roleTab === 'staf_jadwal'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Staf Jadwal ({stafJadwalCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setRoleTab('hubin');
                   setCurrentPage(1);
                 }}
@@ -1289,27 +1364,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
             </div>
 
             {!readOnly && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleDownloadTemplate}
-                  className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Unduh Template Excel 30 Wali Kelas"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Template Excel</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
-                  title="Impor Data Wali Kelas dari File Excel"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Import Excel</span>
-                </button>
-
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => openUserForm()}
@@ -1319,52 +1374,164 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                   <span>Tambah User</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleOpenCreateRoleModal}
-                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer"
-                  title="Buat Role / Jabatan Baru"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Buat Role Baru</span>
-                </button>
-
-                {appData.customRoles && appData.customRoles.length > 0 && (
+                {/* Single Consolidated Pengaturan User Button with Dropdown */}
+                <div className="relative" ref={settingsMenuRef}>
                   <button
                     type="button"
-                    onClick={handleOpenManageRolesModal}
-                    className="px-3 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
-                    title="Kelola / Hapus Role Kustom"
+                    onClick={() => setShowSettingsMenu((prev) => !prev)}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-700 dark:hover:bg-slate-600 font-bold rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                    title="Pengaturan & Opsi Data User"
                   >
-                    <Trash className="w-3.5 h-3.5" />
-                    <span>Hapus Role ({appData.customRoles.length})</span>
+                    <UserCog className="w-4 h-4 text-blue-400" />
+                    <span>Pengaturan User</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showSettingsMenu ? 'rotate-180' : ''}`} />
                   </button>
-                )}
 
-                {appData.waliKelas.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleHapusSeluruhWali}
-                    className="px-3 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
-                    title="Hapus Seluruh Data Wali Kelas"
-                  >
-                    <Trash className="w-3.5 h-3.5" />
-                    <span>Hapus Wali</span>
-                  </button>
-                )}
+                  {showSettingsMenu && (
+                    <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-800 p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                          Pengaturan & Opsi User
+                        </span>
+                        <UserCog className="w-3.5 h-3.5 text-blue-500" />
+                      </div>
 
-                {appData.siswa && appData.siswa.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleHapusSeluruhMurid}
-                    className="px-3 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
-                    title="Hapus Seluruh Data Siswa / Murid"
-                  >
-                    <Trash className="w-3.5 h-3.5" />
-                    <span>Hapus Semua Murid</span>
-                  </button>
-                )}
-              </>
+                      {/* Group 1: Role Management */}
+                      <div className="py-1">
+                        <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Role & Hak Akses
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSettingsMenu(false);
+                            handleOpenCreateRoleModal();
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:text-blue-600 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <div className="p-1.5 bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 rounded-lg shrink-0">
+                            <Plus className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <div className="font-bold">Buat Role Baru</div>
+                            <div className="text-[10px] text-slate-400">Tambah role / jabatan kustom</div>
+                          </div>
+                        </button>
+
+                        {appData.customRoles && appData.customRoles.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSettingsMenu(false);
+                              handleOpenManageRolesModal();
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-purple-50 dark:hover:bg-purple-950/50 hover:text-purple-600 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                          >
+                            <div className="p-1.5 bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-400 rounded-lg shrink-0">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <div className="font-bold">Kelola Role Kustom</div>
+                              <div className="text-[10px] text-slate-400">{appData.customRoles.length} role kustom aktif</div>
+                            </div>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+
+                      {/* Group 2: Excel Import & Export */}
+                      <div className="py-1">
+                        <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Import & Export Excel
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSettingsMenu(false);
+                            handleDownloadTemplate();
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 hover:text-emerald-600 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                            <Download className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <div className="font-bold">Unduh Template Excel</div>
+                            <div className="text-[10px] text-slate-400">Format data 30 Wali Kelas</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSettingsMenu(false);
+                            fileInputRef.current?.click();
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 hover:text-emerald-600 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0">
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <div className="font-bold">Import File Excel</div>
+                            <div className="text-[10px] text-slate-400">Impor massal data Wali Kelas</div>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Group 3: Danger Zone */}
+                      {(appData.waliKelas.length > 0 || (appData.siswa && appData.siswa.length > 0)) && (
+                        <>
+                          <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+                          <div className="py-1">
+                            <p className="px-3 py-1 text-[10px] font-bold text-rose-500 uppercase tracking-wider">
+                              Pembersihan Data
+                            </p>
+                            {appData.waliKelas.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowSettingsMenu(false);
+                                  handleHapusSeluruhWali();
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                              >
+                                <div className="p-1.5 bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 rounded-lg shrink-0">
+                                  <Trash className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                  <div className="font-bold">Hapus Seluruh Wali Kelas</div>
+                                  <div className="text-[10px] text-rose-400">Kosongkan data akun wali kelas</div>
+                                </div>
+                              </button>
+                            )}
+
+                            {appData.siswa && appData.siswa.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowSettingsMenu(false);
+                                  handleHapusSeluruhMurid();
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                              >
+                                <div className="p-1.5 bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400 rounded-lg shrink-0">
+                                  <Trash className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                  <div className="font-bold">Hapus Seluruh Murid</div>
+                                  <div className="text-[10px] text-rose-400">Kosongkan data akun murid</div>
+                                </div>
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1419,7 +1586,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Metadata: Kelas / Mapel / Hari Mengajar */}
+                    {/* Metadata: Kelas / Mapel */}
                     <div className="space-y-1.5 mb-3 text-xs">
                       {user.kelasNama && (
                         <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-xl border border-emerald-100 dark:border-emerald-800">
@@ -1430,17 +1597,6 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                         <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-xl border border-indigo-100 dark:border-indigo-800">
                           <BookOpen className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                           <span className="truncate">{cleanMapelName(user.mataPelajaran)}</span>
-                        </div>
-                      )}
-                      {user.hariMengajar && user.hariMengajar.length > 0 && (
-                        <div className="text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 rounded-xl border border-amber-100 dark:border-amber-800">
-                          <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span className="truncate">{user.hariMengajar.join(', ')}</span>
-                          {user.batasiLoginHariMengajar && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded shrink-0">
-                              🔒 Restrict
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1584,19 +1740,6 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                               <BookOpen className="w-3 h-3 text-indigo-500" />
                               <span>{cleanMapelName(user.mataPelajaran)}</span>
                             </p>
-                          )}
-                          {user.hariMengajar && user.hariMengajar.length > 0 && (
-                            <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                              <span className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold flex items-center gap-1">
-                                <Calendar className="w-3 h-3 text-amber-500" />
-                                <span>{user.hariMengajar.join(', ')}</span>
-                              </span>
-                              {user.batasiLoginHariMengajar && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded border border-rose-200">
-                                  🔒 Restricted
-                                </span>
-                              )}
-                            </div>
                           )}
                           {user.noHp && (
                             <p className="text-[10px] text-slate-400 mt-0.5">

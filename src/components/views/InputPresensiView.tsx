@@ -62,6 +62,7 @@ interface InputPresensiViewProps {
   appData: AppData;
   currentUser: UserSession;
   initialKelasId?: string;
+  readOnly?: boolean;
   onSavePresensi: (updatedData: AppData) => Promise<SyncResult> | void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onConfirmModal?: (
@@ -77,6 +78,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
   appData,
   currentUser,
   initialKelasId,
+  readOnly = false,
   onSavePresensi,
   onShowToast,
   onConfirmModal,
@@ -949,14 +951,15 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     }
   };
 
+  const isTeacherRole = currentUser.role === 'guru' || currentUser.role === 'user';
   const canEditPresensi =
-    currentUser.role === 'admin' ||
-    currentUser.role === 'wali' ||
-    currentUser.role === 'walikelas' ||
-    currentUser.role === 'kesiswaan' ||
-    currentUser.role === 'guru' ||
-    currentUser.role === 'user' ||
-    currentUser.role === 'hubin';
+    !readOnly &&
+    !isTeacherRole &&
+    (currentUser.role === 'admin' ||
+     currentUser.role === 'wali' ||
+     currentUser.role === 'walikelas' ||
+     currentUser.role === 'kesiswaan' ||
+     currentUser.role === 'hubin');
   const canManageSiswa = canEditPresensi;
   const isReadOnlyUser = !canEditPresensi;
 
@@ -966,7 +969,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     if (isSaving) return;
 
     if (!canEditPresensi) {
-      onShowToast('Mode Read Only! Pengguna biasa tidak berwenang mengisi atau mengubah presensi siswa.', 'warning');
+      onShowToast('Mode Read Only! Akun Guru tidak berwenang mengisi atau mengubah presensi siswa.', 'warning');
       return;
     }
 
@@ -1220,7 +1223,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
               <button
                 type="button"
                 onClick={onOpenServerQrModal}
-                className="px-3.5 py-2.5 rounded-xl font-bold text-xs bg-emerald-500 hover:bg-emerald-600 text-white transition flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-500/20 active:scale-95 border border-emerald-400/30"
+                className="px-3.5 py-2 rounded-xl font-bold text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 transition flex items-center gap-2 cursor-pointer border border-emerald-400/30 active:scale-95"
                 title="Buka Scanner QR / Kios Presensi Kartu Pelajar"
               >
                 <QrCode className="w-4 h-4" />
@@ -1228,17 +1231,17 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
               </button>
             )}
 
-            <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+            <div className="inline-flex p-1 bg-white/15 dark:bg-white/15 rounded-xl border border-white/20 backdrop-blur-xs">
               <button
                 type="button"
                 onClick={() => handleTabChange('presensi')}
                 className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'presensi'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-white text-blue-950 shadow-xs'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <ClipboardCheck className="w-3.5 h-3.5 text-theme-primary" />
+                <ClipboardCheck className="w-3.5 h-3.5" />
                 <span>Input Presensi</span>
               </button>
               <button
@@ -1246,11 +1249,11 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                 onClick={() => handleTabChange('siswa')}
                 className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'siswa'
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-white text-blue-950 shadow-xs'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <Users className="w-3.5 h-3.5 text-theme-primary" />
+                <Users className="w-3.5 h-3.5" />
                 <span>Data Siswa Kelas</span>
               </button>
             </div>
@@ -1263,7 +1266,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
         <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-center gap-3 text-amber-800 dark:text-amber-200 text-xs shadow-2xs">
           <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div>
-            <span className="font-bold">Akses Read-Only:</span> Hanya Admin, Wali Kelas, Guru, dan Tim Kesiswaan yang berwenang untuk mengisi dan mengubah data presensi siswa.
+            <span className="font-bold">Akses Read-Only Presensi Kelas:</span> {isTeacherRole ? 'Akun Guru bersifat Read-Only untuk presensi kelas. Pengisian dan pengubahan presensi siswa dikelola oleh Wali Kelas, Tim Kesiswaan, atau Admin.' : 'Hanya Admin, Wali Kelas, dan Tim Kesiswaan yang berwenang untuk mengisi dan mengubah data presensi siswa.'}
           </div>
         </div>
       )}
@@ -1283,7 +1286,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
               {availableClasses.length === 0 && <option value="">Belum Ada Kelas</option>}
               {availableClasses.map((k) => (
                 <option key={k.id} value={k.id}>
-                  {k.nama} {k.jurusanId ? `(${k.jurusanId})` : ''}
+                  {k.nama}
                 </option>
               ))}
             </select>

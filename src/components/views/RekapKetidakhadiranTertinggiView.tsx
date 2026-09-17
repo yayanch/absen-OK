@@ -191,36 +191,44 @@ export const RekapKetidakhadiranTertinggiView: React.FC<RekapKetidakhadiranTerti
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl p-4">
-          <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Total Sakit (S)</span>
-            <Stethoscope className="w-4 h-4" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Total Sakit (S)</span>
+            <div className="text-2xl font-black text-slate-900 dark:text-white">{totalCumSakit} <span className="text-xs font-normal text-slate-400">hari</span></div>
           </div>
-          <div className="text-2xl font-extrabold text-blue-950 dark:text-blue-200">{totalCumSakit} <span className="text-xs font-normal text-slate-500">hari</span></div>
+          <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 font-bold shadow-xs">
+            <Stethoscope className="w-5 h-5" />
+          </div>
         </div>
 
-        <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50 rounded-2xl p-4">
-          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Total Izin (I)</span>
-            <Mail className="w-4 h-4" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Total Izin (I)</span>
+            <div className="text-2xl font-black text-slate-900 dark:text-white">{totalCumIzin} <span className="text-xs font-normal text-slate-400">hari</span></div>
           </div>
-          <div className="text-2xl font-extrabold text-amber-950 dark:text-amber-200">{totalCumIzin} <span className="text-xs font-normal text-slate-500">hari</span></div>
+          <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 font-bold shadow-xs">
+            <Mail className="w-5 h-5" />
+          </div>
         </div>
 
-        <div className="bg-rose-50/70 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/50 rounded-2xl p-4">
-          <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Total Alpa (A)</span>
-            <UserX className="w-4 h-4" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Total Alpa (A)</span>
+            <div className="text-2xl font-black text-slate-900 dark:text-white">{totalCumAlfa} <span className="text-xs font-normal text-slate-400">hari</span></div>
           </div>
-          <div className="text-2xl font-extrabold text-rose-950 dark:text-rose-200">{totalCumAlfa} <span className="text-xs font-normal text-slate-500">hari</span></div>
+          <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 font-bold shadow-xs">
+            <UserX className="w-5 h-5" />
+          </div>
         </div>
 
-        <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-4">
-          <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Siswa Terdampak</span>
-            <Users className="w-4 h-4" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Siswa Terdampak</span>
+            <div className="text-2xl font-black text-slate-900 dark:text-white">{totalSiswaAdaAbsen} <span className="text-xs font-normal text-slate-400">siswa</span></div>
           </div>
-          <div className="text-2xl font-extrabold text-indigo-950 dark:text-indigo-200">{totalSiswaAdaAbsen} <span className="text-xs font-normal text-slate-500">siswa</span></div>
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 font-bold shadow-xs">
+            <Users className="w-5 h-5" />
+          </div>
         </div>
       </div>
 

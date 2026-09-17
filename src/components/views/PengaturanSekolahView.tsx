@@ -28,9 +28,19 @@ import {
   Calendar,
   X,
   CheckCircle2,
-  Image as ImageIcon,
   Eye,
   Info,
+  Wifi,
+  WifiOff,
+  Database,
+  Server,
+  HardDrive,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  Sliders,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import {
   AppData,
@@ -41,7 +51,6 @@ import {
 } from '../../types';
 import { PageHeader } from '../common/UIComponents';
 import { compressBase64Image, formatDateIndo, addAuditLog, getEffectiveSchoolDays } from '../../utils/helpers';
-import { LoginBackgroundSettings } from './LoginBackgroundSettings';
 import {
   generate36StudentsForAllClasses,
   generateRandomPresensiForToday,
@@ -64,7 +73,7 @@ interface PengaturanSekolahViewProps {
   ) => void;
 }
 
-type TabType = 'identitas' | 'pengumuman' | 'background_login' | 'tampilan_header';
+type TabType = 'identitas' | 'pengumuman' | 'tampilan_header' | 'offline';
 
 export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
   appData,
@@ -153,6 +162,15 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
   const [headerSubtitle, setHeaderSubtitle] = useState(sekolah.headerSubtitle || 'SMKN 6 GARUT');
   const [browserTitle, setBrowserTitle] = useState(sekolah.browserTitle || '');
 
+  // Offline & Synchronization Settings State
+  const [enableOfflineMode, setEnableOfflineMode] = useState<boolean>(sekolah.enableOfflineMode !== false);
+  const [allowOfflineBypass, setAllowOfflineBypass] = useState<boolean>(sekolah.allowOfflineBypass !== false);
+  const [showOfflineToastWarning, setShowOfflineToastWarning] = useState<boolean>(sekolah.showOfflineToastWarning !== false);
+  const [autoSyncOnReconnect, setAutoSyncOnReconnect] = useState<boolean>(sekolah.autoSyncOnReconnect !== false);
+  const [offlineNoticeMessage, setOfflineNoticeMessage] = useState<string>(sekolah.offlineNoticeMessage || '');
+  const [isTestingPing, setIsTestingPing] = useState<boolean>(false);
+  const [pingResult, setPingResult] = useState<{ status: 'idle' | 'success' | 'failed'; message: string; ms?: number }>({ status: 'idle', message: '' });
+
   useEffect(() => {
     const s: Partial<SekolahConfig> = appData.sekolah || {};
     setNama(s.nama || '');
@@ -195,6 +213,13 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
     setLoginAnnouncementTitle(s.loginAnnouncementTitle || '');
     setLoginAnnouncementText(s.loginAnnouncementText || '');
     setLoginAnnouncementType(s.loginAnnouncementType || 'info');
+
+    // Load offline config
+    setEnableOfflineMode(s.enableOfflineMode !== false);
+    setAllowOfflineBypass(s.allowOfflineBypass !== false);
+    setShowOfflineToastWarning(s.showOfflineToastWarning !== false);
+    setAutoSyncOnReconnect(s.autoSyncOnReconnect !== false);
+    setOfflineNoticeMessage(s.offlineNoticeMessage || '');
 
     if (appData.pengumuman) {
       setPengumumanList(appData.pengumuman);
@@ -294,6 +319,11 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
       loginAnnouncementTitle: loginAnnouncementTitle.trim(),
       loginAnnouncementText: loginAnnouncementText.trim(),
       loginAnnouncementType,
+      enableOfflineMode,
+      allowOfflineBypass,
+      showOfflineToastWarning,
+      autoSyncOnReconnect,
+      offlineNoticeMessage: offlineNoticeMessage.trim(),
       ...overrides,
     };
 
@@ -689,19 +719,6 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('background_login')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer select-none ${
-            activeTab === 'background_login'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          <ImageIcon className="w-4 h-4" />
-          <span>Background Login</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab('tampilan_header')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer select-none ${
             activeTab === 'tampilan_header'
@@ -711,6 +728,30 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
         >
           <Layout className="w-4 h-4" />
           <span>Header, Sidebar &amp; Footer</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('offline')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer select-none ${
+            activeTab === 'offline'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          {enableOfflineMode ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+          <span>Mode Offline &amp; Sinkronisasi</span>
+          <span
+            className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+              activeTab === 'offline'
+                ? 'bg-white/20 text-white'
+                : enableOfflineMode
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+            }`}
+          >
+            {enableOfflineMode ? 'Aktif' : 'Nonaktif'}
+          </span>
         </button>
       </div>
 
@@ -1727,20 +1768,7 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: BACKGROUND HALAMAN LOGIN */}
-      {/* ========================================================================= */}
-      {activeTab === 'background_login' && (
-        <LoginBackgroundSettings
-          appData={appData}
-          readOnly={readOnly}
-          onUpdateAppData={onUpdateAppData}
-          onShowToast={onShowToast}
-          onConfirmModal={onConfirmModal}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 4: HEADER, SIDEBAR & FOOTER */}
+      {/* TAB 3: HEADER, SIDEBAR & FOOTER */}
       {/* ========================================================================= */}
       {activeTab === 'tampilan_header' && (
         <form onSubmit={(e) => handleSaveSettings(e, 'Pengaturan Header, Sidebar & Footer berhasil disimpan!')} className="space-y-6">
@@ -1938,6 +1966,338 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
               >
                 <Save className="w-4 h-4" />
                 <span>Simpan Pengaturan Header, Sidebar &amp; Footer</span>
+              </button>
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: MODE OFFLINE & SINKRONISASI */}
+      {/* ========================================================================= */}
+      {activeTab === 'offline' && (
+        <form
+          onSubmit={(e) => handleSaveSettings(e, 'Pengaturan Mode Offline & Sinkronisasi berhasil disimpan!')}
+          className="space-y-6"
+        >
+          {/* Master Switch Banner */}
+          <div className={`p-6 sm:p-8 rounded-3xl border transition-all ${
+            enableOfflineMode
+              ? 'bg-gradient-to-br from-emerald-500/10 via-emerald-50/40 to-white dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900 border-emerald-200/80 dark:border-emerald-800/60 shadow-sm'
+              : 'bg-gradient-to-br from-rose-500/10 via-rose-50/40 to-white dark:from-rose-950/40 dark:via-slate-900 dark:to-slate-900 border-rose-200/80 dark:border-rose-800/60 shadow-sm'
+          }`}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                  enableOfflineMode
+                    ? 'bg-emerald-500 text-white shadow-emerald-500/30'
+                    : 'bg-rose-500 text-white shadow-rose-500/30'
+                }`}>
+                  {enableOfflineMode ? <Wifi className="w-7 h-7" /> : <WifiOff className="w-7 h-7" />}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                      Status Fitur Mode Offline (Offline Storage &amp; Local Fallback)
+                    </h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black tracking-wide ${
+                      enableOfflineMode
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                    }`}>
+                      {enableOfflineMode ? 'AKTIF (ENABLED)' : 'NONAKTIF (DISABLED)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
+                    {enableOfflineMode
+                      ? 'Fitur offline aktif: Pengguna dapat tetap menginput presensi dan melihat jadwal guru/siswa saat koneksi internet terputus menggunakan LocalStorage lokal perangkat.'
+                      : 'Fitur offline nonaktif: Aplikasi memblokir akses lokal saat internet terputus dan mewajibkan koneksi aktif ke server pusat cloud/MySQL untuk menjamin integritas data real-time.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => {
+                    const nextVal = !enableOfflineMode;
+                    setEnableOfflineMode(nextVal);
+                    if (!nextVal) {
+                      onShowToast('Mode Offline dinonaktifkan. Pengguna akan diwajibkan terkoneksi internet.', 'warning');
+                    } else {
+                      onShowToast('Mode Offline diaktifkan. Akses lokal diizinkan saat koneksi terputus.', 'info');
+                    }
+                  }}
+                  className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors cursor-pointer disabled:opacity-50 ${
+                    enableOfflineMode ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform ${
+                      enableOfflineMode ? 'translate-x-9' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Opsi Perilaku & Kebijakan Mode Offline */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
+                <Sliders className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                  Kebijakan Akses &amp; Perilaku Sinkronisasi Offline
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Konfigurasikan bagaimana sistem menangani putusnya jaringan, notifikasi, dan tombol bypass lokal.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Opsi 1: Allow Offline Bypass */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                allowOfflineBypass
+                  ? 'bg-blue-50/40 dark:bg-blue-950/20 border-blue-200/70 dark:border-blue-900/50'
+                  : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+              }`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-800 dark:text-slate-100 block cursor-pointer">
+                      Izinkan Tombol Lanjutkan Offline (Bypass Modal)
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Bila diaktifkan, guru &amp; staf dapat menekan tombol &ldquo;Lanjutkan Mode Offline (Akses Lokal)&rdquo; pada layar peringatan untuk tetap mencatat presensi tanpa internet.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly || !enableOfflineMode}
+                    checked={allowOfflineBypass && enableOfflineMode}
+                    onChange={(e) => setAllowOfflineBypass(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded-lg border-slate-300 focus:ring-blue-500 mt-1 cursor-pointer disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
+              {/* Opsi 2: Auto Sync On Reconnect */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                autoSyncOnReconnect
+                  ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/70 dark:border-emerald-900/50'
+                  : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+              }`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-800 dark:text-slate-100 block cursor-pointer">
+                      Otomatis Sinkronisasi Saat Online Kembali
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Seketika internet tersambung kembali, sistem secara proaktif menyinkronkan data presensi lokal dan log mutasi ke server MySQL/Cloud.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={autoSyncOnReconnect}
+                    onChange={(e) => setAutoSyncOnReconnect(e.target.checked)}
+                    className="w-5 h-5 text-emerald-600 rounded-lg border-slate-300 focus:ring-emerald-500 mt-1 cursor-pointer disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
+              {/* Opsi 3: Toast Notification on Offline/Online */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                showOfflineToastWarning
+                  ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-900/50'
+                  : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+              }`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-black text-slate-800 dark:text-slate-100 block cursor-pointer">
+                      Notifikasi Pop-up Status Koneksi Jaringan
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Tampilkan notifikasi pop-up (Toast Alert) saat browser mendeteksi transisi dari kondisi Online ke Offline atau sebaliknya.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={showOfflineToastWarning}
+                    onChange={(e) => setShowOfflineToastWarning(e.target.checked)}
+                    className="w-5 h-5 text-amber-600 rounded-lg border-slate-300 focus:ring-amber-500 mt-1 cursor-pointer disabled:opacity-40"
+                  />
+                </div>
+              </div>
+
+              {/* Opsi 4: Local Storage Persistence Health */}
+              <div className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-slate-100">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      <span>Proteksi Cache &amp; Keamanan Data Lokal</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Data master siswa, kelas, guru, dan presensi otomatis di-cache ke LocalStorage terenkripsi browser untuk pencegahan kehilangan data saat koneksi drop mendadak.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Offline Message / Instructions */}
+            <div className="space-y-2 pt-2">
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                Pesan Instruksi / Bantuan Kustom Layar Offline
+              </label>
+              <textarea
+                rows={3}
+                disabled={readOnly}
+                value={offlineNoticeMessage}
+                onChange={(e) => setOfflineNoticeMessage(e.target.value)}
+                className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="Contoh: Jika mengalami kendala jaringan di lingkungan sekolah, silakan hubungi Tim IT / Helpdesk di Ruang Server atau hubungi ext. 102."
+              />
+              <p className="text-[11px] text-slate-400">
+                Pesan ini akan ditampilkan pada layar peringatan offline kepada guru atau siswa ketika sambungan internet terputus.
+              </p>
+            </div>
+          </div>
+
+          {/* Diagnostik & Pengujian Koneksi */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                    Panel Diagnostik &amp; Pengujian Sistem Offline
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Periksa status perangkat saat ini, kapasitas penyimpanan cache lokal, dan latensi server.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isTestingPing}
+                onClick={async () => {
+                  setIsTestingPing(true);
+                  const start = Date.now();
+                  try {
+                    const res = await fetch('/api/health', { method: 'GET', cache: 'no-store' });
+                    const elapsed = Date.now() - start;
+                    if (res.ok) {
+                      setPingResult({
+                        status: 'success',
+                        message: `Server merespons normal (HTTP 200). Latensi: ${elapsed}ms`,
+                        ms: elapsed,
+                      });
+                      onShowToast(`Koneksi server aktif (${elapsed}ms)`, 'success');
+                    } else {
+                      setPingResult({
+                        status: 'failed',
+                        message: `Server merespons status HTTP ${res.status}`,
+                        ms: elapsed,
+                      });
+                      onShowToast('Server merespons galat', 'warning');
+                    }
+                  } catch (err: any) {
+                    setPingResult({
+                      status: 'failed',
+                      message: `Gagal menjangkau server: ${err.message || 'Network Error'}`,
+                    });
+                    onShowToast('Gagal menghubungi server pusat', 'error');
+                  } finally {
+                    setIsTestingPing(false);
+                  }
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingPing ? 'animate-spin' : ''}`} />
+                <span>{isTestingPing ? 'Menguji Koneksi...' : 'Uji Koneksi Server'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Status Browser</div>
+                <div className="flex items-center gap-2 font-black text-slate-800 dark:text-slate-100">
+                  {typeof navigator !== 'undefined' && navigator.onLine ? (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span className="text-emerald-600 dark:text-emerald-400">Online (Terhubung)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="text-rose-600 dark:text-rose-400">Offline (Terputus)</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Kapasitas Storage Presensi</div>
+                <div className="flex items-center gap-2 font-black text-slate-800 dark:text-slate-100">
+                  <Database className="w-4 h-4 text-blue-500" />
+                  <span>{Object.keys(appData.presensi || {}).length} Sesi Presensi Tersimpan</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Status Diagnostik Server</div>
+                <div className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                  {pingResult.status === 'success' ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Online ({pingResult.ms}ms)</span>
+                    </span>
+                  ) : pingResult.status === 'failed' ? (
+                    <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>Gagal / Terputus</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">Belum diuji</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {pingResult.message && (
+              <div className={`p-3.5 rounded-2xl text-xs font-medium border flex items-center gap-2.5 ${
+                pingResult.status === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+              }`}>
+                {pingResult.status === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                )}
+                <span>{pingResult.message}</span>
+              </div>
+            )}
+          </div>
+
+          {!readOnly && (
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-lg shadow-emerald-600/25 transition flex items-center gap-2 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Pengaturan Mode Offline</span>
               </button>
             </div>
           )}

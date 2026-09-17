@@ -81,6 +81,13 @@ export interface SekolahConfig {
   loginAnnouncementTitle?: string;
   loginAnnouncementText?: string;
   loginAnnouncementType?: 'info' | 'penting' | 'peringatan' | 'kegiatan';
+
+  // Offline Mode & Synchronization Config
+  enableOfflineMode?: boolean; // Mengaktifkan atau menonaktifkan fitur mode offline
+  allowOfflineBypass?: boolean; // Izinkan pengguna melanjutkan akses saat offline
+  showOfflineToastWarning?: boolean; // Tampilkan pop-up peringatan ketika jaringan terputus
+  autoSyncOnReconnect?: boolean; // Otomatis trigger sinkronisasi data saat online kembali
+  offlineNoticeMessage?: string; // Pesan informasi kustom pada tampilan offline
 }
 
 export interface PengumumanSekolah {
@@ -120,6 +127,16 @@ export interface KurikulumAccount {
   username: string;
   password: string;
   nama: string;
+  jabatan?: string;
+  foto?: string;
+  noHp?: string;
+}
+
+export interface StafJadwalAccount {
+  username: string;
+  password: string;
+  nama: string;
+  nip?: string;
   jabatan?: string;
   foto?: string;
   noHp?: string;
@@ -173,6 +190,7 @@ export interface WaliKelas {
   mataPelajaran?: string;
   hariMengajar?: string[]; // e.g. ['Senin', 'Rabu', 'Jumat']
   batasiLoginHariMengajar?: boolean;
+  mapelAjar?: GuruMapelKelasItem[];
 }
 
 export interface Kelas {
@@ -378,6 +396,7 @@ export interface AppData {
   admin: AdminAccount;
   kesiswaan?: KesiswaanAccount;
   kurikulum?: KurikulumAccount;
+  stafJadwal?: StafJadwalAccount;
   userBiasa?: UserBiasaAccount;
   gsheetUrl?: string;
   spreadsheetId?: string;
@@ -399,6 +418,7 @@ export interface AppData {
   shiftConfig?: ShiftConfig;
   jadwalMengajar?: JadwalMengajarGuru[];
   mataPelajaran?: MataPelajaran[];
+  guruMapelKelas?: GuruMapelKelasItem[];
   presensiMengajarGuru?: AbsensiMengajarGuruItem[];
   pengumuman?: PengumumanSekolah[];
   securityIncidents?: SecurityIncident[];
@@ -446,6 +466,25 @@ export interface MataPelajaran {
   deskripsi?: string;
 }
 
+export interface GuruMapelKelasItem {
+  id: string; // Unique id, e.g. "GMK-001"
+  guruId: string; // ID dari waliKelas / guru pengampu
+  guruUsername?: string;
+  guruNama?: string;
+  guruNip?: string;
+  kodeMapel: string; // e.g. "MAT-WJB", "RPL-PWPB"
+  namaMapel: string; // e.g. "Matematika Wajib", "Pemrograman Web"
+  kategori?: string; // 'Kelompok A (Nasional)', 'Kelompok B', 'Kelompok C', 'Muatan Lokal', dll.
+  tingkat?: string; // 'Semua Tingkat' | 'X' | 'XI' | 'XII'
+  alokasiJp?: number; // Jumlah jam pelajaran / minggu (misal 4 JP)
+  kkm?: number; // KKM mata pelajaran (misal 75)
+  deskripsi?: string;
+  kelasIds: string[]; // Daftar ID kelas yang disatukan dengan mata pelajaran ini
+  catatan?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface JadwalMengajarGuru {
   id: string;
   guruId?: string; // id from waliKelas
@@ -462,7 +501,7 @@ export interface JadwalMengajarGuru {
   jamMulai?: string; // e.g. "07:15"
   jamSelesai?: string; // e.g. "08:45"
   jamKe?: string; // e.g. "1 - 3"
-  ruangan?: string; // e.g. "Lab Komputer 1"
+  jumlahJp?: number;
   catatan?: string;
 }
 
@@ -496,7 +535,7 @@ export type UserRole = string;
 
 export interface UserSession {
   role: UserRole;
-  data: AdminAccount | WaliKelas | KesiswaanAccount | UserBiasaAccount | Siswa;
+  data: AdminAccount | WaliKelas | KesiswaanAccount | KurikulumAccount | StafJadwalAccount | UserBiasaAccount | Siswa;
 }
 
 export type ViewType =
@@ -517,9 +556,11 @@ export type ViewType =
   | 'master_wali'
   | 'master_guru'
   | 'master_mapel'
+  | 'mapel_kelas_guru'
   | 'master_kelas'
   | 'master_siswa'
   | 'jadwal_mengajar'
+  | 'jadwal_minggu_ini'
   | 'data_demo'
   | 'pengaturan_sekolah'
   | 'pengaturan_tema'
