@@ -64,6 +64,8 @@ const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/
 const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
 const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
 const IntrusionDetectionView = React.lazy(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
+const ServerMonitoringView = React.lazy(() => import('./components/views/ServerMonitoringView').then(m => ({ default: m.ServerMonitoringView })));
+const UserLoginMonitoringView = React.lazy(() => import('./components/views/UserLoginMonitoringView').then(m => ({ default: m.UserLoginMonitoringView })));
 
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';
@@ -734,6 +736,23 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    if (currentUser?.data?.username) {
+      const uName = currentUser.data.username;
+      const updatedSessions = (appData.activeUserSessions || []).filter(
+        (s) => s.username.toLowerCase() !== uName.toLowerCase()
+      );
+      handleUpdateAppData({
+        ...appData,
+        activeUserSessions: updatedSessions,
+      });
+      try {
+        fetch('/api/user-sessions/terminate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: `sess-${uName}`, terminatedBy: 'Logout Pengguna' }),
+        }).catch(() => {});
+      } catch {}
+    }
     setCurrentUser(null);
     saveSessionUser(null);
     handleNavigate('dashboard', true);
@@ -1275,6 +1294,26 @@ export default function App() {
                 appData={appData}
                 currentUser={currentUser}
                 onShowToast={showToast}
+              />
+            )}
+
+            {currentView === 'monitoring_server' && (
+              <ServerMonitoringView
+                appData={appData}
+                currentUser={currentUser}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
+              />
+            )}
+
+            {currentView === 'monitoring_login' && (
+              <UserLoginMonitoringView
+                appData={appData}
+                currentUser={currentUser}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onConfirmModal={openConfirmModal}
+                onNavigateToView={handleNavigate}
               />
             )}
 

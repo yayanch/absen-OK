@@ -1539,20 +1539,28 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             {/* Modal Body (Scrollable) */}
             <div className="p-5 sm:p-6 overflow-y-auto space-y-6">
 
-          {/* Special Routine Slot Notice (Senin Jam 1-2 Upacara, Jumat Jam 1-2 Pembiasaan Baik) */}
-          {formHari === 'Senin' && formSelectedJam.some((j) => j === 1 || j === 2) && (
+          {/* Special Routine Slot Notice (Shift Pagi: Senin Jam 1-2 Upacara, Jumat Jam 1-2 Pembiasaan Baik. Shift Siang: SEMUA KELAS TIDAK ADA Upacara/Pembiasaan, KBM Reguler) */}
+          {formShift === 'Pagi' && formHari === 'Senin' && formSelectedJam.some((j) => j === 1 || j === 2) && (
             <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-800 dark:text-rose-200 flex items-center gap-2.5 text-xs font-semibold">
               <Flag className="w-4 h-4 text-rose-600 shrink-0" />
               <span>
-                <strong>Informasi Rutinitas:</strong> Hari Senin Jam ke-1 &amp; 2 digunakan untuk <strong>Upacara Bendera</strong> (wajib seluruh guru &amp; siswa).
+                <strong>Informasi Rutinitas (Shift Pagi):</strong> Hari Senin Jam ke-1 &amp; 2 digunakan untuk <strong>Upacara Bendera</strong> (wajib seluruh guru &amp; siswa Shift Pagi).
               </span>
             </div>
           )}
-          {formHari === 'Jumat' && formSelectedJam.some((j) => j === 1 || j === 2) && (
+          {formShift === 'Pagi' && formHari === 'Jumat' && formSelectedJam.some((j) => j === 1 || j === 2) && (
             <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-200 flex items-center gap-2.5 text-xs font-semibold">
               <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
-                <strong>Informasi Rutinitas:</strong> Hari Jumat Jam ke-1 &amp; 2 digunakan untuk <strong>Pembiasaan Baik</strong> (Karakter, Literasi &amp; Rohis).
+                <strong>Informasi Rutinitas (Shift Pagi):</strong> Hari Jumat Jam ke-1 &amp; 2 digunakan untuk <strong>Pembiasaan Baik</strong> (Karakter, Literasi &amp; Rohis).
+              </span>
+            </div>
+          )}
+          {formShift === 'Siang' && (formHari === 'Senin' || formHari === 'Jumat') && formSelectedJam.some((j) => j === 1 || j === 2) && (
+            <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-900/60 text-indigo-800 dark:text-indigo-200 flex items-center gap-2.5 text-xs font-semibold">
+              <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                <strong>Ketentuan Shift Siang:</strong> Jadwal shift siang semua kelas hari <strong>{formHari} tidak ada {formHari === 'Senin' ? 'upacara' : 'pembiasaan baik'}</strong>. Jam ke-1 s.d. 2 langsung aktif untuk KBM reguler.
               </span>
             </div>
           )}
@@ -2555,25 +2563,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 <span>{activeMatrixOption.label}</span>
                 <span className="font-medium opacity-80">({activeMatrixOption.tingkatLabel} • Jam 1-10)</span>
               </span>
-
-              {/* Routine Activities Legend Badges */}
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 shadow-2xs">
-                <Flag className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-                <span>Senin Jam 1-2: Upacara</span>
-              </span>
-
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60 shadow-2xs">
-                <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                <span>Jumat Jam 1-2: Pembiasaan Baik</span>
-              </span>
-
-              {/* Istirahat Info Badge */}
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/60 shadow-2xs">
-                <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                <span>
-                  Istirahat: {activeMatrixOption.shift === 'Pagi' ? '08.30 - 09.00 (setelah Jam 4)' : '15.00 - 15.30 (setelah Jam 6)'}
-                </span>
-              </span>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
@@ -2663,8 +2652,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
                         {/* Columns for Jam 1 s.d. 10 */}
                         {LIST_JAM_ANGKA.map((jamNum) => {
-                          const isUpacara = hari === 'Senin' && (jamNum === 1 || jamNum === 2);
-                          const isPembiasaan = hari === 'Jumat' && (jamNum === 1 || jamNum === 2);
+                          // Shift Siang untuk semua kelas: Senin TIDAK ADA upacara dan Jumat TIDAK ADA pembiasaan (KBM penuh Jam 1 s.d. 10)
+                          const isUpacara = activeMatrixOption.shift === 'Pagi' && hari === 'Senin' && (jamNum === 1 || jamNum === 2);
+                          const isPembiasaan = activeMatrixOption.shift === 'Pagi' && hari === 'Jumat' && (jamNum === 1 || jamNum === 2);
 
                           // Find schedule on this day covering this jamNum and matching shift
                           const matchedSchedule = matrixSchedules.find((item) => {

@@ -192,7 +192,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Trend Chart Data (Last N Days)
   const trendDaysCount = trendRange === '7d' ? 7 : trendRange === '14d' ? 14 : 30;
   const trendData = React.useMemo(() => {
-    const days: { date: string; dateLabel: string; hadir: number; total: number; percent: number }[] = [];
+    const days: {
+      date: string;
+      dateLabel: string;
+      hadir: number;
+      sakit: number;
+      izin: number;
+      alpa: number;
+      kesiangan: number;
+      dispensasi: number;
+      total: number;
+      percent: number;
+      isEffective: boolean;
+    }[] = [];
     const baseDate = new Date(selectedDate);
 
     for (let i = trendDaysCount - 1; i >= 0; i--) {
@@ -211,7 +223,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const dayTotal = dayStat.totalSiswa;
       const pct = Math.round(dayStat.attendanceRate);
 
-      days.push({ date: dStr, dateLabel: dLabel, hadir: dayHadir, total: dayTotal, percent: pct });
+      days.push({
+        date: dStr,
+        dateLabel: dLabel,
+        hadir: dayHadir,
+        sakit: dayStat.sakitCount,
+        izin: dayStat.izinCount,
+        alpa: dayStat.alpaCount,
+        kesiangan: dayStat.kesianganCount,
+        dispensasi: dayStat.dispensasiCount,
+        total: dayTotal,
+        percent: pct,
+        isEffective: dayStat.isEffectiveSchoolDay,
+      });
     }
     return days;
   }, [selectedDate, trendDaysCount, appData, currentUser]);

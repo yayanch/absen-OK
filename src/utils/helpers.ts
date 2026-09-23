@@ -1150,6 +1150,29 @@ export function loadAppData(): AppData {
       } else {
         merged.presensiMengajarGuru = [];
       }
+
+      if (merged.userLoginLogs && Array.isArray(merged.userLoginLogs)) {
+        merged.userLoginLogs = merged.userLoginLogs.filter(
+          (l: any) => !l?.id?.startsWith('log-login-') && !l?.id?.startsWith('log-srv-')
+        );
+      } else {
+        merged.userLoginLogs = [];
+      }
+
+      if (merged.activeUserSessions && Array.isArray(merged.activeUserSessions)) {
+        merged.activeUserSessions = merged.activeUserSessions.filter(
+          (s: any) =>
+            !s?.id?.startsWith('sess-srv-') &&
+            !s?.id?.startsWith('sess-guru-') &&
+            !s?.id?.startsWith('sess-kesiswaan-') &&
+            !s?.id?.startsWith('sess-siswa-') &&
+            s?.id !== 'sess-admin-active' &&
+            s?.id !== 'sess-guru1-active'
+        );
+      } else {
+        merged.activeUserSessions = [];
+      }
+
       return merged;
     }
   } catch (e) {

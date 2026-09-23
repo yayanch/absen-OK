@@ -546,11 +546,11 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
                   <div className="text-xs font-black text-rose-800 dark:text-rose-200 flex items-center gap-2">
                     <span>Upacara Bendera</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-200/80 dark:bg-rose-900/70 text-rose-900 dark:text-rose-200">
-                      Jam ke-1 s.d. 2 (06.30 - 08.00)
+                      Khusus Shift Pagi: Jam 1 s.d. 2 (06.30 - 08.00)
                     </span>
                   </div>
                   <p className="text-[11px] font-medium text-rose-700/80 dark:text-rose-300/80">
-                    Wajib diikuti oleh seluruh dewan guru, staf pendidik, dan siswa-siswi.
+                    Wajib diikuti oleh guru &amp; siswa Shift Pagi. <strong>Semua kelas Shift Siang tidak ada upacara</strong> (langsung KBM reguler).
                   </p>
                 </div>
               </div>
@@ -572,11 +572,11 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
                   <div className="text-xs font-black text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
                     <span>Pembiasaan Baik &amp; Literasi</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-200/80 dark:bg-emerald-900/70 text-emerald-900 dark:text-emerald-200">
-                      Jam ke-1 s.d. 2 (06.30 - 08.00)
+                      Khusus Shift Pagi: Jam 1 s.d. 2 (06.30 - 08.00)
                     </span>
                   </div>
                   <p className="text-[11px] font-medium text-emerald-700/80 dark:text-emerald-300/80">
-                    Penguatan karakter, tadarus / keagamaan, literasi &amp; senam / kebersihan bersama.
+                    Penguatan karakter &amp; literasi Shift Pagi. <strong>Semua kelas Shift Siang tidak ada pembiasaan</strong> (langsung KBM reguler).
                   </p>
                 </div>
               </div>

@@ -48,6 +48,7 @@ import {
   inspectInputPayload,
   isNightHourAccess,
 } from '../utils/securityEngine';
+import { recordLoginEvent } from '../utils/loginMonitorEngine';
 import {
   parseColorToRgb,
   calculateLuminance,
@@ -238,8 +239,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
       );
 
       if (onUpdateAppData) {
+        const withLog = recordLoginEvent(appData, {
+          username: targetUser,
+          nama: targetUser,
+          role: roleAttempted,
+          status: 'account_locked',
+          failureReason: `Percobaan gagal ${currentCount}x berturut-turut, akun dikunci ${lockoutMinutes} menit`,
+        });
         onUpdateAppData({
-          ...appData,
+          ...withLog,
           lockedAccounts: [lockObj, ...existingLocks],
           securityIncidents: [newIncident, ...(appData.securityIncidents || [])],
         });
@@ -250,31 +258,40 @@ export const LoginView: React.FC<LoginViewProps> = ({
         'error'
       );
     } else {
-      // Record minor failed attempt incident on 3rd attempt
-      if (currentCount === 3) {
-        const warnIncident: SecurityIncident = {
-          id: `warn-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          formattedTime: formatIndonesianDateTime(new Date()),
-          type: 'brute_force_login',
-          severity: 'medium',
-          title: 'Percobaan Password Berulang (Suspicious Activity)',
-          description: `Terdeteksi 3 kali kegagalan password pada username "${targetUser}" dari IP ${client.ip}.`,
-          targetUsername: targetUser,
-          targetRole: roleAttempted,
-          ipAddress: client.ip,
-          userAgent: client.userAgent,
-          payloadSnippet: `Gagal login ke-${currentCount}`,
-          status: 'active',
-          actionTaken: 'none',
-          locationEstimate: client.location,
-        };
+      if (onUpdateAppData) {
+        const withLog = recordLoginEvent(appData, {
+          username: targetUser,
+          nama: targetUser,
+          role: roleAttempted,
+          status: 'failed_password',
+          failureReason: `Kata sandi salah (percobaan ke-${currentCount})`,
+        });
 
-        if (onUpdateAppData) {
+        // Record minor failed attempt incident on 3rd attempt
+        if (currentCount === 3) {
+          const warnIncident: SecurityIncident = {
+            id: `warn-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            formattedTime: formatIndonesianDateTime(new Date()),
+            type: 'brute_force_login',
+            severity: 'medium',
+            title: 'Percobaan Password Berulang (Suspicious Activity)',
+            description: `Terdeteksi 3 kali kegagalan password pada username "${targetUser}" dari IP ${client.ip}.`,
+            targetUsername: targetUser,
+            targetRole: roleAttempted,
+            ipAddress: client.ip,
+            userAgent: client.userAgent,
+            payloadSnippet: `Gagal login ke-${currentCount}`,
+            status: 'active',
+            actionTaken: 'none',
+            locationEstimate: client.location,
+          };
           onUpdateAppData({
-            ...appData,
-            securityIncidents: [warnIncident, ...(appData.securityIncidents || [])],
+            ...withLog,
+            securityIncidents: [warnIncident, ...(withLog.securityIncidents || [])],
           });
+        } else {
+          onUpdateAppData(withLog);
         }
       }
     }
@@ -308,6 +325,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
     // 1. Check IP Blacklist
     const ipCheck = checkIpBlockedStatus(client.ip, appData.blockedIps || []);
     if (ipCheck.isBlocked) {
+      if (onUpdateAppData) {
+        const withLog = recordLoginEvent(appData, {
+          username: uInput,
+          nama: uInput,
+          role: 'unknown',
+          status: 'ip_blocked',
+          failureReason: `IP ${client.ip} masuk daftar blacklist`,
+        });
+        onUpdateAppData(withLog);
+      }
       onShowToast(
         `Akses Diblokir: Alamat IP Anda (${client.ip}) terdaftar dalam Blacklist Keamanan Sistem. Alasan: ${
           ipCheck.blockInfo?.reason || 'Pelanggaran keamanan'
@@ -320,6 +347,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
     // 2. Check Account Lockout Status
     const lockCheck = checkAccountLockStatus(uInput, appData.lockedAccounts || []);
     if (lockCheck.isLocked) {
+      if (onUpdateAppData) {
+        const withLog = recordLoginEvent(appData, {
+          username: uInput,
+          nama: uInput,
+          role: 'unknown',
+          status: 'account_locked',
+          failureReason: `Akun masih dalam masa proteksi lock (${lockCheck.remainingMinutes} mnt tersisa)`,
+        });
+        onUpdateAppData(withLog);
+      }
       onShowToast(
         `Akun Terkunci Sementara: Akun "${uInput}" dinonaktifkan (${lockCheck.remainingMinutes} menit lagi) karena percobaan login gagal berulang kali. Silakan gunakan tombol Buka Kunci jika perlu.`,
         'error'
@@ -353,9 +390,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
         };
 
         if (onUpdateAppData) {
+          const withLog = recordLoginEvent(appData, {
+            username: uInput,
+            nama: uInput,
+            role: 'unknown',
+            status: 'waf_rejected',
+            failureReason: `Payload form dicekal oleh WAF: ${ruleName}`,
+          });
           onUpdateAppData({
-            ...appData,
-            securityIncidents: [wafIncident, ...(appData.securityIncidents || [])],
+            ...withLog,
+            securityIncidents: [wafIncident, ...(withLog.securityIncidents || [])],
           });
         }
 
@@ -377,6 +421,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
             localStorage.setItem('presensi_remember_me_pref', 'false');
           }
         } catch (e) {}
+
+        if (onUpdateAppData) {
+          const withLog = recordLoginEvent(appData, {
+            username: rawUser.trim(),
+            nama: userData?.nama || rawUser.trim(),
+            role,
+            status: 'success',
+          });
+          onUpdateAppData(withLog);
+        }
+
         onLogin({ role, data: userData }, rememberMe);
       };
 

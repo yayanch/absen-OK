@@ -20,7 +20,9 @@ import {
   AlertTriangle,
   Zap,
   Sliders,
-  Settings
+  Settings,
+  Flag,
+  Sparkles
 } from 'lucide-react';
 import { AppData, UserSession, ShiftPeriod, ShiftConfig, SekolahConfig } from '../../types';
 import { formatDateIndo, generateWeeklyShiftSchedules, normalizeWeeklyShiftPeriods, getTodayString, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
@@ -556,6 +558,20 @@ export const JadwalShiftView: React.FC<JadwalShiftViewProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Rutinitas Khusus Shift Pagi */}
+            <div className="p-3 rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 text-xs space-y-1">
+              <div className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                <Flag className="w-3.5 h-3.5 text-rose-600" />
+                <span>Rutinitas Khusus Mingguan (Shift Pagi):</span>
+              </div>
+              <p className="text-[11px] text-amber-900/90 dark:text-amber-300">
+                • <strong>Senin Jam 1-2 (06.30 - 08.00):</strong> Upacara Bendera (wajib guru &amp; siswa Shift Pagi).
+              </p>
+              <p className="text-[11px] text-amber-900/90 dark:text-amber-300">
+                • <strong>Jumat Jam 1-2 (06.30 - 08.00):</strong> Pembiasaan Baik, Karakter, Literasi &amp; Rohis.
+              </p>
+            </div>
           </div>
 
           {/* SHIFT 2 (SIANG) CARD */}
@@ -706,6 +722,20 @@ export const JadwalShiftView: React.FC<JadwalShiftViewProps> = ({
                   <strong>Status KESIANGAN (K):</strong> Siswa scan lewat dari jam <strong>{isEditing ? editSiangJamMasukSelesai : activeSiangJamMasukSelesai} WIB</strong>
                 </div>
               </div>
+            </div>
+
+            {/* Ketentuan Khusus Rutinitas Shift Siang */}
+            <div className="p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/50 text-xs space-y-1">
+              <div className="font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Ketentuan Rutinitas Khusus Shift Siang:</span>
+              </div>
+              <p className="text-[11px] text-indigo-900/90 dark:text-indigo-300">
+                • <strong>Hari Senin:</strong> Semua kelas Shift Siang <strong>TIDAK ADA UPACARA</strong> (KBM reguler Jam ke-1 s.d. 10).
+              </p>
+              <p className="text-[11px] text-indigo-900/90 dark:text-indigo-300">
+                • <strong>Hari Jumat:</strong> Semua kelas Shift Siang <strong>TIDAK ADA PEMBIASAAN</strong> (KBM reguler Jam ke-1 s.d. 10).
+              </p>
             </div>
           </div>
         </div>

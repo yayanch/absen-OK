@@ -32,7 +32,8 @@ import {
   Clock,
   CalendarRange,
   BookOpen,
-  Layers
+  Layers,
+  Server
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
@@ -604,11 +605,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       'SISTEM & KEAMANAN',
                       'sistem',
                       <Database className="w-4 h-4 text-emerald-300 shrink-0" />,
-                      ['master_user', 'integrasi_mysql', 'database_traffic', 'audit_logs', 'intrusion_detection', 'live_chat'],
+                      ['master_user', 'intrusion_detection', 'monitoring_server', 'monitoring_login', 'integrasi_mysql', 'database_traffic', 'audit_logs', 'live_chat'],
                       (
                         <>
                           {isAdmin && renderItem('master_user', <UserCheck className="w-4 h-4 shrink-0" />, 'Pengguna / Manajemen User', undefined, undefined, true)}
                           {isAdmin && renderItem('intrusion_detection', <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />, 'Deteksi Intrusi (IDS)', (appData?.securityIncidents || []).filter(i => i.status === 'active').length, undefined, true)}
+                          {isAdmin && renderItem('monitoring_server', <Server className="w-4 h-4 text-teal-300 shrink-0" />, 'Monitoring Server (CPU/RAM/Disk)', undefined, undefined, true)}
+                          {isAdmin && renderItem('monitoring_login', <Users className="w-4 h-4 text-sky-300 shrink-0" />, 'Monitoring Login Pengguna', (appData?.activeUserSessions || []).filter(s => !s.id.startsWith('sess-srv-') && !s.id.startsWith('sess-guru-') && !s.id.startsWith('sess-kesiswaan-') && !s.id.startsWith('sess-siswa-') && s.id !== 'sess-admin-active').length || undefined, undefined, true)}
                           {isAdmin && renderItem('integrasi_mysql', <Database className="w-4 h-4 text-emerald-300 shrink-0" />, 'Integrasi MySQL', undefined, undefined, true)}
                           {isAdmin && renderItem('database_traffic', <Activity className="w-4 h-4 text-cyan-300 shrink-0" />, 'Monitoring Trafik DB', undefined, undefined, true)}
                           {isAdmin && renderItem('audit_logs' as ViewType, <HardDriveDownload className="w-4 h-4 text-blue-300 shrink-0" />, 'Backup & Restore Data', undefined, () => {

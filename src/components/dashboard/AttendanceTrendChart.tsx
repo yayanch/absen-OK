@@ -11,11 +11,20 @@ import {
 import { TrendingUp, LucideIcon } from 'lucide-react';
 
 export interface AttendanceTrendDataPoint {
+  date?: string;
   dateLabel: string;
   percent: number;
   hadir: number;
   total: number;
+  sakit?: number;
+  izin?: number;
+  alpa?: number;
+  kesiangan?: number;
+  dispensasi?: number;
+  isEffective?: boolean;
 }
+
+export { AttendanceRecapChart } from './AttendanceRecapChart';
 
 export interface AttendanceTrendChartProps {
   data: AttendanceTrendDataPoint[];
@@ -127,6 +136,13 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
                         <p className="text-slate-300 text-[11px]">
                           Hadir: {d.hadir} / {d.total} Siswa
                         </p>
+                        {Boolean((d.sakit ?? 0) > 0 || (d.izin ?? 0) > 0 || (d.alpa ?? 0) > 0) && (
+                          <div className="pt-1 border-t border-slate-700/60 flex items-center gap-2 text-[10px] text-slate-300">
+                            {(d.sakit ?? 0) > 0 && <span className="text-sky-300">S: {d.sakit}</span>}
+                            {(d.izin ?? 0) > 0 && <span className="text-indigo-300">I: {d.izin}</span>}
+                            {(d.alpa ?? 0) > 0 && <span className="text-rose-300">A: {d.alpa}</span>}
+                          </div>
+                        )}
                       </div>
                     );
                   }

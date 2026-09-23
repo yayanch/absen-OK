@@ -360,6 +360,51 @@ export interface SecurityConfig {
   usernameWhitelist?: string[];
 }
 
+export type LoginStatus =
+  | 'success'
+  | 'failed_password'
+  | 'user_not_found'
+  | 'account_locked'
+  | 'ip_blocked'
+  | 'waf_rejected'
+  | 'anomaly_time'
+  | 'session_terminated';
+
+export interface UserLoginLog {
+  id: string;
+  timestamp: string; // ISO string
+  formattedTime: string; // e.g. "23 Sep 2026, 07:15:22"
+  username: string;
+  nama: string;
+  role: string; // 'admin' | 'guru' | 'wali' | 'murid' | 'kesiswaan' | 'kurikulum' | 'staf_jadwal' | 'hubin' | 'unknown'
+  status: LoginStatus;
+  statusLabel: string;
+  ipAddress: string;
+  location?: string;
+  device: string;
+  browser: string;
+  userAgent: string;
+  failureReason?: string;
+  sessionId?: string;
+  sessionDurationSeconds?: number;
+}
+
+export interface ActiveUserSession {
+  id: string;
+  username: string;
+  nama: string;
+  role: string;
+  loginAt: string;
+  lastActiveAt: string;
+  formattedLoginTime: string;
+  ipAddress: string;
+  location?: string;
+  device: string;
+  browser: string;
+  userAgent: string;
+  isCurrent?: boolean;
+}
+
 export interface AuditLog {
   id: string;
   timestamp: string; // ISO string / Indonesian Date string
@@ -426,6 +471,8 @@ export interface AppData {
   lockedAccounts?: LockedAccount[];
   securityConfig?: SecurityConfig;
   backupConfig?: BackupScheduleConfig;
+  userLoginLogs?: UserLoginLog[];
+  activeUserSessions?: ActiveUserSession[];
 }
 
 export interface SiswaPresensiSesiGuru {
@@ -572,7 +619,9 @@ export type ViewType =
   | 'hari_libur'
   | 'jadwal_shift'
   | 'audit_logs'
-  | 'intrusion_detection';
+  | 'intrusion_detection'
+  | 'monitoring_server'
+  | 'monitoring_login';
 
 export type SyncStatus = 'idle' | 'dirty' | 'saving' | 'syncing' | 'saved' | 'error' | 'offline' | 'unknown' | 'conflict';
 

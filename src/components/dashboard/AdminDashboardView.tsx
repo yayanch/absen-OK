@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   UserCheck,
@@ -15,11 +15,14 @@ import {
   Search,
   ChevronRight,
   ChevronLeft,
+  Cpu,
+  Server,
+  HardDrive,
+  ArrowUpRight,
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, calculateDailyAttendanceStats } from '../../utils/helpers';
-import { SystemHealthWidget } from './SystemHealthWidget';
-import { AttendanceTrendChart } from './AttendanceTrendChart';
+import { AttendanceTrendChart, AttendanceRecapChart } from './AttendanceTrendChart';
 import { PageHeader, StatCard } from '../common/UIComponents';
 
 interface AdminDashboardViewProps {
@@ -114,6 +117,52 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const bestClasses = classRanking.slice(0, 3);
   const attentionClasses = classRanking.filter((c) => c.isFilled).slice(-3).reverse();
 
+  // Server Resources Quick Telemetry
+  const [serverMetrics, setServerMetrics] = useState<{
+    cpuPercent: number;
+    ramPercent: number;
+    ramUsedGb: number;
+    ramTotalGb: number;
+    diskPercent: number;
+    diskUsedGb: number;
+    diskTotalGb: number;
+    networkInKbps: number;
+    networkOutKbps: number;
+    avgLatencyMs: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadServerMetrics = async () => {
+      try {
+        const res = await fetch('/api/server/resources');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && isMounted) {
+          setServerMetrics({
+            cpuPercent: data.cpu.percent,
+            ramPercent: data.ram.percent,
+            ramUsedGb: data.ram.usedGb,
+            ramTotalGb: data.ram.totalGb,
+            diskPercent: data.disk.percent,
+            diskUsedGb: data.disk.usedGb,
+            diskTotalGb: data.disk.totalGb,
+            networkInKbps: data.network.currentInKbps,
+            networkOutKbps: data.network.currentOutKbps,
+            avgLatencyMs: data.network.avgLatencyMs,
+          });
+        }
+      } catch (_) {}
+    };
+
+    loadServerMetrics();
+    const interval = setInterval(loadServerMetrics, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -197,16 +246,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* Attendance Overview: Tren Kehadiran 7 Hari & Rankings */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Tren Kehadiran */}
+        {/* Left Column: Rekapitulasi & Tren Kehadiran Siswa */}
         <div className="lg:col-span-8 space-y-6">
-          <AttendanceTrendChart
-            data={trendData}
-            title="Tren Kehadiran Sekolah"
-            subtitle="Tingkat kehadiran harian dalam rentang waktu terpilih."
-            height={224}
-            rangeSelector={true}
-            selectedRange={trendRange === '30d' ? '14d' : trendRange}
-            onRangeChange={(r) => setTrendRange(r)}
+          <AttendanceRecapChart
+            trendData={trendData}
+            trendRange={trendRange}
+            onRangeChange={setTrendRange}
+            appData={appData}
+            selectedDate={selectedDate}
+            currentUser={currentUser}
+            targetClasses={targetClasses}
+            title="Rekapitulasi & Tren Kehadiran Siswa"
+            subtitle="Grafik analitik komprehensif tingkat kehadiran siswa, distribusi status presensi, dan komparasi rombel."
+            onNavigateView={onNavigateView}
           />
 
           {/* Tabel Rekapitulasi Presensi Harian */}
@@ -369,8 +421,217 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* System Health Section Ringkas */}
-      <SystemHealthWidget onNavigateView={onNavigateView} />
+      {/* Monitoring Login Pengguna (Live Sesi Online) */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>Monitoring Login Pengguna</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  {
+                    (appData.activeUserSessions || []).filter(
+                      (s) =>
+                        !s.id.startsWith('sess-srv-') &&
+                        !s.id.startsWith('sess-guru-') &&
+                        !s.id.startsWith('sess-kesiswaan-') &&
+                        !s.id.startsWith('sess-siswa-') &&
+                        s.id !== 'sess-admin-active'
+                    ).length
+                  } Sesi Online
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Pantau seluruh sesi aktif guru, siswa, dan staf serta telemetri riwayat login.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onNavigateView('monitoring_login')}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition border border-slate-200 dark:border-slate-700 shadow-2xs group"
+          >
+            <span>Buka Panel Monitoring Login</span>
+            <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-sky-600 dark:text-sky-400" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Sesi Aktif Online</span>
+            <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+              {
+                (appData.activeUserSessions || []).filter(
+                  (s) =>
+                    !s.id.startsWith('sess-srv-') &&
+                    !s.id.startsWith('sess-guru-') &&
+                    !s.id.startsWith('sess-kesiswaan-') &&
+                    !s.id.startsWith('sess-siswa-') &&
+                    s.id !== 'sess-admin-active'
+                ).length
+              } Pengguna
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">Guru, Siswa &amp; Staf</span>
+          </div>
+
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Total Log Otentikasi</span>
+            <div className="text-lg font-black text-slate-800 dark:text-slate-100">
+              {
+                (appData.userLoginLogs || []).filter(
+                  (l) => !l.id.startsWith('log-login-') && !l.id.startsWith('log-srv-')
+                ).length
+              } Tercatat
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">Riwayat login sistem</span>
+          </div>
+
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Akun Terkunci</span>
+            <div className="text-lg font-black text-amber-600 dark:text-amber-400">
+              {(appData.lockedAccounts?.length || 0)} Akun
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">Proteksi brute-force</span>
+          </div>
+
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">IP Terdaftar Blacklist</span>
+            <div className="text-lg font-black text-rose-600 dark:text-rose-400">
+              {(appData.blockedIps?.length || 0)} Alamat IP
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">Firewall IDS</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Monitoring Sumber Daya Server (CPU, RAM, Harddisk, Traffic Jaringan) */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Server className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>Monitoring Sumber Daya Server (Live Telemetri)</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Real-time
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Penggunaan CPU, alokasi RAM, kapasitas Harddisk, dan laju Traffic Jaringan host backend.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onNavigateView('monitoring_server')}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition border border-slate-200 dark:border-slate-700 shadow-2xs group"
+          >
+            <span>Buka Panel Monitoring Lengkap</span>
+            <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-emerald-600 dark:text-emerald-400" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          {/* CPU Quick */}
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5 text-blue-500" />
+                <span>Beban CPU</span>
+              </span>
+              <span className="text-xs font-black font-mono text-slate-800 dark:text-slate-100">
+                {serverMetrics?.cpuPercent ?? 18}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(3, serverMetrics?.cpuPercent ?? 18)}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">
+              Core Aktif • Status Optimal
+            </span>
+          </div>
+
+          {/* RAM Quick */}
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <Server className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Memori RAM</span>
+              </span>
+              <span className="text-xs font-black font-mono text-slate-800 dark:text-slate-100">
+                {serverMetrics?.ramPercent ?? 28}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(3, serverMetrics?.ramPercent ?? 28)}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">
+              {serverMetrics ? `${serverMetrics.ramUsedGb} GB / ${serverMetrics.ramTotalGb} GB` : '4.5 GB / 16.0 GB'}
+            </span>
+          </div>
+
+          {/* Harddisk Quick */}
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <HardDrive className="w-3.5 h-3.5 text-amber-500" />
+                <span>Penyimpanan Disk</span>
+              </span>
+              <span className="text-xs font-black font-mono text-slate-800 dark:text-slate-100">
+                {serverMetrics?.diskPercent ?? 14}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(3, serverMetrics?.diskPercent ?? 14)}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">
+              {serverMetrics ? `${serverMetrics.diskUsedGb} GB / ${serverMetrics.diskTotalGb} GB` : '75.6 GB / 540 GB'}
+            </span>
+          </div>
+
+          {/* Network Quick */}
+          <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-cyan-500" />
+                <span>Traffic Jaringan</span>
+              </span>
+              <span className="text-[11px] font-bold font-mono text-cyan-600 dark:text-cyan-400">
+                {serverMetrics?.avgLatencyMs ?? 1.2} ms
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] font-mono font-semibold pt-0.5">
+              <span className="text-cyan-600 dark:text-cyan-400">
+                ↓ {serverMetrics?.networkInKbps ?? 45} KB/s
+              </span>
+              <span className="text-purple-600 dark:text-purple-400">
+                ↑ {serverMetrics?.networkOutKbps ?? 120} KB/s
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-400 block truncate">
+              Throughput Normal &amp; Cepat
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
