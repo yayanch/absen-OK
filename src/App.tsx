@@ -19,7 +19,9 @@ import {
   saveSessionUser,
   mergeChatMessages,
   mergePelanggaran,
-  mergeHomeVisits
+  mergeHomeVisits,
+  mergeSiswa,
+  mergePresensi
 } from './utils/helpers';
 import { DEMO_DATASET } from './data/initialData';
 
@@ -200,6 +202,10 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   const [selectedInputKelasId, setSelectedInputKelasId] = useState<string | undefined>(undefined);
+  const [selectedMasterSiswaQuery, setSelectedMasterSiswaQuery] = useState<string | undefined>(undefined);
+  const [selectedMasterGuruQuery, setSelectedMasterGuruQuery] = useState<string | undefined>(undefined);
+  const [selectedMasterKelasQuery, setSelectedMasterKelasQuery] = useState<string | undefined>(undefined);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState<string>('');
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark';
@@ -297,15 +303,30 @@ export default function App() {
               const mergedMessages = mergeChatMessages(prev.chatMessages, data.appData.chatMessages);
               const allDeletedPelanggaran = Array.from(new Set([...(prev.deletedPelanggaranIds || []), ...(data.appData.deletedPelanggaranIds || [])]));
               const allDeletedHomeVisits = Array.from(new Set([...(prev.deletedHomeVisitIds || []), ...(data.appData.deletedHomeVisitIds || [])]));
+              const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
               const mergedPelanggaran = mergePelanggaran(prev.pelanggaran, data.appData.pelanggaran, allDeletedPelanggaran);
               const mergedHomeVisits = mergeHomeVisits(prev.homeVisits, data.appData.homeVisits, allDeletedHomeVisits);
+              const mergedSiswa = mergeSiswa(prev.siswa, data.appData.siswa, allDeletedSiswa);
+              const mergedPresensi = mergePresensi(prev.presensi, data.appData.presensi);
+
+              // Preserve master data if server response is incomplete
+              const mergedKelas = (Array.isArray(data.appData.kelas) && data.appData.kelas.length > 0) ? data.appData.kelas : prev.kelas;
+              const mergedWaliKelas = (Array.isArray(data.appData.waliKelas) && data.appData.waliKelas.length > 0) ? data.appData.waliKelas : prev.waliKelas;
+              const mergedJurusan = (Array.isArray(data.appData.jurusan) && data.appData.jurusan.length > 0) ? data.appData.jurusan : prev.jurusan;
+
               const targetAppData = {
                 ...data.appData,
+                siswa: mergedSiswa,
+                presensi: mergedPresensi,
+                kelas: mergedKelas,
+                waliKelas: mergedWaliKelas,
+                jurusan: mergedJurusan,
                 chatMessages: mergedMessages,
                 pelanggaran: mergedPelanggaran,
                 homeVisits: mergedHomeVisits,
                 deletedPelanggaranIds: allDeletedPelanggaran,
                 deletedHomeVisitIds: allDeletedHomeVisits,
+                deletedSiswaIds: allDeletedSiswa,
               };
               const newStr = JSON.stringify(targetAppData);
               if (!prev || newStr.length !== JSON.stringify(prev).length || newStr !== JSON.stringify(prev)) {
@@ -347,9 +368,15 @@ export default function App() {
       if (customEvent.detail && isMounted) {
         setAppData((prev) => {
           const mergedMessages = mergeChatMessages(prev.chatMessages, customEvent.detail.chatMessages);
+          const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(customEvent.detail.deletedSiswaIds || [])]));
+          const mergedSiswa = mergeSiswa(prev.siswa, customEvent.detail.siswa, allDeletedSiswa);
+          const mergedPresensi = mergePresensi(prev.presensi, customEvent.detail.presensi);
           return {
             ...customEvent.detail,
+            siswa: mergedSiswa,
+            presensi: mergedPresensi,
             chatMessages: mergedMessages,
+            deletedSiswaIds: allDeletedSiswa,
           };
         });
       }
@@ -917,6 +944,11 @@ export default function App() {
   const isStudentRole = currentUser.role === 'murid' || currentUser.role === 'siswa';
   const isStudentPortal = isStudentRole || currentView === 'portal_murid' || currentView === 'absen_qr' || currentView === 'kartu_pelajar' || currentView === 'rekap_siswa';
 
+  const userEffectiveRoles = [
+    currentUser.role,
+    ...((currentUser.data as any)?.additionalRoles || [])
+  ].filter(Boolean);
+
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors relative">
       {/* Sidebar Container - Hidden on mobile and for student accounts */}
@@ -955,6 +987,25 @@ export default function App() {
             onToggleTheme={toggleTheme}
             onSelectColorTheme={handleSelectColorTheme}
             onNavigate={(v) => handleNavigate(v)}
+            onNavigateToInput={(kelasId) => {
+              setSelectedInputKelasId(kelasId);
+              handleNavigate('presensi_input');
+            }}
+            onNavigateToMasterSiswa={(query, kelasId) => {
+              if (kelasId) setSelectedInputKelasId(kelasId);
+              setSelectedMasterSiswaQuery(query);
+              handleNavigate('master_siswa');
+            }}
+            onNavigateToMasterGuru={(query) => {
+              setSelectedMasterGuruQuery(query);
+              handleNavigate('master_guru');
+            }}
+            onNavigateToMasterKelas={(query) => {
+              setSelectedMasterKelasQuery(query);
+              handleNavigate('master_kelas');
+            }}
+            onOpenModal={openGeneralModal}
+            onCloseModal={closeGeneralModal}
             onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
             saveStatus={saveStatus}
             onOpenChat={() => setIsLiveChatOpen((prev) => !prev)}
@@ -1011,7 +1062,7 @@ export default function App() {
                 onNavigate={(v) => handleNavigate(v)}
                 onLogout={handleLogout}
               />
-            ) : !hasMenuAccess(currentUser.role, currentView, appData) && currentUser.role !== 'admin' ? (
+            ) : !hasMenuAccess(userEffectiveRoles, currentView, appData) && currentUser.role !== 'admin' ? (
               <div className="max-w-md mx-auto my-12 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-xl">
                 <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 text-rose-600 rounded-2xl flex items-center justify-center mx-auto font-black">
                   <ShieldAlert className="w-8 h-8" />
@@ -1126,6 +1177,7 @@ export default function App() {
                 appData={appData}
                 currentUser={currentUser}
                 readOnly={currentUser.role !== 'admin'}
+                initialSearchQuery={selectedMasterGuruQuery}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
@@ -1233,7 +1285,9 @@ export default function App() {
             {currentView === 'master_kelas' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
               <MasterKelasView
                 appData={appData}
+                currentUser={currentUser}
                 readOnly={currentUser.role !== 'admin'}
+                initialSearchQuery={selectedMasterKelasQuery}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
@@ -1247,6 +1301,8 @@ export default function App() {
                 appData={appData}
                 currentUser={currentUser}
                 readOnly={currentUser.role !== 'admin' && currentUser.role !== 'wali'}
+                initialSearchQuery={selectedMasterSiswaQuery}
+                initialKelasId={selectedInputKelasId}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}

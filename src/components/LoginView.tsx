@@ -309,6 +309,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
     } catch (e) {}
 
+    const userRoles: any[] = Array.isArray(userData?.roles) && userData.roles.length > 0
+      ? userData.roles
+      : [role];
+
     if (onUpdateAppData) {
       const withLog = recordLoginEvent(appData, {
         username: userData?.nisn || userData?.username || username,
@@ -319,7 +323,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       onUpdateAppData(withLog);
     }
 
-    onLogin({ role, data: userData }, rememberMe);
+    onLogin({ role, roles: userRoles, data: userData }, rememberMe);
   };
 
   // -------------------------------------------------------------

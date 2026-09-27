@@ -22,7 +22,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { AppData, Siswa, Kelas } from '../../types';
-import { generateRandomWaNumber, sortKelasList } from '../../data/initialData';
+import { sortKelasList } from '../../data/initialData';
 
 interface ImportSiswaModalProps {
   isOpen: boolean;
@@ -276,8 +276,8 @@ export const ImportSiswaModal: React.FC<ImportSiswaModalProps> = ({
           targetKelasId,
           targetKelasNama,
           namaOrangTua: namaOrangTua || (nama ? `Bpk. ${nama.split(' ')[1] || nama.split(' ')[0]} / Ibu` : 'Bapak / Ibu'),
-          noWaOrangTua: noWaOrangTua || generateRandomWaNumber(),
-          noWa: noWa || generateRandomWaNumber(),
+          noWaOrangTua: noWaOrangTua || '',
+          noWa: noWa || '',
           alamat,
           tempatLahir,
           tanggalLahir,

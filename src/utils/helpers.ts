@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { AppData, UserSession, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit } from '../types';
+import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit } from '../types';
 import { DEMO_DATASET, DEFAULT_TOGA_LOGO, getTodayString, randomizeWaForStudents } from '../data/initialData';
 import {
   DEFAULT_SECURITY_CONFIG,
@@ -132,6 +132,127 @@ export function mergeHomeVisits(
     if (timeA !== timeB) return timeB - timeA;
     return b.id.localeCompare(a.id);
   });
+}
+
+export function mergeSiswa(
+  localList: Siswa[] = [],
+  serverList: Siswa[] = [],
+  deletedIds: string[] = []
+): Siswa[] {
+  if (!Array.isArray(localList)) localList = [];
+  if (!Array.isArray(serverList)) serverList = [];
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+
+  if (localList.length === 0 && serverList.length === 0) return [];
+
+  // Filter out any explicitly deleted student IDs from both lists
+  const filteredServer = serverList.filter((s) => s && s.id && !deletedSet.has(String(s.id)));
+  const filteredLocal = localList.filter((s) => s && s.id && !deletedSet.has(String(s.id)));
+
+  const map = new Map<string, Siswa>();
+
+  // If localList was provided, localList is prioritized
+  for (const localS of filteredLocal) {
+    if (localS && localS.id && !deletedSet.has(String(localS.id))) {
+      map.set(String(localS.id), { ...localS });
+    }
+  }
+
+  // Merge server items for any server students not in deletedSet
+  for (const s of filteredServer) {
+    if (!s || !s.id || deletedSet.has(String(s.id))) continue;
+    const sId = String(s.id);
+    const existing = map.get(sId);
+    if (!existing) {
+      map.set(sId, { ...s });
+    } else {
+      map.set(sId, {
+        ...s,
+        ...existing,
+        nama: existing.nama || s.nama,
+        nisn: existing.nisn || s.nisn,
+        gender: existing.gender || s.gender || 'L',
+        kelasId: existing.kelasId || s.kelasId,
+        status: existing.status || s.status || 'aktif',
+        noWa: existing.noWa !== undefined ? existing.noWa : '',
+        namaOrangTua: existing.namaOrangTua || s.namaOrangTua || '',
+        noWaOrangTua: existing.noWaOrangTua !== undefined ? existing.noWaOrangTua : '',
+        foto: existing.foto || s.foto || '',
+        username: existing.username || s.username,
+        password: existing.password || s.password,
+        tempatLahir: existing.tempatLahir || s.tempatLahir,
+        tanggalLahir: existing.tanggalLahir || s.tanggalLahir,
+        alamat: existing.alamat || s.alamat,
+      });
+    }
+  }
+
+  return Array.from(map.values()).filter((s) => !deletedSet.has(String(s.id)));
+}
+
+export function mergePresensi(
+  localMap: PresensiMap = {},
+  serverMap: PresensiMap = {}
+): PresensiMap {
+  const merged: PresensiMap = {};
+
+  const allKeys = new Set([
+    ...Object.keys(localMap || {}),
+    ...Object.keys(serverMap || {}),
+  ]);
+
+  for (const key of allKeys) {
+    const localRecords = Array.isArray(localMap?.[key]) ? localMap[key] : [];
+    const serverRecords = Array.isArray(serverMap?.[key]) ? serverMap[key] : [];
+
+    if (localRecords.length === 0 && serverRecords.length === 0) {
+      continue;
+    }
+    if (localRecords.length === 0) {
+      merged[key] = [...serverRecords];
+      continue;
+    }
+    if (serverRecords.length === 0) {
+      merged[key] = [...localRecords];
+      continue;
+    }
+
+    // Both contain records for this date/class key: merge student by student
+    const studentItemMap = new Map<string, SiswaPresensiItem>();
+
+    // 1. Seed with server items
+    for (const item of serverRecords) {
+      if (item && item.siswaId) {
+        studentItemMap.set(String(item.siswaId), { ...item });
+      }
+    }
+
+    // 2. Merge local items: keep local attendance records that are valid
+    for (const item of localRecords) {
+      if (!item || !item.siswaId) continue;
+      const sId = String(item.siswaId);
+      const existing = studentItemMap.get(sId);
+      if (!existing) {
+        studentItemMap.set(sId, { ...item });
+      } else {
+        // Merge attributes, keeping existing non-empty values
+        studentItemMap.set(sId, {
+          ...existing,
+          ...item,
+          status: item.status || existing.status,
+          time: item.time || existing.time,
+          pulangTime: item.pulangTime || existing.pulangTime,
+          pulangStatus: item.pulangStatus || existing.pulangStatus,
+          suratBukti: item.suratBukti || existing.suratBukti,
+          catatan: item.catatan !== undefined ? item.catatan : existing.catatan,
+        });
+      }
+    }
+
+    merged[key] = Array.from(studentItemMap.values());
+  }
+
+  return merged;
 }
 
 export function normalizePresensiStatus(status: any): 'H' | 'I' | 'S' | 'A' | 'K' | 'D' | 'TAP' | '' {
@@ -1082,6 +1203,12 @@ export function loadAppData(): AppData {
     if (stored) {
       const parsed = JSON.parse(stored);
       const merged = { ...DEMO_DATASET, ...parsed };
+      if (parsed.siswa && Array.isArray(parsed.siswa) && parsed.siswa.length > 0) {
+        merged.siswa = parsed.siswa;
+      }
+      if (parsed.presensi && typeof parsed.presensi === 'object' && Object.keys(parsed.presensi).length > 0) {
+        merged.presensi = parsed.presensi;
+      }
       if (merged.sekolah) {
         if (!merged.sekolah.nama || merged.sekolah.nama === 'Absensi Siswa') {
           merged.sekolah.nama = 'SMKN 6 Garut';
@@ -1097,9 +1224,6 @@ export function loadAppData(): AppData {
           }
           return w;
         });
-      }
-      if (merged.siswa && Array.isArray(merged.siswa)) {
-        merged.siswa = randomizeWaForStudents(merged.siswa);
       }
       if (merged.shiftConfig) {
         if (merged.shiftConfig.periods && Array.isArray(merged.shiftConfig.periods)) {
@@ -1173,6 +1297,14 @@ export function loadAppData(): AppData {
         merged.activeUserSessions = [];
       }
 
+      if (merged.siswa && Array.isArray(merged.siswa)) {
+        merged.siswa = merged.siswa.map((s: any) => ({
+          ...s,
+          noWa: '',
+          noWaOrangTua: '',
+        }));
+      }
+
       return merged;
     }
   } catch (e) {
@@ -1180,7 +1312,11 @@ export function loadAppData(): AppData {
   }
   const defaultData = JSON.parse(JSON.stringify(DEMO_DATASET));
   if (defaultData.siswa && Array.isArray(defaultData.siswa)) {
-    defaultData.siswa = randomizeWaForStudents(defaultData.siswa);
+    defaultData.siswa = defaultData.siswa.map((s: any) => ({
+      ...s,
+      noWa: '',
+      noWaOrangTua: '',
+    }));
   }
   if (!defaultData.securityConfig) {
     defaultData.securityConfig = DEFAULT_SECURITY_CONFIG;

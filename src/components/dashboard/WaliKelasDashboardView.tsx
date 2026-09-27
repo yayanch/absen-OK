@@ -64,23 +64,26 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
 }) => {
   const currentClassName = targetClasses.map((k) => k.nama).join(', ') || 'Kelas Binaan';
 
-  // 5 Siswa perlu perhatian di kelas wali
+  // Siswa perlu perhatian di kelas wali (hanya siswa dengan indikator ketidakhadiran / risiko pembinaan)
   const classAttentionStudents = React.useMemo(() => {
-    return studentCumulativeStats.map((item) => {
-      let statusRisk: 'Normal' | 'Perlu Perhatian' | 'Prioritas' = 'Normal';
-      if (item.alfa >= 3 || item.totalTidakHadir >= 7) {
-        statusRisk = 'Prioritas';
-      } else if (item.alfa >= 1 || item.totalTidakHadir >= 3) {
-        statusRisk = 'Perlu Perhatian';
-      }
-      return { ...item, statusRisk };
-    }).sort((a, b) => {
-      const riskOrder = { Prioritas: 0, 'Perlu Perhatian': 1, Normal: 2 };
-      if (riskOrder[a.statusRisk] !== riskOrder[b.statusRisk]) {
-        return riskOrder[a.statusRisk] - riskOrder[b.statusRisk];
-      }
-      return b.alfa - a.alfa;
-    });
+    return studentCumulativeStats
+      .map((item) => {
+        let statusRisk: 'Normal' | 'Perlu Perhatian' | 'Prioritas' = 'Normal';
+        if (item.alfa >= 3 || item.totalTidakHadir >= 7) {
+          statusRisk = 'Prioritas';
+        } else if (item.alfa >= 1 || item.totalTidakHadir >= 3) {
+          statusRisk = 'Perlu Perhatian';
+        }
+        return { ...item, statusRisk };
+      })
+      .filter((item) => item.statusRisk !== 'Normal')
+      .sort((a, b) => {
+        const riskOrder = { Prioritas: 0, 'Perlu Perhatian': 1, Normal: 2 };
+        if (riskOrder[a.statusRisk] !== riskOrder[b.statusRisk]) {
+          return riskOrder[a.statusRisk] - riskOrder[b.statusRisk];
+        }
+        return b.alfa - a.alfa || b.totalTidakHadir - a.totalTidakHadir;
+      });
   }, [studentCumulativeStats]);
 
   const topAttention = classAttentionStudents.slice(0, 5);
@@ -185,7 +188,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
         <div className="lg:col-span-7">
           <StudentAttentionWidget
             students={topAttention}
-            title="5 Siswa Perlu Perhatian di Kelas"
+            title={topAttention.length > 0 ? `${topAttention.length} Siswa Perlu Perhatian di Kelas` : 'Siswa Perlu Perhatian di Kelas'}
             subtitle={`Indikator ketidakhadiran siswa kelas ${currentClassName}`}
             maxItems={5}
             onOpenDetail={setSelectedStudentDetail}

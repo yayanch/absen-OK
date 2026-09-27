@@ -1,4 +1,4 @@
-import { AppData, RoleMenuPermission, ViewType } from '../types';
+import { AppData, CustomRole, RoleMenuPermission, UserSession, ViewType } from '../types';
 
 export type MenuCategoryKey =
   | 'dashboard'
@@ -611,9 +611,9 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
 }
 
 /**
- * Checks whether a role has permission to access and view a given menu ViewType
+ * Internal single role permission evaluator
  */
-export function hasMenuAccess(role: string | undefined, view: ViewType, appData?: AppData): boolean {
+function checkSingleRoleMenuAccess(role: string, view: ViewType, appData?: AppData): boolean {
   if (!role) return false;
   const normalized = normalizeRoleKey(role);
 
@@ -659,6 +659,99 @@ export function hasMenuAccess(role: string | undefined, view: ViewType, appData?
 
   // Default fallback for unrecognized non-admin role: can view dashboard
   return view === 'dashboard' || view === 'live_chat';
+}
+
+/**
+ * Checks whether a role or set of roles has permission to access and view a given menu ViewType.
+ * Supports single role string, array of roles, or primary role + additionalRoles.
+ */
+export function hasMenuAccess(
+  role: string | string[] | undefined,
+  view: ViewType,
+  appData?: AppData,
+  additionalRoles?: string[]
+): boolean {
+  if (!role && (!additionalRoles || additionalRoles.length === 0)) return false;
+
+  const rolesToCheck: string[] = [];
+  if (Array.isArray(role)) {
+    rolesToCheck.push(...role);
+  } else if (typeof role === 'string' && role.trim()) {
+    rolesToCheck.push(role);
+  }
+  if (Array.isArray(additionalRoles)) {
+    rolesToCheck.push(...additionalRoles);
+  }
+
+  if (rolesToCheck.length === 0) return false;
+
+  // If any assigned role has access to this view, grant access
+  return rolesToCheck.some((singleRole) => checkSingleRoleMenuAccess(singleRole, view, appData));
+}
+
+/**
+ * Returns role display name, color badge class, and description for any standard or custom role.
+ */
+export function getRoleBadgeMeta(
+  roleId?: string,
+  appData?: AppData
+): { label: string; color: string; badgeClass: string; isCustom: boolean } {
+  if (!roleId) {
+    return {
+      label: 'Guru Pengampu',
+      color: 'indigo',
+      badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800',
+      isCustom: false,
+    };
+  }
+
+  const normalized = normalizeRoleKey(roleId);
+  const allRoles = getAllRolePermissions(appData);
+  const matched = allRoles.find((r) => normalizeRoleKey(r.roleId) === normalized);
+
+  const roleName = matched?.roleName || (
+    normalized === 'admin' ? 'Administrator' :
+    normalized === 'kesiswaan' ? 'WKS Kesiswaan / BP BK' :
+    normalized === 'kurikulum' ? 'WKS Kurikulum' :
+    normalized === 'staf_jadwal' ? 'Staf Pengelola Jadwal' :
+    normalized === 'hubin' ? 'WKS Hubin & Humas' :
+    normalized === 'wali' ? 'Wali Kelas' :
+    normalized === 'guru' ? 'Guru Pengampu' :
+    normalized === 'murid' ? 'Siswa / Murid' :
+    roleId
+  );
+
+  const color = matched?.badgeColor || (
+    normalized === 'admin' ? 'blue' :
+    normalized === 'kesiswaan' ? 'purple' :
+    normalized === 'kurikulum' ? 'amber' :
+    normalized === 'wali' ? 'emerald' :
+    normalized === 'staf_jadwal' ? 'cyan' :
+    normalized === 'hubin' ? 'teal' :
+    normalized === 'murid' ? 'rose' :
+    'indigo'
+  );
+
+  const colorClasses: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800',
+    purple: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800',
+    amber: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800',
+    emerald: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800',
+    cyan: 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800',
+    teal: 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800',
+    rose: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800',
+    indigo: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800',
+  };
+
+  const badgeClass = colorClasses[color] || colorClasses.indigo;
+  const isCustom = !matched?.isSystem && !['admin', 'kesiswaan', 'kurikulum', 'wali', 'guru', 'staf_jadwal', 'hubin', 'murid'].includes(normalized);
+
+  return {
+    label: roleName,
+    color,
+    badgeClass,
+    isCustom,
+  };
 }
 
 /**
@@ -718,3 +811,196 @@ export function resetRolePermissionsToDefault(appData: AppData): AppData {
     })),
   };
 }
+
+/**
+ * Maps a duty / job title string to its corresponding system or custom role key
+ */
+export function mapDutyToRole(duty: string, customRoles?: CustomRole[]): string | null {
+  if (!duty || typeof duty !== 'string') return null;
+  const d = duty.trim().toLowerCase();
+
+  if (d.includes('wali kelas') || d === 'wali') return 'wali';
+  if (d.includes('kesiswaan') || d.includes('bp bk') || d.includes('bimbingan konseling')) return 'kesiswaan';
+  if (d.includes('kurikulum')) return 'kurikulum';
+  if (d.includes('hubin') || d.includes('hubungan industri') || d.includes('humas')) return 'hubin';
+  if (d.includes('staf jadwal') || d.includes('pengelola jadwal') || d.includes('jadwal kbm')) return 'staf_jadwal';
+  if (d.includes('administrator') || d === 'admin') return 'admin';
+
+  // Check custom roles matching name or label
+  if (Array.isArray(customRoles)) {
+    const matchedCustom = customRoles.find(
+      (cr) =>
+        cr.name?.toLowerCase() === d ||
+        cr.label?.toLowerCase() === d ||
+        cr.id?.toLowerCase() === d
+    );
+    if (matchedCustom) return matchedCustom.id || matchedCustom.name;
+  }
+
+  return null;
+}
+
+/**
+ * Maps an array of duties to unique role strings
+ */
+export function mapDutiesToRoles(duties: string[], customRoles?: CustomRole[]): string[] {
+  if (!Array.isArray(duties)) return [];
+  const roles = new Set<string>();
+  duties.forEach((d) => {
+    const r = mapDutyToRole(d, customRoles);
+    if (r) roles.add(normalizeRoleKey(r));
+  });
+  return Array.from(roles);
+}
+
+export interface ReconciledRolesResult {
+  primaryRole: string;
+  additionalRoles: string[];
+  roles: string[];
+  isWaliActive: boolean;
+}
+
+/**
+ * Reconciles primary role, additional roles, and duties into a unified role state
+ */
+export function reconcileRolesAndDuties(
+  primaryRole: string = 'guru',
+  additionalRoles: string[] = [],
+  duties: string[] = [],
+  appData?: AppData,
+  currentGuruId?: string
+): ReconciledRolesResult {
+  const normPrimary = normalizeRoleKey(primaryRole || 'guru');
+  const customRoles = appData?.customRoles;
+
+  const dutyRoles = mapDutiesToRoles(duties, customRoles);
+  const normalizedAdditional = (additionalRoles || []).map(normalizeRoleKey);
+
+  // Combine duty-derived roles and additionalRoles
+  const combinedAddSet = new Set<string>();
+  dutyRoles.forEach((r) => {
+    if (r !== normPrimary) combinedAddSet.add(r);
+  });
+  normalizedAdditional.forEach((r) => {
+    if (r !== normPrimary) combinedAddSet.add(r);
+  });
+
+  const finalAdditionalRoles = Array.from(combinedAddSet);
+  const allRoles = Array.from(new Set([normPrimary, ...finalAdditionalRoles]));
+
+  const isWaliByRole = allRoles.includes('wali');
+  const isWaliByDuty = duties.some((d) => d.toLowerCase().includes('wali'));
+  const isWaliByClass = Boolean(
+    currentGuruId && appData?.kelas?.some((k) => k.waliKelasId === currentGuruId)
+  );
+  const isWaliActive = isWaliByRole || isWaliByDuty || isWaliByClass;
+
+  return {
+    primaryRole: normPrimary,
+    additionalRoles: finalAdditionalRoles,
+    roles: allRoles,
+    isWaliActive,
+  };
+}
+
+/**
+ * Resolves all effective roles for a current user session considering primary role,
+ * multi-role arrays, duties, and data bindings.
+ */
+export function getEffectiveUserRoles(
+  currentUser?: UserSession | null,
+  appData?: AppData
+): string[] {
+  if (!currentUser) return ['guru'];
+
+  const rolesSet = new Set<string>();
+
+  // 1. Primary role on session
+  if (currentUser.role) {
+    rolesSet.add(normalizeRoleKey(currentUser.role));
+  }
+
+  // 2. Roles array on session
+  if (Array.isArray(currentUser.roles)) {
+    currentUser.roles.forEach((r) => {
+      if (r) rolesSet.add(normalizeRoleKey(r));
+    });
+  }
+
+  // 3. User data attributes
+  const userData = currentUser.data as any;
+  if (userData) {
+    if (userData.role) {
+      rolesSet.add(normalizeRoleKey(userData.role));
+    }
+    if (Array.isArray(userData.roles)) {
+      userData.roles.forEach((r: string) => {
+        if (r) rolesSet.add(normalizeRoleKey(r));
+      });
+    }
+    if (Array.isArray(userData.additionalRoles)) {
+      userData.additionalRoles.forEach((r: string) => {
+        if (r) rolesSet.add(normalizeRoleKey(r));
+      });
+    }
+
+    // Tugas tambahan on userData
+    const userDuties: string[] = [];
+    if (Array.isArray(userData.tugasTambahanList)) {
+      userDuties.push(...userData.tugasTambahanList);
+    }
+    if (typeof userData.tugasTambahan === 'string') {
+      userDuties.push(...userData.tugasTambahan.split(',').map((s: string) => s.trim()));
+    }
+    if (userDuties.length > 0) {
+      mapDutiesToRoles(userDuties, appData?.customRoles).forEach((r) => rolesSet.add(r));
+    }
+
+    // 4. If matched in appData.waliKelas by ID, username, or NIP
+    if (appData?.waliKelas && Array.isArray(appData.waliKelas)) {
+      const matchedGuru = appData.waliKelas.find(
+        (w) =>
+          (userData.id && w.id === userData.id) ||
+          (userData.username && w.username?.toLowerCase() === userData.username?.toLowerCase()) ||
+          (userData.nip && w.nip && w.nip === userData.nip)
+      );
+
+      if (matchedGuru) {
+        if (matchedGuru.role) rolesSet.add(normalizeRoleKey(matchedGuru.role));
+        if (Array.isArray(matchedGuru.roles)) {
+          matchedGuru.roles.forEach((r) => rolesSet.add(normalizeRoleKey(r)));
+        }
+        if (Array.isArray(matchedGuru.additionalRoles)) {
+          matchedGuru.additionalRoles.forEach((r) => rolesSet.add(normalizeRoleKey(r)));
+        }
+        const guruDuties: string[] = [];
+        if (Array.isArray(matchedGuru.tugasTambahanList)) {
+          guruDuties.push(...matchedGuru.tugasTambahanList);
+        }
+        if (typeof matchedGuru.tugasTambahan === 'string') {
+          guruDuties.push(...matchedGuru.tugasTambahan.split(',').map((s: string) => s.trim()));
+        }
+        if (guruDuties.length > 0) {
+          mapDutiesToRoles(guruDuties, appData.customRoles).forEach((r) => rolesSet.add(r));
+        }
+        if (appData.kelas?.some((k) => k.waliKelasId === matchedGuru.id)) {
+          rolesSet.add('wali');
+        }
+      }
+    }
+
+    // 5. If user is assigned as wali in any class
+    if (userData.id && appData?.kelas?.some((k) => k.waliKelasId === userData.id)) {
+      rolesSet.add('wali');
+    }
+  }
+
+  // Ensure murid role is isolated if student
+  if (rolesSet.has('murid') || rolesSet.has('siswa')) {
+    return ['murid'];
+  }
+
+  const result = Array.from(rolesSet).filter(Boolean);
+  return result.length > 0 ? result : ['guru'];
+}
+

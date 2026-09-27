@@ -17,6 +17,62 @@ interface MasterJurusanViewProps {
   onRestoreDemo?: () => void;
 }
 
+interface JurusanFormModalContentProps {
+  jurusan?: Jurusan;
+  onSave: (id: string | null, kode: string, nama: string) => void;
+  onClose: () => void;
+}
+
+export const JurusanFormModalContent: React.FC<JurusanFormModalContentProps> = ({
+  jurusan,
+  onSave,
+  onClose,
+}) => {
+  const [kode, setKode] = useState(jurusan ? jurusan.kode : '');
+  const [nama, setNama] = useState(jurusan ? jurusan.nama : '');
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(jurusan ? jurusan.id : null, kode.trim().toUpperCase(), nama.trim());
+      }}
+      className="space-y-4"
+    >
+      <div>
+        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Kode Jurusan</label>
+        <input
+          type="text"
+          required
+          value={kode}
+          onChange={(e) => setKode(e.target.value)}
+          className="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none"
+          placeholder="Misal: RPL, TKJ"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Nama Jurusan</label>
+        <input
+          type="text"
+          required
+          value={nama}
+          onChange={(e) => setNama(e.target.value)}
+          className="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none"
+          placeholder="Misal: Rekayasa Perangkat Lunak"
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+        <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600">
+          Batal
+        </button>
+        <button type="submit" className="px-5 py-2 rounded-xl bg-theme-primary hover:bg-theme-primary-dark text-white text-xs font-bold transition">
+          Simpan
+        </button>
+      </div>
+    </form>
+  );
+};
+
 export const MasterJurusanView: React.FC<MasterJurusanViewProps> = ({
   appData,
   readOnly = false,
@@ -192,56 +248,14 @@ export const MasterJurusanView: React.FC<MasterJurusanViewProps> = ({
 
   const openFormJurusan = (jurusan?: Jurusan) => {
     const isEdit = !!jurusan;
-    let kodeVal = jurusan ? jurusan.kode : '';
-    let namaVal = jurusan ? jurusan.nama : '';
-
-    const FormContent = () => {
-      const [kode, setKode] = useState(kodeVal);
-      const [nama, setNama] = useState(namaVal);
-
-      return (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSaveJurusan(jurusan ? jurusan.id : null, kode.trim().toUpperCase(), nama.trim());
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Kode Jurusan</label>
-            <input
-              type="text"
-              required
-              value={kode}
-              onChange={(e) => setKode(e.target.value)}
-              className="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none"
-              placeholder="Misal: RPL, TKJ"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Nama Jurusan</label>
-            <input
-              type="text"
-              required
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-              className="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:outline-none"
-              placeholder="Misal: Rekayasa Perangkat Lunak"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-            <button type="button" onClick={onCloseModal} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600">
-              Batal
-            </button>
-            <button type="submit" className="px-5 py-2 rounded-xl bg-theme-primary hover:bg-theme-primary-dark text-white text-xs font-bold transition">
-              Simpan
-            </button>
-          </div>
-        </form>
-      );
-    };
-
-    onOpenModal(isEdit ? 'Edit Data Jurusan' : 'Tambah Jurusan Baru', <FormContent />);
+    onOpenModal(
+      isEdit ? 'Edit Data Jurusan' : 'Tambah Jurusan Baru',
+      <JurusanFormModalContent
+        jurusan={jurusan}
+        onSave={handleSaveJurusan}
+        onClose={onCloseModal}
+      />
+    );
   };
 
   const handleDeleteJurusan = (id: string) => {

@@ -34,7 +34,8 @@ import {
   BookOpen,
   Layers,
   Server,
-  ShieldCheck
+  ShieldCheck,
+  Search,
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
@@ -356,10 +357,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {(() => {
               const navLayout = getNavigationLayout(appData);
 
+              const userRoles = [
+                currentUser.role,
+                ...((currentUser.data as any)?.additionalRoles || [])
+              ].filter(Boolean);
+
               const hasAnyMenuAccess = (views: ViewType[]) => {
                 return views.some(
                   (v) =>
-                    hasMenuAccess(currentUser.role, v, appData) &&
+                    hasMenuAccess(userRoles, v, appData) &&
                     isMenuVisibleInLayout(v, navLayout)
                 );
               };
@@ -373,7 +379,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 isSubItem?: boolean,
                 bypassPermission?: boolean
               ) => {
-                if (!bypassPermission && !hasMenuAccess(currentUser.role, view, appData)) {
+                if (!bypassPermission && !hasMenuAccess(userRoles, view, appData)) {
                   return null;
                 }
                 const isActive = currentView === view || (view === 'dashboard' && currentView === 'portal_murid');
@@ -555,6 +561,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               return (
                 <>
+
                   {/* Dynamic sections configured from Navigation Layout */}
                   {navLayout.sections
                     .filter((sec) => sec.visible !== false)

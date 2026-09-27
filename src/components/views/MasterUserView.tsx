@@ -23,13 +23,763 @@ import {
   Clock,
   List,
   LayoutGrid,
-  ChevronDown
+  ChevronDown,
+  Check,
+  Shield,
+  Layers,
+  Sparkles
 } from 'lucide-react';
-import { AppData, UserRole, UserSession, ViewType } from '../../types';
+import { AppData, CustomRole, UserRole, UserSession, ViewType, WaliKelas } from '../../types';
 import { Pagination } from '../Pagination';
 import { PageHeader } from '../common/UIComponents';
 import { addAuditLog, cleanMapelName } from '../../utils/helpers';
+import { normalizeRoleKey, mapDutyToRole } from '../../utils/rolePermissionEngine';
 
+export interface UserItem {
+  id: string;
+  nama: string;
+  username: string;
+  nip: string;
+  password: string;
+  role: UserRole; // primary role
+  roles: UserRole[]; // all assigned roles (multi-role)
+  originalType: 'admin' | 'kesiswaan' | 'wali' | 'user';
+  noHp?: string;
+  foto?: string;
+  kelasNama?: string;
+  mataPelajaran?: string;
+  hariMengajar?: string[];
+  batasiLoginHariMengajar?: boolean;
+}
+
+export interface AvailableRoleOption {
+  id: string;
+  label: string;
+  badgeColor: string;
+  description: string;
+  isSystem?: boolean;
+}
+
+export const getRoleBadgeClass = (role?: string, customRoles?: CustomRole[]) => {
+  if (!role) return 'bg-slate-100 text-slate-700 border-slate-200';
+  const custom = customRoles?.find((r) => r.id === role || r.name === role);
+  if (custom) {
+    switch (custom.color) {
+      case 'blue':
+        return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800';
+      case 'purple':
+        return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800';
+      case 'cyan':
+        return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800';
+      case 'amber':
+        return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800';
+      case 'emerald':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800';
+      case 'rose':
+        return 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800';
+      case 'teal':
+        return 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800';
+      default:
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800';
+    }
+  }
+  switch (role) {
+    case 'admin':
+      return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800';
+    case 'kesiswaan':
+      return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800';
+    case 'kurikulum':
+      return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800';
+    case 'staf_jadwal':
+      return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800';
+    case 'hubin':
+      return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800';
+    case 'guru':
+    case 'user':
+      return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800';
+    case 'wali':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800';
+    case 'murid':
+    case 'siswa':
+      return 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800';
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  }
+};
+
+export const getRoleLabel = (role?: string, customRoles?: CustomRole[]) => {
+  if (!role) return '-';
+  switch (role) {
+    case 'admin':
+      return 'Administrator';
+    case 'kesiswaan':
+      return 'WKS Kesiswaan / BP BK';
+    case 'kurikulum':
+      return 'WKS Kurikulum';
+    case 'staf_jadwal':
+      return 'Staf Pengelola Jadwal';
+    case 'hubin':
+      return 'WKS Hubin';
+    case 'guru':
+    case 'user':
+      return 'Guru';
+    case 'wali':
+      return 'Wali Kelas';
+    case 'murid':
+    case 'siswa':
+      return 'Murid / Siswa';
+    default:
+      const custom = customRoles?.find((r) => r.id === role || r.name === role);
+      return custom ? custom.label : role;
+  }
+};
+
+export const getAvailableRoleOptionsList = (appData: AppData): AvailableRoleOption[] => {
+  const baseRoles: AvailableRoleOption[] = [
+    { id: 'admin', label: 'Administrator', badgeColor: 'blue', description: 'Akses penuh ke seluruh menu & konfigurasi sistem', isSystem: true },
+    { id: 'kesiswaan', label: 'WKS Kesiswaan / BP BK', badgeColor: 'purple', description: 'Pengawasan presensi, kedisiplinan, poin pelanggaran & home visit', isSystem: true },
+    { id: 'kurikulum', label: 'WKS Kurikulum', badgeColor: 'indigo', description: 'Master mapel, kurikulum pembelajaran & jadwal mengajar guru', isSystem: true },
+    { id: 'staf_jadwal', label: 'Staf Pengelola Jadwal', badgeColor: 'cyan', description: 'Pengaturan teknis alokasi jadwal pelajaran dan plotting jam', isSystem: true },
+    { id: 'hubin', label: 'WKS Hubin / Humas', badgeColor: 'teal', description: 'Kemitraan industri, data kejuruan & penelusuran lulusan', isSystem: true },
+    { id: 'wali', label: 'Wali Kelas', badgeColor: 'emerald', description: 'Pembina kelas binaan, presensi harian & rekapitulasi kelas', isSystem: true },
+    { id: 'guru', label: 'Guru / Tenaga Pendidik', badgeColor: 'amber', description: 'Melihat jadwal ajar pribadi, kelas ajar & pencatatan KBM', isSystem: true },
+    { id: 'murid', label: 'Siswa / Murid', badgeColor: 'rose', description: 'Portal mandiri siswa, scan kehadiran QR & kartu pelajar digital', isSystem: true },
+  ];
+
+  const customRoles: AvailableRoleOption[] = (appData.customRoles || []).map((cr) => ({
+    id: cr.id,
+    label: cr.label || cr.name,
+    badgeColor: cr.color || 'indigo',
+    description: cr.description || 'Role kustom pengguna',
+    isSystem: false,
+  }));
+
+  return [...baseRoles, ...customRoles];
+};
+
+/* --- TOP-LEVEL MODAL COMPONENT 1: ROLE FORM MODAL (CREATE CUSTOM ROLE) --- */
+interface RoleFormModalContentProps {
+  appData: AppData;
+  onUpdateAppData: (updated: AppData) => void;
+  onCloseModal: () => void;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+export const RoleFormModalContent: React.FC<RoleFormModalContentProps> = ({
+  appData,
+  onUpdateAppData,
+  onCloseModal,
+  onShowToast,
+}) => {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('indigo');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      onShowToast('Nama role tidak boleh kosong!', 'error');
+      return;
+    }
+    const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const currentCustomRoles = appData.customRoles || [];
+    if (currentCustomRoles.some((r) => r.id === roleId || r.name.toLowerCase() === name.toLowerCase())) {
+      onShowToast('Role dengan nama tersebut sudah ada!', 'warning');
+      return;
+    }
+
+    const newRoleObj = {
+      id: roleId,
+      name: roleId,
+      label: name.trim(),
+      color: color,
+    };
+
+    onUpdateAppData({
+      ...appData,
+      customRoles: [...currentCustomRoles, newRoleObj],
+    });
+
+    onShowToast(`Role baru "${name}" berhasil dibuat!`, 'success');
+    onCloseModal();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+          Nama Role / Jabatan Baru
+        </label>
+        <input
+          type="text"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Contoh: Pembina Pramuka, Staf TU, dll"
+          className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+          Warna Badge / Tema
+        </label>
+        <select
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="indigo">Indigo / Ungu Biru</option>
+          <option value="blue">Biru Utama</option>
+          <option value="purple">Ungu Kesiswaan</option>
+          <option value="cyan">Cyan / Toska</option>
+          <option value="amber">Amber / Kuning</option>
+          <option value="emerald">Emerald / Hijau</option>
+          <option value="rose">Rose / Merah Muda</option>
+          <option value="teal">Teal</option>
+        </select>
+      </div>
+
+      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCloseModal}
+          className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          className="px-5 py-2 bg-theme-primary hover:bg-theme-primary-dark text-white font-bold rounded-xl text-xs shadow-md shadow-theme-primary/30 transition flex items-center gap-1.5"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Simpan Role Baru</span>
+        </button>
+      </div>
+    </form>
+  );
+};
+
+/* --- TOP-LEVEL MODAL COMPONENT 2: MANAGE ROLES MODAL --- */
+interface ManageRolesModalContentProps {
+  appData: AppData;
+  allUsers: UserItem[];
+  onUpdateAppData: (updated: AppData) => void;
+  onCloseModal: () => void;
+  onConfirmModal: (
+    title: string,
+    message: string,
+    type: 'danger' | 'warning' | 'info' | 'emerald',
+    onConfirm: () => void
+  ) => void;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+export const ManageRolesModalContent: React.FC<ManageRolesModalContentProps> = ({
+  appData,
+  allUsers,
+  onUpdateAppData,
+  onCloseModal,
+  onConfirmModal,
+  onShowToast,
+}) => {
+  const customRoles = appData.customRoles || [];
+
+  if (customRoles.length === 0) {
+    return (
+      <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-xs font-medium">
+        Belum ada role kustom yang dibuat.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Kelola daftar role / jabatan kustom yang telah dibuat. Menghapus role akan menghapus role tersebut dari daftar role pengguna.
+      </p>
+      <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto pr-1">
+        {customRoles.map((role) => {
+          const count = allUsers.filter((u) => u.roles.includes(role.id) || u.roles.includes(role.name)).length;
+          return (
+            <div key={role.id} className="py-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-xs text-slate-800 dark:text-slate-100">{role.label}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">ID: {role.id} • {count} pengguna memiliki role ini</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onConfirmModal(
+                    `Hapus Role "${role.label}"`,
+                    `Apakah Anda yakin ingin menghapus role "${role.label}"? Role ini akan dicabut dari ${count} pengguna.`,
+                    'danger',
+                    () => {
+                      const updatedCustomRoles = (appData.customRoles || []).filter((r) => r.id !== role.id);
+                      const updatedWaliKelas = appData.waliKelas.map((w) => {
+                        const wRoles = Array.isArray(w.roles) && w.roles.length > 0 ? w.roles : [w.role || 'guru'];
+                        const filteredRoles = wRoles.filter((r) => r !== role.id && r !== role.name);
+                        const nextRoles = filteredRoles.length > 0 ? filteredRoles : ['guru'];
+                        return {
+                          ...w,
+                          roles: nextRoles,
+                          role: nextRoles[0] || 'guru',
+                        };
+                      });
+                      onUpdateAppData({
+                        ...appData,
+                        customRoles: updatedCustomRoles,
+                        waliKelas: updatedWaliKelas,
+                      });
+                      onShowToast(`Role "${role.label}" berhasil dihapus!`, 'success');
+                      onCloseModal();
+                    }
+                  );
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Trash className="w-3.5 h-3.5" />
+                <span>Hapus</span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/* --- TOP-LEVEL MODAL COMPONENT 3: QUICK MULTI-ROLE MODAL --- */
+interface QuickRoleModalContentProps {
+  user: UserItem;
+  appData: AppData;
+  onSaveUser: (
+    editingUser: UserItem | null,
+    nama: string,
+    username: string,
+    nip: string,
+    password: string,
+    roles: UserRole[],
+    primaryRole: UserRole,
+    noHp: string,
+    mataPelajaran?: string,
+    hariMengajar?: string[],
+    batasiLoginHariMengajar?: boolean
+  ) => void;
+  onCloseModal: () => void;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+export const QuickRoleModalContent: React.FC<QuickRoleModalContentProps> = ({
+  user,
+  appData,
+  onSaveUser,
+  onCloseModal,
+  onShowToast,
+}) => {
+  const availableOptions = getAvailableRoleOptionsList(appData);
+  const initialRoles = user.roles && user.roles.length > 0 ? [...user.roles] : [user.role || 'guru'];
+  const [selectedRoles, setSelectedRoles] = useState<UserRole[]>(initialRoles);
+  const [primaryRole, setPrimaryRole] = useState<UserRole>(user.role || initialRoles[0] || 'guru');
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoles((prev) => {
+      let updated: UserRole[];
+      if (prev.includes(roleId)) {
+        if (prev.length <= 1) {
+          onShowToast('Pengguna harus memiliki minimal 1 role aktif!', 'warning');
+          return prev;
+        }
+        updated = prev.filter((r) => r !== roleId);
+        if (primaryRole === roleId) {
+          setPrimaryRole(updated[0] || 'guru');
+        }
+      } else {
+        updated = [...prev, roleId];
+      }
+      return updated;
+    });
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedRoles.length === 0) {
+      onShowToast('Pilih minimal 1 role untuk pengguna!', 'error');
+      return;
+    }
+
+    onSaveUser(
+      user,
+      user.nama,
+      user.username,
+      user.nip,
+      user.password,
+      selectedRoles,
+      primaryRole || selectedRoles[0],
+      user.noHp || '',
+      user.mataPelajaran,
+      user.hariMengajar,
+      user.batasiLoginHariMengajar
+    );
+  };
+
+  return (
+    <form onSubmit={handleSave} className="space-y-4 text-left max-h-[80vh] overflow-y-auto pr-1">
+      <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+        <div>
+          <h4 className="text-xs font-black text-slate-800 dark:text-slate-100">{user.nama}</h4>
+          <p className="text-[11px] font-mono text-slate-400">@{user.username} • {user.nip}</p>
+        </div>
+        <div className="text-right">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 rounded-xl border border-blue-200 dark:border-blue-800">
+            <Layers className="w-3.5 h-3.5" />
+            <span>{selectedRoles.length} Role Terpilih</span>
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1.5 flex items-center justify-between">
+          <span>Pilih Role & Hak Akses (Bisa lebih dari 1)</span>
+          <span className="text-[10px] text-slate-400 font-medium">Klik untuk mencentang role</span>
+        </label>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {availableOptions.map((opt) => {
+            const isSelected = selectedRoles.includes(opt.id);
+            return (
+              <div
+                key={opt.id}
+                onClick={() => toggleRole(opt.id)}
+                className={`p-3 rounded-2xl border transition cursor-pointer flex items-start justify-between gap-2.5 select-none ${
+                  isSelected
+                    ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-400 dark:border-blue-600 shadow-xs'
+                    : 'bg-white dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRoleBadgeClass(opt.id, appData.customRoles)}`}>
+                      {opt.label}
+                    </span>
+                    {primaryRole === opt.id && (
+                      <span className="text-[9px] font-extrabold bg-blue-600 text-white px-1.5 py-0.5 rounded">
+                        Utama
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-400 mt-1 line-clamp-2 leading-tight">
+                    {opt.description}
+                  </p>
+                </div>
+
+                <div
+                  className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700'
+                  }`}
+                >
+                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedRoles.length > 1 && (
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+            Tentukan Role Utama (Default Landing)
+          </label>
+          <select
+            value={primaryRole}
+            onChange={(e) => setPrimaryRole(e.target.value as UserRole)}
+            className="w-full py-2 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          >
+            {selectedRoles.map((r) => (
+              <option key={r} value={r}>
+                {getRoleLabel(r, appData.customRoles)}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Role utama digunakan sebagai tampilan identitas primer dan dashboard default. Pengguna tetap memiliki hak akses dari seluruh role yang dicentang.
+          </p>
+        </div>
+      )}
+
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCloseModal}
+          className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Simpan Perubahan Role ({selectedRoles.length})</span>
+        </button>
+      </div>
+    </form>
+  );
+};
+
+/* --- TOP-LEVEL MODAL COMPONENT 4: USER FULL FORM MODAL --- */
+interface UserFormModalContentProps {
+  user?: UserItem;
+  appData: AppData;
+  onSaveUser: (
+    editingUser: UserItem | null,
+    nama: string,
+    username: string,
+    nip: string,
+    password: string,
+    roles: UserRole[],
+    primaryRole: UserRole,
+    noHp: string,
+    mataPelajaran?: string,
+    hariMengajar?: string[],
+    batasiLoginHariMengajar?: boolean
+  ) => void;
+  onCloseModal: () => void;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
+  user,
+  appData,
+  onSaveUser,
+  onCloseModal,
+  onShowToast,
+}) => {
+  const availableOptions = getAvailableRoleOptionsList(appData);
+  const initialRoles = user ? (user.roles && user.roles.length > 0 ? user.roles : [user.role || 'wali']) : ['wali'];
+  
+  const [nama, setNama] = useState(user ? user.nama : '');
+  const [username, setUsername] = useState(user ? user.username : '');
+  const [nip, setNip] = useState(user ? user.nip : '');
+  const [password, setPassword] = useState(user ? user.password : '123');
+  const [selectedRoles, setSelectedRoles] = useState<UserRole[]>(initialRoles);
+  const [primaryRole, setPrimaryRole] = useState<UserRole>(user ? user.role || initialRoles[0] : 'wali');
+  const [noHp, setNoHp] = useState(user ? user.noHp || '' : '');
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoles((prev) => {
+      let updated: UserRole[];
+      if (prev.includes(roleId)) {
+        if (prev.length <= 1) {
+          onShowToast('Pengguna harus memiliki minimal 1 role aktif!', 'warning');
+          return prev;
+        }
+        updated = prev.filter((r) => r !== roleId);
+        if (primaryRole === roleId) {
+          setPrimaryRole(updated[0] || 'wali');
+        }
+      } else {
+        updated = [...prev, roleId];
+      }
+      return updated;
+    });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedRoles.length === 0) {
+      onShowToast('Pilih minimal 1 role untuk user!', 'error');
+      return;
+    }
+    onSaveUser(
+      user || null,
+      nama.trim(),
+      username.trim(),
+      nip.trim(),
+      password.trim(),
+      selectedRoles,
+      primaryRole || selectedRoles[0],
+      noHp.trim(),
+      user?.mataPelajaran || '',
+      user?.hariMengajar,
+      user?.batasiLoginHariMengajar
+    );
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 text-left max-h-[80vh] overflow-y-auto pr-1">
+      <div>
+        <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+          Nama Lengkap User
+        </label>
+        <input
+          type="text"
+          required
+          value={nama}
+          onChange={(e) => setNama(e.target.value)}
+          className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Contoh: Drs. Ahmad Fauzi, M.Pd"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+            Username Login
+          </label>
+          <input
+            type="text"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Contoh: ahmad"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+            NIP / Identitas
+          </label>
+          <input
+            type="text"
+            value={nip}
+            onChange={(e) => setNip(e.target.value)}
+            className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="NIP / No Identitas"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+            Password
+          </label>
+          <input
+            type="text"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Password Login"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+            Nomor WhatsApp / HP
+          </label>
+          <input
+            type="text"
+            value={noHp}
+            onChange={(e) => setNoHp(e.target.value)}
+            className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="081234567890"
+          />
+        </div>
+      </div>
+
+      {/* Multi-Role Selector */}
+      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+            <span>Pengaturan Role &amp; Hak Akses Pengguna</span>
+          </label>
+          <span className="text-[11px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg">
+            {selectedRoles.length} Role Terpilih
+          </span>
+        </div>
+
+        <p className="text-[11px] text-slate-400 mb-2.5">
+          Centang satu atau lebih role yang dimiliki oleh pengguna ini. Pengguna akan mendapatkan akses ke seluruh menu dari role yang dicentang.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {availableOptions.map((opt) => {
+            const isSelected = selectedRoles.includes(opt.id);
+            return (
+              <div
+                key={opt.id}
+                onClick={() => toggleRole(opt.id)}
+                className={`p-2.5 rounded-xl border transition cursor-pointer flex items-start justify-between gap-2 select-none ${
+                  isSelected
+                    ? 'bg-blue-50/90 dark:bg-blue-950/50 border-blue-400 dark:border-blue-600 shadow-xs'
+                    : 'bg-slate-50/70 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRoleBadgeClass(opt.id, appData.customRoles)}`}>
+                      {opt.label}
+                    </span>
+                    {primaryRole === opt.id && (
+                      <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded">
+                        Utama
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-400 mt-1 line-clamp-1">
+                    {opt.description}
+                  </p>
+                </div>
+
+                <div
+                  className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 mt-0.5 transition ${
+                    isSelected
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'
+                  }`}
+                >
+                  {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedRoles.length > 1 && (
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+            Role Utama (Primary Identity)
+          </label>
+          <select
+            value={primaryRole}
+            onChange={(e) => setPrimaryRole(e.target.value as UserRole)}
+            className="w-full py-2 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          >
+            {selectedRoles.map((r) => (
+              <option key={r} value={r}>
+                {getRoleLabel(r, appData.customRoles)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCloseModal}
+          className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          className="px-5 py-2 bg-theme-primary hover:bg-theme-primary-dark text-white font-bold rounded-xl text-xs shadow-md shadow-theme-primary/30 transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Simpan Data User</span>
+        </button>
+      </div>
+    </form>
+  );
+};
+
+/* --- MAIN VIEW COMPONENT --- */
 interface MasterUserViewProps {
   appData: AppData;
   currentUser: UserSession;
@@ -45,22 +795,6 @@ interface MasterUserViewProps {
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onNavigateView?: (view: ViewType) => void;
-}
-
-export interface UserItem {
-  id: string;
-  nama: string;
-  username: string;
-  nip: string;
-  password: string;
-  role: UserRole;
-  originalType: 'admin' | 'kesiswaan' | 'wali' | 'user';
-  noHp?: string;
-  foto?: string;
-  kelasNama?: string;
-  mataPelajaran?: string;
-  hariMengajar?: string[];
-  batasiLoginHariMengajar?: boolean;
 }
 
 export const MasterUserView: React.FC<MasterUserViewProps> = ({
@@ -97,19 +831,23 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     };
   }, []);
 
-  // Compile full user list from appData
+  // Compile full user list from appData with multi-role support
   const buildUserList = (): UserItem[] => {
     const list: UserItem[] = [];
 
     // 1. Admin
     if (appData.admin) {
+      const adminRoles: UserRole[] = Array.isArray(appData.admin.roles) && appData.admin.roles.length > 0
+        ? appData.admin.roles
+        : ['admin'];
       list.push({
         id: 'USER_ADMIN',
         nama: appData.admin.nama || 'Administrator Utama',
         username: appData.admin.username || 'admin',
         nip: '198001011999011001',
         password: appData.admin.password || '',
-        role: 'admin',
+        role: adminRoles[0] || 'admin',
+        roles: adminRoles,
         originalType: 'admin',
         foto: appData.admin.foto,
       });
@@ -118,13 +856,14 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     const effectiveWaliKelas = [...(appData.waliKelas || [])];
 
     // Ensure default Kesiswaan exists if not in waliKelas
-    if (!effectiveWaliKelas.some((w) => w.role === 'kesiswaan')) {
+    if (!effectiveWaliKelas.some((w) => (w.roles && w.roles.includes('kesiswaan')) || w.role === 'kesiswaan')) {
       const kesiswaanObj = appData.kesiswaan || {
         username: 'kesiswaan',
         password: '',
         nama: 'Tim WKS Kesiswaan & BP BK',
         jabatan: 'WKS Kesiswaan / BP BK',
       };
+      const kRoles = Array.isArray(kesiswaanObj.roles) && kesiswaanObj.roles.length > 0 ? kesiswaanObj.roles : ['kesiswaan'];
       effectiveWaliKelas.push({
         id: 'USER_KESISWAAN',
         nip: '198202022005011002',
@@ -132,13 +871,14 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         username: kesiswaanObj.username || 'kesiswaan',
         password: kesiswaanObj.password || '',
         noHp: '',
-        role: 'kesiswaan',
+        role: kRoles[0] || 'kesiswaan',
+        roles: kRoles,
         foto: kesiswaanObj.foto,
       });
     }
 
     // Ensure default Guru / User Biasa exists if not in waliKelas
-    if (!effectiveWaliKelas.some((w) => w.role === 'user' || w.role === 'guru')) {
+    if (!effectiveWaliKelas.some((w) => (w.roles && (w.roles.includes('guru') || w.roles.includes('user'))) || w.role === 'user' || w.role === 'guru')) {
       const userBiasaObj = appData.userBiasa || {
         username: 'guru',
         password: '',
@@ -148,6 +888,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         hariMengajar: ['Senin', 'Rabu', 'Jumat'],
         batasiLoginHariMengajar: false,
       };
+      const gRoles = Array.isArray(userBiasaObj.roles) && userBiasaObj.roles.length > 0 ? userBiasaObj.roles : ['guru'];
       effectiveWaliKelas.push({
         id: 'USER_BIASA',
         nip: '-',
@@ -155,7 +896,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         username: userBiasaObj.username || 'guru',
         password: userBiasaObj.password || '',
         noHp: '',
-        role: 'guru',
+        role: gRoles[0] || 'guru',
+        roles: gRoles,
         foto: userBiasaObj.foto,
         mataPelajaran: userBiasaObj.mataPelajaran,
         hariMengajar: userBiasaObj.hariMengajar,
@@ -165,13 +907,17 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
 
     // Staf Jadwal (Non-Guru Pengelola Jadwal)
     if (appData.stafJadwal) {
+      const sjRoles = Array.isArray(appData.stafJadwal.roles) && appData.stafJadwal.roles.length > 0
+        ? appData.stafJadwal.roles
+        : ['staf_jadwal'];
       list.push({
         id: 'USER_STAF_JADWAL',
         nama: appData.stafJadwal.nama || 'Staf Pengelola Jadwal',
         username: appData.stafJadwal.username || 'jadwal',
         nip: appData.stafJadwal.nip || 'STAF-JADWAL-01',
         password: appData.stafJadwal.password || 'jadwal123',
-        role: 'staf_jadwal',
+        role: sjRoles[0] || 'staf_jadwal',
+        roles: sjRoles,
         originalType: 'user',
         noHp: appData.stafJadwal.noHp,
         foto: appData.stafJadwal.foto,
@@ -179,23 +925,31 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     }
 
     effectiveWaliKelas.forEach((w) => {
-      const userRole: UserRole = w.role && ['admin', 'wali', 'kesiswaan', 'user', 'guru', 'kurikulum', 'hubin'].includes(w.role) ? w.role : 'wali';
-      const k = userRole === 'wali' ? appData.kelas.find((kl) => kl.waliKelasId === w.id) : undefined;
+      const userRoles: UserRole[] = Array.isArray(w.roles) && w.roles.length > 0
+        ? w.roles
+        : [w.role && ['admin', 'wali', 'kesiswaan', 'user', 'guru', 'kurikulum', 'hubin', 'staf_jadwal', 'murid'].includes(w.role) ? w.role : 'wali'];
+      
+      const primaryRole: UserRole = userRoles[0] || 'wali';
+      const isWaliRole = userRoles.includes('wali');
+      const k = isWaliRole ? appData.kelas.find((kl) => kl.waliKelasId === w.id) : undefined;
+      
       let effectivePassword = w.password || '';
-      if (userRole === 'kesiswaan' && appData.kesiswaan?.password) {
+      if (userRoles.includes('kesiswaan') && appData.kesiswaan?.password) {
         effectivePassword = w.password || appData.kesiswaan.password;
       }
-      if ((userRole === 'user' || userRole === 'guru') && appData.userBiasa?.password) {
+      if ((userRoles.includes('user') || userRoles.includes('guru')) && appData.userBiasa?.password) {
         effectivePassword = w.password || appData.userBiasa.password;
       }
+
       list.push({
         id: w.id,
         nama: w.nama,
         username: w.username || w.nip,
         nip: w.nip || '-',
         password: effectivePassword,
-        role: userRole,
-        originalType: userRole === 'kesiswaan' ? 'kesiswaan' : (userRole === 'user' || userRole === 'guru') ? 'user' : 'wali',
+        role: primaryRole,
+        roles: userRoles,
+        originalType: userRoles.includes('kesiswaan') ? 'kesiswaan' : (userRoles.includes('user') || userRoles.includes('guru')) ? 'user' : 'wali',
         noHp: w.noHp,
         foto: w.foto,
         kelasNama: k ? k.nama : undefined,
@@ -208,13 +962,15 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     // Add Siswa / Murid
     (appData.siswa || []).forEach((s) => {
       const k = appData.kelas.find((kl) => kl.id === s.kelasId);
+      const studentRoles: UserRole[] = Array.isArray(s.roles) && s.roles.length > 0 ? s.roles : ['murid'];
       list.push({
         id: s.id,
         nama: s.nama,
         username: s.username || s.nisn,
         nip: s.nisn,
         password: s.password !== undefined && s.password !== '' ? s.password : (s.nisn || ''),
-        role: 'murid',
+        role: studentRoles[0] || 'murid',
+        roles: studentRoles,
         originalType: 'user',
         noHp: s.noWa,
         foto: s.foto,
@@ -227,11 +983,20 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
 
   const allUsers = buildUserList();
 
+  const userHasMatchingRole = (u: UserItem, targetRole: string) => {
+    const roles = u.roles && u.roles.length > 0 ? u.roles : [u.role];
+    if (targetRole === 'user' || targetRole === 'guru') {
+      return roles.some((r) => r === 'user' || r === 'guru');
+    }
+    if (targetRole === 'murid' || targetRole === 'siswa') {
+      return roles.some((r) => r === 'murid' || r === 'siswa');
+    }
+    return roles.includes(targetRole);
+  };
+
   let filteredUsers = allUsers.filter((u) => {
     if (roleTab !== 'semua') {
-      if ((roleTab === 'user' || roleTab === 'guru') && !(u.role === 'user' || u.role === 'guru')) return false;
-      if ((roleTab === 'murid' || roleTab === 'siswa') && !(u.role === 'murid' || u.role === 'siswa')) return false;
-      if (roleTab !== 'user' && roleTab !== 'guru' && roleTab !== 'murid' && roleTab !== 'siswa' && u.role !== roleTab) return false;
+      if (!userHasMatchingRole(u, roleTab)) return false;
     }
     const q = searchTerm.toLowerCase();
     return (
@@ -253,8 +1018,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       valA = a.username || '';
       valB = b.username || '';
     } else if (sortField === 'role') {
-      valA = a.role || '';
-      valB = b.role || '';
+      valA = a.roles.join(', ');
+      valB = b.roles.join(', ');
     } else if (sortField === 'kelasNama') {
       valA = a.kelasNama || '';
       valB = b.kelasNama || '';
@@ -353,6 +1118,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                 username: username || nip,
                 password: password || '123',
                 noHp,
+                role: 'wali',
+                roles: ['wali'],
               });
               addedCount++;
             }
@@ -412,175 +1179,20 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   const startIdx = (validCurrentPage - 1) * validPageSize;
   const pagedUsers = filteredUsers.slice(startIdx, startIdx + validPageSize);
 
-  const getRoleLabel = (role: UserRole) => {
-    switch (role) {
-      case 'admin':
-        return 'Administrator';
-      case 'kesiswaan':
-        return 'WKS Kesiswaan / BP BK';
-      case 'kurikulum':
-        return 'WKS Kurikulum';
-      case 'staf_jadwal':
-        return 'Staf Pengelola Jadwal';
-      case 'hubin':
-        return 'WKS Hubin';
-      case 'guru':
-      case 'user':
-        return 'Guru';
-      case 'wali':
-        return 'Wali Kelas';
-      case 'murid':
-      case 'siswa':
-        return 'Murid / Siswa';
-      default:
-        const custom = appData.customRoles?.find((r) => r.id === role || r.name === role);
-        return custom ? custom.label : role;
-    }
-  };
-
-  const getRoleBadgeClass = (role: UserRole) => {
-    const custom = appData.customRoles?.find((r) => r.id === role || r.name === role);
-    if (custom) {
-      switch (custom.color) {
-        case 'blue':
-          return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800';
-        case 'purple':
-          return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800';
-        case 'cyan':
-          return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800';
-        case 'amber':
-          return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800';
-        case 'emerald':
-          return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800';
-        case 'rose':
-          return 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800';
-        case 'teal':
-          return 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800';
-        default:
-          return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800';
-      }
-    }
-    switch (role) {
-      case 'admin':
-        return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800';
-      case 'kesiswaan':
-        return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800';
-      case 'kurikulum':
-        return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800';
-      case 'staf_jadwal':
-        return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800';
-      case 'hubin':
-        return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800';
-      case 'guru':
-      case 'user':
-        return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800';
-      case 'wali':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800';
-      case 'murid':
-      case 'siswa':
-        return 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
   const handleOpenCreateRoleModal = () => {
     if (readOnly) {
       onShowToast('Akses dibatasi! Hanya Administrator yang dapat membuat role baru.', 'warning');
       return;
     }
-
-    const RoleFormContent = () => {
-      const [name, setName] = useState('');
-      const [color, setColor] = useState('indigo');
-
-      return (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) {
-              onShowToast('Nama role tidak boleh kosong!', 'error');
-              return;
-            }
-            const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            const currentCustomRoles = appData.customRoles || [];
-            if (currentCustomRoles.some((r) => r.id === roleId || r.name.toLowerCase() === name.toLowerCase())) {
-              onShowToast('Role dengan nama tersebut sudah ada!', 'warning');
-              return;
-            }
-
-            const newRoleObj = {
-              id: roleId,
-              name: roleId,
-              label: name.trim(),
-              color: color,
-            };
-
-            onUpdateAppData({
-              ...appData,
-              customRoles: [...currentCustomRoles, newRoleObj],
-            });
-
-            onShowToast(`Role baru "${name}" berhasil dibuat!`, 'success');
-            onCloseModal();
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-              Nama Role / Jabatan Baru
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Contoh: Pembina Pramuka, Staf TU, dll"
-              className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-              Warna Badge / Tema
-            </label>
-            <select
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="indigo">Indigo / Ungu Biru</option>
-              <option value="blue">Biru Utama</option>
-              <option value="purple">Ungu Kesiswaan</option>
-              <option value="cyan">Cyan / Toska</option>
-              <option value="amber">Amber / Kuning</option>
-              <option value="emerald">Emerald / Hijau</option>
-              <option value="rose">Rose / Merah Muda</option>
-              <option value="teal">Teal</option>
-            </select>
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCloseModal}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-theme-primary hover:bg-theme-primary-dark text-white font-bold rounded-xl text-xs shadow-md shadow-theme-primary/30 transition flex items-center gap-1.5"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Simpan Role Baru</span>
-            </button>
-          </div>
-        </form>
-      );
-    };
-
-    onOpenModal('Buat Role / Jabatan Baru', <RoleFormContent />);
+    onOpenModal(
+      'Buat Role / Jabatan Baru',
+      <RoleFormModalContent
+        appData={appData}
+        onUpdateAppData={onUpdateAppData}
+        onCloseModal={onCloseModal}
+        onShowToast={onShowToast}
+      />
+    );
   };
 
   const handleOpenManageRolesModal = () => {
@@ -588,150 +1200,17 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       onShowToast('Akses dibatasi! Hanya Administrator yang dapat mengelola role.', 'warning');
       return;
     }
-
-    const ManageRolesContent = () => {
-      const customRoles = appData.customRoles || [];
-
-      if (customRoles.length === 0) {
-        return (
-          <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-xs font-medium">
-            Belum ada role kustom yang dibuat.
-          </div>
-        );
-      }
-
-      return (
-        <div className="space-y-4">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Kelola daftar role / jabatan kustom yang telah dibuat. Menghapus role akan mengembalikan pengguna dengan role tersebut menjadi Guru.
-          </p>
-          <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto pr-1">
-            {customRoles.map((role) => {
-              const count = allUsers.filter((u) => u.role === role.id || u.role === role.name).length;
-              return (
-                <div key={role.id} className="py-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-bold text-xs text-slate-800 dark:text-slate-100">{role.label}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">ID: {role.id} • {count} pengguna aktif</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onConfirmModal(
-                        `Hapus Role "${role.label}"`,
-                        `Apakah Anda yakin ingin menghapus role "${role.label}"? ${count} pengguna akan dikembalikan rolenya menjadi Guru.`,
-                        'danger',
-                        () => {
-                          const updatedCustomRoles = (appData.customRoles || []).filter((r) => r.id !== role.id);
-                          const updatedWaliKelas = appData.waliKelas.map((w) => {
-                            if (w.role === role.id || w.role === role.name) {
-                              return { ...w, role: 'guru' };
-                            }
-                            return w;
-                          });
-                          onUpdateAppData({
-                            ...appData,
-                            customRoles: updatedCustomRoles,
-                            waliKelas: updatedWaliKelas,
-                          });
-                          onShowToast(`Role "${role.label}" berhasil dihapus!`, 'success');
-                          onCloseModal();
-                        }
-                      );
-                    }}
-                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                  >
-                    <Trash className="w-3.5 h-3.5" />
-                    <span>Hapus</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
-
-    onOpenModal('Kelola & Hapus Role Kustom', <ManageRolesContent />);
-  };
-
-  // Change Role Handler via dropdown
-  const handleRoleChange = (user: UserItem, newRole: UserRole) => {
-    if (user.role === newRole) return;
-
-    if (readOnly) {
-      onShowToast('Akses dibatasi! Hanya Administrator yang dapat mengubah role.', 'warning');
-      return;
-    }
-
-    if (newRole === 'admin') {
-      onShowToast('Role Administrator utama tidak dapat dipindah melalui tabel.', 'warning');
-      return;
-    }
-
-    let updatedWaliKelas = [...appData.waliKelas];
-    let updatedSiswa = [...(appData.siswa || [])];
-
-    if (user.role === 'murid' && newRole !== 'murid') {
-      // Adding to staff/waliKelas
-      updatedWaliKelas.push({
-        id: user.id.startsWith('SISWA_') ? 'WAL_' + Date.now() : user.id,
-        nip: user.nip && user.nip !== '-' ? user.nip : user.username,
-        nama: user.nama,
-        username: user.username,
-        password: user.password,
-        noHp: user.noHp || '',
-        role: newRole,
-        foto: user.foto,
-      });
-    } else if (newRole === 'murid') {
-      // Moving to murid
-      updatedWaliKelas = updatedWaliKelas.filter((w) => w.id !== user.id && w.username !== user.username);
-      const studentExists = updatedSiswa.find((s) => s.id === user.id || s.username === user.username);
-      if (!studentExists) {
-        updatedSiswa.push({
-          id: user.id.startsWith('WAL_') || user.id.startsWith('USER_') ? 'SISWA_' + Date.now() : user.id,
-          nama: user.nama,
-          nisn: user.nip && user.nip !== '-' ? user.nip : user.username,
-          username: user.username,
-          password: user.password || '123',
-          kelasId: appData.kelas[0]?.id || '',
-          noWa: user.noHp || '',
-          gender: 'L',
-          foto: user.foto,
-        });
-      }
-    } else {
-      const exists = updatedWaliKelas.find((w) => w.id === user.id || w.username === user.username);
-      if (exists) {
-        updatedWaliKelas = updatedWaliKelas.map((w) =>
-          w.id === exists.id || w.username === user.username
-            ? { ...w, role: newRole, nama: user.nama, username: user.username, password: user.password, nip: user.nip && user.nip !== '-' ? user.nip : w.nip, noHp: user.noHp || w.noHp, foto: user.foto || w.foto }
-            : w
-        );
-      } else {
-        updatedWaliKelas.push({
-          id: user.id.startsWith('USER_') ? 'WAL_' + Date.now() : user.id,
-          nip: user.nip && user.nip !== '-' ? user.nip : user.username,
-          nama: user.nama,
-          username: user.username,
-          password: user.password,
-          noHp: user.noHp || '',
-          role: newRole,
-          foto: user.foto,
-        });
-      }
-    }
-
-    const baseAppData: AppData = {
-      ...appData,
-      waliKelas: updatedWaliKelas,
-      siswa: updatedSiswa,
-    };
-
-    const nextAppData = addAuditLog(baseAppData, 'Mengubah role user', `Mengubah role user: ${user.nama} dari ${getRoleLabel(user.role)} menjadi ${getRoleLabel(newRole)}`);
-    onUpdateAppData(nextAppData);
-    onShowToast(`Role "${user.nama}" berhasil diubah menjadi ${getRoleLabel(newRole)}!`, 'success');
+    onOpenModal(
+      'Kelola & Hapus Role Kustom',
+      <ManageRolesModalContent
+        appData={appData}
+        allUsers={allUsers}
+        onUpdateAppData={onUpdateAppData}
+        onCloseModal={onCloseModal}
+        onConfirmModal={onConfirmModal}
+        onShowToast={onShowToast}
+      />
+    );
   };
 
   const handleSaveUser = (
@@ -740,25 +1219,30 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     username: string,
     nip: string,
     password: string,
-    role: UserRole,
+    roles: UserRole[],
+    primaryRole: UserRole,
     noHp: string,
     mataPelajaran?: string,
     hariMengajar?: string[],
     batasiLoginHariMengajar?: boolean
   ) => {
+    const finalRoles = roles && roles.length > 0 ? roles : [primaryRole || 'guru'];
+    const finalPrimaryRole = primaryRole || finalRoles[0] || 'guru';
+
     // 1. Admin
-    if (role === 'admin' || editingUser?.role === 'admin') {
+    if (finalRoles.includes('admin') || editingUser?.roles.includes('admin') || editingUser?.role === 'admin') {
       let updatedAdmin = {
         ...appData.admin,
         username: username || appData.admin?.username || 'admin',
         password: password || appData.admin?.password || 'admin123',
         nama: nama || appData.admin?.nama || 'Administrator Utama',
         foto: editingUser?.foto || appData.admin?.foto || '',
+        roles: finalRoles,
       };
       const nextAppData = addAuditLog(
         { ...appData, admin: updatedAdmin },
         'Ubah data admin',
-        `Mengubah data akun Administrator: ${nama}`
+        `Mengubah data akun Administrator: ${nama} (Roles: ${finalRoles.join(', ')})`
       );
       onUpdateAppData(nextAppData);
       onShowToast(`Data administrator berhasil diperbarui!`, 'success');
@@ -766,8 +1250,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       return;
     }
 
-    // 2. Murid / Siswa
-    if (role === 'murid' || editingUser?.role === 'murid') {
+    // 2. Murid / Siswa only
+    if (finalRoles.length === 1 && (finalRoles[0] === 'murid' || finalRoles[0] === 'siswa')) {
       let updatedSiswa = [...(appData.siswa || [])];
       if (editingUser) {
         updatedSiswa = updatedSiswa.map((s) => {
@@ -780,6 +1264,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               password: password ? password : (s.password || s.nisn || ''),
               noWa: noHp || s.noWa,
               foto: editingUser?.foto || s.foto,
+              roles: finalRoles,
             };
           }
           return s;
@@ -795,6 +1280,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
           noWa: noHp || '',
           gender: 'L',
           foto: '',
+          roles: finalRoles,
         });
       }
       const nextAppData = addAuditLog(
@@ -812,7 +1298,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     }
 
     // 2b. Staf Pengelola Jadwal (Non-Guru)
-    if (role === 'staf_jadwal' || editingUser?.id === 'USER_STAF_JADWAL' || editingUser?.role === 'staf_jadwal') {
+    if (finalRoles.includes('staf_jadwal') && editingUser?.id === 'USER_STAF_JADWAL') {
       const nextStafJadwal = {
         ...(appData.stafJadwal || { jabatan: 'Staf Pengelola Jadwal' }),
         nama,
@@ -821,6 +1307,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         password: password || 'jadwal123',
         noHp,
         foto: editingUser?.foto || appData.stafJadwal?.foto || '',
+        roles: finalRoles,
       };
       const nextAppData = addAuditLog(
         {
@@ -828,7 +1315,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
           stafJadwal: nextStafJadwal,
         },
         editingUser ? 'Ubah data staf jadwal' : 'Tambah akun staf jadwal',
-        `${editingUser ? 'Mengubah' : 'Menambahkan'} data akun Staf Jadwal: ${nama}`
+        `${editingUser ? 'Mengubah' : 'Menambahkan'} data akun Staf Jadwal: ${nama} (Roles: ${finalRoles.join(', ')})`
       );
       onUpdateAppData(nextAppData);
       onShowToast(`Data akun Staf Pengelola Jadwal "${nama}" berhasil ${editingUser ? 'diperbarui' : 'ditambahkan'}!`, 'success');
@@ -836,22 +1323,23 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       return;
     }
 
-    // 3. Wali / Kesiswaan / Guru / Kurikulum / Hubin
+    // 3. Wali / Kesiswaan / Guru / Kurikulum / Hubin / Multi-Role
     let updatedWaliKelas = [...(appData.waliKelas || [])];
     let nextKesiswaan = appData.kesiswaan ? { ...appData.kesiswaan } : undefined;
     let nextUserBiasa = appData.userBiasa ? { ...appData.userBiasa } : undefined;
 
-    if (role === 'kesiswaan' || editingUser?.id === 'USER_KESISWAAN') {
+    if (finalRoles.includes('kesiswaan') || editingUser?.id === 'USER_KESISWAAN') {
       nextKesiswaan = {
         ...(appData.kesiswaan || { jabatan: 'WKS Kesiswaan / BP BK' }),
         nama,
         username,
         password,
         foto: editingUser?.foto || appData.kesiswaan?.foto || '',
+        roles: finalRoles,
       };
     }
 
-    if (role === 'guru' || role === 'user' || editingUser?.id === 'USER_BIASA') {
+    if (finalRoles.includes('guru') || finalRoles.includes('user') || editingUser?.id === 'USER_BIASA') {
       nextUserBiasa = {
         ...(appData.userBiasa || { jabatan: 'Guru Pengampu' }),
         nama,
@@ -861,6 +1349,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         mataPelajaran: cleanMapelName(mataPelajaran),
         hariMengajar: hariMengajar || [],
         batasiLoginHariMengajar: !!batasiLoginHariMengajar,
+        roles: finalRoles,
       };
     }
 
@@ -875,7 +1364,25 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                 username,
                 nip: nip || w.nip,
                 password,
-                role,
+                role: finalPrimaryRole,
+                roles: finalRoles,
+                additionalRoles: finalRoles.filter((r) => r !== finalPrimaryRole),
+                tugasTambahanList: (w.tugasTambahanList || []).filter((d) => {
+                  const r = mapDutyToRole(d, appData.customRoles);
+                  return !r || finalRoles.includes(r as any);
+                }),
+                tugasTambahan: (w.tugasTambahanList || [])
+                  .filter((d) => {
+                    const r = mapDutyToRole(d, appData.customRoles);
+                    return !r || finalRoles.includes(r as any);
+                  })
+                  .join(', '),
+                jabatan: (w.tugasTambahanList || [])
+                  .filter((d) => {
+                    const r = mapDutyToRole(d, appData.customRoles);
+                    return !r || finalRoles.includes(r as any);
+                  })
+                  .join(', '),
                 noHp,
                 foto: editingUser.foto || w.foto,
                 mataPelajaran: cleanMapelName(mataPelajaran || w.mataPelajaran),
@@ -892,14 +1399,16 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
           username,
           password,
           noHp,
-          role,
+          role: finalPrimaryRole,
+          roles: finalRoles,
+          additionalRoles: finalRoles.filter((r) => r !== finalPrimaryRole),
           foto: editingUser.foto,
           mataPelajaran: cleanMapelName(mataPelajaran),
           hariMengajar,
           batasiLoginHariMengajar,
         });
       }
-      onShowToast(`Data user "${nama}" berhasil diperbarui!`, 'success');
+      onShowToast(`Data user "${nama}" berhasil diperbarui (${finalRoles.length} role)!`, 'success');
     } else {
       updatedWaliKelas.push({
         id: 'WAL_' + Date.now(),
@@ -908,44 +1417,87 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         username,
         password,
         noHp,
-        role,
+        role: finalPrimaryRole,
+        roles: finalRoles,
+        additionalRoles: finalRoles.filter((r) => r !== finalPrimaryRole),
         mataPelajaran,
         hariMengajar,
         batasiLoginHariMengajar,
       });
-      onShowToast(`User baru "${nama}" dengan role ${getRoleLabel(role)} berhasil dibuat!`, 'success');
+      onShowToast(`User baru "${nama}" dengan ${finalRoles.length} role berhasil dibuat!`, 'success');
+    }
+
+    let nextKelas = appData.kelas;
+    if (editingUser && !finalRoles.includes('wali')) {
+      nextKelas = (appData.kelas || []).map((k) =>
+        k.waliKelasId === editingUser.id ? { ...k, waliKelasId: '' } : k
+      );
     }
 
     const nextAppData = {
       ...appData,
       waliKelas: updatedWaliKelas,
+      kelas: nextKelas,
       ...(nextKesiswaan ? { kesiswaan: nextKesiswaan } : {}),
       ...(nextUserBiasa ? { userBiasa: nextUserBiasa } : {}),
     };
 
     let finalAppData = nextAppData;
     if (editingUser) {
-      finalAppData = addAuditLog(finalAppData, 'Mengubah data user', `Mengubah data user pengguna: ${nama} (${role})`);
+      finalAppData = addAuditLog(finalAppData, 'Mengubah data user', `Mengubah data user: ${nama} (Roles: ${finalRoles.join(', ')})`);
     } else {
-      finalAppData = addAuditLog(finalAppData, 'Membuat user baru', `Membuat user pengguna baru: ${nama} (${role})`);
+      finalAppData = addAuditLog(finalAppData, 'Membuat user baru', `Membuat user baru: ${nama} (Roles: ${finalRoles.join(', ')})`);
     }
 
     onUpdateAppData(finalAppData);
-
     onCloseModal();
   };
 
-  const isAdmin = currentUser?.role === 'admin';
-  const isKesiswaan = currentUser?.role === 'kesiswaan';
-  const isWali = currentUser?.role === 'wali';
+  const openQuickRoleModal = (user: UserItem) => {
+    if (readOnly) {
+      onShowToast('Akses dibatasi! Hanya Administrator yang dapat mengubah role.', 'warning');
+      return;
+    }
+    onOpenModal(
+      `Atur Role Pengguna: ${user.nama}`,
+      <QuickRoleModalContent
+        user={user}
+        appData={appData}
+        onSaveUser={handleSaveUser}
+        onCloseModal={onCloseModal}
+        onShowToast={onShowToast}
+      />
+    );
+  };
+
+  const openUserForm = (user?: UserItem) => {
+    if (readOnly) {
+      onShowToast('Akses dibatasi!', 'warning');
+      return;
+    }
+    onOpenModal(
+      user ? 'Edit Identitas & Multi-Role User' : 'Tambah User Pengguna Baru',
+      <UserFormModalContent
+        user={user}
+        appData={appData}
+        onSaveUser={handleSaveUser}
+        onCloseModal={onCloseModal}
+        onShowToast={onShowToast}
+      />
+    );
+  };
+
+  const isAdmin = currentUser?.role === 'admin' || (currentUser?.roles && currentUser.roles.includes('admin'));
+  const isKesiswaan = currentUser?.role === 'kesiswaan' || (currentUser?.roles && currentUser.roles.includes('kesiswaan'));
+  const isWali = currentUser?.role === 'wali' || (currentUser?.roles && currentUser.roles.includes('wali'));
 
   const canDeleteUser = (user: UserItem) => {
     if (isAdmin) {
-      if (user.role === 'admin' && currentUser?.data?.username === user.username) return false;
+      if (user.roles.includes('admin') && currentUser?.data?.username === user.username) return false;
       return true;
     }
     if (isKesiswaan || isWali) {
-      return user.role === 'murid';
+      return user.roles.includes('murid') || user.role === 'murid';
     }
     return false;
   };
@@ -956,17 +1508,19 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       return;
     }
 
-    if (user.role === 'admin' && isAdmin && currentUser?.data?.username === user.username) {
+    if (user.roles.includes('admin') && isAdmin && currentUser?.data?.username === user.username) {
       onShowToast('Anda tidak dapat menghapus akun Administrator yang sedang aktif dipakai!', 'error');
       return;
     }
 
+    const isStudent = user.roles.includes('murid') || user.role === 'murid';
+
     onConfirmModal(
-      user.role === 'murid' ? 'Hapus Siswa / Murid' : 'Hapus User Pengguna',
-      `Apakah Anda yakin ingin menghapus ${user.role === 'murid' ? 'siswa' : 'user'} "${user.nama}" (${getRoleLabel(user.role)})?`,
+      isStudent ? 'Hapus Siswa / Murid' : 'Hapus User Pengguna',
+      `Apakah Anda yakin ingin menghapus ${isStudent ? 'siswa' : 'user'} "${user.nama}" (${user.roles.map((r) => getRoleLabel(r, appData.customRoles)).join(', ')})?`,
       'danger',
       () => {
-        if (user.role === 'murid') {
+        if (isStudent && user.roles.length === 1) {
           const updatedSiswa = (appData.siswa || []).filter((s) => s.id !== user.id && s.nisn !== user.username);
           const nextAppData = addAuditLog(
             { ...appData, siswa: updatedSiswa },
@@ -980,7 +1534,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
           const nextAppData = addAuditLog(
             { ...appData, waliKelas: updatedWaliKelas },
             'Hapus akun pengguna',
-            `Menghapus akun pengguna: ${user.nama} (${user.username}, role: ${user.role})`
+            `Menghapus akun pengguna: ${user.nama} (${user.username}, roles: ${user.roles.join(', ')})`
           );
           onUpdateAppData(nextAppData);
           onShowToast(`User "${user.nama}" berhasil dihapus.`, 'info');
@@ -989,163 +1543,14 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     );
   };
 
-  const openUserForm = (user?: UserItem) => {
-    if (readOnly) {
-      onShowToast('Akses dibatasi!', 'warning');
-      return;
-    }
-
-    const FormContent = () => {
-      const [nama, setNama] = useState(user ? user.nama : '');
-      const [username, setUsername] = useState(user ? user.username : '');
-      const [nip, setNip] = useState(user ? user.nip : '');
-      const [password, setPassword] = useState(user ? user.password : '123');
-      const [role, setRole] = useState<UserRole>(user ? user.role : 'wali');
-      const [noHp, setNoHp] = useState(user ? user.noHp || '' : '');
-
-      return (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSaveUser(
-              user || null,
-              nama.trim(),
-              username.trim(),
-              nip.trim(),
-              password.trim(),
-              role,
-              noHp.trim(),
-              user?.mataPelajaran || '',
-              user?.hariMengajar,
-              user?.batasiLoginHariMengajar
-            );
-          }}
-          className="space-y-4 text-left max-h-[80vh] overflow-y-auto pr-1"
-        >
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-              Nama Lengkap User
-            </label>
-            <input
-              type="text"
-              required
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-              className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Contoh: Drs. Ahmad Fauzi, M.Pd"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                Username Login
-              </label>
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Contoh: ahmad"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                NIP / Identitas
-              </label>
-              <input
-                type="text"
-                value={nip}
-                onChange={(e) => setNip(e.target.value)}
-                className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="NIP / No Identitas"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                Password
-              </label>
-              <input
-                type="text"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Password Login"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                Nomor WhatsApp / HP
-              </label>
-              <input
-                type="text"
-                value={noHp}
-                onChange={(e) => setNoHp(e.target.value)}
-                className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="081234567890"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-              Pengaturan Role Hak Akses
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="admin">Administrator</option>
-              <option value="kesiswaan">WKS Kesiswaan / BP BK</option>
-              <option value="kurikulum">WKS Kurikulum</option>
-              <option value="staf_jadwal">Staf Pengelola Jadwal (Non-Guru)</option>
-              <option value="hubin">WKS Hubin</option>
-              <option value="guru">Guru / Staf Pengajar</option>
-              <option value="wali">Wali Kelas</option>
-              <option value="murid">Siswa / Murid</option>
-              {appData.customRoles?.map((cr) => (
-                <option key={cr.id} value={cr.id}>{cr.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCloseModal}
-              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-theme-primary hover:bg-theme-primary-dark text-white font-bold rounded-xl text-xs shadow-md shadow-theme-primary/30 transition flex items-center gap-1.5"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Simpan Data User</span>
-            </button>
-          </div>
-        </form>
-      );
-    };
-
-    onOpenModal(user ? 'Edit Identitas & Role User' : 'Tambah User Pengguna Baru', <FormContent />);
-  };
-
-  const adminCount = allUsers.filter((u) => u.role === 'admin').length;
-  const kesiswaanCount = allUsers.filter((u) => u.role === 'kesiswaan').length;
-  const kurikulumCount = allUsers.filter((u) => u.role === 'kurikulum').length;
-  const stafJadwalCount = allUsers.filter((u) => u.role === 'staf_jadwal').length;
-  const hubinCount = allUsers.filter((u) => u.role === 'hubin').length;
-  const guruCount = allUsers.filter((u) => u.role === 'guru' || u.role === 'user').length;
-  const waliCount = allUsers.filter((u) => u.role === 'wali').length;
-  const muridCount = allUsers.filter((u) => u.role === 'murid' || u.role === 'siswa').length;
+  const adminCount = allUsers.filter((u) => userHasMatchingRole(u, 'admin')).length;
+  const kesiswaanCount = allUsers.filter((u) => userHasMatchingRole(u, 'kesiswaan')).length;
+  const kurikulumCount = allUsers.filter((u) => userHasMatchingRole(u, 'kurikulum')).length;
+  const stafJadwalCount = allUsers.filter((u) => userHasMatchingRole(u, 'staf_jadwal')).length;
+  const hubinCount = allUsers.filter((u) => userHasMatchingRole(u, 'hubin')).length;
+  const guruCount = allUsers.filter((u) => userHasMatchingRole(u, 'guru')).length;
+  const waliCount = allUsers.filter((u) => userHasMatchingRole(u, 'wali')).length;
+  const muridCount = allUsers.filter((u) => userHasMatchingRole(u, 'murid')).length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -1161,8 +1566,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       <PageHeader
         icon={UserCheck}
         title="Master Data User & Akun Login"
-        description="Kelola data pengguna, hak akses role (Admin, Kesiswaan, Wali Kelas, BP/BK, WKS Kurikulum, WKS Hubin), password, dan reset akun."
-        badge="Manajemen Pengguna"
+        description="Kelola data pengguna, multi-role hak akses (Admin, Kesiswaan, Wali Kelas, BP/BK, WKS Kurikulum, WKS Hubin, Staf Jadwal, Guru), password, dan reset akun."
+        badge="Manajemen Pengguna & Multi-Role"
       />
 
       {/* Search Bar & Action Toolbar */}
@@ -1198,13 +1603,15 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition"
+                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                 title={`Urutan: ${sortDirection === 'asc' ? 'A-Z / Naik' : 'Z-A / Turun'}`}
               >
                 {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />}
               </button>
             </div>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
+
+            {/* Role Filter Tabs */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold flex-wrap">
               <button
                 type="button"
                 onClick={() => {
@@ -1340,7 +1747,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                   viewMode === 'list'
                     ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -1353,7 +1760,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                   viewMode === 'grid'
                     ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -1594,21 +2001,23 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                           />
                         ) : (
                           <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-white text-xs shrink-0 shadow-xs ${
-                            user.role === 'admin' ? 'bg-blue-600' : user.role === 'kesiswaan' ? 'bg-purple-600' : user.role === 'kurikulum' ? 'bg-indigo-600' : user.role === 'hubin' ? 'bg-cyan-600' : user.role === 'guru' || user.role === 'user' ? 'bg-amber-600' : user.role === 'murid' || user.role === 'siswa' ? 'bg-teal-600' : 'bg-emerald-600'
+                            user.roles.includes('admin') ? 'bg-blue-600' : user.roles.includes('kesiswaan') ? 'bg-purple-600' : user.roles.includes('kurikulum') ? 'bg-indigo-600' : user.roles.includes('hubin') ? 'bg-cyan-600' : user.roles.includes('guru') || user.roles.includes('user') ? 'bg-amber-600' : user.roles.includes('murid') || user.roles.includes('siswa') ? 'bg-teal-600' : 'bg-emerald-600'
                           }`}>
                             {user.nama.substring(0, 2).toUpperCase()}
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
                               #{(currentPage - 1) * pageSize + idx + 1}
                             </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${getRoleBadgeClass(user.role)}`}>
-                              {getRoleLabel(user.role)}
-                            </span>
+                            {user.roles.map((r) => (
+                              <span key={r} className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${getRoleBadgeClass(r, appData.customRoles)}`}>
+                                {getRoleLabel(r, appData.customRoles)}
+                              </span>
+                            ))}
                           </div>
-                          <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate mt-1" title={user.nama}>
+                          <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate mt-1.5" title={user.nama}>
                             {user.nama}
                           </h4>
                           <p className="text-[11px] font-mono text-slate-400 dark:text-slate-400">
@@ -1633,7 +2042,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                       )}
                     </div>
 
-                    {/* Password and Role Selector */}
+                    {/* Password and Role Badges */}
                     <div className="space-y-2 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 text-xs">
                       <div className="flex justify-between items-center text-slate-500">
                         <span className="text-[10px] text-slate-400 font-medium">Password:</span>
@@ -1644,55 +2053,75 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Ubah Hak Akses:
-                        </label>
-                        <select
-                          disabled={readOnly}
-                          value={user.role}
-                          onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
-                          className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold border transition focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${getRoleBadgeClass(user.role)}`}
-                        >
-                          <option value="admin">Administrator</option>
-                          <option value="kesiswaan">WKS Kesiswaan / BP BK</option>
-                          <option value="kurikulum">WKS Kurikulum</option>
-                          <option value="hubin">WKS Hubin</option>
-                          <option value="guru">Guru</option>
-                          <option value="wali">Wali Kelas</option>
-                          <option value="murid">Murid / Siswa</option>
-                          {appData.customRoles?.map((cr) => (
-                            <option key={cr.id} value={cr.id}>{cr.label}</option>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Role Aktif ({user.roles.length}):
+                          </label>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => openQuickRoleModal(user)}
+                              className="text-[10px] text-blue-600 dark:text-blue-400 font-extrabold hover:underline flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3 h-3" />
+                              <span>Atur Role</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                          {user.roles.map((r) => (
+                            <span
+                              key={r}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${getRoleBadgeClass(r, appData.customRoles)}`}
+                            >
+                              {getRoleLabel(r, appData.customRoles)}
+                            </span>
                           ))}
-                        </select>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
                   {(isAdmin || canDeleteUser(user)) && (
-                    <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-end gap-1.5">
-                      {isAdmin && (
+                    <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between gap-1.5">
+                      {!readOnly && (
                         <button
                           type="button"
-                          onClick={() => openUserForm(user)}
-                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 rounded-xl border border-blue-200/80 dark:border-blue-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
-                          title="Edit User"
+                          onClick={() => openQuickRoleModal(user)}
+                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-xl border border-indigo-200/80 dark:border-indigo-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                          title="Tambah / Ubah Role"
                         >
-                          <Edit className="w-3.5 h-3.5" />
-                          <span>Edit</span>
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>+ Role</span>
                         </button>
                       )}
-                      {canDeleteUser(user) && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteUser(user)}
-                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 rounded-xl border border-rose-200/80 dark:border-rose-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
-                          title={user.role === 'murid' ? 'Hapus Siswa / Murid' : 'Hapus User'}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Hapus</span>
-                        </button>
-                      )}
+                      
+                      <div className="flex items-center gap-1.5">
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => openUserForm(user)}
+                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 rounded-xl border border-blue-200/80 dark:border-blue-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                            title="Edit User"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                        {canDeleteUser(user) && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user)}
+                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 rounded-xl border border-rose-200/80 dark:border-rose-800 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                            title={user.roles.includes('murid') ? 'Hapus Siswa / Murid' : 'Hapus User'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1729,7 +2158,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                   <th className="py-3 px-4">PASSWORD</th>
                   <th className="py-3 px-4 cursor-pointer hover:text-blue-600 transition select-none" onClick={() => handleSort('role')}>
                     <div className="flex items-center gap-1.5">
-                      <span>PENGATURAN ROLE (HAK AKSES)</span>
+                      <span>ROLE HAK AKSES (MULTI-ROLE)</span>
                       {sortField === 'role' ? (
                         sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
                       ) : (
@@ -1753,7 +2182,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                           <img src={user.foto} alt={user.nama} className="w-9 h-9 rounded-full object-cover shrink-0 border border-slate-200" />
                         ) : (
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 ${
-                            user.role === 'admin' ? 'bg-blue-600' : user.role === 'kesiswaan' ? 'bg-purple-600' : user.role === 'kurikulum' ? 'bg-indigo-600' : user.role === 'hubin' ? 'bg-cyan-600' : user.role === 'guru' || user.role === 'user' ? 'bg-amber-600' : user.role === 'murid' || user.role === 'siswa' ? 'bg-teal-600' : 'bg-emerald-600'
+                            user.roles.includes('admin') ? 'bg-blue-600' : user.roles.includes('kesiswaan') ? 'bg-purple-600' : user.roles.includes('kurikulum') ? 'bg-indigo-600' : user.roles.includes('hubin') ? 'bg-cyan-600' : user.roles.includes('guru') || user.roles.includes('user') ? 'bg-amber-600' : user.roles.includes('murid') || user.roles.includes('siswa') ? 'bg-teal-600' : 'bg-emerald-600'
                           }`}>
                             {user.nama.substring(0, 2).toUpperCase()}
                           </div>
@@ -1794,36 +2223,44 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                       </span>
                     </td>
 
-                    {/* Role Dropdown */}
+                    {/* Multi-Role Column */}
                     <td className="py-3.5 px-4">
-                      {readOnly ? (
-                        <span className={`px-2.5 py-1 rounded-xl text-xs font-extrabold border ${getRoleBadgeClass(user.role)}`}>
-                          {getRoleLabel(user.role)}
-                        </span>
-                      ) : (
-                        <div className="relative inline-block w-48">
-                          <select
-                            value={user.role}
-                            onChange={(e) => handleRoleChange(user, e.target.value as UserRole)}
-                            className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold border transition focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${getRoleBadgeClass(user.role)}`}
+                      <div className="flex items-center gap-1.5 flex-wrap max-w-sm">
+                        {user.roles.map((r) => (
+                          <span
+                            key={r}
+                            className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border ${getRoleBadgeClass(r, appData.customRoles)}`}
                           >
-                            <option value="admin">Administrator</option>
-                            <option value="kesiswaan">WKS Kesiswaan / BP BK</option>
-                            <option value="kurikulum">WKS Kurikulum</option>
-                            <option value="hubin">WKS Hubin</option>
-                            <option value="guru">Guru</option>
-                            <option value="wali">Wali Kelas</option>
-                            <option value="murid">Murid / Siswa</option>
-                            {appData.customRoles?.map((cr) => (
-                              <option key={cr.id} value={cr.id}>{cr.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                            {getRoleLabel(r, appData.customRoles)}
+                          </span>
+                        ))}
+
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => openQuickRoleModal(user)}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition flex items-center gap-1 cursor-pointer"
+                            title="Tambah / Ubah Role Pengguna"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                            <span>Role</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => openQuickRoleModal(user)}
+                            className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-xl border border-indigo-200/80 dark:border-indigo-800 transition cursor-pointer"
+                            title="Kelola Role Pengguna"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        )}
                         {isAdmin && (
                           <button
                             type="button"
@@ -1839,7 +2276,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                             type="button"
                             onClick={() => handleDeleteUser(user)}
                             className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 rounded-xl border border-rose-200/80 dark:border-rose-800 transition cursor-pointer"
-                            title={user.role === 'murid' ? 'Hapus Siswa / Murid' : 'Hapus User'}
+                            title={user.roles.includes('murid') ? 'Hapus Siswa / Murid' : 'Hapus User'}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   DoorOpen,
@@ -25,7 +25,7 @@ import {
   FileDown,
   SlidersHorizontal,
 } from 'lucide-react';
-import { AppData, Kelas } from '../../types';
+import { AppData, Kelas, UserSession } from '../../types';
 import { randomizeWaliKelasForClasses, sortKelasList } from '../../data/initialData';
 import { Pagination } from '../Pagination';
 import { addAuditLog, extractKelasTingkat, determineKelasKelompok } from '../../utils/helpers';
@@ -33,6 +33,7 @@ import { PageHeader } from '../common/UIComponents';
 
 interface MasterKelasViewProps {
   appData: AppData;
+  currentUser?: UserSession;
   readOnly?: boolean;
   onUpdateAppData: (updated: AppData) => void;
   onOpenModal: (title: string, content: React.ReactNode) => void;
@@ -44,24 +45,89 @@ interface MasterKelasViewProps {
     onConfirm: () => void
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  initialSearchQuery?: string;
 }
 
 export const MasterKelasView: React.FC<MasterKelasViewProps> = ({
   appData,
+  currentUser,
   readOnly = false,
   onUpdateAppData,
   onOpenModal,
   onCloseModal,
   onConfirmModal,
   onShowToast,
+  initialSearchQuery,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  const userRole = currentUser?.role || 'admin';
+  const userRoles = Array.isArray(currentUser?.roles) ? currentUser.roles : [userRole];
+  const isAdmin = userRole === 'admin';
+  const isKesiswaan = userRole === 'kesiswaan' || userRoles.includes('kesiswaan');
+  const isWali = userRole === 'wali' || userRoles.includes('wali');
+  const isGuru = userRole === 'guru' || userRole === 'user' || userRoles.includes('guru');
+  const isMurid = userRole === 'murid' || userRole === 'siswa' || userRoles.includes('murid');
+
+  const currentGuruId = String((currentUser?.data as any)?.id || '');
+  const currentUsername = String((currentUser?.data as any)?.username || '').toLowerCase();
+  const currentNip = String((currentUser?.data as any)?.nip || '').toLowerCase();
+
+  const authorizedClassIds = useMemo(() => {
+    if (isAdmin || isKesiswaan || userRole === 'kurikulum' || userRole === 'hubin' || userRole === 'staf_jadwal') {
+      return null;
+    }
+    if (isWali) {
+      const ids = new Set<string>();
+      appData.kelas.forEach((k) => {
+        if (k.waliKelasId === currentGuruId) ids.add(k.id);
+      });
+      (appData.guruMapelKelas || []).forEach((gmk) => {
+        if (
+          gmk.guruId === currentGuruId ||
+          (gmk.guruUsername && gmk.guruUsername.toLowerCase() === currentUsername) ||
+          (gmk.guruNip && gmk.guruNip.toLowerCase() === currentNip)
+        ) {
+          (gmk.kelasIds || []).forEach((cid) => ids.add(cid));
+        }
+      });
+      return ids.size > 0 ? ids : null;
+    }
+    if (isGuru) {
+      const ids = new Set<string>();
+      appData.kelas.forEach((k) => {
+        if (k.waliKelasId === currentGuruId) ids.add(k.id);
+      });
+      (appData.guruMapelKelas || []).forEach((gmk) => {
+        if (
+          gmk.guruId === currentGuruId ||
+          (gmk.guruUsername && gmk.guruUsername.toLowerCase() === currentUsername) ||
+          (gmk.guruNip && gmk.guruNip.toLowerCase() === currentNip)
+        ) {
+          (gmk.kelasIds || []).forEach((cid) => ids.add(cid));
+        }
+      });
+      if (ids.size > 0) return ids;
+      return null;
+    }
+    if (isMurid) {
+      const studentClassId = (currentUser?.data as any)?.kelasId;
+      return studentClassId ? new Set([studentClassId]) : new Set<string>();
+    }
+    return null;
+  }, [isAdmin, isKesiswaan, userRole, isWali, isGuru, isMurid, appData.kelas, appData.guruMapelKelas, currentGuruId, currentUsername, currentNip]);
+
   const hasJurusan = appData.jurusan && appData.jurusan.length > 0;
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchQuery || '');
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchTerm(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
   const [filterJurusanId, setFilterJurusanId] = useState('');
   const [sortField, setSortField] = useState<'nama' | 'jurusan' | 'wali' | 'jumlahSiswa'>('nama');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');

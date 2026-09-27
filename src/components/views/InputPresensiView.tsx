@@ -1087,11 +1087,18 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
         });
       }
 
+      // Safely merge with existing records for this key to prevent dropping unedited students
+      const existingForThisKey = (appData.presensi || {})[presensiKey] || [];
+      const recMap = new Map<string, SiswaPresensiItem>();
+      existingForThisKey.forEach((r) => { if (r && r.siswaId) recMap.set(r.siswaId, r); });
+      newRecords.forEach((r) => { if (r && r.siswaId) recMap.set(r.siswaId, r); });
+      const finalPresensiRecords = Array.from(recMap.values());
+
       const nextAppData: AppData = {
         ...appData,
         presensi: {
           ...appData.presensi,
-          [presensiKey]: newRecords,
+          [presensiKey]: finalPresensiRecords,
         },
         presensiMengajarGuru: updatedGuruLogs,
       };

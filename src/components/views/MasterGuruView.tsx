@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Users,
@@ -30,13 +30,27 @@ import {
   List,
   Camera,
   Upload,
-  X
+  X,
+  ShieldCheck,
+  Sparkles,
+  Layers,
+  Briefcase,
+  Sliders,
+  Award
 } from 'lucide-react';
 import { AppData, WaliKelas, UserSession } from '../../types';
 import { Pagination } from '../Pagination';
 import { PageHeader } from '../common/UIComponents';
 import { addAuditLog, compressBase64Image } from '../../utils/helpers';
 import { ImportGuruModal } from './ImportGuruModal';
+import {
+  getAllRolePermissions,
+  getRoleBadgeMeta,
+  normalizeRoleKey,
+  mapDutyToRole,
+  mapDutiesToRoles,
+  reconcileRolesAndDuties,
+} from '../../utils/rolePermissionEngine';
 
 const NAMA_BULAN_INDONESIA = [
   'Januari',
@@ -115,6 +129,7 @@ interface MasterGuruViewProps {
     onConfirm: () => void
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  initialSearchQuery?: string;
 }
 
 export const AGAMA_OPTIONS = [
@@ -179,6 +194,85 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
   const [showPass, setShowPass] = useState(false);
   const [err, setErr] = useState('');
 
+  // Role, Multi-Role & Tugas Tambahan fields
+  const allRoles = useMemo(() => getAllRolePermissions(appData), [appData]);
+  const [role, setRole] = useState<string>(guruToEdit?.role || 'guru');
+  const [additionalRoles, setAdditionalRoles] = useState<string[]>(() => {
+    if (Array.isArray(guruToEdit?.additionalRoles)) return [...guruToEdit.additionalRoles];
+    return [];
+  });
+  const [tugasTambahanList, setTugasTambahanList] = useState<string[]>(() => {
+    if (Array.isArray(guruToEdit?.tugasTambahanList) && guruToEdit.tugasTambahanList.length > 0) {
+      return [...guruToEdit.tugasTambahanList];
+    }
+    if (guruToEdit?.tugasTambahan) {
+      return guruToEdit.tugasTambahan.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  });
+  const [mataPelajaran, setMataPelajaran] = useState(guruToEdit?.mataPelajaran || '');
+  const [customTugasInput, setCustomTugasInput] = useState('');
+
+  const COMMON_TUGAS_PRESETS = [
+    'Wali Kelas',
+    'Pembina OSIS',
+    'Koordinator BP / BK',
+    'Kepala Perpustakaan',
+    'Guru Piket',
+    'Bendahara BOS / Sekolah',
+    'Koordinator P5',
+    'Tim Ketertiban & Disiplin (Tatib)',
+    'Kepala Lab Komputer',
+    'Kepala Bengkel / Lab Kejuruan',
+    'WKS Kurikulum',
+    'WKS Kesiswaan',
+    'WKS Hubin & Humas',
+    'WKS Sarana & Prasarana',
+    'Pembina Pramuka',
+    'Pembina Ekstrakurikuler',
+  ];
+
+  const handleToggleAdditionalRole = (roleKey: string) => {
+    if (roleKey === role) return; // Cannot be both primary and secondary
+    const isRemoving = additionalRoles.includes(roleKey);
+    const nextAddRoles = isRemoving
+      ? additionalRoles.filter((r) => r !== roleKey)
+      : [...additionalRoles, roleKey];
+    setAdditionalRoles(nextAddRoles);
+
+    // If removing an additional role, also remove any duties mapped to it
+    if (isRemoving) {
+      setTugasTambahanList((prev) =>
+        prev.filter((d) => mapDutyToRole(d, appData.customRoles) !== roleKey)
+      );
+    }
+  };
+
+  const handleToggleTugasTambahan = (tugas: string) => {
+    setTugasTambahanList((prev) => {
+      const nextList = prev.includes(tugas) ? prev.filter((t) => t !== tugas) : [...prev, tugas];
+      // Automatically keep role & additionalRoles in sync
+      const reconciled = reconcileRolesAndDuties(role, additionalRoles, nextList, appData, guruToEdit?.id);
+      setRole(reconciled.primaryRole);
+      setAdditionalRoles(reconciled.additionalRoles);
+      return nextList;
+    });
+  };
+
+  const handleAddCustomTugas = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = customTugasInput.trim();
+    if (!clean) return;
+    if (!tugasTambahanList.includes(clean)) {
+      const nextList = [...tugasTambahanList, clean];
+      setTugasTambahanList(nextList);
+      const reconciled = reconcileRolesAndDuties(role, additionalRoles, nextList, appData, guruToEdit?.id);
+      setRole(reconciled.primaryRole);
+      setAdditionalRoles(reconciled.additionalRoles);
+    }
+    setCustomTugasInput('');
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -219,6 +313,7 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
     }
 
     const guruId = guruToEdit ? guruToEdit.id : `GURU_${Date.now()}`;
+    const reconciled = reconcileRolesAndDuties(role, additionalRoles, tugasTambahanList, appData, guruToEdit?.id);
 
     const newGuruObj: WaliKelas = {
       id: guruId,
@@ -242,11 +337,14 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
       email: email.trim(),
       username: cleanUsername,
       password: password.trim() || '123',
-      role: guruToEdit?.role || 'guru',
+      role: reconciled.primaryRole,
+      roles: reconciled.roles,
+      additionalRoles: reconciled.additionalRoles,
+      tugasTambahan: tugasTambahanList.join(', '),
+      tugasTambahanList: tugasTambahanList,
+      jabatan: tugasTambahanList.join(', '),
       foto: foto.trim(),
-      tugasTambahan: guruToEdit?.tugasTambahan || '',
-      jabatan: guruToEdit?.jabatan || '',
-      mataPelajaran: guruToEdit?.mataPelajaran || '',
+      mataPelajaran: mataPelajaran.trim() || guruToEdit?.mataPelajaran || '',
       hariMengajar: guruToEdit?.hariMengajar || ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
       batasiLoginHariMengajar: Boolean(guruToEdit?.batasiLoginHariMengajar),
     };
@@ -258,8 +356,16 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
       updatedWali = [newGuruObj, ...appData.waliKelas];
     }
 
+    // If teacher is no longer assigned as Wali Kelas, detach from any classes
+    let updatedKelas = appData.kelas;
+    if (guruToEdit && !reconciled.isWaliActive) {
+      updatedKelas = (appData.kelas || []).map((k) =>
+        k.waliKelasId === guruToEdit.id ? { ...k, waliKelasId: '' } : k
+      );
+    }
+
     const updatedAppData = addAuditLog(
-      { ...appData, waliKelas: updatedWali },
+      { ...appData, waliKelas: updatedWali, kelas: updatedKelas },
       guruToEdit ? 'Edit Biodata Guru' : 'Tambah Biodata Guru Baru',
       `${guruToEdit ? 'Mengubah' : 'Menambah'} biodata guru ${nama.trim()}`
     );
@@ -668,6 +774,249 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
         </div>
       </div>
 
+      {/* Section 4: Peran Akun & Hak Akses Sistem (Hak Akses Aplikasi) */}
+      <div className="space-y-3.5 p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/60">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>4. Peran Akun &amp; Hak Akses Sistem</span>
+          </h4>
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+            Hak Akses Aplikasi
+          </span>
+        </div>
+
+        {/* 1. Role Utama */}
+        <div className="space-y-1.5">
+          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+            Role Utama / Level Akses Sistem <span className="text-rose-500">*</span>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select
+              value={role}
+              onChange={(e) => {
+                const newR = e.target.value;
+                setRole(newR);
+                // Remove from additional roles if chosen as primary
+                setAdditionalRoles((prev) => prev.filter((r) => r !== newR));
+              }}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none transition font-semibold"
+            >
+              <optgroup label="Role Sistem Standar">
+                <option value="guru">Guru Pengampu (Default)</option>
+                <option value="wali">Wali Kelas</option>
+                <option value="kesiswaan">WKS Kesiswaan / BP BK</option>
+                <option value="kurikulum">WKS Kurikulum</option>
+                <option value="staf_jadwal">Staf Pengelola Jadwal</option>
+                <option value="hubin">WKS Hubin &amp; Humas</option>
+                <option value="admin">Administrator</option>
+              </optgroup>
+              {allRoles.filter((r) => !r.isSystem).length > 0 && (
+                <optgroup label="Role Kustom Sekolah">
+                  {allRoles
+                    .filter((r) => !r.isSystem)
+                    .map((cr) => (
+                      <option key={cr.roleId} value={cr.roleId}>
+                        {cr.roleName} (Kustom)
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px]">
+              <span className="text-slate-500 dark:text-slate-400">Badge Akses:</span>
+              {(() => {
+                const badge = getRoleBadgeMeta(role, appData);
+                return (
+                  <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${badge.badgeClass}`}>
+                    {badge.label}
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            Menentukan role utama saat akun login dan hak akses navigasi menu sidebar yang diberikan secara default.
+          </p>
+        </div>
+
+        {/* 2. Role Tambahan / Multi-Role Access */}
+        <div className="space-y-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+          <div className="flex items-center justify-between">
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              Role Tambahan / Multi-Role Akses (Opsional)
+            </label>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+              {additionalRoles.length} role tambahan aktif
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            Guru ini juga akan otomatis mendapatkan seluruh akses menu dari role tambahan yang dicentang:
+          </p>
+
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {allRoles
+              .filter((r) => r.roleId !== 'murid' && r.roleId !== normalizeRoleKey(role))
+              .map((rItem) => {
+                const isChecked = additionalRoles.includes(rItem.roleId);
+                const meta = getRoleBadgeMeta(rItem.roleId, appData);
+                return (
+                  <button
+                    key={rItem.roleId}
+                    type="button"
+                    onClick={() => handleToggleAdditionalRole(rItem.roleId)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                      isChecked
+                        ? `${meta.badgeClass} ring-2 ring-indigo-500/40 shadow-xs`
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] ${
+                        isChecked
+                          ? 'bg-indigo-600 text-white font-black'
+                          : 'border border-slate-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                    <span>{meta.label}</span>
+                    {meta.isCustom && (
+                      <span className="text-[9px] px-1 rounded bg-indigo-200/60 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200">
+                        Kustom
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      </div>
+
+      {/* Section 5: Tugas Tambahan & Tanggung Jawab Fungsional Sekolah */}
+      <div className="space-y-3.5 p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/60">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-extrabold text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>5. Tugas Tambahan &amp; Fungsional Sekolah</span>
+          </h4>
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+            Tanggung Jawab KBM / Sekolah
+          </span>
+        </div>
+
+        {/* Mata Pelajaran Diampu */}
+        <div className="space-y-1.5">
+          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+            Mata Pelajaran yang Diampu (Opsional)
+          </label>
+          <input
+            type="text"
+            value={mataPelajaran}
+            onChange={(e) => setMataPelajaran(e.target.value)}
+            placeholder="misal: Matematika Wajib, Pemrograman Web, Bahasa Indonesia"
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none transition"
+          />
+        </div>
+
+        {/* Pilihan Cepat Tugas Tambahan Presets */}
+        <div className="space-y-2 pt-2 border-t border-amber-100 dark:border-amber-900/40">
+          <div className="flex items-center justify-between">
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              Pilihan Tugas Tambahan / Jabatan Fungsional
+            </label>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+              {tugasTambahanList.length} tugas terpasang
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            Tugas fungsional guru di sekolah di luar kewajiban jam mengajar pokok (klik untuk memilih/membatalkan):
+          </p>
+
+          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+            {COMMON_TUGAS_PRESETS.map((tugasName) => {
+              const isSelected = tugasTambahanList.includes(tugasName);
+              return (
+                <button
+                  key={tugasName}
+                  type="button"
+                  onClick={() => handleToggleTugasTambahan(tugasName)}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    isSelected
+                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border-amber-400 dark:border-amber-600 shadow-xs'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                  }`}
+                >
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] ${
+                      isSelected
+                        ? 'bg-amber-600 text-white font-bold'
+                        : 'border border-slate-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                  <span>{tugasName}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Tugas Input */}
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="text"
+              value={customTugasInput}
+              onChange={(e) => setCustomTugasInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddCustomTugas(e);
+                }
+              }}
+              placeholder="Ketik tugas tambahan lainnya lalu klik + Tambah..."
+              className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none transition"
+            />
+            <button
+              type="button"
+              onClick={handleAddCustomTugas}
+              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition cursor-pointer shrink-0 shadow-xs"
+            >
+              + Tambah
+            </button>
+          </div>
+
+          {/* Active Tugas Badges List */}
+          {tugasTambahanList.length > 0 && (
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                Daftar Tugas Tambahan Terpasang ({tugasTambahanList.length}):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {tugasTambahanList.map((tugas) => (
+                  <span
+                    key={tugas}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1"
+                  >
+                    <Award className="w-3 h-3 text-amber-600" />
+                    <span>{tugas}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTugasTambahan(tugas)}
+                      className="hover:text-rose-600 cursor-pointer ml-0.5"
+                      title="Hapus tugas ini"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
         <button
           type="button"
@@ -688,6 +1037,453 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
   );
 };
 
+interface QuickRoleModalContentProps {
+  guru: WaliKelas;
+  appData: AppData;
+  onUpdateAppData: (appData: AppData) => void;
+  onCloseModal: () => void;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const QuickRoleModalContent: React.FC<QuickRoleModalContentProps> = ({
+  guru,
+  appData,
+  onUpdateAppData,
+  onCloseModal,
+  onShowToast,
+}) => {
+  const allRoles = useMemo(() => getAllRolePermissions(appData), [appData]);
+  const [activeTab, setActiveTab] = useState<'role' | 'tugas'>('role');
+  const [role, setRole] = useState<string>(guru.role || 'guru');
+  const [additionalRoles, setAdditionalRoles] = useState<string[]>(() => {
+    if (Array.isArray(guru.additionalRoles)) return [...guru.additionalRoles];
+    return [];
+  });
+  const [tugasList, setTugasList] = useState<string[]>(() => {
+    if (Array.isArray(guru.tugasTambahanList) && guru.tugasTambahanList.length > 0) {
+      return [...guru.tugasTambahanList];
+    }
+    if (guru.tugasTambahan) {
+      return guru.tugasTambahan.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  });
+  const [customTugas, setCustomTugas] = useState('');
+
+  const COMMON_PRESETS = [
+    'Wali Kelas',
+    'Pembina OSIS',
+    'Koordinator BP / BK',
+    'Kepala Perpustakaan',
+    'Guru Piket',
+    'Bendahara BOS / Sekolah',
+    'Koordinator P5',
+    'Tim Ketertiban & Disiplin (Tatib)',
+    'Kepala Lab Komputer',
+    'Kepala Bengkel / Lab Kejuruan',
+    'WKS Kurikulum',
+    'WKS Kesiswaan',
+    'WKS Hubin & Humas',
+    'WKS Sarana & Prasarana',
+    'Pembina Pramuka',
+    'Pembina Ekstrakurikuler',
+  ];
+
+  const handleToggleAddRole = (rKey: string) => {
+    if (rKey === role) return;
+    const isRemoving = additionalRoles.includes(rKey);
+    const nextAddRoles = isRemoving
+      ? additionalRoles.filter((r) => r !== rKey)
+      : [...additionalRoles, rKey];
+    setAdditionalRoles(nextAddRoles);
+
+    // If removing an additional role, also remove any duties mapped to it
+    if (isRemoving) {
+      setTugasList((prev) =>
+        prev.filter((d) => mapDutyToRole(d, appData.customRoles) !== rKey)
+      );
+    }
+  };
+
+  const handleToggleTugas = (t: string) => {
+    setTugasList((prev) => {
+      const nextList = prev.includes(t) ? prev.filter((item) => item !== t) : [...prev, t];
+      const reconciled = reconcileRolesAndDuties(role, additionalRoles, nextList, appData, guru.id);
+      setRole(reconciled.primaryRole);
+      setAdditionalRoles(reconciled.additionalRoles);
+      return nextList;
+    });
+  };
+
+  const handleAddCustom = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = customTugas.trim();
+    if (!clean) return;
+    if (!tugasList.includes(clean)) {
+      const nextList = [...tugasList, clean];
+      setTugasList(nextList);
+      const reconciled = reconcileRolesAndDuties(role, additionalRoles, nextList, appData, guru.id);
+      setRole(reconciled.primaryRole);
+      setAdditionalRoles(reconciled.additionalRoles);
+    }
+    setCustomTugas('');
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const reconciled = reconcileRolesAndDuties(role, additionalRoles, tugasList, appData, guru.id);
+
+    const updatedWali = (appData.waliKelas || []).map((w) => {
+      if (w.id === guru.id) {
+        return {
+          ...w,
+          role: reconciled.primaryRole,
+          roles: reconciled.roles,
+          additionalRoles: reconciled.additionalRoles,
+          tugasTambahan: tugasList.join(', '),
+          tugasTambahanList: tugasList,
+          jabatan: tugasList.join(', '),
+        };
+      }
+      return w;
+    });
+
+    let updatedKelas = appData.kelas;
+    if (!reconciled.isWaliActive) {
+      updatedKelas = (appData.kelas || []).map((k) =>
+        k.waliKelasId === guru.id ? { ...k, waliKelasId: '' } : k
+      );
+    }
+
+    const updatedAppData = addAuditLog(
+      { ...appData, waliKelas: updatedWali, kelas: updatedKelas },
+      'Ubah Role & Tugas Guru',
+      `Memperbarui role utama (${getRoleBadgeMeta(reconciled.primaryRole, appData).label}), role tambahan (${reconciled.additionalRoles.length}), dan tugas tambahan (${tugasList.length}) guru ${guru.nama}`
+    );
+    onUpdateAppData(updatedAppData);
+    onShowToast(`Peran & Tugas Tambahan "${guru.nama}" berhasil diperbarui!`, 'success');
+    onCloseModal();
+  };
+
+  const primaryBadge = getRoleBadgeMeta(role, appData);
+
+  return (
+    <form onSubmit={handleSave} className="space-y-3.5 text-slate-800 dark:text-slate-100 max-h-[78vh] overflow-y-auto pr-1">
+      {/* Profil Singkat Guru */}
+      <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
+          {guru.nama ? guru.nama.charAt(0).toUpperCase() : 'G'}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 truncate">{guru.nama}</h4>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono block truncate">
+            @{guru.username} | NIP: {guru.nip || '-'}
+          </span>
+        </div>
+      </div>
+
+      {/* Segmented Tab Switcher: Terpisah Antara Peran Akun & Tugas Tambahan */}
+      <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={() => setActiveTab('role')}
+          className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'role'
+              ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <span className="truncate">1. Peran Akun &amp; Hak Akses</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-mono">
+            {1 + additionalRoles.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('tugas')}
+          className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'tugas'
+              ? 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-700'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <Award className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="truncate">2. Tugas Tambahan Sekolah</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-mono">
+            {tugasList.length}
+          </span>
+        </button>
+      </div>
+
+      {/* KONTEN TAB 1: PERAN AKUN & HAK AKSES SISTEM */}
+      {activeTab === 'role' && (
+        <div className="space-y-3 p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/60 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-indigo-100 dark:border-indigo-900/40">
+            <div>
+              <h5 className="font-extrabold text-xs text-indigo-800 dark:text-indigo-300 uppercase tracking-wide flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>Pengaturan Peran &amp; Akses Sistem</span>
+              </h5>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Mengatur hak akses akun saat login dan menu-menu yang dapat dibuka di sidebar.
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 shrink-0">
+              Hak Akses
+            </span>
+          </div>
+
+          {/* Role Utama */}
+          <div className="space-y-1.5">
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              Role Utama Sistem (Primary Role) <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <select
+                value={role}
+                onChange={(e) => {
+                  const nextR = e.target.value;
+                  setRole(nextR);
+                  setAdditionalRoles((prev) => prev.filter((r) => r !== nextR));
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                <optgroup label="Role Sistem Standar">
+                  <option value="guru">Guru Pengampu (Default)</option>
+                  <option value="wali">Wali Kelas</option>
+                  <option value="kesiswaan">WKS Kesiswaan / BP BK</option>
+                  <option value="kurikulum">WKS Kurikulum</option>
+                  <option value="staf_jadwal">Staf Pengelola Jadwal</option>
+                  <option value="hubin">WKS Hubin &amp; Humas</option>
+                  <option value="admin">Administrator</option>
+                </optgroup>
+                {allRoles.filter((r) => !r.isSystem).length > 0 && (
+                  <optgroup label="Role Kustom Sekolah">
+                    {allRoles
+                      .filter((r) => !r.isSystem)
+                      .map((cr) => (
+                        <option key={cr.roleId} value={cr.roleId}>
+                          {cr.roleName} (Kustom)
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">Badge Akses:</span>
+                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${primaryBadge.badgeClass}`}>
+                  {primaryBadge.label}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Role Tambahan (Multi-Role) */}
+          <div className="space-y-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                Role Tambahan / Multi-Role Akses (Opsional)
+              </label>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                {additionalRoles.length} role tambahan aktif
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Guru ini juga dapat mengakses seluruh menu dari role tambahan yang dicentang di bawah ini:
+            </p>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {allRoles
+                .filter((r) => r.roleId !== 'murid' && r.roleId !== normalizeRoleKey(role))
+                .map((rItem) => {
+                  const isChecked = additionalRoles.includes(rItem.roleId);
+                  const meta = getRoleBadgeMeta(rItem.roleId, appData);
+                  return (
+                    <button
+                      key={rItem.roleId}
+                      type="button"
+                      onClick={() => handleToggleAddRole(rItem.roleId)}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                        isChecked
+                          ? `${meta.badgeClass} ring-2 ring-indigo-500/40 shadow-xs`
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                      }`}
+                    >
+                      <div
+                        className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] ${
+                          isChecked ? 'bg-indigo-600 text-white font-bold' : 'border border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                      </div>
+                      <span>{meta.label}</span>
+                      {meta.isCustom && (
+                        <span className="text-[9px] px-1 rounded bg-indigo-200/60 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200">
+                          Kustom
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KONTEN TAB 2: TUGAS TAMBAHAN & FUNGSIONAL SEKOLAH */}
+      {activeTab === 'tugas' && (
+        <div className="space-y-3 p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/60 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-amber-100 dark:border-amber-900/40">
+            <div>
+              <h5 className="font-extrabold text-xs text-amber-800 dark:text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-amber-600" />
+                <span>Pengaturan Tugas Tambahan Sekolah</span>
+              </h5>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Tanggung jawab struktural dan fungsional di sekolah (tanpa mengubah role sistem pokok).
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 shrink-0">
+              Fungsional
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              Pilihan Cepat Tugas Tambahan
+            </label>
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+              {COMMON_PRESETS.map((tName) => {
+                const isSel = tugasList.includes(tName);
+                return (
+                  <button
+                    key={tName}
+                    type="button"
+                    onClick={() => handleToggleTugas(tName)}
+                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                      isSel
+                        ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border-amber-400 dark:border-amber-600 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                    }`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] ${
+                        isSel ? 'bg-amber-600 text-white font-bold' : 'border border-slate-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {isSel && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                    <span>{tName}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-1.5 pt-1">
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              Tambah Tugas Khusus Lainnya
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customTugas}
+                onChange={(e) => setCustomTugas(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCustom(e);
+                  }
+                }}
+                placeholder="Ketik nama tugas fungsional lain..."
+                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none transition"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustom}
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition cursor-pointer shrink-0 shadow-xs"
+              >
+                + Tambah
+              </button>
+            </div>
+          </div>
+
+          {/* Active Tugas List */}
+          {tugasList.length > 0 && (
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                Daftar Tugas Tambahan Terpasang ({tugasList.length}):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {tugasList.map((t) => (
+                  <span
+                    key={t}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1"
+                  >
+                    <Award className="w-3 h-3 text-amber-600" />
+                    <span>{t}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTugas(t)}
+                      className="hover:text-rose-600 cursor-pointer ml-0.5"
+                      title="Hapus tugas ini"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ringkasan Konfigurasi Sebelum Simpan */}
+      <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 text-[11px] space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-slate-500 dark:text-slate-400 font-semibold">Peran Sistem:</span>
+          <div className="flex flex-wrap items-center gap-1">
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${primaryBadge.badgeClass}`}>
+              {primaryBadge.label} (Utama)
+            </span>
+            {additionalRoles.map((rId) => (
+              <span key={rId} className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                +{getRoleBadgeMeta(rId, appData).label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+          <span className="text-slate-500 dark:text-slate-400 font-semibold">Tugas Tambahan:</span>
+          <span className="font-semibold text-slate-800 dark:text-slate-200">
+            {tugasList.length > 0 ? `${tugasList.length} tugas terpasang` : 'Tidak ada tugas tambahan'}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={onCloseModal}
+          className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Simpan Peran &amp; Tugas</span>
+        </button>
+      </div>
+    </form>
+  );
+};
+
 export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
   appData,
   currentUser,
@@ -697,16 +1493,27 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
   onCloseModal,
   onConfirmModal,
   onShowToast,
+  initialSearchQuery,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchQuery || '');
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchTerm(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
   const [jkFilter, setJkFilter] = useState<'semua' | 'L' | 'P'>('semua');
   const [agamaFilter, setAgamaFilter] = useState<string>('semua');
-  const [sortField, setSortField] = useState<'nama' | 'nip' | 'nuptk' | 'nik' | 'tempatLahir' | 'desaKelurahan' | 'kecamatan' | 'kota'>('nama');
+  const [roleFilter, setRoleFilter] = useState<string>('semua');
+  const [sortField, setSortField] = useState<'nama' | 'nip' | 'nuptk' | 'nik' | 'tempatLahir' | 'desaKelurahan' | 'kecamatan' | 'kota' | 'role'>('nama');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // List of all registered roles
+  const allRoles = useMemo(() => getAllRolePermissions(appData), [appData]);
 
   // List of all teachers (biodata)
   const guruList: WaliKelas[] = appData.waliKelas || [];
@@ -726,14 +1533,25 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
       (g.kecamatan && g.kecamatan.toLowerCase().includes(q)) ||
       (g.kota && g.kota.toLowerCase().includes(q)) ||
       (g.email && g.email.toLowerCase().includes(q)) ||
-      (g.noHp && g.noHp.toLowerCase().includes(q));
+      (g.noHp && g.noHp.toLowerCase().includes(q)) ||
+      (g.tugasTambahan && g.tugasTambahan.toLowerCase().includes(q)) ||
+      (g.jabatan && g.jabatan.toLowerCase().includes(q)) ||
+      (g.mataPelajaran && g.mataPelajaran.toLowerCase().includes(q));
 
     const gJk = (g.jenisKelamin || '').toUpperCase();
     const matchJk = jkFilter === 'semua' || gJk === jkFilter || (jkFilter === 'L' && (gJk.startsWith('L') || gJk === 'PRIA')) || (jkFilter === 'P' && (gJk.startsWith('P') || gJk === 'WANITA'));
 
     const matchAgama = agamaFilter === 'semua' || String(g.agamaId || '').trim() === agamaFilter || getAgamaLabel(g.agamaId).toLowerCase() === agamaFilter.toLowerCase();
 
-    return matchSearch && matchJk && matchAgama;
+    const gRole = normalizeRoleKey(g.role || 'guru');
+    const gAddRoles = Array.isArray(g.additionalRoles) ? g.additionalRoles.map(normalizeRoleKey) : [];
+    const matchRole =
+      roleFilter === 'semua' ||
+      gRole === roleFilter ||
+      gAddRoles.includes(roleFilter) ||
+      (roleFilter === 'wali' && (g.tugasTambahan?.toLowerCase().includes('wali') || g.tugasTambahanList?.includes('Wali Kelas')));
+
+    return matchSearch && matchJk && matchAgama && matchRole;
   });
 
   // Sort list
@@ -765,13 +1583,16 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
     } else if (sortField === 'kota') {
       valA = a.kota || '';
       valB = b.kota || '';
+    } else if (sortField === 'role') {
+      valA = a.role || '';
+      valB = b.role || '';
     }
 
     const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
     return sortDirection === 'asc' ? cmp : -cmp;
   });
 
-  const handleSort = (field: 'nama' | 'nip' | 'nuptk' | 'nik' | 'tempatLahir' | 'desaKelurahan' | 'kecamatan' | 'kota') => {
+  const handleSort = (field: 'nama' | 'nip' | 'nuptk' | 'nik' | 'tempatLahir' | 'desaKelurahan' | 'kecamatan' | 'kota' | 'role') => {
     if (sortField === field) {
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -798,142 +1619,262 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
     return jk === 'P' || jk.startsWith('P') || jk === 'WANITA';
   }).length;
   const totalNuptk = guruList.filter((g) => g.nuptk && g.nuptk.trim() !== '' && g.nuptk !== '-').length;
+  const totalMultiRole = guruList.filter((g) => (g.additionalRoles && g.additionalRoles.length > 0) || (g.tugasTambahanList && g.tugasTambahanList.length > 0)).length;
+
+  // Open Quick Role & Duty Modal
+  const handleOpenRoleModal = (guru: WaliKelas) => {
+    if (readOnly) return;
+    onOpenModal(
+      `Kelola Role & Tugas: ${guru.nama}`,
+      <QuickRoleModalContent
+        guru={guru}
+        appData={appData}
+        onUpdateAppData={onUpdateAppData}
+        onCloseModal={onCloseModal}
+        onShowToast={onShowToast}
+      />
+    );
+  };
 
   // View Teacher Detail Modal
   const handleViewDetailGuru = (guru: WaliKelas) => {
+    const primaryBadge = getRoleBadgeMeta(guru.role || 'guru', appData);
+    const addRoles = Array.isArray(guru.additionalRoles) ? guru.additionalRoles : [];
+    const duties = Array.isArray(guru.tugasTambahanList) && guru.tugasTambahanList.length > 0
+      ? guru.tugasTambahanList
+      : guru.tugasTambahan ? guru.tugasTambahan.split(',').map(s => s.trim()).filter(Boolean) : [];
+
     onOpenModal(
       `Biodata Guru: ${guru.nama}`,
-      <div className="space-y-4 text-slate-800 dark:text-slate-100">
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-850 border border-blue-100 dark:border-slate-700">
-            {guru.foto ? (
-              <img
-                src={guru.foto}
-                alt={guru.nama}
-                className="w-14 h-14 rounded-2xl object-cover shadow-md shrink-0 border-2 border-white dark:border-slate-700"
-              />
-            ) : (
-              <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white font-black text-xl flex items-center justify-center shadow-md shrink-0">
-                {guru.nama ? guru.nama.charAt(0).toUpperCase() : 'G'}
-              </div>
-            )}
-            <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">{guru.nama}</h3>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 font-mono">
-                  NIP: {guru.nip || '-'}
-                </span>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 font-mono">
-                  NUPTK: {guru.nuptk || '-'}
-                </span>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300">
-                  {guru.jenisKelamin === 'L' || guru.jenisKelamin?.toUpperCase().startsWith('L') ? 'Laki-laki (L)' : guru.jenisKelamin === 'P' || guru.jenisKelamin?.toUpperCase().startsWith('P') ? 'Perempuan (P)' : '-'}
-                </span>
-              </div>
+      <div className="space-y-4 text-slate-800 dark:text-slate-100 max-h-[80vh] overflow-y-auto pr-1">
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-850 border border-blue-100 dark:border-slate-700">
+          {guru.foto ? (
+            <img
+              src={guru.foto}
+              alt={guru.nama}
+              className="w-14 h-14 rounded-2xl object-cover shadow-md shrink-0 border-2 border-white dark:border-slate-700"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white font-black text-xl flex items-center justify-center shadow-md shrink-0">
+              {guru.nama ? guru.nama.charAt(0).toUpperCase() : 'G'}
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            {/* Box 1: Identitas Pribadi */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
-              <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                <User className="w-3.5 h-3.5" />
-                <span>Identitas Pribadi</span>
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-[10px] text-slate-400 block">NIK</span>
-                  <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">{guru.nik || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Agama</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{getAgamaLabel(guru.agamaId)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Tempat Lahir</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.tempatLahir || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Tanggal Lahir</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {formatTanggalIndonesia(guru.tanggalLahir) || guru.tanggalLahir || '-'}
-                  </span>
-                </div>
-              </div>
+          )}
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">{guru.nama}</h3>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${primaryBadge.badgeClass}`}>
+                {primaryBadge.label} (Role Utama)
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 font-mono">
+                NIP: {guru.nip || '-'}
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 font-mono">
+                NUPTK: {guru.nuptk || '-'}
+              </span>
             </div>
-
-            {/* Box 2: Kontak & Komunikasi */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
-              <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                <Phone className="w-3.5 h-3.5" />
-                <span>Kontak & Akun</span>
-              </h4>
-              <div className="space-y-2">
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Nomor HP / WhatsApp</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                    {guru.noHp || '-'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Email</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.email || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Username Login</span>
-                  <span className="font-mono text-slate-800 dark:text-slate-200">@{guru.username}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Box 3: Domisili / Alamat Lengkap */}
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
-            <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              <MapPin className="w-3.5 h-3.5" />
-              <span>Alamat & Wilayah Tempat Tinggal</span>
-            </h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="col-span-2 sm:col-span-4">
-                <span className="text-[10px] text-slate-400 block">Alamat Lengkap</span>
-                <span className="font-medium text-slate-800 dark:text-slate-200">{guru.alamat || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">RT / RW</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">
-                  {guru.rt ? `RT ${guru.rt}` : '-'} / {guru.rw ? `RW ${guru.rw}` : '-'}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Desa / Kelurahan</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.desaKelurahan || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Kecamatan</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.kecamatan || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Kota / Kabupaten</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.kota || '-'}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 block">Kode Pos / Wilayah</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
-                  {guru.kodePos || '-'} {guru.kodeWilayah ? `(${guru.kodeWilayah})` : ''}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={onCloseModal}
-              className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 transition cursor-pointer"
-            >
-              Tutup
-            </button>
           </div>
         </div>
+
+        {/* Dua Kotak Terpisah: Peran Sistem & Hak Akses vs Tugas Tambahan Sekolah */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          {/* Box A: Peran Sistem & Hak Akses Akun */}
+          <div className="p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+                <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>1. Peran Akun &amp; Hak Akses</span>
+              </h4>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCloseModal();
+                    setTimeout(() => handleOpenRoleModal(guru), 200);
+                  }}
+                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <Sliders className="w-3 h-3" />
+                  <span>Ubah Role</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">Role Utama Sistem</span>
+                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-bold border ${primaryBadge.badgeClass}`}>
+                  {primaryBadge.label}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                  Role Tambahan / Multi-Role ({addRoles.length})
+                </span>
+                {addRoles.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {addRoles.map((rId) => {
+                      const rMeta = getRoleBadgeMeta(rId, appData);
+                      return (
+                        <span key={rId} className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${rMeta.badgeClass}`}>
+                          +{rMeta.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-xs italic">Tidak ada role tambahan</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Box B: Tugas Tambahan & Fungsional Sekolah */}
+          <div className="p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>2. Tugas Tambahan Sekolah</span>
+              </h4>
+              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                {duties.length} Tugas
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">
+                  Tugas Fungsional Terpasang
+                </span>
+                {duties.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {duties.map((duty) => (
+                      <span
+                        key={duty}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1"
+                      >
+                        <Award className="w-3 h-3 text-amber-600" />
+                        <span>{duty}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-xs italic">Tidak ada tugas tambahan</span>
+                )}
+              </div>
+
+              {guru.mataPelajaran && (
+                <div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Mata Pelajaran Diampu</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.mataPelajaran}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          {/* Box 1: Identitas Pribadi */}
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+            <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              <User className="w-3.5 h-3.5" />
+              <span>Identitas Pribadi</span>
+            </h4>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-[10px] text-slate-400 block">NIK</span>
+                <span className="font-semibold font-mono text-slate-800 dark:text-slate-200">{guru.nik || '-'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Agama</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{getAgamaLabel(guru.agamaId)}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Tempat Lahir</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.tempatLahir || '-'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Tanggal Lahir</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {formatTanggalIndonesia(guru.tanggalLahir) || guru.tanggalLahir || '-'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Box 2: Kontak & Komunikasi */}
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+            <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <Phone className="w-3.5 h-3.5" />
+              <span>Kontak & Akun</span>
+            </h4>
+            <div className="space-y-2">
+              <div>
+                <span className="text-[10px] text-slate-400 block">Nomor HP / WhatsApp</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                  {guru.noHp || '-'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Email</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.email || '-'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Username Login</span>
+                <span className="font-mono text-slate-800 dark:text-slate-200">@{guru.username}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Box 3: Domisili / Alamat Lengkap */}
+        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            <MapPin className="w-3.5 h-3.5" />
+            <span>Alamat & Wilayah Tempat Tinggal</span>
+          </h4>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="col-span-2 sm:col-span-4">
+              <span className="text-[10px] text-slate-400 block">Alamat Lengkap</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{guru.alamat || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block">RT / RW</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {guru.rt ? `RT ${guru.rt}` : '-'} / {guru.rw ? `RW ${guru.rw}` : '-'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block">Desa / Kelurahan</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.desaKelurahan || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block">Kecamatan</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.kecamatan || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block">Kota / Kabupaten</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{guru.kota || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block">Kode Pos / Wilayah</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">
+                {guru.kodePos || '-'} {guru.kodeWilayah ? `(${guru.kodeWilayah})` : ''}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="button"
+            onClick={onCloseModal}
+            className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 transition cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      </div>
     );
   };
 
@@ -1044,7 +1985,6 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
     let templateRows: any[] = [];
 
     if (!isDemo) {
-      // 1 single guide row clearly labeled so it won't be confused with real teacher data
       templateRows = [
         {
           nip: '198501012010011001',
@@ -1192,7 +2132,9 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
       no_hp: g.noHp || '',
       email: g.email || '',
       mata_pelajaran: g.mataPelajaran || '',
-      jabatan: g.jabatan || g.tugasTambahan || '',
+      role_utama: getRoleBadgeMeta(g.role, appData).label,
+      role_tambahan: (g.additionalRoles || []).map((r) => getRoleBadgeMeta(r, appData).label).join(', '),
+      tugas_tambahan: (g.tugasTambahanList || []).join(', ') || g.tugasTambahan || g.jabatan || '',
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -1216,7 +2158,9 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
       { wch: 16 }, // no_hp
       { wch: 28 }, // email
       { wch: 22 }, // mata_pelajaran
-      { wch: 24 }, // jabatan
+      { wch: 20 }, // role_utama
+      { wch: 25 }, // role_tambahan
+      { wch: 30 }, // tugas_tambahan
     ];
 
     const wb = XLSX.utils.book_new();
@@ -1229,8 +2173,8 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
     <div className="space-y-5">
       {/* Page Header */}
       <PageHeader
-        title="Master Data Biodata Guru"
-        description="Pusat data biodata lengkap seluruh tenaga pendidik (guru) sesuai format data resmi sekolah: NIP, NUPTK, NIK, Tempat/Tgl Lahir, Alamat, Wilayah, Kontak, dan Email."
+        title="Master Data Biodata & Peran Guru"
+        description="Pusat data biodata lengkap tenaga pendidik serta pengelolaan penugasan Role Utama, Role Tambahan (Multi-Role), dan Tugas Fungsional Sekolah (Wali Kelas, Pembina OSIS, Kepala Lab, BP/BK, dll.)."
         icon={Users}
         actions={
           !readOnly ? (
@@ -1247,44 +2191,54 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <Users className="w-5 h-5" />
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Users className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{totalGuru}</div>
-            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Total Tenaga Pendidik</div>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{totalGuru}</div>
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Total Guru</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <User className="w-5 h-5" />
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <User className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{totalLaki}</div>
-            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Laki-laki (L)</div>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{totalLaki}</div>
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Laki-laki (L)</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <UserCheck className="w-5 h-5" />
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <UserCheck className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{totalPerempuan}</div>
-            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Perempuan (P)</div>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{totalPerempuan}</div>
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Perempuan (P)</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <Hash className="w-5 h-5" />
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Hash className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{totalNuptk}</div>
-            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Tercatat NUPTK</div>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{totalNuptk}</div>
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">NUPTK Tercatat</div>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3 col-span-2 sm:col-span-1">
+          <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-lg font-extrabold text-slate-900 dark:text-slate-100">{totalMultiRole}</div>
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Multi-Role / Tugas</div>
           </div>
         </div>
       </div>
@@ -1302,7 +2256,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Cari NAMA, NIP, NUPTK, NIK, TEMPAT LAHIR, ALAMAT, KECAMATAN, NO HP..."
+              placeholder="Cari NAMA, NIP, PERAN, TUGAS TAMBAHAN, MAPEL, ALAMAT, NO HP..."
               className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
             />
           </div>
@@ -1339,6 +2293,32 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
               </button>
             </div>
 
+            {/* Role Filter */}
+            <select
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition font-medium"
+            >
+              <option value="semua">Semua Role & Tugas</option>
+              <option value="guru">Guru Pengampu</option>
+              <option value="wali">Wali Kelas</option>
+              <option value="kesiswaan">WKS Kesiswaan / BK</option>
+              <option value="kurikulum">WKS Kurikulum</option>
+              <option value="staf_jadwal">Staf Pengelola Jadwal</option>
+              <option value="hubin">WKS Hubin & Humas</option>
+              <option value="admin">Administrator</option>
+              {allRoles
+                .filter((r) => !r.isSystem)
+                .map((cr) => (
+                  <option key={cr.roleId} value={cr.roleId}>
+                    {cr.roleName} (Kustom)
+                  </option>
+                ))}
+            </select>
+
             {/* JK Filter */}
             <select
               value={jkFilter}
@@ -1348,26 +2328,9 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
               }}
               className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition"
             >
-              <option value="semua">Semua Gender (L/P)</option>
+              <option value="semua">Semua Gender</option>
               <option value="L">Laki-laki (L)</option>
               <option value="P">Perempuan (P)</option>
-            </select>
-
-            {/* Agama Filter */}
-            <select
-              value={agamaFilter}
-              onChange={(e) => {
-                setAgamaFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition"
-            >
-              <option value="semua">Semua Agama</option>
-              {AGAMA_OPTIONS.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
             </select>
 
             {/* Excel Actions */}
@@ -1377,7 +2340,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                   type="button"
                   onClick={() => setIsImportModalOpen(true)}
                   className="px-3 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                  title="Buka Wizard Import Excel Guru (Validasi, Mapping, dan Preview Lengkap)"
+                  title="Buka Wizard Import Excel Guru"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Import Excel</span>
@@ -1387,7 +2350,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                   type="button"
                   onClick={() => handleDownloadTemplate(false)}
                   className="px-3 py-2 text-xs font-bold rounded-xl bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="Unduh Format Template Excel Biodata Guru (Siap Diisi)"
+                  title="Unduh Format Template Excel Biodata Guru"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Template</span>
@@ -1399,7 +2362,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
               type="button"
               onClick={handleExportExcel}
               className="px-3 py-2 text-xs font-bold rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Export Data Biodata Guru ke Excel"
+              title="Export Data Biodata & Peran Guru ke Excel"
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Export</span>
@@ -1410,7 +2373,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                 type="button"
                 onClick={handleDeleteAllGuru}
                 className="px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Hapus Seluruh Data Biodata Guru"
+                title="Hapus Seluruh Data Guru"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Hapus Semua</span>
@@ -1429,7 +2392,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                 <Users className="w-8 h-8 opacity-40" />
                 <p className="font-bold">Tidak ada data guru ditemukan.</p>
                 <p className="text-[11px] text-slate-500">
-                  Coba sesuaikan kata kunci pencarian.
+                  Coba sesuaikan kata kunci pencarian atau filter role.
                 </p>
               </div>
             </div>
@@ -1439,6 +2402,11 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                 const globalIdx = startIdx + index + 1;
                 const fullNama = guru.nama;
                 const ttl = formatTTL(guru.tempatLahir, guru.tanggalLahir);
+                const primaryBadge = getRoleBadgeMeta(guru.role, appData);
+                const addRoles = Array.isArray(guru.additionalRoles) ? guru.additionalRoles : [];
+                const duties = Array.isArray(guru.tugasTambahanList) && guru.tugasTambahanList.length > 0
+                  ? guru.tugasTambahanList
+                  : guru.tugasTambahan ? guru.tugasTambahan.split(',').map(s => s.trim()).filter(Boolean) : [];
 
                 return (
                   <div
@@ -1474,66 +2442,120 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                         </span>
                       </div>
 
-                      {/* Card Body: NIP & TTL */}
+                      {/* Card Body: Roles & Badges Terpisah Rapi */}
                       <div className="space-y-2 py-2.5 border-t border-b border-slate-100 dark:border-slate-800 text-xs">
-                        <div className="flex items-center justify-between gap-2">
+                        {/* 1. Bagian Peran Sistem */}
+                        <div className="p-2 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100/80 dark:border-indigo-900/40">
+                          <span className="text-[10px] font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1 mb-1">
+                            <ShieldCheck className="w-3 h-3 text-indigo-600" />
+                            <span>Peran Sistem (Akses)</span>
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${primaryBadge.badgeClass}`}>
+                              {primaryBadge.label}
+                            </span>
+                            {addRoles.map((rId) => {
+                              const rMeta = getRoleBadgeMeta(rId, appData);
+                              return (
+                                <span key={rId} className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold border ${rMeta.badgeClass}`}>
+                                  +{rMeta.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 2. Bagian Tugas Tambahan Sekolah */}
+                        <div className="p-2 rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border border-amber-100/80 dark:border-amber-900/40">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-extrabold text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                              <Award className="w-3 h-3 text-amber-600" />
+                              <span>Tugas Tambahan</span>
+                            </span>
+                            <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                              {duties.length > 0 ? `${duties.length}` : '0'}
+                            </span>
+                          </div>
+                          {duties.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {duties.map((duty) => (
+                                <span
+                                  key={duty}
+                                  className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                                >
+                                  {duty}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Tidak ada tugas tambahan</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-0.5">
                           <span className="text-[11px] font-semibold text-slate-400">NIP</span>
                           <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs">
                             {guru.nip || <span className="text-slate-400 font-normal font-sans">-</span>}
                           </span>
                         </div>
 
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[11px] font-semibold text-slate-400">TTL</span>
-                          <span className="font-medium text-slate-800 dark:text-slate-200 text-xs leading-relaxed">
-                            {ttl}
-                          </span>
-                        </div>
+                        {guru.mataPelajaran && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold text-slate-400">Mapel</span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs truncate max-w-[150px]">
+                              {guru.mataPelajaran}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* Card Footer: Action Buttons */}
-                    <div className="flex items-center justify-end gap-1.5 pt-3 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleViewDetailGuru(guru)}
-                        className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition flex items-center gap-1 cursor-pointer"
-                        title="Lihat Detail Lengkap Biodata Guru"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>Detail</span>
-                      </button>
+                    <div className="flex items-center justify-between gap-1.5 pt-3 mt-1">
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRoleModal(guru)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 hover:bg-indigo-100 transition flex items-center gap-1 cursor-pointer border border-indigo-200 dark:border-indigo-800"
+                          title="Kelola Role & Tugas Tambahan Guru Ini"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Atur Role</span>
+                        </button>
+                      ) : <div />}
 
-                      {!readOnly && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleResetPassword(guru)}
-                            className="p-1.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 transition cursor-pointer"
-                            title="Reset Password ke default 123"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                          </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleViewDetailGuru(guru)}
+                          className="p-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                          title="Lihat Detail Lengkap Biodata Guru"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleOpenGuruModal(guru)}
-                            className="p-1.5 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition cursor-pointer"
-                            title="Edit Biodata Guru"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
+                        {!readOnly && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenGuruModal(guru)}
+                              className="p-1.5 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition cursor-pointer"
+                              title="Edit Biodata Lengkap"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteGuru(guru)}
-                            className="p-1.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
-                            title="Hapus Biodata Guru"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGuru(guru)}
+                              className="p-1.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                              title="Hapus Data Guru"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1565,11 +2587,11 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                 <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 text-[11px] uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800">
                   <th className="py-3 px-3 w-12 text-center">No</th>
                   <th
-                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition w-48"
+                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition w-44"
                     onClick={() => handleSort('nip')}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>NIP</span>
+                      <span>NIP & Akun</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
@@ -1578,31 +2600,40 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                     onClick={() => handleSort('nama')}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>Nama</span>
+                      <span>Nama Guru</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th
-                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition"
-                    onClick={() => handleSort('tempatLahir')}
+                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition w-64"
+                    onClick={() => handleSort('role')}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>TTL (Tempat, Tanggal Lahir)</span>
+                      <span>Peran & Tugas Tambahan</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
-                  <th className="py-3 px-4 text-center w-36">Aksi</th>
+                  <th
+                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition hidden md:table-cell"
+                    onClick={() => handleSort('tempatLahir')}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>TTL & Kontak</span>
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-center w-40">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-200">
                 {pagedGuru.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400">
+                    <td colSpan={6} className="py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Users className="w-8 h-8 opacity-40" />
                         <p className="font-bold">Tidak ada data guru ditemukan.</p>
                         <p className="text-[11px] text-slate-500">
-                          Coba sesuaikan kata kunci pencarian.
+                          Coba sesuaikan kata kunci pencarian atau filter role.
                         </p>
                       </div>
                     </td>
@@ -1612,6 +2643,11 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                     const globalIdx = startIdx + index + 1;
                     const fullNama = guru.nama;
                     const ttl = formatTTL(guru.tempatLahir, guru.tanggalLahir);
+                    const primaryBadge = getRoleBadgeMeta(guru.role, appData);
+                    const addRoles = Array.isArray(guru.additionalRoles) ? guru.additionalRoles : [];
+                    const duties = Array.isArray(guru.tugasTambahanList) && guru.tugasTambahanList.length > 0
+                      ? guru.tugasTambahanList
+                      : guru.tugasTambahan ? guru.tugasTambahan.split(',').map(s => s.trim()).filter(Boolean) : [];
 
                     return (
                       <tr
@@ -1622,9 +2658,14 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                           {globalIdx}
                         </td>
 
-                        {/* NIP */}
-                        <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {guru.nip || <span className="text-slate-400 font-normal font-sans">-</span>}
+                        {/* NIP & Username */}
+                        <td className="py-3 px-4">
+                          <div className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                            {guru.nip || <span className="text-slate-400 font-normal font-sans">-</span>}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            @{guru.username}
+                          </div>
                         </td>
 
                         {/* Nama */}
@@ -1645,23 +2686,94 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                               <div className="font-bold text-slate-900 dark:text-slate-100">
                                 {fullNama}
                               </div>
-                              <div className="text-[10px] text-slate-400 font-mono">
-                                @{guru.username}
-                              </div>
+                              {guru.mataPelajaran && (
+                                <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate max-w-[180px]">
+                                  {guru.mataPelajaran}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
 
-                        {/* TTL */}
+                        {/* Peran & Tugas Tambahan Column (Terpisah Rapi) */}
                         <td className="py-3 px-4">
+                          <div className="space-y-1.5 min-w-[210px]">
+                            {/* 1. Baris Peran Sistem */}
+                            <div>
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 flex items-center gap-1 mb-0.5">
+                                <ShieldCheck className="w-2.5 h-2.5 text-indigo-600" />
+                                <span>Peran Sistem</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span
+                                  onClick={() => !readOnly && handleOpenRoleModal(guru)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${primaryBadge.badgeClass} ${!readOnly ? 'cursor-pointer hover:opacity-80' : ''}`}
+                                  title={!readOnly ? 'Klik untuk mengubah role / tugas' : undefined}
+                                >
+                                  {primaryBadge.label}
+                                </span>
+                                {addRoles.map((rId) => {
+                                  const rMeta = getRoleBadgeMeta(rId, appData);
+                                  return (
+                                    <span key={rId} className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold border ${rMeta.badgeClass}`}>
+                                      +{rMeta.label}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* 2. Baris Tugas Tambahan Sekolah */}
+                            <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400 flex items-center gap-1 mb-0.5">
+                                <Award className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Tugas Tambahan</span>
+                              </div>
+                              {duties.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {duties.map((duty) => (
+                                    <span
+                                      key={duty}
+                                      className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                                    >
+                                      {duty}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">Tidak ada tugas tambahan</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* TTL & Kontak */}
+                        <td className="py-3 px-4 hidden md:table-cell">
                           <div className="font-medium text-slate-800 dark:text-slate-200">
                             {ttl}
                           </div>
+                          {guru.noHp && (
+                            <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                              <Phone className="w-2.5 h-2.5" />
+                              <span>{guru.noHp}</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Aksi */}
                         <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-1">
+                            {!readOnly && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRoleModal(guru)}
+                                className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition cursor-pointer"
+                                title="Kelola Role & Tugas Tambahan Guru Ini"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => handleViewDetailGuru(guru)}

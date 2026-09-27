@@ -60,6 +60,243 @@ const TINGKAT_OPTIONS: Array<NonNullable<MataPelajaran['tingkat']>> = [
   'XII',
 ];
 
+interface MapelFormModalContentProps {
+  itemToEdit?: MataPelajaran;
+  appData: AppData;
+  onSaveSuccess: (updatedAppData: AppData, message: string) => void;
+  onClose: () => void;
+}
+
+export const MapelFormModalContent: React.FC<MapelFormModalContentProps> = ({
+  itemToEdit,
+  appData,
+  onSaveSuccess,
+  onClose,
+}) => {
+  const [kode, setKode] = useState(itemToEdit?.kode || '');
+  const [nama, setNama] = useState(itemToEdit?.nama || '');
+  const [kategori, setKategori] = useState<MataPelajaran['kategori']>(itemToEdit?.kategori || 'Kelompok A (Nasional)');
+  const [tingkat, setTingkat] = useState<MataPelajaran['tingkat']>(itemToEdit?.tingkat || 'Semua Tingkat');
+  const [jurusanNama, setJurusanNama] = useState(itemToEdit?.jurusanNama || '');
+  const [alokasiJp, setAlokasiJp] = useState(itemToEdit?.alokasiJp || 4);
+  const [kkm, setKkm] = useState(itemToEdit?.kkm || 75);
+  const [deskripsi, setDeskripsi] = useState(itemToEdit?.deskripsi || '');
+  const [err, setErr] = useState('');
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr('');
+
+    if (!kode.trim()) {
+      setErr('Kode Mata Pelajaran wajib diisi (misal: MAT-01, RPL-PW).');
+      return;
+    }
+    if (!nama.trim()) {
+      setErr('Nama Mata Pelajaran wajib diisi.');
+      return;
+    }
+
+    // Duplicate code check
+    const currentMList = appData.mataPelajaran || DEFAULT_MATA_PELAJARAN;
+    const isDuplicate = currentMList.some(
+      (m) =>
+        m.kode.trim().toLowerCase() === kode.trim().toLowerCase() &&
+        (!itemToEdit || m.id !== itemToEdit.id)
+    );
+    if (isDuplicate) {
+      setErr(`Kode Mapel "${kode.trim().toUpperCase()}" sudah digunakan pada mapel lain.`);
+      return;
+    }
+
+    const newMapelItem: MataPelajaran = {
+      id: itemToEdit ? itemToEdit.id : `MP_${Date.now()}`,
+      kode: kode.trim().toUpperCase(),
+      nama: cleanMapelName(nama),
+      kategori: kategori,
+      tingkat: tingkat,
+      jurusanNama: jurusanNama.trim() || undefined,
+      alokasiJp: Number(alokasiJp) || 0,
+      kkm: Number(kkm) || 75,
+      deskripsi: deskripsi.trim() || undefined,
+    };
+
+    let updatedList: MataPelajaran[];
+    if (itemToEdit) {
+      updatedList = currentMList.map((m) => (m.id === itemToEdit.id ? newMapelItem : m));
+    } else {
+      updatedList = [newMapelItem, ...currentMList];
+    }
+
+    const updatedAppData = addAuditLog(
+      { ...appData, mataPelajaran: updatedList },
+      itemToEdit ? 'Edit Master Mapel' : 'Tambah Master Mapel',
+      `${itemToEdit ? 'Mengubah' : 'Menambahkan'} master mata pelajaran ${nama.trim()} (${kode.trim().toUpperCase()})`
+    );
+
+    const msg = itemToEdit
+      ? `Mata Pelajaran ${nama.trim()} berhasil diperbarui!`
+      : `Mata Pelajaran ${nama.trim()} berhasil ditambahkan ke Katalog Master!`;
+
+    onSaveSuccess(updatedAppData, msg);
+  };
+
+  return (
+    <form onSubmit={handleSave} className="space-y-4 text-slate-800 dark:text-slate-100">
+      {err && (
+        <div className="p-3 text-xs rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 shrink-0" />
+          <span>{err}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+            <Hash className="w-3.5 h-3.5 text-blue-600" />
+            <span>Kode Mapel</span> <span className="text-rose-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={kode}
+            onChange={(e) => setKode(e.target.value)}
+            placeholder="misal: RPL-PWPB"
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold uppercase focus:ring-2 focus:ring-blue-500 outline-none transition"
+          />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+            <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Nama Mata Pelajaran</span> <span className="text-rose-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={nama}
+            onChange={(e) => setNama(e.target.value)}
+            placeholder="misal: Pemrograman Web & Perangkat Bergerak"
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition font-medium"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5 text-purple-600" />
+            <span>Kelompok / Kategori</span>
+          </label>
+          <select
+            value={kategori}
+            onChange={(e) => setKategori(e.target.value as any)}
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            {MAPEL_KATEGORI_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+            <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
+            <span>Tingkat Kelas Sasaran</span>
+          </label>
+          <select
+            value={tingkat}
+            onChange={(e) => setTingkat(e.target.value as any)}
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            {TINGKAT_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {t === 'Semua Tingkat' ? 'Semua Tingkat (X, XI, XII)' : `Khusus Kelas ${t}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-blue-600" />
+            <span>Alokasi (JP/Minggu)</span>
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="24"
+            value={alokasiJp}
+            onChange={(e) => setAlokasiJp(Number(e.target.value))}
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5 text-amber-500" />
+            <span>KKM Standar</span>
+          </label>
+          <input
+            type="number"
+            min="50"
+            max="100"
+            value={kkm}
+            onChange={(e) => setKkm(Number(e.target.value))}
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Jurusan (Opsional)
+          </label>
+          <input
+            type="text"
+            value={jurusanNama}
+            onChange={(e) => setJurusanNama(e.target.value)}
+            placeholder="misal: RPL, TKJ, DKV"
+            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+          Deskripsi & Silabus Ringkas (Opsional)
+        </label>
+        <textarea
+          rows={2}
+          value={deskripsi}
+          onChange={(e) => setDeskripsi(e.target.value)}
+          placeholder="Deskripsi ringkas materi pokok atau capaian pembelajaran..."
+          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
+        />
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{itemToEdit ? 'Simpan Perubahan' : 'Simpan Master Mapel'}</span>
+        </button>
+      </div>
+    </form>
+  );
+};
+
 export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = ({
   appData,
   readOnly = false,
@@ -146,246 +383,18 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
   const handleOpenMasterMapelModal = (itemToEdit?: MataPelajaran) => {
     if (readOnly) return;
 
-    const initialKode = itemToEdit?.kode || '';
-    const initialNama = itemToEdit?.nama || '';
-    const initialKategori = itemToEdit?.kategori || 'Kelompok A (Nasional)';
-    const initialTingkat = itemToEdit?.tingkat || 'Semua Tingkat';
-    const initialJurusanNama = itemToEdit?.jurusanNama || '';
-    const initialAlokasiJp = itemToEdit?.alokasiJp || 4;
-    const initialKkm = itemToEdit?.kkm || 75;
-    const initialDeskripsi = itemToEdit?.deskripsi || '';
-
-    const FormModal: React.FC = () => {
-      const [kode, setKode] = useState(initialKode);
-      const [nama, setNama] = useState(initialNama);
-      const [kategori, setKategori] = useState<MataPelajaran['kategori']>(initialKategori);
-      const [tingkat, setTingkat] = useState<MataPelajaran['tingkat']>(initialTingkat);
-      const [jurusanNama, setJurusanNama] = useState(initialJurusanNama);
-      const [alokasiJp, setAlokasiJp] = useState(initialAlokasiJp);
-      const [kkm, setKkm] = useState(initialKkm);
-      const [deskripsi, setDeskripsi] = useState(initialDeskripsi);
-      const [err, setErr] = useState('');
-
-      const handleSave = (e: React.FormEvent) => {
-        e.preventDefault();
-        setErr('');
-
-        if (!kode.trim()) {
-          setErr('Kode Mata Pelajaran wajib diisi (misal: MAT-01, RPL-PW).');
-          return;
-        }
-        if (!nama.trim()) {
-          setErr('Nama Mata Pelajaran wajib diisi.');
-          return;
-        }
-
-        // Duplicate code check
-        const currentMList = appData.mataPelajaran || DEFAULT_MATA_PELAJARAN;
-        const isDuplicate = currentMList.some(
-          (m) =>
-            m.kode.trim().toLowerCase() === kode.trim().toLowerCase() &&
-            (!itemToEdit || m.id !== itemToEdit.id)
-        );
-        if (isDuplicate) {
-          setErr(`Kode Mapel "${kode.trim().toUpperCase()}" sudah digunakan pada mapel lain.`);
-          return;
-        }
-
-        const newMapelItem: MataPelajaran = {
-          id: itemToEdit ? itemToEdit.id : `MP_${Date.now()}`,
-          kode: kode.trim().toUpperCase(),
-          nama: cleanMapelName(nama),
-          kategori: kategori,
-          tingkat: tingkat,
-          jurusanNama: jurusanNama.trim() || undefined,
-          alokasiJp: Number(alokasiJp) || 0,
-          kkm: Number(kkm) || 75,
-          deskripsi: deskripsi.trim() || undefined,
-        };
-
-        let updatedList: MataPelajaran[];
-        if (itemToEdit) {
-          updatedList = currentMList.map((m) => (m.id === itemToEdit.id ? newMapelItem : m));
-        } else {
-          updatedList = [newMapelItem, ...currentMList];
-        }
-
-        const updatedAppData = addAuditLog(
-          { ...appData, mataPelajaran: updatedList },
-          itemToEdit ? 'Edit Master Mapel' : 'Tambah Master Mapel',
-          `${itemToEdit ? 'Mengubah' : 'Menambahkan'} master mata pelajaran ${nama.trim()} (${kode.trim().toUpperCase()})`
-        );
-
-        onUpdateAppData(updatedAppData);
-        onCloseModal();
-        onShowToast(
-          itemToEdit
-            ? `Mata Pelajaran ${nama.trim()} berhasil diperbarui!`
-            : `Mata Pelajaran ${nama.trim()} berhasil ditambahkan ke Katalog Master!`,
-          'success'
-        );
-      };
-
-      return (
-        <form onSubmit={handleSave} className="space-y-4 text-slate-800 dark:text-slate-100">
-          {err && (
-            <div className="p-3 text-xs rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>{err}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Hash className="w-3.5 h-3.5 text-blue-600" />
-                <span>Kode Mapel</span> <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={kode}
-                onChange={(e) => setKode(e.target.value)}
-                placeholder="misal: RPL-PWPB"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold uppercase focus:ring-2 focus:ring-blue-500 outline-none transition"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Nama Mata Pelajaran</span> <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={nama}
-                onChange={(e) => setNama(e.target.value)}
-                placeholder="misal: Pemrograman Web & Perangkat Bergerak"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-purple-600" />
-                <span>Kelompok / Kategori</span>
-              </label>
-              <select
-                value={kategori}
-                onChange={(e) => setKategori(e.target.value as any)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
-              >
-                {MAPEL_KATEGORI_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
-                <span>Tingkat Kelas Sasaran</span>
-              </label>
-              <select
-                value={tingkat}
-                onChange={(e) => setTingkat(e.target.value as any)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
-              >
-                {TINGKAT_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t === 'Semua Tingkat' ? 'Semua Tingkat (X, XI, XII)' : `Khusus Kelas ${t}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <span>Alokasi (JP/Minggu)</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="24"
-                value={alokasiJp}
-                onChange={(e) => setAlokasiJp(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-                <Award className="w-3.5 h-3.5 text-amber-500" />
-                <span>KKM Standar</span>
-              </label>
-              <input
-                type="number"
-                min="50"
-                max="100"
-                value={kkm}
-                onChange={(e) => setKkm(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Jurusan (Opsional)
-              </label>
-              <input
-                type="text"
-                value={jurusanNama}
-                onChange={(e) => setJurusanNama(e.target.value)}
-                placeholder="misal: RPL, TKJ, DKV"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Deskripsi & Silabus Ringkas (Opsional)
-            </label>
-            <textarea
-              rows={2}
-              value={deskripsi}
-              onChange={(e) => setDeskripsi(e.target.value)}
-              placeholder="Deskripsi ringkas materi pokok atau capaian pembelajaran..."
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={onCloseModal}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{itemToEdit ? 'Simpan Perubahan' : 'Simpan Master Mapel'}</span>
-            </button>
-          </div>
-        </form>
-      );
-    };
-
     onOpenModal(
       itemToEdit ? `Edit Master Mapel: ${itemToEdit.nama}` : 'Tambah Master Mata Pelajaran Baru',
-      <FormModal />
+      <MapelFormModalContent
+        itemToEdit={itemToEdit}
+        appData={appData}
+        onSaveSuccess={(updatedAppData, msg) => {
+          onUpdateAppData(updatedAppData);
+          onCloseModal();
+          onShowToast(msg, 'success');
+        }}
+        onClose={onCloseModal}
+      />
     );
   };
 

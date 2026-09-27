@@ -165,6 +165,7 @@ export interface AdminAccount {
   password: string;
   nama: string;
   foto: string;
+  roles?: string[];
 }
 
 export interface KesiswaanAccount {
@@ -174,6 +175,7 @@ export interface KesiswaanAccount {
   jabatan: string;
   foto?: string;
   noHp?: string;
+  roles?: string[];
 }
 
 export interface KurikulumAccount {
@@ -183,6 +185,7 @@ export interface KurikulumAccount {
   jabatan?: string;
   foto?: string;
   noHp?: string;
+  roles?: string[];
 }
 
 export interface StafJadwalAccount {
@@ -193,6 +196,7 @@ export interface StafJadwalAccount {
   jabatan?: string;
   foto?: string;
   noHp?: string;
+  roles?: string[];
 }
 
 export interface UserBiasaAccount {
@@ -204,6 +208,7 @@ export interface UserBiasaAccount {
   mataPelajaran?: string;
   hariMengajar?: string[]; // ['Senin', 'Rabu', 'Jumat']
   batasiLoginHariMengajar?: boolean;
+  roles?: string[];
 }
 
 export interface Jurusan {
@@ -236,6 +241,8 @@ export interface WaliKelas {
   username: string;
   password: string;
   role?: UserRole;
+  roles?: string[];
+  additionalRoles?: UserRole[]; // e.g. ['wali', 'kesiswaan', 'custom_osis']
   tugasTambahan?: string; // e.g. 'Wali Kelas', 'WKS Kurikulum', 'WKS Kesiswaan', 'WKS Hubin', 'Guru Mapel'
   tugasTambahanList?: string[]; // e.g. ['Wali Kelas', 'WKS Kurikulum', 'Kepala Lab']
   foto?: string;
@@ -274,6 +281,7 @@ export interface Siswa {
   deviceInfo?: string;
   deviceLockedAt?: string;
   isDeviceLocked?: boolean;
+  roles?: string[];
 }
 
 export interface SiswaPresensiItem {
@@ -553,6 +561,7 @@ export interface AppData {
   pelanggaran?: Pelanggaran[];
   deletedHomeVisitIds?: string[];
   deletedPelanggaranIds?: string[];
+  deletedSiswaIds?: string[];
   violationTemplates?: ViolationTemplate[];
   chatMessages?: ChatMessage[];
   enableLiveChat?: boolean;
@@ -684,6 +693,7 @@ export type UserRole = string;
 
 export interface UserSession {
   role: UserRole;
+  roles?: string[];
   data: AdminAccount | WaliKelas | KesiswaanAccount | KurikulumAccount | StafJadwalAccount | UserBiasaAccount | Siswa;
 }
 

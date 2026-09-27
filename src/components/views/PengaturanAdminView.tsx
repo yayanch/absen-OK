@@ -202,11 +202,13 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
           jabatan: cleanJabatan || matched.item.jabatan || 'WKS Kesiswaan / BP BK',
         };
         updatedWaliList[matched.index] = updatedWali;
-        const newSession: UserSession = { role: 'kesiswaan', data: updatedWali };
+        const newRoles = currentUser.roles || (updatedWali.roles) || [updatedWali.role || 'kesiswaan'];
+        const newSession: UserSession = { role: updatedWali.role || 'kesiswaan', roles: newRoles, data: updatedWali };
         onUpdateSession(newSession);
         saveSessionUser(newSession);
       } else {
-        const newSession: UserSession = { role: 'kesiswaan', data: updatedKesiswaan };
+        const newRoles = currentUser.roles || ((updatedKesiswaan as any).roles) || ['kesiswaan'];
+        const newSession: UserSession = { role: 'kesiswaan', roles: newRoles, data: updatedKesiswaan };
         onUpdateSession(newSession);
         saveSessionUser(newSession);
       }
@@ -236,11 +238,13 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
           jabatan: cleanJabatan || matched.item.jabatan || 'WKS Kurikulum',
         };
         updatedWaliList[matched.index] = updatedWali;
-        const newSession: UserSession = { role: 'kurikulum', data: updatedWali };
+        const newRoles = currentUser.roles || (updatedWali.roles) || [updatedWali.role || 'kurikulum'];
+        const newSession: UserSession = { role: updatedWali.role || 'kurikulum', roles: newRoles, data: updatedWali };
         onUpdateSession(newSession);
         saveSessionUser(newSession);
       } else {
-        const newSession: UserSession = { role: 'kurikulum', data: updatedKurikulum };
+        const newRoles = currentUser.roles || ((updatedKurikulum as any).roles) || ['kurikulum'];
+        const newSession: UserSession = { role: 'kurikulum', roles: newRoles, data: updatedKurikulum };
         onUpdateSession(newSession);
         saveSessionUser(newSession);
       }
@@ -258,6 +262,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
           password: cleanPassword,
           foto: fotoBase64,
           role: matched.item.role || 'guru',
+          roles: Array.isArray(matched.item.roles) && matched.item.roles.length > 0 ? matched.item.roles : [matched.item.role || 'guru'],
           jabatan: cleanJabatan || matched.item.jabatan || 'Guru Pengampu',
         };
         updatedWaliList[matched.index] = updatedGuruData;
@@ -270,6 +275,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
           password: cleanPassword,
           noHp: currentData.noHp || '',
           role: 'guru',
+          roles: currentUser.roles || ['guru'],
           foto: fotoBase64,
           jabatan: cleanJabatan || 'Guru Pengampu',
         };
@@ -288,7 +294,8 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       }
 
       nextAppData.waliKelas = updatedWaliList;
-      const newSession: UserSession = { role: 'guru', data: updatedGuruData };
+      const newRoles = currentUser.roles || (updatedGuruData.roles) || ['guru'];
+      const newSession: UserSession = { role: updatedGuruData.role || 'guru', roles: newRoles, data: updatedGuruData };
       onUpdateSession(newSession);
       saveSessionUser(newSession);
     } else if (currentUser.role === 'murid' || currentUser.role === 'siswa') {
@@ -301,7 +308,8 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
             password: cleanPassword ? cleanPassword : (s.password || s.nisn || ''),
             foto: fotoBase64 || s.foto,
           };
-          const newSession: UserSession = { role: 'murid', data: newS };
+          const newRoles = currentUser.roles || (s.roles) || ['murid'];
+          const newSession: UserSession = { role: 'murid', roles: newRoles, data: newS };
           onUpdateSession(newSession);
           saveSessionUser(newSession);
           return newS;
@@ -334,6 +342,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
           password: cleanPassword,
           noHp: currentData.noHp || '',
           role: currentUser.role || 'wali',
+          roles: currentUser.roles || [currentUser.role || 'wali'],
           foto: fotoBase64,
           jabatan: cleanJabatan,
         };
@@ -341,7 +350,8 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       }
 
       nextAppData.waliKelas = updatedWaliList;
-      const newSession: UserSession = { role: updatedWali.role || currentUser.role || 'wali', data: updatedWali };
+      const newRoles = currentUser.roles || (updatedWali.roles) || [updatedWali.role || currentUser.role || 'wali'];
+      const newSession: UserSession = { role: updatedWali.role || currentUser.role || 'wali', roles: newRoles, data: updatedWali };
       onUpdateSession(newSession);
       saveSessionUser(newSession);
     }

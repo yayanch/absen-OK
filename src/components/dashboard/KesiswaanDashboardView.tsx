@@ -51,26 +51,29 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
   setSelectedStudentDetail,
   onNavigateView,
 }) => {
-  // Map student risk levels (Prioritas, Perlu Perhatian, Normal)
+  // Map student risk levels (Prioritas, Perlu Perhatian)
   const studentsWithRisk = React.useMemo(() => {
-    return studentCumulativeStats.map((item) => {
-      let statusRisk: 'Normal' | 'Perlu Perhatian' | 'Prioritas' = 'Normal';
-      if (item.alfa >= 3 || item.totalTidakHadir >= 7) {
-        statusRisk = 'Prioritas';
-      } else if (item.alfa >= 1 || item.totalTidakHadir >= 3) {
-        statusRisk = 'Perlu Perhatian';
-      }
-      return {
-        ...item,
-        statusRisk,
-      };
-    }).sort((a, b) => {
-      const riskOrder = { Prioritas: 0, 'Perlu Perhatian': 1, Normal: 2 };
-      if (riskOrder[a.statusRisk] !== riskOrder[b.statusRisk]) {
-        return riskOrder[a.statusRisk] - riskOrder[b.statusRisk];
-      }
-      return b.alfa - a.alfa;
-    });
+    return studentCumulativeStats
+      .map((item) => {
+        let statusRisk: 'Normal' | 'Perlu Perhatian' | 'Prioritas' = 'Normal';
+        if (item.alfa >= 3 || item.totalTidakHadir >= 7) {
+          statusRisk = 'Prioritas';
+        } else if (item.alfa >= 1 || item.totalTidakHadir >= 3) {
+          statusRisk = 'Perlu Perhatian';
+        }
+        return {
+          ...item,
+          statusRisk,
+        };
+      })
+      .filter((item) => item.statusRisk !== 'Normal')
+      .sort((a, b) => {
+        const riskOrder = { Prioritas: 0, 'Perlu Perhatian': 1, Normal: 2 };
+        if (riskOrder[a.statusRisk] !== riskOrder[b.statusRisk]) {
+          return riskOrder[a.statusRisk] - riskOrder[b.statusRisk];
+        }
+        return b.alfa - a.alfa || b.totalTidakHadir - a.totalTidakHadir;
+      });
   }, [studentCumulativeStats]);
 
   const topAlphaStudents = React.useMemo(() => {

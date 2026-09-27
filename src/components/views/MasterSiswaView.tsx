@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
 import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, User, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppData, Siswa, Kelas, UserSession } from '../../types';
-import { randomizeWaForStudents, generateRandomWaNumber, sortKelasList } from '../../data/initialData';
+import { sortKelasList } from '../../data/initialData';
 import { compressBase64Image, addAuditLog, formatTTL, extractKelasTingkat } from '../../utils/helpers';
 import { Pagination } from '../Pagination';
 import { ImportSiswaModal } from './ImportSiswaModal';
@@ -24,6 +24,8 @@ interface MasterSiswaViewProps {
     onConfirm: () => void
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  initialSearchQuery?: string;
+  initialKelasId?: string;
 }
 
 interface SiswaQrModalContentProps {
@@ -235,10 +237,20 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   onCloseModal,
   onConfirmModal,
   onShowToast,
+  initialSearchQuery,
+  initialKelasId,
 }) => {
-  const isAdmin = currentUser?.role === 'admin';
-  const isWali = currentUser?.role === 'wali';
-  const isKesiswaan = currentUser?.role === 'kesiswaan';
+  const userRole = currentUser?.role || 'admin';
+  const userRoles = Array.isArray(currentUser?.roles) ? currentUser.roles : [userRole];
+  const isAdmin = userRole === 'admin';
+  const isWali = userRole === 'wali' || userRoles.includes('wali');
+  const isKesiswaan = userRole === 'kesiswaan' || userRoles.includes('kesiswaan');
+  const isGuru = userRole === 'guru' || userRole === 'user' || userRoles.includes('guru');
+  const isMurid = userRole === 'murid' || userRole === 'siswa' || userRoles.includes('murid');
+
+  const currentGuruId = String((currentUser?.data as any)?.id || '');
+  const currentUsername = String((currentUser?.data as any)?.username || '').toLowerCase();
+  const currentNip = String((currentUser?.data as any)?.nip || '').toLowerCase();
 
   const canEdit = !readOnly || isAdmin || isWali || isKesiswaan;
   const canAdd = !readOnly || isAdmin || isWali || isKesiswaan;
@@ -250,11 +262,43 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     ? sortedKelas.filter((k) => k.waliKelasId === (currentUser?.data as any)?.id)
     : sortedKelas;
 
+  // Compute class IDs that are strictly "Kelas Binaan" (wali kelas binaan or admin/kesiswaan)
+  const binaanClassIds = useMemo(() => {
+    if (isAdmin || isKesiswaan) return null; // Admin/kesiswaan has full management access
+    const matchedGuru = (appData?.waliKelas || []).find((g) => {
+      return (
+        (g.id && g.id === currentGuruId) ||
+        (g.username && g.username.toLowerCase() === currentUsername) ||
+        (g.nip && currentNip && g.nip.toLowerCase() === currentNip)
+      );
+    });
+    const teacherIds = new Set<string>();
+    if (currentGuruId) teacherIds.add(currentGuruId);
+    if (matchedGuru?.id) teacherIds.add(matchedGuru.id);
+
+    const ids = new Set<string>();
+    (appData?.kelas || []).forEach((k) => {
+      if (teacherIds.has(k.waliKelasId)) {
+        ids.add(k.id);
+      }
+    });
+    return ids;
+  }, [isAdmin, isKesiswaan, currentGuruId, currentUsername, currentNip, appData?.waliKelas, appData?.kelas]);
+
   const [filterKelasId, setFilterKelasId] = useState<string>(
-    isWali && waliClasses.length > 0 ? waliClasses[0].id : ''
+    initialKelasId || (isWali && waliClasses.length > 0 ? waliClasses[0].id : '')
   );
   const [filterStatus, setFilterStatus] = useState<string>('semua');
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>(initialSearchQuery || '');
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchTerm(initialSearchQuery);
+    }
+    if (initialKelasId !== undefined) {
+      setFilterKelasId(initialKelasId);
+    }
+  }, [initialSearchQuery, initialKelasId]);
   const [sortField, setSortField] = useState<'nama' | 'nisn' | 'gender' | 'kelas' | 'status'>('nama');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -262,6 +306,11 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => (typeof window !== 'undefined' && window.innerWidth < 768 ? 'grid' : 'list'));
   const [activeTingkatDetail, setActiveTingkatDetail] = useState<'X' | 'XI' | 'XII' | null>(null);
   const [showImportModal, setShowImportModal] = useState<boolean>(false);
+  const [showResetWaModal, setShowResetWaModal] = useState<boolean>(false);
+  const [resetTargetScope, setResetTargetScope] = useState<'filtered' | 'selected_class' | 'all'>('all');
+  const [resetIncludeSiswaWa, setResetIncludeSiswaWa] = useState<boolean>(true);
+  const [resetIncludeOrtuWa, setResetIncludeOrtuWa] = useState<boolean>(true);
+  const [resetIncludeOrtuNama, setResetIncludeOrtuNama] = useState<boolean>(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState<boolean>(false);
   const settingsMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -280,9 +329,11 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   }, []);
 
   let filteredSiswa = appData.siswa;
-  if (isWali) {
+  if (isWali && !searchTerm.trim()) {
     const waliClassIds = waliClasses.map((k) => k.id);
-    filteredSiswa = filteredSiswa.filter((s) => waliClassIds.includes(s.kelasId));
+    if (waliClassIds.length > 0 && (!filterKelasId || waliClassIds.includes(filterKelasId))) {
+      filteredSiswa = filteredSiswa.filter((s) => waliClassIds.includes(s.kelasId));
+    }
   }
   if (filterKelasId) {
     filteredSiswa = filteredSiswa.filter((s) => s.kelasId === filterKelasId);
@@ -343,90 +394,6 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   const startIdx = (validCurrentPage - 1) * validPageSize;
   const pagedSiswa = filteredSiswa.slice(startIdx, startIdx + validPageSize);
 
-  const handleRandomizeOrangTuaDanWa = () => {
-    if (appData.siswa.length === 0) {
-      onShowToast('Data siswa masih kosong!', 'warning');
-      return;
-    }
-
-    const hasFilters = !!filterKelasId || filterStatus !== 'semua' || !!searchTerm.trim();
-    const targetClass = appData.kelas.find((k) => k.id === filterKelasId);
-
-    if (hasFilters) {
-      if (filteredSiswa.length === 0) {
-        onShowToast('Tidak ada data siswa yang sesuai filter untuk diacak!', 'warning');
-        return;
-      }
-
-      let filterDesc = '';
-      if (filterKelasId && targetClass) filterDesc = `di kelas ${targetClass.nama}`;
-      else if (filterStatus === 'tidak_aktif') filterDesc = 'berstatus Tidak Aktif';
-      else if (filterStatus === 'aktif') filterDesc = 'berstatus Aktif';
-      else if (searchTerm) filterDesc = `sesuai pencarian "${searchTerm}"`;
-      else filterDesc = 'sesuai filter';
-
-      const msg = `Apakah Anda ingin mengacak nama orang tua dan nomor WhatsApp untuk ${filteredSiswa.length} data siswa ${filterDesc}?`;
-
-      onConfirmModal('Acak Orang Tua & WA', msg, 'info', () => {
-        const parentFirstNames = ["Bpk.", "Bapak", "Bpk.", "Bapak", "Bapak/Ibu"];
-        const parentLastNames = ["Santoso", "Wijaya", "Kusuma", "Hidayat", "Pratama", "Setiawan", "Nugraha", "Lestari", "Sari", "Anggraini", "Wibowo", "Ramadhan", "Saputra"];
-        
-        const idsToRandomize = new Set(filteredSiswa.map((s) => s.id));
-        const updatedSiswa = appData.siswa.map((s) => {
-          if (idsToRandomize.has(s.id)) {
-            const parts = s.nama.split(' ');
-            const lastName = parts.length > 1 ? parts[parts.length - 1] : parentLastNames[Math.floor(Math.random() * parentLastNames.length)];
-            const pTitle = parentFirstNames[Math.floor(Math.random() * parentFirstNames.length)];
-            
-            return {
-              ...s,
-              namaOrangTua: `${pTitle} ${lastName}`,
-              noWa: s.noWa && s.noWa.includes('-') ? s.noWa : generateRandomWaNumber(),
-              noWaOrangTua: generateRandomWaNumber(),
-            };
-          }
-          return s;
-        });
-
-        const nextAppData = addAuditLog(
-          { ...appData, siswa: updatedSiswa },
-          'Acak Orang Tua & WA Siswa',
-          `Mengacak nama orang tua dan No. WA untuk ${filteredSiswa.length} siswa`
-        );
-        onUpdateAppData(nextAppData);
-        onShowToast(`Berhasil mengacak nama orang tua dan nomor WA untuk ${filteredSiswa.length} siswa!`, 'success');
-      });
-    } else {
-      const msg = `Apakah Anda ingin mengacak atau mengisi ulang nama orang tua dan nomor WhatsApp untuk SELURUH ${appData.siswa.length} siswa?`;
-
-      onConfirmModal('Acak Orang Tua & WA Seluruh Siswa', msg, 'info', () => {
-        const parentFirstNames = ["Bpk.", "Bapak", "Bpk.", "Bapak", "Bapak/Ibu"];
-        const parentLastNames = ["Santoso", "Wijaya", "Kusuma", "Hidayat", "Pratama", "Setiawan", "Nugraha", "Lestari", "Sari", "Anggraini", "Wibowo", "Ramadhan", "Saputra"];
-        
-        const updatedSiswa = appData.siswa.map((s) => {
-          const parts = s.nama.split(' ');
-          const lastName = parts.length > 1 ? parts[parts.length - 1] : parentLastNames[Math.floor(Math.random() * parentLastNames.length)];
-          const pTitle = parentFirstNames[Math.floor(Math.random() * parentFirstNames.length)];
-          
-          return {
-            ...s,
-            namaOrangTua: `${pTitle} ${lastName}`,
-            noWa: s.noWa && s.noWa.includes('-') ? s.noWa : generateRandomWaNumber(),
-            noWaOrangTua: generateRandomWaNumber(),
-          };
-        });
-
-        const nextAppData = addAuditLog(
-          { ...appData, siswa: updatedSiswa },
-          'Acak Orang Tua & WA Seluruh Siswa',
-          `Mengacak nama orang tua dan No. WA untuk seluruh (${appData.siswa.length}) siswa`
-        );
-        onUpdateAppData(nextAppData);
-        onShowToast('Berhasil mengacak nama orang tua dan nomor WA untuk seluruh siswa!', 'success');
-      });
-    }
-  };
-
   const handleSaveSiswa = (
     id: string | null,
     nisn: string,
@@ -474,9 +441,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         gender,
         kelasId,
         status,
-        noWa: noWa || generateRandomWaNumber(),
+        noWa: noWa || '',
         namaOrangTua: namaOrangTua || 'Bapak / Ibu',
-        noWaOrangTua: noWaOrangTua || generateRandomWaNumber(),
+        noWaOrangTua: noWaOrangTua || '',
         alamat,
         tempatLahir,
         tanggalLahir,
@@ -486,7 +453,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       onShowToast('Siswa baru berhasil ditambahkan!', 'success');
     }
 
-    let nextAppData = { ...appData, siswa: newSiswa };
+    const addedOrEditedId = id || ('SIS_' + Date.now());
+    const updatedDeletedIds = (appData.deletedSiswaIds || []).filter((did) => did !== addedOrEditedId);
+    let nextAppData: AppData = { ...appData, siswa: newSiswa, deletedSiswaIds: updatedDeletedIds };
     if (id) {
       nextAppData = addAuditLog(nextAppData, 'Mengubah data siswa', `Mengubah data siswa: ${nama} (NISN: ${nisn})`);
     } else {
@@ -660,9 +629,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       const [nama, setNama] = useState(siswa ? siswa.nama : '');
       const [gender, setGender] = useState<'L' | 'P'>(siswa ? siswa.gender : 'L');
       const [status, setStatus] = useState<'aktif' | 'tidak_aktif'>(siswa ? siswa.status || 'aktif' : 'aktif');
-      const [noWa, setNoWa] = useState(siswa ? siswa.noWa || '' : generateRandomWaNumber());
+      const [noWa, setNoWa] = useState(siswa ? siswa.noWa || '' : '');
       const [namaOrangTua, setNamaOrangTua] = useState(siswa ? siswa.namaOrangTua || '' : '');
-      const [noWaOrangTua, setNoWaOrangTua] = useState(siswa ? siswa.noWaOrangTua || '' : generateRandomWaNumber());
+      const [noWaOrangTua, setNoWaOrangTua] = useState(siswa ? siswa.noWaOrangTua || '' : '');
       const [alamat, setAlamat] = useState(siswa ? siswa.alamat || '' : '');
       const [tempatLahir, setTempatLahir] = useState(siswa ? siswa.tempatLahir || '' : '');
       const [tanggalLahir, setTanggalLahir] = useState(siswa ? siswa.tanggalLahir || '' : '');
@@ -1073,8 +1042,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       const targetName = targetSiswa ? targetSiswa.nama : id;
       const targetNisn = targetSiswa ? targetSiswa.nisn : '';
       const newSiswa = appData.siswa.filter((s) => s.id !== id);
+      const updatedDeletedIds = Array.from(new Set([...(appData.deletedSiswaIds || []), id]));
       const nextAppData = addAuditLog(
-        { ...appData, siswa: newSiswa },
+        { ...appData, siswa: newSiswa, deletedSiswaIds: updatedDeletedIds },
         'Hapus data siswa',
         `Menghapus data siswa: ${targetName} (NISN: ${targetNisn})`
       );
@@ -1110,8 +1080,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       onConfirmModal('Konfirmasi Hapus Massal', msg, 'danger', () => {
         const idsToDelete = new Set(filteredSiswa.map((s) => s.id));
         const newSiswaList = appData.siswa.filter((s) => !idsToDelete.has(s.id));
+        const updatedDeletedIds = Array.from(new Set([...(appData.deletedSiswaIds || []), ...Array.from(idsToDelete)]));
         const nextAppData = addAuditLog(
-          { ...appData, siswa: newSiswaList },
+          { ...appData, siswa: newSiswaList, deletedSiswaIds: updatedDeletedIds },
           'Hapus massal siswa',
           `Menghapus secara massal ${filteredSiswa.length} siswa ${filterDesc}`
         );
@@ -1122,8 +1093,10 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       const msg = `Apakah Anda yakin ingin menghapus SELURUH ${appData.siswa.length} data siswa di sistem?`;
 
       onConfirmModal('Konfirmasi Hapus Seluruh Siswa', msg, 'danger', () => {
+        const allIds = appData.siswa.map((s) => s.id);
+        const updatedDeletedIds = Array.from(new Set([...(appData.deletedSiswaIds || []), ...allIds]));
         const nextAppData = addAuditLog(
-          { ...appData, siswa: [] },
+          { ...appData, siswa: [], deletedSiswaIds: updatedDeletedIds },
           'Hapus seluruh siswa',
           `Menghapus seluruh (${appData.siswa.length}) data siswa`
         );
@@ -1133,70 +1106,83 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     }
   };
 
-  const handleResetDataOrangTuaDanWa = () => {
+  const handleExecuteResetWa = (
+    scope: 'filtered' | 'selected_class' | 'all',
+    targetTypes: { resetSiswaWa: boolean; resetOrtuWa: boolean; resetOrtuNama: boolean }
+  ) => {
+    const { resetSiswaWa, resetOrtuWa, resetOrtuNama } = targetTypes;
+    if (!resetSiswaWa && !resetOrtuWa && !resetOrtuNama) {
+      onShowToast('Pilih minimal satu data yang ingin direset!', 'warning');
+      return;
+    }
+
     if (appData.siswa.length === 0) {
       onShowToast('Data siswa masih kosong!', 'warning');
       return;
     }
 
-    const hasFilters = !!filterKelasId || filterStatus !== 'semua' || !!searchTerm.trim();
-    const targetClass = appData.kelas.find((k) => k.id === filterKelasId);
+    let targetStudents: Siswa[] = [];
+    let scopeLabel = '';
 
-    if (hasFilters) {
-      if (filteredSiswa.length === 0) {
-        onShowToast('Tidak ada data siswa yang sesuai filter untuk direset!', 'warning');
-        return;
-      }
-
-      let filterDesc = '';
-      if (filterKelasId && targetClass) filterDesc = `di kelas ${targetClass.nama}`;
-      else if (filterStatus === 'tidak_aktif') filterDesc = 'berstatus Tidak Aktif';
-      else if (filterStatus === 'aktif') filterDesc = 'berstatus Aktif';
-      else if (searchTerm) filterDesc = `sesuai pencarian "${searchTerm}"`;
-      else filterDesc = 'sesuai filter';
-
-      const msg = `Apakah Anda yakin ingin mereset (mengosongkan) Nama Orang Tua, No. WA Orang Tua, dan No. WA Siswa untuk ${filteredSiswa.length} data siswa ${filterDesc}?`;
-
-      onConfirmModal('Reset Data Orang Tua & WA', msg, 'warning', () => {
-        const idsToReset = new Set(filteredSiswa.map((s) => s.id));
-        const newSiswaList = appData.siswa.map((s) => {
-          if (idsToReset.has(s.id)) {
-            return {
-              ...s,
-              namaOrangTua: '',
-              noWaOrangTua: '',
-              noWa: '',
-            };
-          }
-          return s;
-        });
-        const nextAppData = addAuditLog(
-          { ...appData, siswa: newSiswaList },
-          'Reset data orang tua & WA',
-          `Mereset data orang tua & WA untuk ${filteredSiswa.length} siswa ${filterDesc}`
-        );
-        onUpdateAppData(nextAppData);
-        onShowToast(`Berhasil mereset Nama Orang Tua, No. WA Ortu, & No. WA ${filteredSiswa.length} siswa!`, 'success');
-      });
+    if (scope === 'filtered') {
+      targetStudents = filteredSiswa;
+      scopeLabel = `${targetStudents.length} siswa sesuai filter aktif`;
+    } else if (scope === 'selected_class') {
+      const k = appData.kelas.find((item) => item.id === filterKelasId);
+      targetStudents = filterKelasId ? appData.siswa.filter((s) => s.kelasId === filterKelasId) : filteredSiswa;
+      scopeLabel = `${targetStudents.length} siswa di kelas ${k ? k.nama : 'terpilih'}`;
     } else {
-      const msg = `Apakah Anda yakin ingin mereset (mengosongkan) Nama Orang Tua, No. WA Orang Tua, dan No. WA Siswa untuk SELURUH ${appData.siswa.length} data siswa?`;
-
-      onConfirmModal('Reset Data Orang Tua & WA Seluruh Siswa', msg, 'warning', () => {
-        const newSiswaList = appData.siswa.map((s) => ({
-          ...s,
-          namaOrangTua: '',
-          noWaOrangTua: '',
-          noWa: '',
-        }));
-        const nextAppData = addAuditLog(
-          { ...appData, siswa: newSiswaList },
-          'Reset data ortu & WA seluruh siswa',
-          `Mereset data orang tua & WA seluruh (${appData.siswa.length}) siswa`
-        );
-        onUpdateAppData(nextAppData);
-        onShowToast('Nama Orang Tua, No. WA Orang Tua, dan No. WA Siswa seluruh siswa berhasil direset!', 'success');
-      });
+      // all
+      if (isWali && !isAdmin && !isKesiswaan) {
+        const waliClassIds = new Set(waliClasses.map((k) => k.id));
+        targetStudents = appData.siswa.filter((s) => waliClassIds.has(s.kelasId));
+        scopeLabel = `${targetStudents.length} siswa kelas binaan Anda`;
+      } else {
+        targetStudents = appData.siswa;
+        scopeLabel = `seluruh (${targetStudents.length}) siswa`;
+      }
     }
+
+    if (targetStudents.length === 0) {
+      onShowToast('Tidak ada data siswa yang memenuhi cakupan untuk direset!', 'warning');
+      return;
+    }
+
+    const itemsReset: string[] = [];
+    if (resetSiswaWa) itemsReset.push('No. WA Siswa');
+    if (resetOrtuWa) itemsReset.push('No. WA Orang Tua');
+    if (resetOrtuNama) itemsReset.push('Nama Orang Tua');
+
+    const title = `Reset ${itemsReset.join(' & ')}`;
+    const message = `Apakah Anda yakin ingin mengosongkan ${itemsReset.join(' & ')} untuk ${scopeLabel}? Tindakan ini tidak dapat dibatalkan.`;
+
+    onConfirmModal(title, message, 'warning', () => {
+      const targetIds = new Set(targetStudents.map((s) => s.id));
+      const newSiswaList = appData.siswa.map((s) => {
+        if (targetIds.has(s.id) || (scope === 'all' && (!isWali || isAdmin || isKesiswaan))) {
+          return {
+            ...s,
+            noWa: resetSiswaWa ? '' : (s.noWa || ''),
+            noWaOrangTua: resetOrtuWa ? '' : (s.noWaOrangTua || ''),
+            namaOrangTua: resetOrtuNama ? '' : (s.namaOrangTua || ''),
+          };
+        }
+        return s;
+      });
+
+      const nextAppData = addAuditLog(
+        { ...appData, siswa: newSiswaList },
+        `Reset ${itemsReset.join(' & ')}`,
+        `Mereset ${itemsReset.join(' & ')} untuk ${targetStudents.length} siswa (${scopeLabel})`
+      );
+      onUpdateAppData(nextAppData);
+      setShowResetWaModal(false);
+      onShowToast(`Berhasil mengosongkan ${itemsReset.join(' & ')} untuk ${targetStudents.length} siswa!`, 'success');
+    });
+  };
+
+  const handleResetDataOrangTuaDanWa = () => {
+    setShowResetWaModal(true);
   };
 
   const handleExportExcel = () => {
@@ -1280,10 +1266,13 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   };
 
   const handleImportSuccess = (importedCount: number, updatedCount: number, newSiswaList: Siswa[], newKelasList?: Kelas[]) => {
+    const importedIds = new Set(newSiswaList.map((s) => s.id));
+    const nextDeletedIds = (appData.deletedSiswaIds || []).filter((did) => !importedIds.has(did));
     const nextAppData = addAuditLog(
       { 
         ...appData, 
         siswa: newSiswaList,
+        deletedSiswaIds: nextDeletedIds,
         ...(newKelasList ? { kelas: newKelasList } : {})
       },
       'Import data siswa via Excel',
@@ -1364,9 +1353,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               gender,
               kelasId: targetKelasId,
               status: 'aktif',
-              noWa: noWa || generateRandomWaNumber(),
+              noWa: noWa || '',
               namaOrangTua: namaOrangTua || 'Bapak / Ibu',
-              noWaOrangTua: noWaOrangTua || generateRandomWaNumber(),
+              noWaOrangTua: noWaOrangTua || '',
             });
             addedCount++;
           }
@@ -1377,8 +1366,10 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
           return;
         }
 
+        const importedIds = new Set(newSiswaList.map((s) => s.id));
+        const nextDeletedIds = (appData.deletedSiswaIds || []).filter((did) => !importedIds.has(did));
         const nextAppData = addAuditLog(
-          { ...appData, siswa: newSiswaList },
+          { ...appData, siswa: newSiswaList, deletedSiswaIds: nextDeletedIds },
           'Import data siswa via Drag & Drop',
           `Mengimpor ${addedCount} data siswa baru via Excel drag & drop / langsung`
         );
@@ -1489,16 +1480,19 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         </div>
       )}
 
-      <PageHeader
-        icon={Users}
-        title="Master Data Siswa"
-        description={`Total ${countTotal} Siswa Terdata${currentKelas ? ` • Kelas ${currentKelas.nama}` : ''}`}
-        badge="Statistik Siswa"
-      />
+      {!searchTerm.trim() && (
+        <PageHeader
+          icon={Users}
+          title="Master Data Siswa"
+          description={`Total ${countTotal} Siswa Terdata${currentKelas ? ` • Kelas ${currentKelas.nama}` : ''}`}
+          badge="Statistik Siswa"
+        />
+      )}
 
-      {/* Card Rekap Siswa: Jika Wali Kelas, tampilkan Rekapitulasi Kelas Binaan; Jika Admin/Kesiswaan, tampilkan Rekapitulasi Per Tingkat Kelas (X, XI, XII) */}
-      {isWali ? (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-4">
+      {/* Card Rekap Siswa: Sembunyikan pada hasil pencarian agar tampilan bersih dan langsung ke data */}
+      {!searchTerm.trim() && (
+        isWali ? (
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 shrink-0">
@@ -1873,7 +1867,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             )}
           </div>
         </div>
-      )}
+      ))}
 
       {/* Filter bar / Header */}
       <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-5 md:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1896,6 +1890,16 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                 </option>
               );
             })}
+            {filterKelasId && !waliClasses.some((k) => k.id === filterKelasId) && (() => {
+              const extraK = appData.kelas.find((k) => k.id === filterKelasId);
+              if (!extraK) return null;
+              const count = appData.siswa.filter((s) => s.kelasId === extraK.id && s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif').length;
+              return (
+                <option key={extraK.id} value={extraK.id}>
+                  {extraK.nama} ({count} siswa)
+                </option>
+              );
+            })()}
           </select>
         </div>
 
@@ -2115,41 +2119,62 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                     {/* Bagian: Utilitas & Kontak */}
                     {canEdit && appData.siswa.length > 0 && (
                       <>
-                        <div className="px-2.5 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-t border-slate-100 dark:border-slate-800 mt-1">
-                          Utilitas Kontak Ortu & WA
+                        <div className="px-2.5 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-t border-slate-100 dark:border-slate-800 mt-1 flex items-center justify-between">
+                          <span>Reset & Kelola WhatsApp Siswa / Ortu</span>
+                          <Phone className="w-3 h-3 text-emerald-600" />
                         </div>
 
+                        {/* Menu Utama: Dialog Konfigurasi Reset WA */}
                         <button
                           type="button"
                           onClick={() => {
                             setShowSettingsMenu(false);
-                            handleRandomizeOrangTuaDanWa();
+                            setShowResetWaModal(true);
                           }}
-                          className="w-full px-3 py-2 text-left rounded-xl hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-700 dark:text-slate-200 hover:text-purple-700 dark:hover:text-purple-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
+                          className="w-full px-3 py-2 text-left rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
                         >
-                          <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition shrink-0">
-                            <Users className="w-3.5 h-3.5" />
-                          </div>
-                          <div>
-                            <div className="font-bold">Acak Data Ortu & WA</div>
-                            <div className="text-[10px] text-slate-400 group-hover:text-purple-600/70">Isi acak nama ortu & no. WA untuk testing</div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowSettingsMenu(false);
-                            handleResetDataOrangTuaDanWa();
-                          }}
-                          className="w-full px-3 py-2 text-left rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
-                        >
-                          <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white transition shrink-0">
+                          <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition shrink-0">
                             <RotateCcw className="w-3.5 h-3.5" />
                           </div>
                           <div>
-                            <div className="font-bold">Reset Data Ortu & WA</div>
-                            <div className="text-[10px] text-slate-400 group-hover:text-amber-600/70">Kosongkan nama ortu & no. WA</div>
+                            <div className="font-bold">Reset No. WA Siswa & Ortu...</div>
+                            <div className="text-[10px] text-slate-400 group-hover:text-emerald-600/70">Pilih target reset (Siswa, Ortu, atau Keduanya)</div>
+                          </div>
+                        </button>
+
+                        {/* Pintasan: Reset WA Siswa Saja */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSettingsMenu(false);
+                            handleExecuteResetWa('all', { resetSiswaWa: true, resetOrtuWa: false, resetOrtuNama: false });
+                          }}
+                          className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
+                        >
+                          <div className="p-1 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white transition shrink-0">
+                            <Phone className="w-3 h-3" />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-[11px]">Reset No. WA Siswa Saja</div>
+                            <div className="text-[9px] text-slate-400">Kosongkan no. WA siswa seluruh terdata</div>
+                          </div>
+                        </button>
+
+                        {/* Pintasan: Reset WA Orang Tua Saja */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSettingsMenu(false);
+                            handleExecuteResetWa('all', { resetSiswaWa: false, resetOrtuWa: true, resetOrtuNama: false });
+                          }}
+                          className="w-full px-3 py-1.5 text-left rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
+                        >
+                          <div className="p-1 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white transition shrink-0">
+                            <Users className="w-3 h-3" />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-[11px]">Reset No. WA Orang Tua Saja</div>
+                            <div className="text-[9px] text-slate-400">Kosongkan no. WA orang tua seluruh terdata</div>
                           </div>
                         </button>
                       </>
@@ -2210,6 +2235,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {pagedSiswa.map((s, idx) => {
                 const k = appData.kelas.find((item) => item.id === s.kelasId);
+                const isStudentBinaan = binaanClassIds === null || (s.kelasId ? binaanClassIds.has(s.kelasId) : false);
+                const isSearchResult = Boolean(searchTerm.trim());
+                const showFullActions = isStudentBinaan && !isSearchResult;
 
                 return (
                   <div
@@ -2217,7 +2245,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                     className="bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/60 transition duration-150 flex flex-col justify-between"
                   >
                     <div>
-                      {/* Card Header: Avatar, Nama, NISN, Kelas */}
+                      {/* Card Header: Avatar, Nama, NISN (jika binaan), Kelas */}
                       <div className="flex items-start justify-between gap-2.5 mb-3">
                         <div className="flex items-center gap-3 min-w-0">
                           {s.foto ? (
@@ -2242,9 +2270,11 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                             <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate" title={s.nama}>
                               {s.nama}
                             </h4>
-                            <p className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                              NISN: <span className="text-slate-700 dark:text-slate-300">{s.nisn}</span>
-                            </p>
+                            {isStudentBinaan && (
+                              <p className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                                NISN: <span className="text-slate-700 dark:text-slate-300">{s.nisn}</span>
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2257,48 +2287,72 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Action Buttons: Detail, QR, Edit, Hapus */}
+                    {/* Action Buttons: Detail/QR/Edit jika Binaan; No WA jika Hasil Pencarian / Bukan Binaan */}
                     <div className="pt-3 mt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openDetailSiswaModal(s)}
-                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 text-indigo-700 border border-indigo-200/80 dark:border-indigo-800 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer"
-                          title="Detail Profil & Biodata Siswa"
-                        >
-                          <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                          <span>Detail</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenQrModal(s)}
-                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 text-emerald-700 border border-emerald-200/80 dark:border-emerald-800 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer"
-                          title="Lihat Kartu & QR Code Siswa"
-                        >
-                          <QrCode className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span>QR</span>
-                        </button>
-                        {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => openFormSiswa(s)}
-                            className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 text-blue-600 border border-blue-200/80 dark:border-blue-800 rounded-xl transition cursor-pointer"
-                            title="Edit Siswa"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      {showFullActions ? (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openDetailSiswaModal(s)}
+                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 text-indigo-700 border border-indigo-200/80 dark:border-indigo-800 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                              title="Detail Profil & Biodata Siswa"
+                            >
+                              <User className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                              <span>Detail</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenQrModal(s)}
+                              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 text-emerald-700 border border-emerald-200/80 dark:border-emerald-800 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                              title="Lihat Kartu & QR Code Siswa"
+                            >
+                              <QrCode className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span>QR</span>
+                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => openFormSiswa(s)}
+                                className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 text-blue-600 border border-blue-200/80 dark:border-blue-800 rounded-xl transition cursor-pointer"
+                                title="Edit Siswa"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
 
-                      {canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSiswa(s.id)}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 text-rose-600 border border-rose-200/80 dark:border-rose-800 rounded-xl transition cursor-pointer"
-                          title="Hapus Siswa"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSiswa(s.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 text-rose-600 border border-rose-200/80 dark:border-rose-800 rounded-xl transition cursor-pointer"
+                              title="Hapus Siswa"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        /* Bukan Kelas Binaan: Hanya Tampilkan No WA */
+                        <div className="w-full flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium truncate">
+                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                            <span className="font-mono">{s.noWa || 'No WA belum diisi'}</span>
+                          </div>
+                          {s.noWa && (
+                            <a
+                              href={`https://wa.me/${s.noWa.replace(/\D/g, '').replace(/^0/, '62')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200/80 dark:border-emerald-800 transition shrink-0"
+                              title="Hubungi Siswa via WhatsApp"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span>WhatsApp</span>
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2343,17 +2397,20 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                       )}
                     </div>
                   </th>
-                  <th className="p-4 text-center w-44">Aksi</th>
+                  <th className="p-4 text-center w-44">Aksi / Kontak</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                 {pagedSiswa.map((s, idx) => {
                   const k = appData.kelas.find((item) => item.id === s.kelasId);
+                  const isStudentBinaan = binaanClassIds === null || (s.kelasId ? binaanClassIds.has(s.kelasId) : false);
+                  const isSearchResult = Boolean(searchTerm.trim());
+                  const showFullActions = isStudentBinaan && !isSearchResult;
 
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                       <td className="p-4 text-center font-extrabold text-slate-400">{startIdx + idx + 1}</td>
-                      <td className="p-4 font-mono font-bold text-slate-700 dark:text-slate-300">{s.nisn}</td>
+                      <td className="p-4 font-mono font-bold text-slate-700 dark:text-slate-300">{s.nisn || '-'}</td>
                       <td className="p-4 font-bold text-slate-800 dark:text-slate-100">
                         <div className="flex items-center gap-2.5">
                           {s.foto ? (
@@ -2374,45 +2431,64 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openDetailSiswaModal(s)}
-                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-xl border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                            title="Detail Profil & Biodata Siswa"
-                          >
-                            <User className="w-3.5 h-3.5" />
-                            <span>Detail</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenQrModal(s)}
-                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300 rounded-xl border border-emerald-200/80 dark:border-emerald-800 transition cursor-pointer"
-                            title="Lihat Kartu & QR Code Siswa"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                          </button>
-                          {canEdit && (
+                        {showFullActions ? (
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => openFormSiswa(s)}
-                              className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 rounded-xl border border-blue-200/80 dark:border-blue-800 transition cursor-pointer"
-                              title="Edit Siswa"
+                              onClick={() => openDetailSiswaModal(s)}
+                              className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-xl border border-indigo-200/80 dark:border-indigo-800 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                              title="Detail Profil & Biodata Siswa"
                             >
-                              <Edit className="w-3.5 h-3.5" />
+                              <User className="w-3.5 h-3.5" />
+                              <span>Detail</span>
                             </button>
-                          )}
-                          {canDelete && (
                             <button
                               type="button"
-                              onClick={() => handleDeleteSiswa(s.id)}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 rounded-xl border border-rose-200/80 dark:border-rose-800 transition cursor-pointer"
-                              title="Hapus Siswa"
+                              onClick={() => handleOpenQrModal(s)}
+                              className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300 rounded-xl border border-emerald-200/80 dark:border-emerald-800 transition cursor-pointer"
+                              title="Lihat Kartu & QR Code Siswa"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <QrCode className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                        </div>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => openFormSiswa(s)}
+                                className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 rounded-xl border border-blue-200/80 dark:border-blue-800 transition cursor-pointer"
+                                title="Edit Siswa"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSiswa(s.id)}
+                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 rounded-xl border border-rose-200/80 dark:border-rose-800 transition cursor-pointer"
+                                title="Hapus Siswa"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {s.noWa ? (
+                              <a
+                                href={`https://wa.me/${s.noWa.replace(/\D/g, '').replace(/^0/, '62')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-300/80 dark:border-emerald-800 transition shadow-2xs"
+                                title="Hubungi Siswa via WhatsApp"
+                              >
+                                <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span className="font-mono">{s.noWa}</span>
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-mono">-</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -2441,6 +2517,206 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         onImportSuccess={handleImportSuccess}
         onShowToast={onShowToast}
       />
+
+      {/* Modal Reset No WA Siswa & Orang Tua */}
+      {showResetWaModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 text-left space-y-5 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                    Reset Nomor WhatsApp & Kontak
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Kosongkan nomor WhatsApp siswa dan orang tua
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetWaModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Pilihan Target yang ingin direset */}
+            <div className="space-y-3">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                1. Pilih Data yang Ingin Direset (Dikosongkan)
+              </label>
+
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={resetIncludeSiswaWa}
+                    onChange={(e) => setResetIncludeSiswaWa(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Nomor WhatsApp Siswa</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Mengosongkan field No. WA siswa (<span className="font-mono">{appData.siswa.filter((s) => s.noWa).length}</span> siswa terisi)
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={resetIncludeOrtuWa}
+                    onChange={(e) => setResetIncludeOrtuWa(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Nomor WhatsApp Orang Tua / Wali</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Mengosongkan field No. WA orang tua (<span className="font-mono">{appData.siswa.filter((s) => s.noWaOrangTua).length}</span> ortu terisi)
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={resetIncludeOrtuNama}
+                    onChange={(e) => setResetIncludeOrtuNama(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Nama Orang Tua / Wali (Opsional)</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Mengosongkan teks nama orang tua jika dipilih
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Pilihan Cakupan Siswa */}
+            <div className="space-y-3">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                2. Pilih Cakupan Siswa Target
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label className={`p-3 rounded-2xl border transition cursor-pointer flex items-center gap-2.5 ${
+                  resetTargetScope === 'filtered'
+                    ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 font-bold'
+                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="resetScope"
+                    value="filtered"
+                    checked={resetTargetScope === 'filtered'}
+                    onChange={() => setResetTargetScope('filtered')}
+                    className="w-4 h-4 text-indigo-600"
+                  />
+                  <div>
+                    <div>Siswa Tampil ({filteredSiswa.length})</div>
+                    <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Sesuai filter & kelas aktif</div>
+                  </div>
+                </label>
+
+                {filterKelasId && (
+                  <label className={`p-3 rounded-2xl border transition cursor-pointer flex items-center gap-2.5 ${
+                    resetTargetScope === 'selected_class'
+                      ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 font-bold'
+                      : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="resetScope"
+                      value="selected_class"
+                      checked={resetTargetScope === 'selected_class'}
+                      onChange={() => setResetTargetScope('selected_class')}
+                      className="w-4 h-4 text-indigo-600"
+                    />
+                    <div>
+                      <div>Kelas Terpilih</div>
+                      <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                        {currentKelas?.nama || 'Kelas saat ini'}
+                      </div>
+                    </div>
+                  </label>
+                )}
+
+                <label className={`p-3 rounded-2xl border transition cursor-pointer flex items-center gap-2.5 ${
+                  resetTargetScope === 'all'
+                    ? 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 font-bold'
+                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="resetScope"
+                    value="all"
+                    checked={resetTargetScope === 'all'}
+                    onChange={() => setResetTargetScope('all')}
+                    className="w-4 h-4 text-indigo-600"
+                  />
+                  <div>
+                    <div>{isWali && !isAdmin && !isKesiswaan ? 'Semua Kelas Binaan' : 'Seluruh Siswa'}</div>
+                    <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                      {isWali && !isAdmin && !isKesiswaan ? `${waliClasses.reduce((acc, k) => acc + appData.siswa.filter(s => s.kelasId === k.id).length, 0)} siswa binaan` : `${appData.siswa.length} siswa terdata`}
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Peringatan */}
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                Nomor WhatsApp yang telah direset akan menjadi kosong. Siswa/Wali kelas dapat mengisi kembali nomor baru melalui form edit atau impor Excel.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowResetWaModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleExecuteResetWa(resetTargetScope, {
+                    resetSiswaWa: resetIncludeSiswaWa,
+                    resetOrtuWa: resetIncludeOrtuWa,
+                    resetOrtuNama: resetIncludeOrtuNama,
+                  });
+                }}
+                disabled={!resetIncludeSiswaWa && !resetIncludeOrtuWa && !resetIncludeOrtuNama}
+                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Reset Data Sekarang</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

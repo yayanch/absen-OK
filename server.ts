@@ -643,8 +643,150 @@ function sanitizeAndDeduplicatePresensiMap(rawPresensi: any): Record<string, any
   return cleaned;
 }
 
+function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], deletedIds: string[] = []): any[] {
+  if (!Array.isArray(existingList)) existingList = [];
+  if (!Array.isArray(incomingList)) incomingList = [];
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+
+  if (existingList.length === 0 && incomingList.length === 0) return [];
+
+  const filteredExisting = existingList.filter((s) => s && s.id && !deletedSet.has(String(s.id)));
+  const filteredIncoming = incomingList.filter((s) => s && s.id && !deletedSet.has(String(s.id)));
+
+  // If incomingList is explicitly provided by the caller, incomingList is the authoritative set
+  const map = new Map<string, any>();
+
+  // 1. Seed with incoming list
+  for (const inc of filteredIncoming) {
+    if (inc && inc.id && !deletedSet.has(String(inc.id))) {
+      map.set(String(inc.id), { ...inc });
+    }
+  }
+
+  // 2. Merge existing details only for items that are currently in the incoming list
+  for (const ex of filteredExisting) {
+    if (!ex || !ex.id || deletedSet.has(String(ex.id))) continue;
+    const sId = String(ex.id);
+    if (map.has(sId)) {
+      const current = map.get(sId)!;
+      map.set(sId, {
+        ...ex,
+        ...current,
+        nama: current.nama || ex.nama,
+        nisn: current.nisn || ex.nisn,
+        gender: current.gender || ex.gender || 'L',
+        kelasId: current.kelasId || ex.kelasId,
+        status: current.status || ex.status || 'aktif',
+        noWa: current.noWa || ex.noWa || '',
+        namaOrangTua: current.namaOrangTua || ex.namaOrangTua || '',
+        noWaOrangTua: current.noWaOrangTua || ex.noWaOrangTua || '',
+        foto: current.foto || ex.foto || '',
+        username: current.username || ex.username,
+        password: current.password || ex.password,
+        tempatLahir: current.tempatLahir || ex.tempatLahir,
+        tanggalLahir: current.tanggalLahir || ex.tanggalLahir,
+        alamat: current.alamat || ex.alamat,
+      });
+    }
+  }
+
+  return Array.from(map.values()).filter((s) => !deletedSet.has(String(s.id)));
+}
+
+function mergePresensiServer(existingMap: any = {}, incomingMap: any = {}): any {
+  const merged: any = {};
+  const allKeys = new Set([
+    ...Object.keys(existingMap || {}),
+    ...Object.keys(incomingMap || {}),
+  ]);
+
+  for (const key of allKeys) {
+    const existingRecs = Array.isArray(existingMap?.[key]) ? existingMap[key] : [];
+    const incomingRecs = Array.isArray(incomingMap?.[key]) ? incomingMap[key] : [];
+
+    if (existingRecs.length === 0 && incomingRecs.length === 0) continue;
+    if (incomingRecs.length === 0) {
+      merged[key] = [...existingRecs];
+      continue;
+    }
+    if (existingRecs.length === 0) {
+      merged[key] = [...incomingRecs];
+      continue;
+    }
+
+    const studentMap = new Map<string, any>();
+    for (const item of existingRecs) {
+      if (item && item.siswaId) {
+        studentMap.set(String(item.siswaId), { ...item });
+      }
+    }
+    for (const item of incomingRecs) {
+      if (!item || !item.siswaId) continue;
+      const sId = String(item.siswaId);
+      const existing = studentMap.get(sId);
+      if (!existing) {
+        studentMap.set(sId, { ...item });
+      } else {
+        studentMap.set(sId, {
+          ...existing,
+          ...item,
+          status: item.status || existing.status,
+          time: item.time || existing.time,
+          pulangTime: item.pulangTime || existing.pulangTime,
+          pulangStatus: item.pulangStatus || existing.pulangStatus,
+          suratBukti: item.suratBukti || existing.suratBukti,
+          catatan: item.catatan !== undefined ? item.catatan : existing.catatan,
+        });
+      }
+    }
+    merged[key] = Array.from(studentMap.values());
+  }
+
+  return sanitizeAndDeduplicatePresensiMap(merged);
+}
+
 function saveAppDataCache(data: any) {
   if (!data || typeof data !== "object") return;
+
+  // Track deleted siswa
+  const deletedSiswaSet = new Set([
+    ...(inMemoryAppDataCache?.deletedSiswaIds || []),
+    ...(data.deletedSiswaIds || []),
+  ]);
+  const allDeletedSiswa = Array.from(deletedSiswaSet);
+  data.deletedSiswaIds = allDeletedSiswa;
+
+  if (inMemoryAppDataCache) {
+    // Safely merge siswa so existing students never vanish
+    if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
+      data.siswa = mergeSiswaServer(inMemoryAppDataCache.siswa, data.siswa, allDeletedSiswa);
+    } else if (Array.isArray(inMemoryAppDataCache.siswa) && (!Array.isArray(data.siswa) || data.siswa.length === 0)) {
+      data.siswa = inMemoryAppDataCache.siswa.filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)));
+    }
+
+    // Safely merge presensi so existing dates/records never vanish
+    if (inMemoryAppDataCache.presensi && data.presensi) {
+      data.presensi = mergePresensiServer(inMemoryAppDataCache.presensi, data.presensi);
+    } else if (inMemoryAppDataCache.presensi && !data.presensi) {
+      data.presensi = inMemoryAppDataCache.presensi;
+    }
+
+    // Preserve master collections if incoming is empty
+    if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
+      data.kelas = inMemoryAppDataCache.kelas;
+    }
+    if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
+      data.waliKelas = inMemoryAppDataCache.waliKelas;
+    }
+    if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
+      data.jurusan = inMemoryAppDataCache.jurusan;
+    }
+  }
+
+  if (Array.isArray(data.siswa)) {
+    data.siswa = data.siswa.filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)));
+  }
+
   if (data.deletedPelanggaranIds && Array.isArray(data.deletedPelanggaranIds) && Array.isArray(data.pelanggaran)) {
     const deletedSet = new Set(data.deletedPelanggaranIds);
     data.pelanggaran = data.pelanggaran.filter((p: any) => !deletedSet.has(p.id));
@@ -798,8 +940,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
     `);
 
     const appDataForSettings = { ...appData };
-    delete appDataForSettings.presensi;
-
+    // Preserve presensi in full_app_data as a resilient fallback
     await db.execute(
       `INSERT INTO app_settings (config_key, config_value) VALUES ('full_app_data', ?)
        ON DUPLICATE KEY UPDATE config_value = ?;`,
@@ -994,8 +1135,20 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         await db.execute(q).catch(() => {});
       }
 
-      await db.execute(`DELETE FROM siswa;`);
-      if (appData.siswa.length > 0) {
+      if (Array.isArray(appData.deletedSiswaIds) && appData.deletedSiswaIds.length > 0) {
+        const delPlaceholders = appData.deletedSiswaIds.map(() => '?').join(',');
+        await db.execute(`DELETE FROM siswa WHERE id IN (${delPlaceholders});`, appData.deletedSiswaIds).catch(() => {});
+      }
+
+      if (appData.siswa.length === 0) {
+        await db.execute(`DELETE FROM siswa;`).catch(() => {});
+      } else {
+        const activeIds = appData.siswa.map((s: any) => s.id).filter(Boolean);
+        if (activeIds.length > 0) {
+          const activePlaceholders = activeIds.map(() => '?').join(',');
+          await db.execute(`DELETE FROM siswa WHERE id NOT IN (${activePlaceholders});`, activeIds).catch(() => {});
+        }
+
         const CHUNK_SIZE = 50;
         for (let i = 0; i < appData.siswa.length; i += CHUNK_SIZE) {
           const chunk = appData.siswa.slice(i, i + CHUNK_SIZE);
@@ -1147,11 +1300,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
             ).catch((err) => console.warn('Chunk presensi save warning:', err?.message || err));
           }
         }
-      } else {
-        await db.execute(`DELETE FROM presensi;`).catch(() => {});
       }
-    } else {
-      await db.execute(`DELETE FROM presensi;`);
     }
 
     // 1. Table & Data Pelanggaran Siswa
@@ -1444,27 +1593,30 @@ async function performMySQLLoad(config: any) {
     }
 
     if (siswaRows && siswaRows.length > 0) {
+      const deletedSiswaSet = new Set((appData.deletedSiswaIds || []).map((id: any) => String(id)));
       const prevSiswaMap = new Map<string, any>((appData.siswa || []).map((s: any) => [s.id, s]));
-      appData.siswa = siswaRows.map((s: any) => {
-        const prev = prevSiswaMap.get(s.id) || {};
-        return {
-          id: s.id,
-          nisn: s.nisn || prev.nisn || '',
-          nama: s.nama || prev.nama || '',
-          gender: s.gender || prev.gender || 'L',
-          kelasId: s.kelas_id || prev.kelasId || '',
-          status: s.status || prev.status || 'aktif',
-          noWa: s.no_wa || prev.noWa || '',
-          namaOrangTua: s.nama_orang_tua || prev.namaOrangTua || '',
-          noWaOrangTua: s.no_wa_orang_tua || prev.noWaOrangTua || '',
-          username: s.username || prev.username || s.nisn || '',
-          password: s.password || prev.password || s.nisn || '',
-          foto: s.foto || prev.foto || '',
-          tempatLahir: s.tempat_lahir || prev.tempatLahir || '',
-          tanggalLahir: s.tanggal_lahir || prev.tanggalLahir || '',
-          alamat: s.alamat || prev.alamat || ''
-        };
-      });
+      appData.siswa = siswaRows
+        .filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)))
+        .map((s: any) => {
+          const prev = prevSiswaMap.get(s.id) || {};
+          return {
+            id: s.id,
+            nisn: s.nisn || prev.nisn || '',
+            nama: s.nama || prev.nama || '',
+            gender: s.gender || prev.gender || 'L',
+            kelasId: s.kelas_id || prev.kelasId || '',
+            status: s.status || prev.status || 'aktif',
+            noWa: s.no_wa || prev.noWa || '',
+            namaOrangTua: s.nama_orang_tua || prev.namaOrangTua || '',
+            noWaOrangTua: s.no_wa_orang_tua || prev.noWaOrangTua || '',
+            username: s.username || prev.username || s.nisn || '',
+            password: s.password || prev.password || s.nisn || '',
+            foto: s.foto || prev.foto || '',
+            tempatLahir: s.tempat_lahir || prev.tempatLahir || '',
+            tanggalLahir: s.tanggal_lahir || prev.tanggalLahir || '',
+            alamat: s.alamat || prev.alamat || ''
+          };
+        });
     }
 
     if (Array.isArray(presensiRows) && presensiRows.length > 0) {

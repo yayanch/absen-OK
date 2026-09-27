@@ -213,18 +213,11 @@ const LAST_NAMES = [
 ];
 
 export function generateRandomWaNumber(): string {
-  const prefixes = ['0812', '0813', '0821', '0852', '0857', '0877', '0896', '0858'];
-  const p = prefixes[Math.floor(Math.random() * prefixes.length)];
-  const part1 = Math.floor(1000 + Math.random() * 9000);
-  const part2 = Math.floor(1000 + Math.random() * 9000);
-  return `${p}-${part1}-${part2}`;
+  return '';
 }
 
 export function randomizeWaForStudents(siswaList: Siswa[]): Siswa[] {
-  return siswaList.map((s) => ({
-    ...s,
-    noWa: s.noWa || generateRandomWaNumber(),
-  }));
+  return siswaList;
 }
 
 export function sortKelasList(kelasList: Kelas[]): Kelas[] {
@@ -257,9 +250,9 @@ export function generate36StudentsForAllClasses(kelasList: Kelas[]): Siswa[] {
         gender,
         kelasId: k.id,
         status: 'aktif',
-        noWa: generateRandomWaNumber(),
+        noWa: '',
         namaOrangTua: `Bpk. ${lName} / Ibu`,
-        noWaOrangTua: generateRandomWaNumber(),
+        noWaOrangTua: '',
       });
     }
   });
@@ -569,6 +562,81 @@ export const DEFAULT_MATA_PELAJARAN: MataPelajaran[] = [
   }
 ];
 
+export const DEFAULT_WALI_KELAS: WaliKelas[] = [
+  {
+    id: "WAL_1",
+    nip: "198501012010011001",
+    nama: "Budi Santoso, S.Kom",
+    username: "1037",
+    password: "123",
+    noHp: "6281234567890",
+    role: "wali",
+    mataPelajaran: "Pemrograman Web & Perangkat Bergerak",
+    hariMengajar: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_2",
+    nip: "198802022012022002",
+    nama: "Siti Rahma, M.Pd",
+    username: "siti",
+    password: "123",
+    noHp: "6281987654321",
+    role: "wali",
+    mataPelajaran: "Administrasi Sistem Jaringan",
+    hariMengajar: ["Senin", "Rabu", "Jumat"],
+    batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_3",
+    nip: "199003032014031003",
+    nama: "Agus Hermawan, S.T",
+    username: "agus",
+    password: "123",
+    noHp: "6285712345678",
+    role: "wali",
+    mataPelajaran: "Desain Grafis & Multimedia",
+    hariMengajar: ["Selasa", "Kamis", "Sabtu"],
+    batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_4",
+    nip: "199204042016042004",
+    nama: "Dewi Lestari, S.Pd",
+    username: "dewi",
+    password: "123",
+    noHp: "6287812345678",
+    role: "wali",
+    mataPelajaran: "Matematika Terapan & Statistika",
+    hariMengajar: ["Senin", "Selasa", "Kamis"],
+    batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_GURU_1",
+    nip: "198705122015021005",
+    nama: "Hendra Gunawan, S.Pd",
+    username: "guru_matematika",
+    password: "123",
+    noHp: "6281233445566",
+    role: "guru",
+    mataPelajaran: "Matematika Wajib",
+    hariMengajar: ["Senin", "Rabu", "Jumat"],
+    batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_GURU_2",
+    nip: "199108232018012003",
+    nama: "Ratna Sari, S.Kom",
+    username: "guru_rpl",
+    password: "123",
+    noHp: "6281998877665",
+    role: "guru",
+    mataPelajaran: "Basis Data & Pemrograman Web",
+    hariMengajar: ["Selasa", "Kamis"],
+    batasiLoginHariMengajar: false
+  }
+];
+
 export const DEFAULT_JADWAL_MENGAJAR: JadwalMengajarGuru[] = [];
 
 export const DEFAULT_PRESENSI_MENGAJAR_GURU: AbsensiMengajarGuruItem[] = [];
@@ -789,80 +857,7 @@ export const DEMO_DATASET: AppData = {
     { id: "JUR_3", kode: "DKV", nama: "Desain Komunikasi Visual" },
     { id: "JUR_4", kode: "TSM", nama: "Teknik Sepeda Motor" }
   ],
-  waliKelas: [
-    {
-      id: "WAL_1",
-      nip: "198501012010011001",
-      nama: "Budi Santoso, S.Kom",
-      username: "1037",
-      password: "123",
-      noHp: "6281234567890",
-      role: "wali",
-      mataPelajaran: "Pemrograman Web & Perangkat Bergerak",
-      hariMengajar: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
-      batasiLoginHariMengajar: false
-    },
-    {
-      id: "WAL_2",
-      nip: "198802022012022002",
-      nama: "Siti Rahma, M.Pd",
-      username: "siti",
-      password: "123",
-      noHp: "6281987654321",
-      role: "wali",
-      mataPelajaran: "Administrasi Sistem Jaringan",
-      hariMengajar: ["Senin", "Rabu", "Jumat"],
-      batasiLoginHariMengajar: false
-    },
-    {
-      id: "WAL_3",
-      nip: "199003032014031003",
-      nama: "Agus Hermawan, S.T",
-      username: "agus",
-      password: "123",
-      noHp: "6285712345678",
-      role: "wali",
-      mataPelajaran: "Desain Grafis & Multimedia",
-      hariMengajar: ["Selasa", "Kamis", "Sabtu"],
-      batasiLoginHariMengajar: false
-    },
-    {
-      id: "WAL_4",
-      nip: "199204042016042004",
-      nama: "Dewi Lestari, S.Pd",
-      username: "dewi",
-      password: "123",
-      noHp: "6287812345678",
-      role: "wali",
-      mataPelajaran: "Matematika Terapan & Statistika",
-      hariMengajar: ["Senin", "Selasa", "Kamis"],
-      batasiLoginHariMengajar: false
-    },
-    {
-      id: "WAL_GURU_1",
-      nip: "198705122015021005",
-      nama: "Hendra Gunawan, S.Pd",
-      username: "guru_matematika",
-      password: "123",
-      noHp: "6281233445566",
-      role: "guru",
-      mataPelajaran: "Matematika Wajib",
-      hariMengajar: ["Senin", "Rabu", "Jumat"],
-      batasiLoginHariMengajar: false
-    },
-    {
-      id: "WAL_GURU_2",
-      nip: "199108232018012003",
-      nama: "Ratna Sari, S.Kom",
-      username: "guru_rpl",
-      password: "123",
-      noHp: "6281998877665",
-      role: "guru",
-      mataPelajaran: "Basis Data & Pemrograman Web",
-      hariMengajar: ["Selasa", "Kamis"],
-      batasiLoginHariMengajar: false
-    }
-  ],
+  waliKelas: DEFAULT_WALI_KELAS,
   kelas: DEFAULT_KELAS,
   siswa: DEFAULT_SISWA,
   presensi: initialPresensi,
