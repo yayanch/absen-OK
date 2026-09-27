@@ -110,10 +110,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   isDarkMode = false,
   onToggleTheme,
 }) => {
-  // Login Mode: 'standard' (Guru/Staff/Admin) vs 'siswa_otp' (NISN + OTP WhatsApp)
-  const [loginMode, setLoginMode] = useState<'standard' | 'siswa_otp'>('standard');
-
-  // Standard Login States
+  // Unified Standard Login States (Admin, Guru, Wali Kelas, Staf, & Siswa)
   const [username, setUsername] = useState(() => {
     try {
       return localStorage.getItem('presensi_remembered_username') || '';
@@ -136,28 +133,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Student NISN + OTP WhatsApp States
-  const [otpNisn, setOtpNisn] = useState('');
-  const [otpStep, setOtpStep] = useState<'input_nisn' | 'register_wa' | 'verify_otp'>('input_nisn');
-  const [matchedOtpSiswa, setMatchedOtpSiswa] = useState<Siswa | null>(null);
-  const [targetWaNumber, setTargetWaNumber] = useState('');
-  const [targetWaRecipientType, setTargetWaRecipientType] = useState<'siswa' | 'orang_tua' | 'new'>('siswa');
-  const [newWaInput, setNewWaInput] = useState('');
-  const [newTglLahirInput, setNewTglLahirInput] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('');
-  const [otpCodeInput, setOtpCodeInput] = useState('');
-  const [otpCountdown, setOtpCountdown] = useState(0);
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [directWaLink, setDirectWaLink] = useState('');
-  const [simulatedWaToast, setSimulatedWaToast] = useState<{
-    visible: boolean;
-    code: string;
-    recipientName: string;
-    phone: string;
-    sentAt: string;
-  } | null>(null);
-
   const sekolah: Partial<SekolahConfig> = appData.sekolah || {};
   const tahunAjaran = sekolah.tahunAjaran || '2026/2027';
   const semester = sekolah.semester || 'Ganjil';
@@ -170,19 +145,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   const [loginFailedAttempts, setLoginFailedAttempts] = useState<{ [username: string]: number }>({});
-
-  // Countdown timer effect for OTP expiration
-  useEffect(() => {
-    let timer: any = null;
-    if (otpCountdown > 0) {
-      timer = setInterval(() => {
-        setOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [otpCountdown]);
 
   // Active School Announcements & Login Notice
   const activePengumuman = useMemo(() => {
@@ -251,7 +213,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const isPopupEligible = Boolean(sekolah.loginAnnouncementModal);
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState<boolean>(() => isPopupEligible);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
-  const [isAccountHelpModalOpen, setIsAccountHelpModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (sekolah.loginAnnouncementModal) {
@@ -714,14 +675,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
         } else {
           setIsLoggingIn(false);
           handleRecordFailedAttempt(uInput, 'murid');
-          onShowToast(`Password untuk Siswa "${matchedSiswa.nama}" salah! (Gunakan Tab Siswa OTP WA atau Password NISN/123)`, 'error');
+          onShowToast(`Password untuk Siswa "${matchedSiswa.nama}" salah! (Default: NISN atau 123)`, 'error');
           return;
         }
       }
 
       setIsLoggingIn(false);
       handleRecordFailedAttempt(uInput, 'unknown');
-      onShowToast('Username / NIP / NISN tidak ditemukan! Silakan gunakan tombol Bantuan Akun.', 'error');
+      onShowToast('Username / NIP / NISN tidak ditemukan! Silakan periksa kembali atau gunakan tombol Bantuan Akun.', 'error');
     }, 350);
   };
 
@@ -729,229 +690,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
     e.preventDefault();
     if (isLoggingIn) return;
     executeLoginProcess(username, password);
-  };
-
-  // -------------------------------------------------------------
-  // STUDENT NISN + OTP WHATSAPP FLOW HANDLERS
-  // -------------------------------------------------------------
-  const dispatchOtpCodeToStudent = async (siswa: Siswa, phone: string, recipientType: 'siswa' | 'orang_tua' | 'new') => {
-    setIsSendingOtp(true);
-    // Generate secure 6-digit random code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    setGeneratedOtp(code);
-    setOtpCountdown(120); // 2 minutes valid
-    setOtpStep('verify_otp');
-    setOtpCodeInput('');
-
-    // Attempt delivery via WhatsApp Gateway or prepare direct WhatsApp link
-    const gwConfig = appData.whatsappGateway;
-    const template = gwConfig?.templateOtp || DEFAULT_WA_TEMPLATES.otp;
-    const formattedMessage = interpolateTemplate(template, {
-      sekolah: sekolah.nama || 'SMK NEGERI 6 GARUT',
-      nama_siswa: siswa.nama,
-      nisn: siswa.nisn,
-      otp_code: code,
-      tanggal: new Date().toLocaleDateString('id-ID', { dateStyle: 'full' }),
-      jam: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-    });
-
-    const res = await sendWhatsAppMessage({
-      phone,
-      recipientName: siswa.nama,
-      message: formattedMessage,
-      gatewayConfig: gwConfig,
-      messageType: 'otp',
-    });
-
-    if (res.directWaUrl) {
-      setDirectWaLink(res.directWaUrl);
-    }
-
-    // Record log to appData
-    if (res.log) {
-      const updatedLogs = [res.log, ...(appData.whatsappLogs || [])].slice(0, 500);
-      onUpdateAppData({
-        ...appData,
-        whatsappLogs: updatedLogs,
-      });
-    }
-
-    // Trigger on-screen simulated WhatsApp notification banner for effortless demonstration
-    setSimulatedWaToast({
-      visible: true,
-      code,
-      recipientName: siswa.nama,
-      phone,
-      sentAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-    });
-
-    setIsSendingOtp(false);
-    onShowToast(
-      `Kode OTP 6-digit (${code}) disiapkan untuk WhatsApp: ${maskPhoneNumber(phone)}!`,
-      'success'
-    );
-  };
-
-  const handleSendOtpForNisn = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const cleanNisn = otpNisn.trim();
-
-    if (!cleanNisn) {
-      onShowToast('Silakan masukkan NISN Siswa terlebih dahulu!', 'warning');
-      return;
-    }
-
-    const siswaList = appData.siswa || [];
-    const foundSiswa = siswaList.find(
-      (s) =>
-        (s.nisn && s.nisn.trim().toLowerCase() === cleanNisn.toLowerCase()) ||
-        (s.username && s.username.trim().toLowerCase() === cleanNisn.toLowerCase()) ||
-        (cleanNisn === '0081234567' && s.id)
-    ) || (cleanNisn === 'demo' ? siswaList[0] : null);
-
-    if (!foundSiswa) {
-      onShowToast(
-        `NISN "${cleanNisn}" tidak ditemukan di database sekolah. Periksa kembali atau hubungi Wali Kelas.`,
-        'error'
-      );
-      return;
-    }
-
-    setMatchedOtpSiswa(foundSiswa);
-
-    // Check if phone number is registered
-    const studentWa = (foundSiswa.noWa || '').trim();
-    const parentWa = (foundSiswa.noWaOrangTua || '').trim();
-
-    if (studentWa.length >= 7) {
-      // Send to Student's WhatsApp
-      setTargetWaNumber(studentWa);
-      setTargetWaRecipientType('siswa');
-      dispatchOtpCodeToStudent(foundSiswa, studentWa, 'siswa');
-    } else if (parentWa.length >= 7) {
-      // Fallback to Parent's WhatsApp
-      setTargetWaNumber(parentWa);
-      setTargetWaRecipientType('orang_tua');
-      dispatchOtpCodeToStudent(foundSiswa, parentWa, 'orang_tua');
-    } else {
-      // No phone number found -> move to register_wa step!
-      setOtpStep('register_wa');
-      setNewWaInput('');
-      onShowToast(
-        `Nomor WhatsApp belum terdaftar untuk ${foundSiswa.nama}. Silakan daftarkan nomor aktif Anda.`,
-        'info'
-      );
-    }
-  };
-
-  const handleRegisterWaAndSendOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanPhone = newWaInput.trim().replace(/[^0-9]/g, '');
-
-    if (!cleanPhone || cleanPhone.length < 9) {
-      onShowToast('Nomor WhatsApp tidak valid! Masukkan minimal 9-13 digit angka (Contoh: 08123456789).', 'warning');
-      return;
-    }
-
-    if (!matchedOtpSiswa) return;
-
-    setTargetWaNumber(cleanPhone);
-    setTargetWaRecipientType('new');
-    dispatchOtpCodeToStudent(matchedOtpSiswa, cleanPhone, 'new');
-  };
-
-  const handleVerifyOtp = (e?: React.FormEvent, overrideCode?: string) => {
-    if (e) e.preventDefault();
-    const codeToVerify = (overrideCode || otpCodeInput).trim();
-
-    if (!codeToVerify) {
-      onShowToast('Masukkan 6-digit kode OTP yang telah dikirim ke WhatsApp Anda!', 'warning');
-      return;
-    }
-
-    if (otpCountdown <= 0) {
-      onShowToast('Kode OTP telah kadaluarsa! Silakan klik tombol "Kirim Ulang OTP".', 'error');
-      return;
-    }
-
-    if (codeToVerify !== generatedOtp.trim()) {
-      onShowToast('Kode OTP salah! Silakan periksa kembali pesan WhatsApp Anda.', 'error');
-      return;
-    }
-
-    if (!matchedOtpSiswa) return;
-
-    setIsVerifyingOtp(true);
-
-    setTimeout(() => {
-      // 1. Device Binding & Locking Check
-      const currentDeviceId = getOrCreateDeviceId();
-      const studentClass = (appData.kelas || []).find((k) => k.id === matchedOtpSiswa.kelasId);
-
-      // Clone and update student data with phone & device binding
-      const updatedSiswa: Siswa = {
-        ...matchedOtpSiswa,
-        noWa: targetWaRecipientType === 'new' || !matchedOtpSiswa.noWa ? targetWaNumber : matchedOtpSiswa.noWa,
-        deviceId: currentDeviceId,
-        deviceInfo: typeof navigator !== 'undefined' ? `${navigator.userAgent.slice(0, 100)}` : 'Mobile Device',
-        deviceLockedAt: new Date().toISOString(),
-        isDeviceLocked: true,
-      };
-
-      // Persist updated student in appData
-      if (onUpdateAppData) {
-        const updatedSiswaList = (appData.siswa || []).map((s) =>
-          s.id === matchedOtpSiswa.id ? updatedSiswa : s
-        );
-        onUpdateAppData({
-          ...appData,
-          siswa: updatedSiswaList,
-        });
-      }
-
-      setIsVerifyingOtp(false);
-      setSimulatedWaToast(null);
-      handleSuccessfulLogin('murid', updatedSiswa);
-      onShowToast(
-        `Verifikasi OTP Berhasil! Selamat datang, ${matchedOtpSiswa.nama} ${studentClass ? `(${studentClass.nama})` : ''}! Perangkat HP Anda telah terkunci sah.`,
-        'success'
-      );
-    }, 400);
-  };
-
-  const handleAutoPasteAndLogin = (code: string) => {
-    setOtpCodeInput(code);
-    handleVerifyOtp(undefined, code);
-  };
-
-  const handleQuickLogin = (u: string, p: string, autoSubmit = true) => {
-    setUsername(u);
-    setPassword(p);
-    if (autoSubmit) {
-      executeLoginProcess(u, p);
-    } else {
-      onShowToast(`Akun ${u} dimasukkan. Silakan klik tombol Masuk ke Sistem.`, 'info');
-    }
-  };
-
-  const firstTeacher: any = (appData.waliKelas || []).find((w: any) => w.username && w.password) || {
-    nama: 'Budi Santoso, S.Pd',
-    username: 'guru1',
-    password: '123',
-    role: 'wali',
-    nip: '1037',
-  };
-  const firstSiswa: any = (appData.siswa || [])[0] || {
-    nama: 'Ahmad Fauzi',
-    nisn: '0081234567',
-    noWa: '081234567890',
-    password: '123',
-  };
-  const secondSiswa: any = (appData.siswa || [])[1] || {
-    nama: 'Siti Nurhaliza',
-    nisn: '0089876543',
-    noWa: '085298765432',
-    password: '123',
   };
 
   // Custom Background Configuration from Sekolah Config
@@ -1125,76 +863,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
         )
       )}
 
-      {/* FLOATING SIMULATED WHATSAPP NOTIFICATION POPUP */}
-      {simulatedWaToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] sm:w-full bg-[#128C7E] text-white rounded-3xl shadow-2xl border border-emerald-400/30 p-4 animate-in slide-in-from-top duration-300">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
-                <MessageSquare className="w-5 h-5 text-emerald-100" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
-                    WhatsApp Otentikasi
-                  </span>
-                  <span className="text-[10px] text-emerald-100 opacity-85">
-                    {simulatedWaToast.sentAt}
-                  </span>
-                </div>
-                <h4 className="text-sm font-black mt-1 text-white truncate">
-                  SMKN 6 Garut Presensi Bot
-                </h4>
-                <div className="mt-2 bg-white/10 backdrop-blur-xs p-2.5 rounded-2xl border border-white/15 text-xs space-y-1.5">
-                  <p className="text-white/90">
-                    Halo <strong>{simulatedWaToast.recipientName}</strong>,
-                  </p>
-                  <p className="text-white/90">
-                    Kode verifikasi OTP login presensi Anda:
-                  </p>
-                  <div className="flex items-center justify-between bg-[#075E54] p-2 rounded-xl border border-emerald-300/40">
-                    <span className="font-mono text-lg font-black tracking-widest text-emerald-300">
-                      {simulatedWaToast.code}
-                    </span>
-                    <span className="text-[10px] text-emerald-200">Berlaku 2 mnt</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSimulatedWaToast(null)}
-              className="p-1.5 rounded-full hover:bg-white/20 text-white transition cursor-pointer shrink-0"
-              title="Tutup Notifikasi"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/15">
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard?.writeText(simulatedWaToast.code);
-                onShowToast(`Kode OTP ${simulatedWaToast.code} disalin ke clipboard!`, 'info');
-              }}
-              className="flex-1 py-1.5 px-3 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Salin OTP</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAutoPasteAndLogin(simulatedWaToast.code)}
-              className="flex-1 py-1.5 px-3 bg-white text-[#075E54] hover:bg-emerald-50 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Tempel & Masuk</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* FLOATING ANNOUNCEMENT BUTTON */}
       {(activePengumuman.length > 0 || hasCustomLoginNotice) && (
         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-30 flex items-center gap-2">
@@ -1221,23 +889,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
         </div>
       )}
 
-      {/* FLOATING THEME TOGGLE & ACCOUNT HELP BUTTON */}
-      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setIsAccountHelpModalOpen(true)}
-          className={`px-3 py-2 rounded-2xl border text-xs font-bold transition cursor-pointer backdrop-blur-md shadow-md flex items-center gap-1.5 ${
-            isBackgroundDark
-              ? 'bg-zinc-900/80 hover:bg-zinc-800 text-blue-400 border-zinc-700/80'
-              : 'bg-white/90 hover:bg-white text-blue-600 border-slate-300 shadow-xs'
-          }`}
-          title="Bantuan Akun & Demo"
-        >
-          <HelpCircle className="w-4 h-4" />
-          <span className="hidden sm:inline">Bantuan Akun</span>
-        </button>
-
-        {onToggleTheme && (
+      {/* FLOATING THEME TOGGLE */}
+      {onToggleTheme && (
+        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 flex items-center gap-2">
           <button
             type="button"
             onClick={onToggleTheme}
@@ -1254,8 +908,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <Moon className="w-4 h-4 text-zinc-800" />
             )}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* MAIN CONTAINER: LEFT TEXT & RIGHT LOGIN CARD */}
       <main className={`w-full flex-1 grid grid-cols-1 ${sekolah.loginLeftShowPanel !== false ? 'md:grid-cols-12' : 'max-w-md mx-auto'} items-center justify-between p-4 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-auto overflow-y-auto w-full`}>
@@ -1434,404 +1088,117 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
               </div>
 
-              {/* DUAL LOGIN METHOD SELECTOR TABS */}
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-zinc-800/80 rounded-2xl border border-slate-200/80 dark:border-zinc-700/60">
-                <button
-                  type="button"
-                  onClick={() => setLoginMode('standard')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    loginMode === 'standard'
-                      ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs'
-                      : 'text-slate-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Lock className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Guru & Pegawai</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginMode('siswa_otp');
-                    setOtpStep('input_nisn');
-                    setOtpCodeInput('');
-                  }}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    loginMode === 'siswa_otp'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>Siswa</span>
-                </button>
-              </div>
-
-              {/* ============================================================== */}
-              {/* 1. STANDARD LOGIN FORM (Guru / Wali Kelas / Staf / Admin)      */}
-              {/* ============================================================== */}
-              {loginMode === 'standard' ? (
-                <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-                  <div className="space-y-1.5 text-left">
-                    <label
-                      className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
-                        isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
-                      }`}
-                    >
-                      Username / NIP / Akun
-                    </label>
-                    <div className="relative">
-                      <div
-                        className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                          isDarkMode ? 'text-blue-400' : 'text-zinc-500'
-                        }`}
-                      >
-                        <User className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Masukkan username atau NIP"
-                        className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
-                          isDarkMode
-                            ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
-                            : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 text-left">
-                    <label
-                      className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
-                        isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
-                      }`}
-                    >
-                      Password
-                    </label>
-                    <div className="relative">
-                      <div
-                        className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                          isDarkMode ? 'text-blue-400' : 'text-zinc-500'
-                        }`}
-                      >
-                        <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-                      </div>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Masukkan password akun Anda"
-                        className={`w-full pl-10 sm:pl-10.5 pr-11 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
-                          isDarkMode
-                            ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
-                            : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className={`absolute inset-y-0 right-0 pr-3.5 flex items-center cursor-pointer ${
-                          isDarkMode ? 'text-zinc-400 hover:text-blue-400' : 'text-slate-500 hover:text-zinc-900'
-                        }`}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4 sm:w-4.5 sm:h-4.5" /> : <Eye className="w-4 h-4 sm:w-4.5 sm:h-4.5" />}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-0.5 px-1">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={rememberMe}
-                          onChange={(e) => setRememberMe(e.target.checked)}
-                          className={`w-3.5 h-3.5 rounded border-2 transition-colors cursor-pointer accent-blue-600 ${
-                            isDarkMode
-                              ? 'bg-zinc-900 border-zinc-700'
-                              : 'bg-white border-slate-300'
-                          }`}
-                        />
-                        <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>Ingat saya</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoggingIn}
-                    className={`w-full py-3 sm:py-3.5 px-4 font-black rounded-2xl text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
-                      isDarkMode
-                        ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg shadow-blue-950/80'
-                        : 'bg-zinc-950 hover:bg-black text-white shadow-lg shadow-zinc-950/30'
+              {/* UNIFIED SINGLE LOGIN FORM (Admin, Guru, Wali Kelas, Staf, & Siswa) */}
+              <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+                <div className="space-y-1.5 text-left">
+                  <label
+                    className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
                     }`}
                   >
-                    {isLoggingIn ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Memverifikasi Akun...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Masuk ke Sistem</span>
-                        <ArrowRight className="w-5 h-5" />
-                      </>
-                    )}
-                  </button>
-                </form>
-              ) : (
-                /* ============================================================== */
-                /* 2. STUDENT NISN + OTP WHATSAPP FLOW                           */
-                /* ============================================================== */
-                <div className="space-y-4 pt-1 text-left">
-                  {/* STEP 1: INPUT NISN */}
-                  {otpStep === 'input_nisn' && (
-                    <form onSubmit={handleSendOtpForNisn} className="space-y-4">
-                      <div className="space-y-1.5">
-                        <label
-                          className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
-                            isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
-                          }`}
-                        >
-                          Nomor Induk Siswa Nasional (NISN)
-                        </label>
-                        <div className="relative">
-                          <div
-                            className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                              isDarkMode ? 'text-blue-400' : 'text-zinc-500'
-                            }`}
-                          >
-                            <GraduationCap className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-                          </div>
-                          <input
-                            type="text"
-                            required
-                            value={otpNisn}
-                            onChange={(e) => setOtpNisn(e.target.value)}
-                            placeholder="Masukkan NISN Anda"
-                            className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
-                              isDarkMode
-                                ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
-                                : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-blue-600 focus:border-blue-600'
-                            }`}
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isSendingOtp || !otpNisn.trim()}
-                        className="w-full py-3 sm:py-3.5 px-4 font-black rounded-2xl text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 disabled:opacity-50"
-                      >
-                        {isSendingOtp ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Memproses NISN...</span>
-                          </>
-                        ) : (
-                          <>
-                            <MessageSquare className="w-4 h-4" />
-                            <span>Kirim Kode OTP WhatsApp</span>
-                            <ArrowRight className="w-4 h-4" />
-                          </>
-                        )}
-                      </button>
-
-                      <p className="text-[11px] text-center text-slate-400 dark:text-zinc-500 font-medium">
-                        Kode OTP 6-digit akan dikirim ke WhatsApp resmi Anda/Orang Tua.
-                      </p>
-                    </form>
-                  )}
-
-                  {/* STEP 2: REGISTER WA (When student has no phone number in database yet) */}
-                  {otpStep === 'register_wa' && (
-                    <form onSubmit={handleRegisterWaAndSendOtp} className="space-y-3.5">
-                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl space-y-1">
-                        <div className="flex items-center gap-1.5 text-xs font-black text-amber-800 dark:text-amber-300">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span>Pendaftaran Nomor WhatsApp Siswa</span>
-                        </div>
-                        <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                          Siswa <strong>{matchedOtpSiswa?.nama}</strong> (NISN: {matchedOtpSiswa?.nisn}) belum memiliki nomor WA terdaftar. Masukkan nomor WhatsApp aktif Anda sekarang untuk menerima kode OTP & aktivasi perangkat.
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label
-                          className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
-                            isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
-                          }`}
-                        >
-                          Nomor WhatsApp Aktif Siswa
-                        </label>
-                        <div className="relative">
-                          <div
-                            className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                              isDarkMode ? 'text-emerald-400' : 'text-zinc-500'
-                            }`}
-                          >
-                            <MessageSquare className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-                          </div>
-                          <input
-                            type="tel"
-                            required
-                            value={newWaInput}
-                            onChange={(e) => setNewWaInput(e.target.value)}
-                            placeholder="Contoh: 081234567890"
-                            className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
-                              isDarkMode
-                                ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-emerald-500 focus:border-emerald-500'
-                                : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-emerald-500 focus:border-emerald-500'
-                            }`}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setOtpStep('input_nisn')}
-                          className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-zinc-700 text-xs font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                        >
-                          Kembali
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isSendingOtp || !newWaInput.trim()}
-                          className="flex-1 py-3 px-4 font-black rounded-xl text-xs sm:text-sm transition-all transform active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-50"
-                        >
-                          <Send className="w-4 h-4" />
-                          <span>Kirim OTP Aktivasi ke WhatsApp</span>
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* STEP 3: VERIFY 6-DIGIT OTP */}
-                  {otpStep === 'verify_otp' && (
-                    <form onSubmit={handleVerifyOtp} className="space-y-3.5">
-                      <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-xs font-black text-blue-900 dark:text-blue-200">
-                            <Smartphone className="w-4 h-4 text-blue-600 shrink-0" />
-                            <span className="truncate">{matchedOtpSiswa?.nama}</span>
-                          </div>
-                          <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
-                            OTP dikirim ke WhatsApp: <strong>{maskPhoneNumber(targetWaNumber)}</strong> {targetWaRecipientType === 'orang_tua' ? '(No Orang Tua)' : ''}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setOtpStep('input_nisn')}
-                          className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                        >
-                          Ganti
-                        </button>
-                      </div>
-
-                      <div className="space-y-1.5 text-center">
-                        <label
-                          className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-left ${
-                            isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
-                          }`}
-                        >
-                          Masukkan 6-Digit Kode OTP
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            maxLength={6}
-                            required
-                            autoFocus
-                            value={otpCodeInput}
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/[^0-9]/g, '');
-                              setOtpCodeInput(val);
-                              if (val.length === 6) {
-                                handleVerifyOtp(undefined, val);
-                              }
-                            }}
-                            placeholder="• • • • • •"
-                            className={`w-full text-center tracking-[0.4em] font-mono text-xl sm:text-2xl font-black py-3 rounded-2xl transition focus:outline-none focus:ring-2 ${
-                              isDarkMode
-                                ? 'bg-zinc-900/90 border border-zinc-700 text-emerald-400 placeholder-zinc-600 focus:ring-emerald-500 focus:border-emerald-500'
-                                : 'bg-white border-2 border-emerald-500/80 text-emerald-600 placeholder-slate-300 focus:ring-emerald-500'
-                            }`}
-                          />
-                        </div>
-
-                        {/* OTP Expiration & Resend countdown */}
-                        <div className="flex items-center justify-between text-xs pt-1 px-1">
-                          <span className="text-slate-500 dark:text-zinc-400 text-[11px]">
-                            {otpCountdown > 0 ? (
-                              <>
-                                Berlaku: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{Math.floor(otpCountdown / 60)}:{(otpCountdown % 60).toString().padStart(2, '0')}</strong>
-                              </>
-                            ) : (
-                              <span className="text-rose-500 font-bold">Kode telah kadaluarsa</span>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={otpCountdown > 0}
-                            onClick={() => {
-                              if (matchedOtpSiswa) {
-                                dispatchOtpCodeToStudent(matchedOtpSiswa, targetWaNumber, targetWaRecipientType);
-                              }
-                            }}
-                            className={`text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
-                              otpCountdown > 0
-                                ? 'text-slate-400 dark:text-zinc-600 cursor-not-allowed'
-                                : 'text-emerald-600 dark:text-emerald-400 hover:underline'
-                            }`}
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            <span>Kirim Ulang OTP</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Direct WhatsApp Web / Mobile Link Button */}
-                      {directWaLink && (
-                        <a
-                          href={directWaLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-2 transition"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span className="truncate">Kirim / Buka WhatsApp ({maskPhoneNumber(targetWaNumber)})</span>
-                          <ExternalLink className="w-3.5 h-3.5 opacity-70 shrink-0" />
-                        </a>
-                      )}
-
-                      <button
-                        type="submit"
-                        disabled={isVerifyingOtp || otpCodeInput.length < 6}
-                        className="w-full py-3.5 px-4 font-black rounded-2xl text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 disabled:opacity-50"
-                      >
-                        {isVerifyingOtp ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Mengunci Perangkat & Masuk...</span>
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="w-5 h-5" />
-                            <span>Verifikasi OTP & Masuk</span>
-                          </>
-                        )}
-                      </button>
-
-                      <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 dark:text-zinc-500 pt-1">
-                        <Lock className="w-3 h-3 text-emerald-500" />
-                        <span>Perangkat HP Anda akan otomatis terkunci ke akun ini.</span>
-                      </div>
-                    </form>
-                  )}
+                    Username / NIP / NISN
+                  </label>
+                  <div className="relative">
+                    <div
+                      className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
+                        isDarkMode ? 'text-blue-400' : 'text-zinc-500'
+                      }`}
+                    >
+                      <User className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Masukkan Username, NIP, atau NISN Siswa"
+                      className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
+                          : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
+                      }`}
+                    />
+                  </div>
                 </div>
-              )}
+
+                <div className="space-y-1.5 text-left">
+                  <label
+                    className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
+                      isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
+                    }`}
+                  >
+                    Password
+                  </label>
+                  <div className="relative">
+                    <div
+                      className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
+                        isDarkMode ? 'text-blue-400' : 'text-zinc-500'
+                      }`}
+                    >
+                      <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Masukkan password akun Anda"
+                      className={`w-full pl-10 sm:pl-10.5 pr-11 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
+                          : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className={`absolute inset-y-0 right-0 pr-3.5 flex items-center cursor-pointer ${
+                        isDarkMode ? 'text-zinc-400 hover:text-blue-400' : 'text-slate-500 hover:text-zinc-900'
+                      }`}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4 sm:w-4.5 sm:h-4.5" /> : <Eye className="w-4 h-4 sm:w-4.5 sm:h-4.5" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-0.5 px-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className={`w-3.5 h-3.5 rounded border-2 transition-colors cursor-pointer accent-blue-600 ${
+                          isDarkMode
+                            ? 'bg-zinc-900 border-zinc-700'
+                            : 'bg-white border-slate-300'
+                        }`}
+                      />
+                      <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>Ingat saya</span>
+                    </label>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className={`w-full py-3 sm:py-3.5 px-4 font-black rounded-2xl text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
+                    isDarkMode
+                      ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg shadow-blue-950/80'
+                      : 'bg-zinc-950 hover:bg-black text-white shadow-lg shadow-zinc-950/30'
+                  }`}
+                >
+                  {isLoggingIn ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Memverifikasi Akun...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Masuk ke Sistem</span>
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+              </form>
 
               {/* Account Lock Notification Alert if any */}
               {(appData.lockedAccounts || []).length > 0 && (
@@ -2171,186 +1538,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         );
       })()}
-
-      {/* MODAL BANTUAN AKUN & DAFTAR LOGIN */}
-      {isAccountHelpModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl max-h-[90vh] bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 flex flex-col overflow-hidden text-left">
-            {/* Header */}
-            <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/25">
-                  <Key className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                    Daftar Akun & Panduan Login
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                    Pilih akun atau gunakan kredensial berikut untuk masuk ke sistem.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAccountHelpModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-500 dark:text-zinc-400 flex items-center justify-center transition cursor-pointer shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Account List */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-3 divide-y divide-slate-100 dark:divide-zinc-800/60">
-              {/* 1. Admin */}
-              <div className="pt-2 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <Shield className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Administrator</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
-                        Akses Penuh
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                      Username: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">admin</code> • Password: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">admin123</code> (atau 123)
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAccountHelpModalOpen(false);
-                    setLoginMode('standard');
-                    handleQuickLogin('admin', 'admin123');
-                  }}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                  <span>Gunakan Akun Ini</span>
-                </button>
-              </div>
-
-              {/* 2. Guru / User Biasa */}
-              <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <UserCheck className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Guru / Tenaga Pengajar</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
-                        Presensi KBM
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                      Username: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">guru</code> (atau <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">user</code>) • Password: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">123</code>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAccountHelpModalOpen(false);
-                    setLoginMode('standard');
-                    handleQuickLogin('guru', '123');
-                  }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                  <span>Gunakan Akun Ini</span>
-                </button>
-              </div>
-
-              {/* 3. Wali Kelas */}
-              <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Wali Kelas ({firstTeacher.nama})</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                        Rekap Kelas
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                      NIP/User: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">{firstTeacher.nip || firstTeacher.username || '1037'}</code> • Password: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">{firstTeacher.password || '123'}</code>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAccountHelpModalOpen(false);
-                    setLoginMode('standard');
-                    handleQuickLogin(firstTeacher.nip || firstTeacher.username || '1037', firstTeacher.password || '123');
-                  }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                  <span>Gunakan Akun Ini</span>
-                </button>
-              </div>
-
-              {/* 4. Siswa / Murid dengan OTP WA */}
-              <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/40 dark:bg-emerald-950/20 p-2.5 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-zinc-100">Portal Siswa ({firstSiswa.nama})</h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300">
-                        NISN + OTP WA
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                      NISN: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">{firstSiswa.nisn || '0081234567'}</code> • WA: <code className="font-mono font-bold text-slate-800 dark:text-zinc-200">{firstSiswa.noWa || '0812-3456-7890'}</code>
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAccountHelpModalOpen(false);
-                    setLoginMode('siswa_otp');
-                    setOtpNisn(firstSiswa.nisn || '0081234567');
-                    setMatchedOtpSiswa(firstSiswa);
-                    setTargetWaNumber(firstSiswa.noWa || '081234567890');
-                    setTargetWaRecipientType('siswa');
-                    dispatchOtpCodeToStudent(firstSiswa, firstSiswa.noWa || '081234567890', 'siswa');
-                  }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>Kirim OTP Siswa Ini</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-3.5 sm:px-6 sm:py-4 bg-slate-50 dark:bg-zinc-800/80 border-t border-slate-200/80 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0">
-              <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                Gunakan tab Siswa untuk login praktis berbasis NISN & WhatsApp.
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsAccountHelpModalOpen(false)}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-slate-800 dark:text-zinc-200 font-bold rounded-xl text-xs transition cursor-pointer"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

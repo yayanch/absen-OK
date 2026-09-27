@@ -354,8 +354,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="flex-1 overflow-y-auto no-scrollbar p-2 sm:p-3.5 space-y-3 bg-transparent">
             {(() => {
+              const navLayout = getNavigationLayout(appData);
+
               const hasAnyMenuAccess = (views: ViewType[]) => {
-                return views.some((v) => hasMenuAccess(currentUser.role, v, appData));
+                return views.some(
+                  (v) =>
+                    hasMenuAccess(currentUser.role, v, appData) &&
+                    isMenuVisibleInLayout(v, navLayout)
+                );
               };
 
               const renderItem = (
@@ -503,8 +509,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 );
               };
-
-              const navLayout = getNavigationLayout(appData);
 
               const renderConfiguredMenuItem = (
                 view: ViewType,

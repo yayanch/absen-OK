@@ -380,7 +380,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     description: 'Akses penuh ke seluruh menu, konfigurasi sistem, dan manajemen keamanan',
     badgeColor: 'blue',
     isSystem: true,
-    allowedMenus: [...ALL_MENU_IDS],
+    allowedMenus: ALL_MENU_IDS.filter((id) => id !== 'portal_murid'),
   },
   {
     roleId: 'kesiswaan',
@@ -617,9 +617,6 @@ export function hasMenuAccess(role: string | undefined, view: ViewType, appData?
   if (!role) return false;
   const normalized = normalizeRoleKey(role);
 
-  // Administrator always has access to all menus
-  if (normalized === 'admin') return true;
-
   // Murid specific view fallbacks
   if (normalized === 'murid') {
     if (view === 'portal_murid' || view === 'absen_qr' || view === 'kartu_pelajar' || view === 'rekap_siswa') {
@@ -627,18 +624,37 @@ export function hasMenuAccess(role: string | undefined, view: ViewType, appData?
     }
   }
 
-  // Get effective permission for this role
+  // Safety guard: Administrator always retains access to essential settings and main dashboard so they are never locked out
+  const isEssentialAdminView =
+    view === 'dashboard' ||
+    view === 'pengaturan_admin' ||
+    view === 'pengaturan_role' ||
+    view === 'pengaturan_menu' ||
+    view === 'pengaturan_sekolah';
+
+  // Get effective permission for this role (honors any customizations made in Pengaturan Hak Akses Role)
   const allRoles = getAllRolePermissions(appData);
   const foundRole = allRoles.find((r) => normalizeRoleKey(r.roleId) === normalized);
 
-  if (foundRole) {
+  if (foundRole && Array.isArray(foundRole.allowedMenus)) {
+    if (normalized === 'admin' && isEssentialAdminView) {
+      return true;
+    }
     return foundRole.allowedMenus.includes(view);
   }
 
   // Fallback to default system roles if any
   const defaultDef = DEFAULT_ROLE_PERMISSIONS.find((d) => d.roleId === normalized);
   if (defaultDef) {
+    if (normalized === 'admin' && isEssentialAdminView) {
+      return true;
+    }
     return defaultDef.allowedMenus.includes(view);
+  }
+
+  // Fallback for admin if not found in permissions
+  if (normalized === 'admin') {
+    return view !== 'portal_murid';
   }
 
   // Default fallback for unrecognized non-admin role: can view dashboard
