@@ -104,6 +104,7 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
           value={hadirCount}
           icon={UserCheck}
           variant="success"
+          onClick={() => onNavigateView('rekap_harian')}
         />
         <StatCard
           label="Belum Presensi"

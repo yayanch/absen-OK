@@ -50,6 +50,8 @@ const PengaturanSekolahView = React.lazy(() => import('./components/views/Pengat
 const PengaturanTemaView = React.lazy(() => import('./components/views/PengaturanTemaView').then(m => ({ default: m.PengaturanTemaView })));
 const PengaturanAdminView = React.lazy(() => import('./components/views/PengaturanAdminView').then(m => ({ default: m.PengaturanAdminView })));
 const MasterUserView = React.lazy(() => import('./components/views/MasterUserView').then(m => ({ default: m.MasterUserView })));
+const PengaturanRoleView = React.lazy(() => import('./components/views/PengaturanRoleView').then(m => ({ default: m.PengaturanRoleView })));
+const PengaturanMenuView = React.lazy(() => import('./components/views/PengaturanMenuView').then(m => ({ default: m.PengaturanMenuView })));
 const DataDemoView = React.lazy(() => import('./components/views/DataDemoView').then(m => ({ default: m.DataDemoView })));
 const IntegrasiMySQLView = React.lazy(() => import('./components/views/IntegrasiMySQLView').then(m => ({ default: m.IntegrasiMySQLView })));
 const DatabaseTrafficView = React.lazy(() => import('./components/views/DatabaseTrafficView').then(m => ({ default: m.DatabaseTrafficView })));
@@ -66,9 +68,11 @@ const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView'
 const IntrusionDetectionView = React.lazy(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
 const ServerMonitoringView = React.lazy(() => import('./components/views/ServerMonitoringView').then(m => ({ default: m.ServerMonitoringView })));
 const UserLoginMonitoringView = React.lazy(() => import('./components/views/UserLoginMonitoringView').then(m => ({ default: m.UserLoginMonitoringView })));
+const WhatsAppGatewayView = React.lazy(() => import('./components/views/WhatsAppGatewayView').then(m => ({ default: m.WhatsAppGatewayView })));
 
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';
+import { hasMenuAccess } from './utils/rolePermissionEngine';
 
 export default function App() {
   const getInitialView = (): ViewType => {
@@ -1007,6 +1011,25 @@ export default function App() {
                 onNavigate={(v) => handleNavigate(v)}
                 onLogout={handleLogout}
               />
+            ) : !hasMenuAccess(currentUser.role, currentView, appData) && currentUser.role !== 'admin' ? (
+              <div className="max-w-md mx-auto my-12 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-xl">
+                <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 text-rose-600 rounded-2xl flex items-center justify-center mx-auto font-black">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Akses Dibatasi</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    Role Anda saat ini tidak memiliki izin untuk mengakses menu ini. Silakan hubungi Administrator untuk memperbarui hak akses role Anda.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleNavigate(currentUser.role === 'murid' ? 'portal_murid' : 'dashboard')}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition cursor-pointer"
+                >
+                  Kembali ke Halaman Utama
+                </button>
+              </div>
             ) : (
               <>
                 {currentView === 'jadwal_shift' && (
@@ -1028,6 +1051,7 @@ export default function App() {
                     }}
                     onNavigateView={(v) => handleNavigate(v)}
                     onUpdateAppData={handleUpdateAppData}
+                    onShowToast={showToast}
                   />
                 )}
 
@@ -1178,6 +1202,31 @@ export default function App() {
                 onCloseModal={closeGeneralModal}
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
+                onNavigateView={handleNavigate}
+              />
+            )}
+
+            {currentView === 'pengaturan_role' && (currentUser.role === 'admin' || hasMenuAccess(currentUser.role, 'pengaturan_role', appData)) && (
+              <PengaturanRoleView
+                appData={appData}
+                currentUser={currentUser}
+                readOnly={currentUser.role !== 'admin'}
+                onUpdateAppData={handleUpdateAppData}
+                onConfirmModal={openConfirmModal}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
+              />
+            )}
+
+            {currentView === 'pengaturan_menu' && (currentUser.role === 'admin' || hasMenuAccess(currentUser.role, 'pengaturan_menu', appData)) && (
+              <PengaturanMenuView
+                appData={appData}
+                currentUser={currentUser}
+                readOnly={currentUser.role !== 'admin'}
+                onUpdateAppData={handleUpdateAppData}
+                onConfirmModal={openConfirmModal}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
               />
             )}
 
@@ -1362,6 +1411,16 @@ export default function App() {
                   onConfirmModal={openConfirmModal}
                 />
               )
+            )}
+
+            {currentView === 'whatsapp_gateway' && (
+              <WhatsAppGatewayView
+                appData={appData}
+                currentUser={currentUser}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onConfirmModal={openConfirmModal}
+              />
             )}
 
               </>

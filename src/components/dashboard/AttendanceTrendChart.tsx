@@ -24,7 +24,7 @@ export interface AttendanceTrendDataPoint {
   isEffective?: boolean;
 }
 
-export { AttendanceRecapChart } from './AttendanceRecapChart';
+export { AttendanceRecapChart, type TrendRangeOption } from './AttendanceRecapChart';
 
 export interface AttendanceTrendChartProps {
   data: AttendanceTrendDataPoint[];

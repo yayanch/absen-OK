@@ -566,7 +566,7 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
           { id: 'tema', label: 'Tema & Warna', icon: Palette, badge: 'Preset & Mode' },
           { id: 'navigasi_header', label: 'Sidebar & Header', icon: Layout, badge: 'Navigasi & Hero' },
           { id: 'tipografi_layout', label: 'Tipografi & Bentuk UI', icon: Type, badge: 'Font & Radius' },
-          { id: 'background_login', label: 'Background Login', icon: ImageIcon, badge: 'Wallpaper' },
+          { id: 'background_login', label: 'Tampilan & Teks Login', icon: ImageIcon, badge: 'Teks & Background' },
         ].map((tab) => {
           const IconComp = tab.icon;
           const isActive = activeTab === tab.id;

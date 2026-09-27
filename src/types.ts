@@ -63,6 +63,15 @@ export interface SekolahConfig {
   loginBgFit?: 'cover' | 'contain' | 'tile';
   loginCardOpacity?: number; // 0 - 100 (%)
   loginCardBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  loginLeftBadgeText?: string;
+  loginLeftTitlePrefix?: string;
+  loginLeftTitleHighlight?: string;
+  loginLeftDescription?: string;
+  loginLeftFeature1Title?: string;
+  loginLeftFeature1Subtitle?: string;
+  loginLeftFeature2Title?: string;
+  loginLeftFeature2Subtitle?: string;
+  loginLeftShowPanel?: boolean;
   footerTeks?: string;
   footerSubTeks?: string;
   appVersion?: string;
@@ -88,6 +97,50 @@ export interface SekolahConfig {
   showOfflineToastWarning?: boolean; // Tampilkan pop-up peringatan ketika jaringan terputus
   autoSyncOnReconnect?: boolean; // Otomatis trigger sinkronisasi data saat online kembali
   offlineNoticeMessage?: string; // Pesan informasi kustom pada tampilan offline
+}
+
+export type WhatsAppProvider = 'fonnte' | 'wablas' | 'starsender' | 'twilio' | 'custom_webhook';
+
+export interface WhatsAppGatewayConfig {
+  enabled: boolean;
+  provider: WhatsAppProvider;
+  apiKey: string;
+  senderNumber?: string;
+  domainUrl?: string; // For Wablas / Starsender
+  webhookUrl?: string; // For Custom Webhook
+  accountSid?: string; // For Twilio
+  authToken?: string; // For Twilio
+
+  // Feature Toggles
+  sendOtpEnabled: boolean;
+  sendPresensiMasukEnabled: boolean;
+  sendPresensiPulangEnabled: boolean;
+  sendPresensiTerlambatEnabled: boolean;
+  sendKetidakhadiranEnabled: boolean;
+
+  // Target Recipients
+  sendToStudent: boolean;
+  sendToParent: boolean;
+
+  // Custom Message Templates
+  templateOtp?: string;
+  templatePresensiMasuk?: string;
+  templatePresensiPulang?: string;
+  templatePresensiTerlambat?: string;
+  templateKetidakhadiran?: string;
+  templateBroadcast?: string;
+}
+
+export interface WhatsAppLog {
+  id: string;
+  timestamp: string;
+  recipientPhone: string;
+  recipientName: string;
+  messageType: 'otp' | 'presensi_masuk' | 'presensi_pulang' | 'terlambat' | 'alpa' | 'broadcast' | 'test';
+  messageText: string;
+  status: 'success' | 'failed' | 'pending';
+  provider: string;
+  responseMessage?: string;
 }
 
 export interface PengumumanSekolah {
@@ -216,6 +269,11 @@ export interface Siswa {
   alamat?: string;
   tempatLahir?: string;
   tanggalLahir?: string;
+  email?: string;
+  deviceId?: string;
+  deviceInfo?: string;
+  deviceLockedAt?: string;
+  isDeviceLocked?: boolean;
 }
 
 export interface SiswaPresensiItem {
@@ -268,6 +326,18 @@ export interface CustomRole {
   name: string;
   label: string;
   color?: string;
+  description?: string;
+  allowedMenus?: ViewType[];
+  isSystem?: boolean;
+}
+
+export interface RoleMenuPermission {
+  roleId: string;
+  roleName: string;
+  description?: string;
+  badgeColor?: string;
+  isSystem?: boolean;
+  allowedMenus: ViewType[];
 }
 
 export type PelanggaranKategori = 'ringan' | 'sedang' | 'berat' | 'kriminal';
@@ -436,6 +506,34 @@ export interface BackupScheduleConfig {
   lastManualBackup?: string;
 }
 
+export interface NavigationSectionConfig {
+  id: string; // e.g. 'dashboard', 'presensi', 'laporan', 'master', 'kegiatan', 'qr', 'sistem', 'pengaturan', or custom string
+  title: string; // Displayed title of the section, e.g. "DASHBOARD", "PRESENSI & KBM"
+  iconName?: string;
+  order: number;
+  visible?: boolean;
+  isAccordion?: boolean;
+  menuIds: ViewType[]; // Ordered list of views inside this section
+  isCustom?: boolean;
+  description?: string;
+}
+
+export interface NavigationMenuItemOverride {
+  id: ViewType;
+  customLabel?: string;
+  customIcon?: string;
+  sectionId?: string; // which section it currently belongs to
+  visible?: boolean;
+  order?: number;
+}
+
+export interface NavigationLayoutConfig {
+  sections: NavigationSectionConfig[];
+  itemOverrides?: Record<string, NavigationMenuItemOverride>;
+  updatedAt?: string;
+  version?: number;
+}
+
 export interface AppData {
   sekolah: SekolahConfig;
   admin: AdminAccount;
@@ -459,6 +557,8 @@ export interface AppData {
   chatMessages?: ChatMessage[];
   enableLiveChat?: boolean;
   customRoles?: CustomRole[];
+  rolePermissions?: RoleMenuPermission[];
+  navigationLayout?: NavigationLayoutConfig;
   hariLibur?: HariLibur[];
   shiftConfig?: ShiftConfig;
   jadwalMengajar?: JadwalMengajarGuru[];
@@ -473,6 +573,8 @@ export interface AppData {
   backupConfig?: BackupScheduleConfig;
   userLoginLogs?: UserLoginLog[];
   activeUserSessions?: ActiveUserSession[];
+  whatsappGateway?: WhatsAppGatewayConfig;
+  whatsappLogs?: WhatsAppLog[];
 }
 
 export interface SiswaPresensiSesiGuru {
@@ -613,6 +715,8 @@ export type ViewType =
   | 'pengaturan_tema'
   | 'pengaturan_admin'
   | 'master_user'
+  | 'pengaturan_role'
+  | 'pengaturan_menu'
   | 'integrasi_mysql'
   | 'database_traffic'
   | 'cetak_kartu_qr'
@@ -621,7 +725,8 @@ export type ViewType =
   | 'audit_logs'
   | 'intrusion_detection'
   | 'monitoring_server'
-  | 'monitoring_login';
+  | 'monitoring_login'
+  | 'whatsapp_gateway';
 
 export type SyncStatus = 'idle' | 'dirty' | 'saving' | 'syncing' | 'saved' | 'error' | 'offline' | 'unknown' | 'conflict';
 

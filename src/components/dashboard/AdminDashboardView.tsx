@@ -22,8 +22,9 @@ import {
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, calculateDailyAttendanceStats } from '../../utils/helpers';
-import { AttendanceTrendChart, AttendanceRecapChart } from './AttendanceTrendChart';
+import { AttendanceTrendChart, AttendanceRecapChart, TrendRangeOption } from './AttendanceTrendChart';
 import { PageHeader, StatCard } from '../common/UIComponents';
+import { WhatsAppLiveMonitoringCard } from './WhatsAppLiveMonitoringCard';
 
 interface AdminDashboardViewProps {
   appData: AppData;
@@ -39,8 +40,11 @@ interface AdminDashboardViewProps {
   kesianganCount: number;
   hadirPercentage: string;
   trendData: any[];
-  trendRange: '7d' | '14d' | '30d';
-  setTrendRange: (r: '7d' | '14d' | '30d') => void;
+  trendRange: TrendRangeOption;
+  setTrendRange: (r: TrendRangeOption) => void;
+  customStartDate?: string;
+  customEndDate?: string;
+  onCustomRangeChange?: (start: string, end: string) => void;
   recentLogs: any[];
   unrecordedClasses: any[];
   targetClasses: any[];
@@ -59,6 +63,8 @@ interface AdminDashboardViewProps {
   onNavigateView: (view: ViewType) => void;
   onNavigateToInput: (kelasId?: string) => void;
   onOpenImportModal?: () => void;
+  onUpdateAppData?: (updated: AppData) => void;
+  onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -77,6 +83,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   trendData,
   trendRange,
   setTrendRange,
+  customStartDate,
+  customEndDate,
+  onCustomRangeChange,
   recentLogs,
   unrecordedClasses,
   targetClasses,
@@ -95,6 +104,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onNavigateView,
   onNavigateToInput,
   onOpenImportModal,
+  onUpdateAppData,
+  onShowToast,
 }) => {
   // Rank classes by attendance % using canonical stats
   const classRanking = React.useMemo(() => {
@@ -228,19 +239,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           icon={UserCheck}
           variant="success"
           badge={{ label: `${hadirPercentage}%`, type: 'success' }}
-          onClick={() => {
-            setCardModalData({
-              title: `Kehadiran Hari Ini (${selectedDate})`,
-              subtitle: `Total ${hadirCount} siswa hadir (${hadirPercentage}%)`,
-              total: hadirCount,
-              items: [
-                { name: 'Hadir', subtitle: `${hadirCount} Siswa (${hadirPercentage}%)`, statusBadge: 'Hadir' },
-                { name: 'Sakit', subtitle: `${sakitCount} Siswa`, statusBadge: 'Sakit' },
-                { name: 'Izin', subtitle: `${izinCount} Siswa`, statusBadge: 'Izin' },
-                { name: 'Alpha', subtitle: `${alpaCount} Siswa`, statusBadge: 'Alpha' },
-              ],
-            });
-          }}
+          onClick={() => onNavigateView('rekap_harian')}
         />
       </div>
 
@@ -252,12 +251,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             trendData={trendData}
             trendRange={trendRange}
             onRangeChange={setTrendRange}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            onCustomRangeChange={onCustomRangeChange}
             appData={appData}
             selectedDate={selectedDate}
             currentUser={currentUser}
             targetClasses={targetClasses}
-            title="Rekapitulasi & Tren Kehadiran Siswa"
-            subtitle="Grafik analitik komprehensif tingkat kehadiran siswa, distribusi status presensi, dan komparasi rombel."
+            title="Grafik Tren Kehadiran Siswa"
+            subtitle="Grafik persentase tingkat kehadiran harian siswa dalam rentang waktu terpilih."
             onNavigateView={onNavigateView}
           />
 
@@ -420,6 +422,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Live WhatsApp Gateway Delivery & Failed Messages Telemetry */}
+      <WhatsAppLiveMonitoringCard
+        appData={appData}
+        currentUser={currentUser}
+        onNavigateView={onNavigateView}
+        onUpdateAppData={onUpdateAppData}
+        onShowToast={onShowToast}
+      />
 
       {/* Monitoring Login Pengguna (Live Sesi Online) */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">

@@ -33,10 +33,19 @@ import {
   CalendarRange,
   BookOpen,
   Layers,
-  Server
+  Server,
+  ShieldCheck
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
+import { hasMenuAccess } from '../utils/rolePermissionEngine';
+import {
+  getNavigationLayout,
+  getEffectiveMenuLabel,
+  getEffectiveMenuIcon,
+  isMenuVisibleInLayout,
+  renderNavIcon
+} from '../utils/navigationLayoutEngine';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -345,14 +354,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="flex-1 overflow-y-auto no-scrollbar p-2 sm:p-3.5 space-y-3 bg-transparent">
             {(() => {
+              const hasAnyMenuAccess = (views: ViewType[]) => {
+                return views.some((v) => hasMenuAccess(currentUser.role, v, appData));
+              };
+
               const renderItem = (
                 view: ViewType,
                 icon: React.ReactNode,
                 label: string,
                 badgeCount?: number,
                 customOnClick?: () => void,
-                isSubItem?: boolean
+                isSubItem?: boolean,
+                bypassPermission?: boolean
               ) => {
+                if (!bypassPermission && !hasMenuAccess(currentUser.role, view, appData)) {
+                  return null;
+                }
                 const isActive = currentView === view || (view === 'dashboard' && currentView === 'portal_murid');
                 const handleClick = customOnClick || (() => handleNavClick(view));
                 return (
@@ -397,6 +414,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 children: React.ReactNode,
                 customOnClick?: () => void
               ) => {
+                if (viewsInThisSection.length > 0 && !hasAnyMenuAccess(viewsInThisSection)) {
+                  return null;
+                }
                 const isSectionOpen = Boolean(openSections[sectionKey]);
                 const isAnyChildActive = viewsInThisSection.includes(currentView);
 
@@ -484,166 +504,110 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 );
               };
 
+              const navLayout = getNavigationLayout(appData);
+
+              const renderConfiguredMenuItem = (
+                view: ViewType,
+                isSubItem?: boolean,
+                customOnClick?: () => void,
+                customBadge?: number
+              ) => {
+                if (!isMenuVisibleInLayout(view, navLayout)) {
+                  return null;
+                }
+
+                // If user is murid and menu is dashboard, direct to portal_murid
+                const actualView = view === 'dashboard' && isMurid ? 'portal_murid' : view;
+                const effectiveLabel = getEffectiveMenuLabel(actualView, navLayout);
+                const effectiveIconName = getEffectiveMenuIcon(actualView, navLayout);
+                const iconComp = renderNavIcon(effectiveIconName, 'w-4 h-4 shrink-0');
+
+                let badge = customBadge;
+                let clickHandler = customOnClick;
+
+                if (actualView === 'catatan_pelanggaran') {
+                  badge = violationCount > 0 ? violationCount : undefined;
+                } else if (actualView === 'home_visit') {
+                  badge = homeVisitCount > 0 ? homeVisitCount : undefined;
+                } else if (actualView === 'intrusion_detection') {
+                  const activeIncidents = (appData?.securityIncidents || []).filter((i) => i.status === 'active').length;
+                  if (activeIncidents > 0) badge = activeIncidents;
+                } else if (actualView === 'monitoring_login') {
+                  const activeSessions = (appData?.activeUserSessions || []).filter(
+                    (s) =>
+                      !s.id.startsWith('sess-srv-') &&
+                      !s.id.startsWith('sess-guru-') &&
+                      !s.id.startsWith('sess-kesiswaan-') &&
+                      !s.id.startsWith('sess-siswa-') &&
+                      s.id !== 'sess-admin-active'
+                  ).length;
+                  if (activeSessions > 0) badge = activeSessions || undefined;
+                } else if (actualView === 'absen_qr' && !isMurid && onOpenServerQrModal) {
+                  clickHandler = () => onOpenServerQrModal();
+                }
+
+                return renderItem(actualView, iconComp, effectiveLabel, badge, clickHandler, isSubItem);
+              };
+
               return (
                 <>
-                  {/* 1. DASHBOARD */}
-                  <div>
-                    {renderSimpleHeading('DASHBOARD')}
-                    <nav className="space-y-1">
-                      {renderItem(
-                        isMurid ? 'portal_murid' : 'dashboard',
-                        <PieChart className="w-4 h-4 shrink-0" />,
-                        isMurid ? 'Portal & Presensi Saya' : 'Dashboard Utama'
-                      )}
-                    </nav>
-                  </div>
+                  {/* Dynamic sections configured from Navigation Layout */}
+                  {navLayout.sections
+                    .filter((sec) => sec.visible !== false)
+                    .map((sec) => {
+                      if (sec.menuIds.length > 0 && !hasAnyMenuAccess(sec.menuIds)) {
+                        return null;
+                      }
 
-                  {/* 2. PRESENSI & KBM */}
-                  {!isMurid && !isKurikulum && !isStafJadwal && (
-                    <div>
-                      {renderSimpleHeading(isGuruOnly ? 'PRESENSI & KBM' : 'PRESENSI')}
-                      <nav className="space-y-1">
-                        {renderItem('presensi_input', <ClipboardCheck className="w-4 h-4 shrink-0" />, isGuruOnly ? 'Presensi Kelas (Read-Only)' : 'Input Presensi')}
-                        {isGuruOnly && renderItem('mapel_kelas_guru', <Layers className="w-4 h-4 text-emerald-300 shrink-0" />, 'Mapel & Kelas Ajar')}
-                      </nav>
-                    </div>
-                  )}
+                      if (sec.isAccordion) {
+                        return renderAccordionSection(
+                          sec.title,
+                          sec.id,
+                          renderNavIcon(sec.iconName || 'Folder', 'w-4 h-4 text-cyan-300 shrink-0'),
+                          sec.menuIds,
+                          (
+                            <>
+                              {sec.menuIds.map((m) => (
+                                <React.Fragment key={sec.id + m}>
+                                  {renderConfiguredMenuItem(m, true)}
+                                </React.Fragment>
+                              ))}
 
-                  {/* 3. LAPORAN (Accordion dengan sub-menu) */}
-                  {!isMurid && !isGuruOnly && !isKurikulum && !isStafJadwal && (
-                    renderAccordionSection(
-                      'LAPORAN',
-                      'laporan',
-                      <CalendarDays className="w-4 h-4 text-cyan-300 shrink-0" />,
-                      ['rekap_harian', 'rekap_mingguan', 'rekap_bulanan', 'rekap_ketidakhadiran_tertinggi', 'rekap_siswa'],
-                      (
-                        <>
-                          {renderItem('rekap_harian', <Calendar className="w-4 h-4 shrink-0" />, 'Rekap Harian', undefined, undefined, true)}
-                          {renderItem('rekap_mingguan', <CalendarDays className="w-4 h-4 shrink-0" />, 'Rekap Mingguan', undefined, undefined, true)}
-                          {renderItem('rekap_bulanan', <CalendarDays className="w-4 h-4 shrink-0" />, 'Rekap Bulanan', undefined, undefined, true)}
-                          {renderItem('rekap_ketidakhadiran_tertinggi', <AlertCircle className="w-4 h-4 shrink-0" />, 'Ketidakhadiran', undefined, undefined, true)}
-                          {isMurid && renderItem('rekap_siswa', <FileText className="w-4 h-4 text-cyan-300 shrink-0" />, 'Riwayat Kehadiran Saya', undefined, undefined, true)}
-                        </>
-                      )
-                    )
-                  )}
+                              {/* Backup modal shortcut in sistem section */}
+                              {sec.id === 'sistem' && hasMenuAccess(currentUser.role, 'audit_logs', appData) && onOpenBackupModal && (
+                                renderItem(
+                                  'audit_logs' as ViewType,
+                                  <HardDriveDownload className="w-4 h-4 text-blue-300 shrink-0" />,
+                                  'Backup & Restore Data',
+                                  undefined,
+                                  () => {
+                                    onOpenBackupModal();
+                                    if (typeof window !== 'undefined' && window.innerWidth < 768) onCloseMobile();
+                                  },
+                                  true
+                                )
+                              )}
+                            </>
+                          )
+                        );
+                      }
 
-                  {/* 4. DATA MASTER / JADWAL KBM */}
-                  {canViewMaster && (
-                    isStafJadwal ? (
-                      <div>
-                        {renderSimpleHeading('JADWAL')}
-                        <nav className="space-y-1">
-                          {renderItem(
-                            'jadwal_mengajar',
-                            <Calendar className="w-4 h-4 text-blue-300 shrink-0" />,
-                            'Jadwal Mengajar Guru'
-                          )}
-                        </nav>
-                      </div>
-                    ) : (
-                      renderAccordionSection(
-                        'DATA MASTER',
-                        'masterData',
-                        <Users className="w-4 h-4 text-blue-300 shrink-0" />,
-                        ['master_siswa', 'master_guru', 'master_mapel', 'mapel_kelas_guru', 'jadwal_mengajar', 'jadwal_minggu_ini', 'jadwal_shift', 'master_kelas', 'master_jurusan', 'hari_libur'],
-                        (
-                          <>
-                            {!isGuruOnly && renderItem('master_siswa', <Users className="w-4 h-4 shrink-0" />, 'Data Siswa', undefined, undefined, true)}
-                            {!isWali && !isGuruOnly && renderItem('master_guru', <UserCheck className="w-4 h-4 shrink-0" />, 'Data Guru & Pendidik', undefined, undefined, true)}
-                            {!isWali && !isGuruOnly && renderItem('master_mapel', <BookOpen className="w-4 h-4 shrink-0 text-emerald-300" />, 'Mata Pelajaran', undefined, undefined, true)}
-                            {renderItem('mapel_kelas_guru', <Layers className="w-4 h-4 text-emerald-300 shrink-0" />, isGuruOnly ? 'Mapel & Kelas Ajar' : 'Mapel & Kelas Guru', undefined, undefined, true)}
-                            {renderItem('jadwal_mengajar', <Calendar className="w-4 h-4 text-blue-300 shrink-0" />, (isAdmin || isKurikulum) ? 'Jadwal Mengajar Guru' : 'Jadwal Mengajar Saya', undefined, undefined, true)}
-                            {renderItem('jadwal_minggu_ini', <CalendarDays className="w-4 h-4 text-indigo-300 shrink-0" />, 'Jadwal Mengajar Minggu Ini', undefined, undefined, true)}
-                            {renderItem('jadwal_shift', <Clock className="w-4 h-4 text-cyan-300 shrink-0" />, 'Jadwal Shift Pagi & Siang', undefined, undefined, true)}
-                            {!isWali && !isGuruOnly && renderItem('master_kelas', <DoorOpen className="w-4 h-4 shrink-0" />, 'Data Kelas', undefined, undefined, true)}
-                            {!isWali && !isGuruOnly && renderItem('master_jurusan', <GraduationCap className="w-4 h-4 shrink-0" />, 'Data Jurusan', undefined, undefined, true)}
-                            {!isWali && !isGuruOnly && renderItem('hari_libur', <CalendarDays className="w-4 h-4 shrink-0 text-purple-300" />, 'Hari Libur & Tanpa Presensi', undefined, undefined, true)}
-                          </>
-                        )
-                      )
-                    )
-                  )}
+                      // Flat section with simple heading
+                      return (
+                        <div key={sec.id}>
+                          {renderSimpleHeading(sec.title)}
+                          <nav className="space-y-1">
+                            {sec.menuIds.map((m) => (
+                              <React.Fragment key={sec.id + m}>
+                                {renderConfiguredMenuItem(m, false)}
+                              </React.Fragment>
+                            ))}
+                          </nav>
+                        </div>
+                      );
+                    })}
 
-                  {/* 5. KEGIATAN */}
-                  {!isKurikulum && !isStafJadwal && (
-                    <div>
-                      {renderSimpleHeading('KEGIATAN')}
-                      <nav className="space-y-1">
-                        {renderItem('catatan_pelanggaran', <ShieldAlert className="w-4 h-4 text-amber-300 shrink-0" />, 'Catatan Pelanggaran', violationCount)}
-                        {!isMurid && !isGuruOnly && renderItem('home_visit', <Home className="w-4 h-4 shrink-0" />, 'Home Visit', homeVisitCount)}
-                      </nav>
-                    </div>
-                  )}
-
-                  {/* 6. QR & KARTU */}
-                  {(isAdmin || isKesiswaan || isMurid) && (
-                    <div>
-                      {renderSimpleHeading('QR & KARTU')}
-                      <nav className="space-y-1">
-                        {isMurid ? (
-                          <>
-                            {renderItem('absen_qr', <QrCode className="w-4 h-4 text-emerald-300 shrink-0" />, 'Absen QR Code')}
-                            {renderItem('kartu_pelajar', <CreditCard className="w-4 h-4 text-indigo-300 shrink-0" />, 'Kartu Pelajar Digital')}
-                          </>
-                        ) : (
-                          <>
-                            {renderItem('absen_qr', <QrCode className="w-4 h-4 text-emerald-300 shrink-0" />, 'Scan QR / Server QR', undefined, () => {
-                              if (onOpenServerQrModal) onOpenServerQrModal();
-                              else handleNavClick('absen_qr');
-                            })}
-                            {isAdmin && renderItem('cetak_kartu_qr', <CreditCard className="w-4 h-4 text-purple-300 shrink-0" />, 'Cetak Kartu QR Siswa')}
-                          </>
-                        )}
-                      </nav>
-                    </div>
-                  )}
-
-                  {/* 7. SISTEM (Accordion dengan sub-menu) */}
-                  {(isAdmin || isKesiswaan) && (
-                    renderAccordionSection(
-                      'SISTEM & KEAMANAN',
-                      'sistem',
-                      <Database className="w-4 h-4 text-emerald-300 shrink-0" />,
-                      ['master_user', 'intrusion_detection', 'monitoring_server', 'monitoring_login', 'integrasi_mysql', 'database_traffic', 'audit_logs', 'live_chat'],
-                      (
-                        <>
-                          {isAdmin && renderItem('master_user', <UserCheck className="w-4 h-4 shrink-0" />, 'Pengguna / Manajemen User', undefined, undefined, true)}
-                          {isAdmin && renderItem('intrusion_detection', <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />, 'Deteksi Intrusi (IDS)', (appData?.securityIncidents || []).filter(i => i.status === 'active').length, undefined, true)}
-                          {isAdmin && renderItem('monitoring_server', <Server className="w-4 h-4 text-teal-300 shrink-0" />, 'Monitoring Server (CPU/RAM/Disk)', undefined, undefined, true)}
-                          {isAdmin && renderItem('monitoring_login', <Users className="w-4 h-4 text-sky-300 shrink-0" />, 'Monitoring Login Pengguna', (appData?.activeUserSessions || []).filter(s => !s.id.startsWith('sess-srv-') && !s.id.startsWith('sess-guru-') && !s.id.startsWith('sess-kesiswaan-') && !s.id.startsWith('sess-siswa-') && s.id !== 'sess-admin-active').length || undefined, undefined, true)}
-                          {isAdmin && renderItem('integrasi_mysql', <Database className="w-4 h-4 text-emerald-300 shrink-0" />, 'Integrasi MySQL', undefined, undefined, true)}
-                          {isAdmin && renderItem('database_traffic', <Activity className="w-4 h-4 text-cyan-300 shrink-0" />, 'Monitoring Trafik DB', undefined, undefined, true)}
-                          {isAdmin && renderItem('audit_logs' as ViewType, <HardDriveDownload className="w-4 h-4 text-blue-300 shrink-0" />, 'Backup & Restore Data', undefined, () => {
-                            if (onOpenBackupModal) onOpenBackupModal();
-                            if (typeof window !== 'undefined' && window.innerWidth < 768) onCloseMobile();
-                          }, true)}
-                          {renderItem('audit_logs', <FileText className="w-4 h-4 text-indigo-300 shrink-0" />, 'Log Audit Aktivitas', undefined, undefined, true)}
-                          {(isAdmin || isLiveChatEnabled) && renderItem('live_chat', <MessageSquare className="w-4 h-4 text-blue-300 shrink-0" />, 'Live Chat Admin', undefined, undefined, true)}
-                        </>
-                      )
-                    )
-                  )}
-
-                  {/* 8. PENGATURAN (Accordion dengan sub-menu) */}
-                  {isAdmin && (
-                    renderAccordionSection(
-                      'PENGATURAN',
-                      'pengaturan',
-                      <Sliders className="w-4 h-4 text-amber-300 shrink-0" />,
-                      ['pengaturan_admin', 'pengaturan_sekolah', 'pengaturan_tema', 'data_demo'],
-                      (
-                        <>
-                          {renderItem('pengaturan_admin', <UserCog className="w-4 h-4 shrink-0" />, 'Pengaturan Akun', undefined, undefined, true)}
-                          {renderItem('pengaturan_sekolah', <School className="w-4 h-4 text-blue-300 shrink-0" />, 'Pengaturan Sekolah', undefined, undefined, true)}
-                          {renderItem('pengaturan_tema', <Palette className="w-4 h-4 text-amber-300 shrink-0" />, 'Pengaturan Tema', undefined, undefined, true)}
-                          {renderItem('data_demo', <Sparkles className="w-4 h-4 text-indigo-300 shrink-0" />, 'Data Demo', undefined, undefined, true)}
-                        </>
-                      )
-                    )
-                  )}
-
-                  {/* RESET */}
+                  {/* RESET (Admin Only) */}
                   {isAdmin && (
                     renderAccordionSection(
                       'RESET',

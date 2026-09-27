@@ -151,6 +151,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
           subtitle={`${hadirPercentage}% Kehadiran`}
           icon={UserCheck}
           variant="success"
+          onClick={() => onNavigateView('rekap_harian')}
         />
         <StatCard
           label="Belum Presensi"

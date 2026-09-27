@@ -15,6 +15,7 @@ import {
   getCanonicalActiveStudents,
 } from '../../utils/helpers';
 import { AdminDashboardView } from '../dashboard/AdminDashboardView';
+import { TrendRangeOption } from '../dashboard/AttendanceRecapChart';
 import { KesiswaanDashboardView } from '../dashboard/KesiswaanDashboardView';
 import { WaliKelasDashboardView } from '../dashboard/WaliKelasDashboardView';
 import { GuruDashboardView } from '../dashboard/GuruDashboardView';
@@ -28,6 +29,7 @@ interface DashboardViewProps {
   onNavigateView: (view: ViewType) => void;
   onRestoreDemo?: () => void;
   onUpdateAppData?: (updated: AppData) => void;
+  onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -36,6 +38,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToInput,
   onNavigateView,
   onUpdateAppData,
+  onShowToast,
 }) => {
   const [selectedDate, setSelectedDate] = React.useState<string>(() => getTodayString());
   const [rekapSearch, setRekapSearch] = React.useState('');
@@ -44,7 +47,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [rekapCurrentPage, setRekapCurrentPage] = React.useState(1);
   const [rekapPerPage, setRekapPerPage] = React.useState(10);
 
-  const [trendRange, setTrendRange] = React.useState<'7d' | '14d' | '30d'>('7d');
+  const [trendRange, setTrendRange] = React.useState<TrendRangeOption>('7d');
+  const [customTrendStart, setCustomTrendStart] = React.useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return d.toISOString().split('T')[0];
+  });
+  const [customTrendEnd, setCustomTrendEnd] = React.useState<string>(() => getTodayString());
+
+  const handleCustomRangeChange = (start: string, end: string) => {
+    setCustomTrendStart(start);
+    setCustomTrendEnd(end);
+  };
 
   const [selectedStudentDetail, setSelectedStudentDetail] = React.useState<{
     siswa: any;
@@ -189,8 +203,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const startRekapIdx = Math.max(0, (validRekapCurrentPage - 1) * validRekapPerPage);
   const paginatedCumulativeStats = filteredCumulativeStats.slice(startRekapIdx, startRekapIdx + validRekapPerPage);
 
-  // Trend Chart Data (Last N Days)
-  const trendDaysCount = trendRange === '7d' ? 7 : trendRange === '14d' ? 14 : 30;
+  // Trend Chart Data (Last N Days or Selected Preset/Custom Range)
   const trendData = React.useMemo(() => {
     const days: {
       date: string;
@@ -205,13 +218,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       percent: number;
       isEffective: boolean;
     }[] = [];
-    const baseDate = new Date(selectedDate);
 
-    for (let i = trendDaysCount - 1; i >= 0; i--) {
-      const d = new Date(baseDate);
-      d.setDate(d.getDate() - i);
-      const dStr = d.toISOString().split('T')[0];
-      const dLabel = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    const dateParts = selectedDate.split('-');
+    const baseYear = parseInt(dateParts[0], 10);
+    const baseMonth = parseInt(dateParts[1], 10) - 1;
+    const baseDay = parseInt(dateParts[2], 10);
+    const baseDate = new Date(baseYear, baseMonth, baseDay);
+
+    let startDate = new Date(baseDate);
+    let endDate = new Date(baseDate);
+
+    if (trendRange === '7d') {
+      startDate.setDate(startDate.getDate() - 6);
+    } else if (trendRange === '14d') {
+      startDate.setDate(startDate.getDate() - 13);
+    } else if (trendRange === '30d') {
+      startDate.setDate(startDate.getDate() - 29);
+    } else if (trendRange === 'this_month') {
+      startDate = new Date(baseYear, baseMonth, 1);
+      endDate = new Date(baseYear, baseMonth + 1, 0);
+    } else if (trendRange === 'last_month') {
+      startDate = new Date(baseYear, baseMonth - 1, 1);
+      endDate = new Date(baseYear, baseMonth, 0);
+    } else if (trendRange === '90d') {
+      startDate.setDate(startDate.getDate() - 89);
+    } else if (trendRange === 'custom') {
+      const sParts = (customTrendStart || selectedDate).split('-');
+      const eParts = (customTrendEnd || selectedDate).split('-');
+      startDate = new Date(parseInt(sParts[0], 10), parseInt(sParts[1], 10) - 1, parseInt(sParts[2], 10));
+      endDate = new Date(parseInt(eParts[0], 10), parseInt(eParts[1], 10) - 1, parseInt(eParts[2], 10));
+      if (startDate > endDate) {
+        const temp = startDate;
+        startDate = endDate;
+        endDate = temp;
+      }
+    }
+
+    const cur = new Date(startDate);
+    let count = 0;
+    while (cur <= endDate && count < 120) {
+      const year = cur.getFullYear();
+      const month = String(cur.getMonth() + 1).padStart(2, '0');
+      const day = String(cur.getDate()).padStart(2, '0');
+      const dStr = `${year}-${month}-${day}`;
+      const dLabel = cur.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 
       const dayStat = calculateDailyAttendanceStats(
         appData,
@@ -236,9 +286,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         percent: pct,
         isEffective: dayStat.isEffectiveSchoolDay,
       });
+
+      cur.setDate(cur.getDate() + 1);
+      count++;
     }
     return days;
-  }, [selectedDate, trendDaysCount, appData, currentUser]);
+  }, [selectedDate, trendRange, customTrendStart, customTrendEnd, appData, currentUser]);
 
   // Live Activity Stream
   const recentLogs = React.useMemo(() => {
@@ -300,6 +353,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             trendData={trendData}
             trendRange={trendRange}
             setTrendRange={setTrendRange}
+            customStartDate={customTrendStart}
+            customEndDate={customTrendEnd}
+            onCustomRangeChange={handleCustomRangeChange}
             recentLogs={recentLogs}
             unrecordedClasses={unrecordedClasses}
             targetClasses={targetClasses}
@@ -317,6 +373,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             setCardModalData={setCardModalData}
             onNavigateView={onNavigateView}
             onNavigateToInput={onNavigateToInput}
+            onUpdateAppData={onUpdateAppData}
+            onShowToast={onShowToast}
           />
         );
 

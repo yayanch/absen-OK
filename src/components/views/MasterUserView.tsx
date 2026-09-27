@@ -25,7 +25,7 @@ import {
   LayoutGrid,
   ChevronDown
 } from 'lucide-react';
-import { AppData, UserRole, UserSession } from '../../types';
+import { AppData, UserRole, UserSession, ViewType } from '../../types';
 import { Pagination } from '../Pagination';
 import { PageHeader } from '../common/UIComponents';
 import { addAuditLog, cleanMapelName } from '../../utils/helpers';
@@ -44,6 +44,7 @@ interface MasterUserViewProps {
     onConfirm: () => void
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onNavigateView?: (view: ViewType) => void;
 }
 
 export interface UserItem {
@@ -71,6 +72,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   onCloseModal,
   onConfirmModal,
   onShowToast,
+  onNavigateView,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleTab, setRoleTab] = useState<'semua' | UserRole>('semua');
@@ -1374,6 +1376,18 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                   <span>Tambah User</span>
                 </button>
 
+                {onNavigateView && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateView('pengaturan_role')}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer"
+                    title="Atur hak akses menu yang dapat dilihat oleh setiap role"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Hak Akses Role</span>
+                  </button>
+                )}
+
                 {/* Single Consolidated Pengaturan User Button with Dropdown */}
                 <div className="relative" ref={settingsMenuRef}>
                   <button
@@ -1401,6 +1415,24 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                         <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                           Role & Hak Akses
                         </p>
+                        {onNavigateView && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSettingsMenu(false);
+                              onNavigateView('pengaturan_role');
+                            }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                          >
+                            <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <div className="font-bold">Pengaturan Hak Akses Menu</div>
+                              <div className="text-[10px] text-slate-400">Atur menu yang dapat diakses per role</div>
+                            </div>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
