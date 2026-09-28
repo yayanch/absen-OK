@@ -316,6 +316,12 @@ export default function App() {
               const mergedKelas = (Array.isArray(data.appData.kelas) && data.appData.kelas.length > 0) ? data.appData.kelas : prev.kelas;
               const mergedWaliKelas = (Array.isArray(data.appData.waliKelas) && data.appData.waliKelas.length > 0) ? data.appData.waliKelas : prev.waliKelas;
               const mergedJurusan = (Array.isArray(data.appData.jurusan) && data.appData.jurusan.length > 0) ? data.appData.jurusan : prev.jurusan;
+              const mergedJadwal = (Array.isArray(data.appData.jadwalMengajar) && data.appData.jadwalMengajar.length > 0)
+                ? data.appData.jadwalMengajar
+                : (prev.jadwalMengajar || []);
+              const mergedShiftConfig = (data.appData.shiftConfig && Array.isArray(data.appData.shiftConfig.periods) && data.appData.shiftConfig.periods.length > 0)
+                ? data.appData.shiftConfig
+                : (prev.shiftConfig || data.appData.shiftConfig);
 
               const targetAppData = {
                 ...data.appData,
@@ -324,6 +330,8 @@ export default function App() {
                 kelas: mergedKelas,
                 waliKelas: mergedWaliKelas,
                 jurusan: mergedJurusan,
+                jadwalMengajar: mergedJadwal,
+                shiftConfig: mergedShiftConfig,
                 chatMessages: mergedMessages,
                 pelanggaran: mergedPelanggaran,
                 homeVisits: mergedHomeVisits,
@@ -376,10 +384,16 @@ export default function App() {
           const customPresensi = customEvent.detail.presensi || {};
           const isCustomPresensiReset = Object.keys(customPresensi).length === 0;
           const mergedPresensi = isCustomPresensiReset ? {} : mergePresensi(prev.presensi, customPresensi);
+          const customJadwal = (Array.isArray(customEvent.detail.jadwalMengajar) && customEvent.detail.jadwalMengajar.length > 0)
+            ? customEvent.detail.jadwalMengajar
+            : prev.jadwalMengajar;
+          const customShiftConfig = customEvent.detail.shiftConfig || prev.shiftConfig;
           return {
             ...customEvent.detail,
             siswa: mergedSiswa,
             presensi: mergedPresensi,
+            jadwalMengajar: customJadwal,
+            shiftConfig: customShiftConfig,
             chatMessages: mergedMessages,
             deletedSiswaIds: allDeletedSiswa,
           };

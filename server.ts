@@ -765,6 +765,12 @@ function saveAppDataCache(data: any) {
     if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
       data.jurusan = inMemoryAppDataCache.jurusan;
     }
+    if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0 && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
+      data.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar;
+    }
+    if (inMemoryAppDataCache.shiftConfig && inMemoryAppDataCache.shiftConfig.periods?.length > 0 && (!data.shiftConfig || !Array.isArray(data.shiftConfig.periods) || data.shiftConfig.periods.length === 0)) {
+      data.shiftConfig = inMemoryAppDataCache.shiftConfig;
+    }
   }
 
   if (Array.isArray(data.siswa)) {
@@ -1472,6 +1478,80 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
     }
 
+    // Ensure jadwal_mengajar table exists and save schedules
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS jadwal_mengajar (
+        id VARCHAR(50) PRIMARY KEY,
+        guru_id VARCHAR(50),
+        guru_username VARCHAR(100),
+        guru_nama VARCHAR(255),
+        guru_nip VARCHAR(50),
+        hari VARCHAR(20),
+        kelas_id VARCHAR(50),
+        kelas_nama VARCHAR(100),
+        mata_pelajaran VARCHAR(255),
+        kode_mapel VARCHAR(50),
+        jam_ke_list TEXT,
+        jam_ke VARCHAR(100),
+        shift VARCHAR(20),
+        catatan TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      );
+    `).catch(() => {});
+
+    if (Array.isArray(appData.jadwalMengajar) && appData.jadwalMengajar.length > 0) {
+      const activeJadwalIds = new Set(appData.jadwalMengajar.map((j: any) => j.id).filter(Boolean));
+      // Delete any removed schedules from DB in safe batches
+      const [existingJadwalRows]: any = await db.execute(`SELECT id FROM jadwal_mengajar;`).catch(() => [[]]);
+      if (Array.isArray(existingJadwalRows) && existingJadwalRows.length > 0) {
+        const toDeleteJadwal = existingJadwalRows.map((r: any) => r.id).filter((id: string) => !activeJadwalIds.has(id));
+        if (toDeleteJadwal.length > 0) {
+          const CHUNK_SIZE = 50;
+          for (let i = 0; i < toDeleteJadwal.length; i += CHUNK_SIZE) {
+            const chunk = toDeleteJadwal.slice(i, i + CHUNK_SIZE);
+            const delPh = chunk.map(() => '?').join(',');
+            await db.execute(`DELETE FROM jadwal_mengajar WHERE id IN (${delPh});`, chunk).catch(() => {});
+          }
+        }
+      }
+
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.jadwalMengajar.length; i += CHUNK_SIZE) {
+        const chunk = appData.jadwalMengajar.slice(i, i + CHUNK_SIZE);
+        const batchVals: any[] = [];
+        const phs: string[] = [];
+        for (const j of chunk) {
+          phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchVals.push(
+            j.id,
+            j.guruId || '',
+            j.guruUsername || '',
+            j.guruNama || '',
+            j.guruNip || '',
+            j.hari || '',
+            j.kelasId || '',
+            j.kelasNama || '',
+            j.mataPelajaran || '',
+            j.kodeMapel || '',
+            JSON.stringify(j.jamKeList || []),
+            j.jamKe || '',
+            j.shift || 'Pagi',
+            j.catatan || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO jadwal_mengajar (id, guru_id, guru_username, guru_nama, guru_nip, hari, kelas_id, kelas_nama, mata_pelajaran, kode_mapel, jam_ke_list, jam_ke, shift, catatan)
+           VALUES ${phs.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             guru_id=VALUES(guru_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama), guru_nip=VALUES(guru_nip),
+             hari=VALUES(hari), kelas_id=VALUES(kelas_id), kelas_nama=VALUES(kelas_nama), mata_pelajaran=VALUES(mata_pelajaran),
+             kode_mapel=VALUES(kode_mapel), jam_ke_list=VALUES(jam_ke_list), jam_ke=VALUES(jam_ke), shift=VALUES(shift), catatan=VALUES(catatan);`,
+          batchVals
+        ).catch(() => {});
+      }
+    }
+
     await db.execute(`SET FOREIGN_KEY_CHECKS = 1;`);
   } catch (err: any) {
     if (isMySQLRateLimitError(err)) {
@@ -1516,6 +1596,7 @@ async function performMySQLLoad(config: any) {
     const [pelanggaranRows]: any = await db.execute(`SELECT * FROM pelanggaran ORDER BY tanggal DESC;`).catch(() => [[]]);
     const [homeVisitRows]: any = await db.execute(`SELECT * FROM home_visit ORDER BY tanggal DESC;`).catch(() => [[]]);
     const [templateRows]: any = await db.execute(`SELECT * FROM violation_templates;`).catch(() => [[]]);
+    const [jadwalRows]: any = await db.execute(`SELECT * FROM jadwal_mengajar;`).catch(() => [[]]);
 
     if (!appData) {
       appData = {};
@@ -1721,6 +1802,33 @@ async function performMySQLLoad(config: any) {
         poin: Number(t.poin) || 0,
         tindakan: t.tindakan || ''
       }));
+    }
+
+    if (Array.isArray(jadwalRows) && jadwalRows.length > 0) {
+      appData.jadwalMengajar = jadwalRows.map((j: any) => {
+        let jamKeList: number[] = [];
+        try {
+          jamKeList = typeof j.jam_ke_list === 'string' ? JSON.parse(j.jam_ke_list) : (Array.isArray(j.jam_ke_list) ? j.jam_ke_list : []);
+        } catch (e) {}
+        return {
+          id: j.id,
+          guruId: j.guru_id || '',
+          guruUsername: j.guru_username || '',
+          guruNama: j.guru_nama || '',
+          guruNip: j.guru_nip || '',
+          hari: j.hari || '',
+          kelasId: j.kelas_id || '',
+          kelasNama: j.kelas_nama || '',
+          mataPelajaran: j.mata_pelajaran || '',
+          kodeMapel: j.kode_mapel || '',
+          jamKeList,
+          jamKe: j.jam_ke || '',
+          shift: j.shift || 'Pagi',
+          catatan: j.catatan || ''
+        };
+      });
+    } else if (inMemoryAppDataCache?.jadwalMengajar && Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0) {
+      appData.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar;
     }
 
     return appData;
