@@ -422,6 +422,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     isSystem: true,
     allowedMenus: [
       'dashboard',
+      'presensi_input',
       'master_guru',
       'master_mapel',
       'mapel_kelas_guru',

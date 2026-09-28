@@ -267,6 +267,19 @@ export const StudentAttendanceRow: React.FC<StudentAttendanceRowProps> = React.m
               </button>
             );
           })}
+
+          {currentStatus && !isDisabled && (
+            <button
+              type="button"
+              disabled={isDisabled}
+              onClick={() => onStatusChange(siswa.id, currentStatus)}
+              className="min-h-[40px] sm:min-h-[36px] px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 border border-slate-200/80 dark:border-slate-700/80 transition flex items-center justify-center gap-1 cursor-pointer"
+              title="Batalkan / Kosongkan status presensi siswa ini"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span className="text-[10px] hidden sm:inline">Batal</span>
+            </button>
+          )}
         </div>
 
         {/* Sub-row: Status Pulang (for H / K) */}

@@ -194,62 +194,18 @@ export function mergePresensi(
   localMap: PresensiMap = {},
   serverMap: PresensiMap = {}
 ): PresensiMap {
-  const merged: PresensiMap = {};
+  // Use serverMap (authoritative saved state from server) as the primary source of truth
+  const merged: PresensiMap = { ...(serverMap || {}) };
 
-  const allKeys = new Set([
-    ...Object.keys(localMap || {}),
-    ...Object.keys(serverMap || {}),
-  ]);
-
-  for (const key of allKeys) {
-    const localRecords = Array.isArray(localMap?.[key]) ? localMap[key] : [];
-    const serverRecords = Array.isArray(serverMap?.[key]) ? serverMap[key] : [];
-
-    if (localRecords.length === 0 && serverRecords.length === 0) {
-      continue;
-    }
-    if (localRecords.length === 0) {
-      merged[key] = [...serverRecords];
-      continue;
-    }
-    if (serverRecords.length === 0) {
-      merged[key] = [...localRecords];
-      continue;
-    }
-
-    // Both contain records for this date/class key: merge student by student
-    const studentItemMap = new Map<string, SiswaPresensiItem>();
-
-    // 1. Seed with server items
-    for (const item of serverRecords) {
-      if (item && item.siswaId) {
-        studentItemMap.set(String(item.siswaId), { ...item });
+  // For offline capability: if a key exists in localMap but not in serverMap, 
+  // preserve it so offline saved edits do not vanish during sync.
+  for (const key of Object.keys(localMap || {})) {
+    if (serverMap && !(key in serverMap)) {
+      const localVal = localMap[key];
+      if (localVal && (!Array.isArray(localVal) || localVal.length > 0)) {
+        merged[key] = localVal;
       }
     }
-
-    // 2. Merge local items: keep local attendance records that are valid
-    for (const item of localRecords) {
-      if (!item || !item.siswaId) continue;
-      const sId = String(item.siswaId);
-      const existing = studentItemMap.get(sId);
-      if (!existing) {
-        studentItemMap.set(sId, { ...item });
-      } else {
-        // Merge attributes, keeping existing non-empty values
-        studentItemMap.set(sId, {
-          ...existing,
-          ...item,
-          status: item.status || existing.status,
-          time: item.time || existing.time,
-          pulangTime: item.pulangTime || existing.pulangTime,
-          pulangStatus: item.pulangStatus || existing.pulangStatus,
-          suratBukti: item.suratBukti || existing.suratBukti,
-          catatan: item.catatan !== undefined ? item.catatan : existing.catatan,
-        });
-      }
-    }
-
-    merged[key] = Array.from(studentItemMap.values());
   }
 
   return merged;
@@ -1714,6 +1670,71 @@ export function isTeacherTeachingToday(hariMengajar?: string[], targetDateOrStr:
   }
   const todayName = getIndonesianDayName(targetDateOrStr).toLowerCase();
   return hariMengajar.some((h) => String(h).trim().toLowerCase() === todayName);
+}
+
+export function isTeacherScheduledOnDay(
+  teacher: { id?: string; username?: string; nama?: string; nip?: string; hariMengajar?: string[] },
+  targetDateOrStr: Date | string,
+  jadwalMengajar?: Array<{ guruId?: string; guruUsername?: string; guruNama?: string; guruNip?: string; hari?: string }>
+): boolean {
+  const targetDayName = getIndonesianDayName(targetDateOrStr).trim().toLowerCase();
+
+  // 1. Check schedule matrix (jadwalMengajar)
+  if (Array.isArray(jadwalMengajar) && jadwalMengajar.length > 0) {
+    const hasMatrixEntry = jadwalMengajar.some((item) => {
+      const dayMatches = String(item.hari || '').trim().toLowerCase() === targetDayName;
+      if (!dayMatches) return false;
+
+      const usernameMatches = Boolean(teacher.username && item.guruUsername && String(item.guruUsername).trim().toLowerCase() === String(teacher.username).trim().toLowerCase());
+      const idMatches = Boolean(teacher.id && item.guruId && String(item.guruId).trim().toLowerCase() === String(teacher.id).trim().toLowerCase());
+      const nameMatches = Boolean(teacher.nama && item.guruNama && String(item.guruNama).trim().toLowerCase() === String(teacher.nama).trim().toLowerCase());
+      const nipMatches = Boolean(teacher.nip && item.guruNip && String(item.guruNip).trim().toLowerCase() === String(teacher.nip).trim().toLowerCase());
+
+      return usernameMatches || idMatches || nameMatches || nipMatches;
+    });
+
+    if (hasMatrixEntry) {
+      return true;
+    }
+  }
+
+  // 2. Check teacher's configured hariMengajar array
+  if (teacher.hariMengajar && Array.isArray(teacher.hariMengajar) && teacher.hariMengajar.length > 0) {
+    return teacher.hariMengajar.some((h) => String(h).trim().toLowerCase() === targetDayName);
+  }
+
+  // Default: if no matrix and no hariMengajar configured, default to standard weekday (Senin - Jumat)
+  const isWeekendDay = targetDayName === 'sabtu' || targetDayName === 'minggu';
+  return !isWeekendDay;
+}
+
+export function getTeacherScheduleSummaryOnDay(
+  teacher: { id?: string; username?: string; nama?: string; nip?: string },
+  targetDateOrStr: Date | string,
+  jadwalMengajar?: Array<{ guruId?: string; guruUsername?: string; guruNama?: string; guruNip?: string; hari?: string; kelasNama?: string; mataPelajaran?: string }>
+): string {
+  const targetDayName = getIndonesianDayName(targetDateOrStr).trim().toLowerCase();
+  if (!Array.isArray(jadwalMengajar) || jadwalMengajar.length === 0) {
+    return 'Jadwal Mengajar Pokok';
+  }
+
+  const items = jadwalMengajar.filter((item) => {
+    const dayMatches = String(item.hari || '').trim().toLowerCase() === targetDayName;
+    if (!dayMatches) return false;
+
+    const usernameMatches = Boolean(teacher.username && item.guruUsername && String(item.guruUsername).trim().toLowerCase() === String(teacher.username).trim().toLowerCase());
+    const idMatches = Boolean(teacher.id && item.guruId && String(item.guruId).trim().toLowerCase() === String(teacher.id).trim().toLowerCase());
+    const nameMatches = Boolean(teacher.nama && item.guruNama && String(item.guruNama).trim().toLowerCase() === String(teacher.nama).trim().toLowerCase());
+    const nipMatches = Boolean(teacher.nip && item.guruNip && String(item.guruNip).trim().toLowerCase() === String(teacher.nip).trim().toLowerCase());
+
+    return usernameMatches || idMatches || nameMatches || nipMatches;
+  });
+
+  if (items.length === 0) {
+    return 'Jadwal Mengajar Pokok';
+  }
+
+  return items.map((i) => `${i.kelasNama || ''} (${i.mataPelajaran || ''})`).join(', ');
 }
 
 export function formatHariMengajar(hariMengajar?: string[]): string {

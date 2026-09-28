@@ -34,7 +34,8 @@ import {
   FileText,
   ShieldAlert,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Undo2
 } from 'lucide-react';
 import { AppData, UserSession, PresensiStatus, SiswaPresensiItem, Siswa, SiswaPresensiSesiGuru, SyncResult } from '../../types';
 import { sortKelasList } from '../../data/initialData';
@@ -56,6 +57,7 @@ import {
 import { DatePickerWithStatus } from '../DatePickerWithStatus';
 import { StudentAttendanceRow } from './StudentAttendanceRow';
 import { StudentQrScannerModal } from '../modals/StudentQrScannerModal';
+import { TeacherManualAttendanceTab } from './TeacherManualAttendanceTab';
 import { Camera } from 'lucide-react';
 
 interface InputPresensiViewProps {
@@ -85,10 +87,56 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
   onOpenServerQrModal,
 }) => {
   const sortedKelas = sortKelasList(appData.kelas);
-  let availableClasses = sortedKelas;
-  if (currentUser.role === 'wali') {
-    availableClasses = sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any).id);
-  }
+  const isPiketOrKesiswaanOrAdmin = useMemo(() => {
+    const role = String(currentUser.role || '').toLowerCase();
+    if (['admin', 'superadmin', 'administrator', 'kesiswaan', 'wks_kesiswaan', 'piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan'].includes(role)) {
+      return true;
+    }
+    const userData = currentUser.data as any;
+    if (userData) {
+      const tugas = String(userData.tugasTambahan || '').toLowerCase();
+      const jabatan = String(userData.jabatan || '').toLowerCase();
+      const userUsername = String(userData.username || '').toLowerCase();
+      if (
+        tugas.includes('piket') ||
+        tugas.includes('kesiswaan') ||
+        jabatan.includes('piket') ||
+        jabatan.includes('kesiswaan') ||
+        userUsername.includes('piket') ||
+        userUsername.includes('kesiswaan')
+      ) {
+        return true;
+      }
+      if (Array.isArray(userData.tugasTambahanList) && userData.tugasTambahanList.some((t: string) => {
+        const l = String(t).toLowerCase();
+        return l.includes('piket') || l.includes('kesiswaan');
+      })) return true;
+      if (Array.isArray(userData.additionalRoles) && userData.additionalRoles.some((r: string) => {
+        const l = String(r).toLowerCase();
+        return l === 'kesiswaan' || l.includes('piket');
+      })) return true;
+    }
+    return false;
+  }, [currentUser]);
+
+  const availableClasses = useMemo(() => {
+    const role = String(currentUser.role || '').toLowerCase();
+    if (isPiketOrKesiswaanOrAdmin) {
+      return sortedKelas;
+    }
+    if (role === 'wali' || role === 'walikelas') {
+      const userData = currentUser.data as any;
+      const myClasses = sortedKelas.filter((k) => {
+        const waliObj = appData.waliKelas?.find((w) => w.id === k.waliKelasId);
+        return (
+          k.waliKelasId === userData?.id ||
+          (userData?.nama && waliObj?.nama?.toLowerCase() === String(userData.nama).toLowerCase())
+        );
+      });
+      return myClasses.length > 0 ? myClasses : sortedKelas;
+    }
+    return sortedKelas;
+  }, [appData.kelas, appData.waliKelas, currentUser, isPiketOrKesiswaanOrAdmin]);
 
   const [selectedKelasId, setSelectedKelasId] = useState<string>(() => {
     if (initialKelasId && availableClasses.some((k) => k.id === initialKelasId)) {
@@ -98,7 +146,48 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
   });
 
   const [selectedTanggal, setSelectedTanggal] = useState<string>(getTodayString());
-  const [activeTab, setActiveTab] = useState<'presensi' | 'siswa'>('presensi');
+  const [activeTab, setActiveTab] = useState<'presensi' | 'siswa' | 'guru'>('presensi');
+
+  // Access control for Absensi Manual Guru: Admin, Kurikulum, and Guru Piket
+  const canAccessTeacherAttendance = useMemo(() => {
+    const role = String(currentUser.role || '').toLowerCase();
+    if (['admin', 'superadmin', 'administrator', 'kurikulum', 'piket', 'guru_piket', 'piket_guru'].includes(role)) {
+      return true;
+    }
+
+    const userData = currentUser.data as any;
+    if (userData) {
+      const tugas = String(userData.tugasTambahan || '').toLowerCase();
+      const jabatan = String(userData.jabatan || '').toLowerCase();
+      if (tugas.includes('piket') || tugas.includes('kurikulum') || jabatan.includes('piket') || jabatan.includes('kurikulum')) {
+        return true;
+      }
+
+      if (Array.isArray(userData.tugasTambahanList)) {
+        const hasMatch = userData.tugasTambahanList.some((t: string) => {
+          const l = String(t).toLowerCase();
+          return l.includes('piket') || l.includes('kurikulum');
+        });
+        if (hasMatch) return true;
+      }
+
+      if (Array.isArray(userData.additionalRoles)) {
+        const hasMatch = userData.additionalRoles.some((r: string) => {
+          const l = String(r).toLowerCase();
+          return l === 'kurikulum' || l.includes('piket');
+        });
+        if (hasMatch) return true;
+      }
+    }
+
+    return false;
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (activeTab === 'guru' && !canAccessTeacherAttendance) {
+      setActiveTab('presensi');
+    }
+  }, [activeTab, canAccessTeacherAttendance]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSavedTimestamp, setLastSavedTimestamp] = useState<string | null>(null);
@@ -791,7 +880,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     setSelectedTanggal(newDate);
   };
 
-  const handleTabChange = (newTab: "presensi" | "siswa") => {
+  const handleTabChange = (newTab: 'presensi' | 'siswa' | 'guru') => {
     if (newTab === activeTab) return;
     if (activeTab === "presensi" && isDirty) {
       const confirmMsg = `Terdapat ${dirtyChangesCount} perubahan presensi yang belum disimpan. Lanjutkan berpindah tab?`;
@@ -857,9 +946,9 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     const executeReset = async () => {
       const presensiKey = `${selectedTanggal}_${selectedKelasId}`;
       
-      // Remove record from appData
+      // Set explicit empty array [] for key so merge logic treats it as an intentional reset
       const updatedPresensi = { ...(appData.presensi || {}) };
-      delete updatedPresensi[presensiKey];
+      updatedPresensi[presensiKey] = [];
 
       const nextAppData: AppData = {
         ...appData,
@@ -874,17 +963,18 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
           return;
         }
 
-        // Reset local studentStatus back to unselected for all students
-        const resetMap: Record<string, PresensiStatus> = {};
-        const resetPulangMap: Record<string, 'H' | 'TAP' | ''> = {};
-        siswaList.forEach((s) => {
-          resetMap[s.id] = '';
-          resetPulangMap[s.id] = '';
-        });
-        setStudentStatus(resetMap);
-        setStudentPulangStatus(resetPulangMap);
+        // Complete local state reset for all students
+        setStudentStatus({});
+        setStudentPulangStatus({});
+        setStudentTime({});
+        setStudentPulangTime({});
+        setStudentSuratBukti({});
+        setStudentCatatan({});
         setConfirmedBaseline({});
         setDetectedConflict(null);
+
+        // Reset context tracking so next render re-syncs cleanly
+        prevContextRef.current = { kelasId: '', tanggal: '' };
 
         if (draftStorageKey) {
           try {
@@ -895,7 +985,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
         setLastSavedTimestamp(null);
         setSaveError(null);
 
-        onShowToast(`Data presensi ${currentKelas.nama} tanggal ${formatDateIndo(selectedTanggal)} berhasil di-reset di server.`, 'success');
+        onShowToast(`Data presensi ${currentKelas.nama} tanggal ${formatDateIndo(selectedTanggal)} berhasil di-reset.`, 'success');
       } catch (err: any) {
         onShowToast('Gagal mereset data presensi ke server.', 'error');
       } finally {
@@ -917,6 +1007,49 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     }
   };
 
+  const handleCancelUnsavedEdits = () => {
+    const statusMap: Record<string, PresensiStatus> = {};
+    const timeMap: Record<string, string> = {};
+    const pulangStatusMap: Record<string, 'H' | 'TAP' | ''> = {};
+    const pulangTimeMap: Record<string, string> = {};
+    const suratMap: Record<string, string> = {};
+    const catatanMap: Record<string, string> = {};
+
+    siswaList.forEach((s) => {
+      const rec = confirmedBaseline[s.id] || confirmedBaseline[s.nisn];
+      const entryStatus = rec ? (normalizePresensiStatus(rec.status) || '') : '';
+      statusMap[s.id] = entryStatus;
+      timeMap[s.id] = rec?.time || '';
+      
+      if (['H', 'K'].includes(entryStatus)) {
+        pulangStatusMap[s.id] = (rec?.pulangStatus || 'TAP') as 'H' | 'TAP';
+      } else {
+        pulangStatusMap[s.id] = (rec?.pulangStatus || '') as 'H' | 'TAP' | '';
+      }
+      pulangTimeMap[s.id] = rec?.pulangTime || '';
+
+      if (rec?.suratBukti) suratMap[s.id] = rec.suratBukti;
+      if (rec?.catatan) catatanMap[s.id] = rec.catatan;
+    });
+
+    setStudentStatus(statusMap);
+    setStudentTime(timeMap);
+    setStudentPulangStatus(pulangStatusMap);
+    setStudentPulangTime(pulangTimeMap);
+    setStudentSuratBukti(suratMap);
+    setStudentCatatan(catatanMap);
+    setSaveError(null);
+
+    if (draftStorageKey) {
+      try {
+        localStorage.removeItem(draftStorageKey);
+      } catch (e) {}
+    }
+    setDetectedDraft(null);
+
+    onShowToast('Perubahan presensi telah dibatalkan dan dikembalikan ke data terkonfirmasi.', 'info');
+  };
+
   const handleStatusChange = (siswaId: string, status: PresensiStatus) => {
     setStudentStatus((prev) => {
       const nextStatus = prev[siswaId] === status ? '' : status;
@@ -924,6 +1057,12 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
         setStudentPulangStatus((p) => ({ ...p, [siswaId]: p[siswaId] || 'TAP' }));
       } else {
         setStudentPulangStatus((p) => ({ ...p, [siswaId]: '' }));
+      }
+      if (!nextStatus) {
+        setStudentTime((t) => { const nt = { ...t }; delete nt[siswaId]; return nt; });
+        setStudentPulangTime((pt) => { const npt = { ...pt }; delete npt[siswaId]; return npt; });
+        setStudentSuratBukti((sb) => { const nsb = { ...sb }; delete nsb[siswaId]; return nsb; });
+        setStudentCatatan((c) => { const nc = { ...c }; delete nc[siswaId]; return nc; });
       }
       return {
         ...prev,
@@ -951,15 +1090,79 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     }
   };
 
-  const isTeacherRole = currentUser.role === 'guru' || currentUser.role === 'user';
-  const canEditPresensi =
-    !readOnly &&
-    !isTeacherRole &&
-    (currentUser.role === 'admin' ||
-     currentUser.role === 'wali' ||
-     currentUser.role === 'walikelas' ||
-     currentUser.role === 'kesiswaan' ||
-     currentUser.role === 'hubin');
+  const canEditPresensi = useMemo(() => {
+    if (readOnly) return false;
+    const role = String(currentUser.role || '').toLowerCase();
+
+    // 1. Admin, Superadmin, Administrator
+    if (['admin', 'superadmin', 'administrator'].includes(role)) {
+      return true;
+    }
+
+    // 2. Kesiswaan (role)
+    if (role === 'kesiswaan' || role === 'wks_kesiswaan') {
+      return true;
+    }
+
+    // 3. Piket (Piket Kesiswaan / Piket Guru)
+    if (['piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan'].includes(role)) {
+      return true;
+    }
+
+    // 4. Wali Kelas / Hubin
+    if (['wali', 'walikelas', 'hubin'].includes(role)) {
+      return true;
+    }
+
+    // 5. Inspect userData attributes (tugasTambahan, jabatan, username, additionalRoles)
+    const userData = currentUser.data as any;
+    if (userData) {
+      const tugas = String(userData.tugasTambahan || '').toLowerCase();
+      const jabatan = String(userData.jabatan || '').toLowerCase();
+      const userUsername = String(userData.username || '').toLowerCase();
+
+      if (
+        tugas.includes('piket') ||
+        tugas.includes('kesiswaan') ||
+        tugas.includes('wali') ||
+        jabatan.includes('piket') ||
+        jabatan.includes('kesiswaan') ||
+        jabatan.includes('wali') ||
+        userUsername.includes('piket') ||
+        userUsername.includes('kesiswaan')
+      ) {
+        return true;
+      }
+
+      if (Array.isArray(userData.tugasTambahanList)) {
+        const hasMatch = userData.tugasTambahanList.some((t: string) => {
+          const l = String(t).toLowerCase();
+          return l.includes('piket') || l.includes('kesiswaan') || l.includes('wali');
+        });
+        if (hasMatch) return true;
+      }
+
+      if (Array.isArray(userData.additionalRoles)) {
+        const hasMatch = userData.additionalRoles.some((r: string) => {
+          const l = String(r).toLowerCase();
+          return l === 'kesiswaan' || l === 'wali' || l.includes('piket');
+        });
+        if (hasMatch) return true;
+      }
+    }
+
+    // 6. Check if teacher is registered as Wali Kelas in appData.waliKelas
+    if (role === 'guru' || role === 'user') {
+      const isWali = appData.waliKelas?.some(
+        (w) => (userData?.username && w.username?.toLowerCase() === String(userData.username).toLowerCase()) ||
+               (userData?.nama && w.nama?.toLowerCase() === String(userData.nama).toLowerCase())
+      );
+      if (isWali) return true;
+    }
+
+    return false;
+  }, [currentUser, readOnly, appData.waliKelas]);
+
   const canManageSiswa = canEditPresensi;
   const isReadOnlyUser = !canEditPresensi;
 
@@ -969,7 +1172,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     if (isSaving) return;
 
     if (!canEditPresensi) {
-      onShowToast('Mode Read Only! Akun Guru tidak berwenang mengisi atau mengubah presensi siswa.', 'warning');
+      onShowToast('Mode Read Only! Pengisian dan pengubahan presensi siswa dikelola oleh Admin, Wali Kelas, Tim Kesiswaan, Piket Kesiswaan, dan Piket Guru.', 'warning');
       return;
     }
 
@@ -1087,11 +1290,24 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
         });
       }
 
-      // Safely merge with existing records for this key to prevent dropping unedited students
+      // Safely merge with existing records for this key: keep updated records & remove explicitly cleared ones
       const existingForThisKey = (appData.presensi || {})[presensiKey] || [];
       const recMap = new Map<string, SiswaPresensiItem>();
       existingForThisKey.forEach((r) => { if (r && r.siswaId) recMap.set(r.siswaId, r); });
-      newRecords.forEach((r) => { if (r && r.siswaId) recMap.set(r.siswaId, r); });
+      
+      siswaList.forEach((s) => {
+        const st = studentStatus[s.id];
+        if (st) {
+          const matchingNew = newRecords.find((r) => r.siswaId === s.id);
+          if (matchingNew) {
+            recMap.set(s.id, matchingNew);
+          }
+        } else {
+          // Explicitly cleared/unfilled in UI -> remove from saved records
+          recMap.delete(s.id);
+        }
+      });
+
       const finalPresensiRecords = Array.from(recMap.values());
 
       const nextAppData: AppData = {
@@ -1115,7 +1331,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
 
       // Update confirmed baseline to the newly saved records
       const newBaselineMap: Record<string, SiswaPresensiItem> = {};
-      newRecords.forEach((r) => {
+      finalPresensiRecords.forEach((r) => {
         if (r.siswaId) newBaselineMap[r.siswaId] = r;
       });
       setConfirmedBaseline(newBaselineMap);
@@ -1132,7 +1348,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       setLastSavedTimestamp(saveTime);
       setSaveError(null);
 
-      onShowToast(`✓ Presensi ${currentKelas.nama} tanggal ${formatDateIndo(selectedTanggal)} berhasil disimpan ke server (${newRecords.length} siswa tercatat)!`, 'success');
+      onShowToast(`✓ Presensi ${currentKelas.nama} tanggal ${formatDateIndo(selectedTanggal)} berhasil disimpan (${finalPresensiRecords.length} dari ${siswaList.length} siswa terisi)!`, 'success');
     } catch (error: any) {
       if (resRequestId !== saveRequestIdRef.current) return;
       const errorMsg = error?.message || 'Gagal menyimpan data presensi ke server. Perubahan Anda tetap aman dalam draf perangkat.';
@@ -1249,8 +1465,22 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                 }`}
               >
                 <ClipboardCheck className="w-3.5 h-3.5" />
-                <span>Input Presensi</span>
+                <span>Input Presensi Siswa</span>
               </button>
+              {canAccessTeacherAttendance && (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('guru')}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'guru'
+                      ? 'bg-white text-blue-950 shadow-xs'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Absensi Manual Guru</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleTabChange('siswa')}
@@ -1269,55 +1499,57 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       />
 
       {/* 2. READ ONLY & HOLIDAY BANNERS */}
-      {!canEditPresensi && (
+      {!canEditPresensi && activeTab !== 'guru' && (
         <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-center gap-3 text-amber-800 dark:text-amber-200 text-xs shadow-2xs">
           <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div>
-            <span className="font-bold">Akses Read-Only Presensi Kelas:</span> {isTeacherRole ? 'Akun Guru bersifat Read-Only untuk presensi kelas. Pengisian dan pengubahan presensi siswa dikelola oleh Wali Kelas, Tim Kesiswaan, atau Admin.' : 'Hanya Admin, Wali Kelas, dan Tim Kesiswaan yang berwenang untuk mengisi dan mengubah data presensi siswa.'}
+            <span className="font-bold">Akses Read-Only Presensi Kelas:</span> Pengisian dan pengubahan presensi siswa dikelola oleh Admin, Wali Kelas, Tim Kesiswaan, Piket Kesiswaan, dan Piket Guru.
           </div>
         </div>
       )}
 
-      {/* 3. CONTEXT BAR (KELAS + TANGGAL) */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
-            Pilih Kelas
-          </label>
-          <div className="relative">
-            <select
-              value={selectedKelasId}
-              onChange={(e) => handleChangeKelas(e.target.value)}
-              className="w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary transition cursor-pointer"
-            >
-              {availableClasses.length === 0 && <option value="">Belum Ada Kelas</option>}
-              {availableClasses.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nama}
-                </option>
-              ))}
-            </select>
+      {/* 3. CONTEXT BAR FOR SISWA (KELAS + TANGGAL) */}
+      {activeTab !== 'guru' && (
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+              Pilih Kelas
+            </label>
+            <div className="relative">
+              <select
+                value={selectedKelasId}
+                onChange={(e) => handleChangeKelas(e.target.value)}
+                className="w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary transition cursor-pointer"
+              >
+                {availableClasses.length === 0 && <option value="">Belum Ada Kelas</option>}
+                {availableClasses.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {waliKelasObj && (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 font-medium">
+                Wali Kelas: <span className="text-slate-700 dark:text-slate-300 font-semibold">{waliKelasObj.nama}</span>
+              </p>
+            )}
           </div>
-          {waliKelasObj && (
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 font-medium">
-              Wali Kelas: <span className="text-slate-700 dark:text-slate-300 font-semibold">{waliKelasObj.nama}</span>
-            </p>
+
+          {activeTab === 'presensi' && (
+            <div>
+              <DatePickerWithStatus
+                label="Pilih Tanggal Presensi"
+                selectedDate={selectedTanggal}
+                onChangeDate={handleChangeTanggal}
+                appData={appData}
+                currentUser={currentUser}
+                kelasId={selectedKelasId}
+              />
+            </div>
           )}
         </div>
-
-        {activeTab === 'presensi' && (
-          <div>
-            <DatePickerWithStatus
-              label="Pilih Tanggal Presensi"
-              selectedDate={selectedTanggal}
-              onChangeDate={handleChangeTanggal}
-              appData={appData}
-              currentUser={currentUser}
-              kelasId={selectedKelasId}
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Hari Libur Notification */}
       {activeTab === 'presensi' && hariLiburObj && (
@@ -1942,11 +2174,25 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
             {/* 7. PRIMARY SAVE & RESET ACTIONS (DESKTOP) */}
             {canEditPresensi && siswaList.length > 0 && !isWeekendSelected && !isFutureSelected && !isBeforeStartDate && (
               <div className="flex items-center justify-end gap-3 pt-2">
+                {isDirty && (
+                  <button
+                    type="button"
+                    onClick={handleCancelUnsavedEdits}
+                    disabled={isSaving}
+                    className="px-4 py-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-bold rounded-xl border border-amber-200 dark:border-amber-800/50 text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Batalkan perubahan lokal dan kembalikan ke data terkonfirmasi"
+                  >
+                    <Undo2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span>Batalkan Perubahan</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleResetKehadiran}
                   disabled={isSaving}
                   className="px-4 py-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-bold rounded-xl border border-rose-200 dark:border-rose-800/50 text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Reset seluruh kehadiran kelas ini menjadi kosong"
                 >
                   <RotateCcw className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   <span>Reset Kehadiran</span>
@@ -1991,7 +2237,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
 
           {/* 8. MOBILE STICKY ACTION BAR */}
           {canEditPresensi && siswaList.length > 0 && !isWeekendSelected && !isFutureSelected && !isBeforeStartDate && (
-            <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-3 shadow-xl flex items-center justify-between gap-3">
+            <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-3 shadow-xl flex items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] font-extrabold uppercase text-slate-400 block">
                   {saveError ? 'Gagal Menyimpan' : isDirty ? 'Belum Disimpan' : 'Status Terisi'}
@@ -2000,35 +2246,48 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                   {saveError ? 'Ketuk Coba Lagi' : isDirty ? `${dirtyChangesCount} Siswa Diubah` : `${attendanceStats.total - attendanceStats.belumAbsen} / ${attendanceStats.total} Siswa`}
                 </span>
               </div>
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={() => handleSave()}
-                className={`px-5 py-2.5 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${
-                  saveError
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md'
-                    : isDirty
-                    ? 'bg-theme-primary hover:bg-theme-primary-hover text-white shadow-md'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                }`}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Menyimpan...</span>
-                  </>
-                ) : saveError ? (
-                  <>
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Coba Lagi</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-3.5 h-3.5" />
-                    <span>{isDirty ? 'Simpan' : isAlreadySaved ? 'Tersimpan' : 'Simpan Presensi'}</span>
-                  </>
+              <div className="flex items-center gap-2">
+                {isDirty && (
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={handleCancelUnsavedEdits}
+                    className="px-3 py-2.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 font-bold rounded-xl text-xs border border-amber-200 dark:border-amber-800/50 flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Batal</span>
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => handleSave()}
+                  className={`px-4 py-2.5 font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${
+                    saveError
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md'
+                      : isDirty
+                      ? 'bg-theme-primary hover:bg-theme-primary-hover text-white shadow-md'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : saveError ? (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Coba Lagi</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isDirty ? 'Simpan' : isAlreadySaved ? 'Tersimpan' : 'Simpan Presensi'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </>
@@ -2164,6 +2423,18 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* TAB 3: ABSENSI MANUAL GURU */}
+      {activeTab === 'guru' && canAccessTeacherAttendance && (
+        <TeacherManualAttendanceTab
+          appData={appData}
+          currentUser={currentUser}
+          selectedTanggal={selectedTanggal}
+          setSelectedTanggal={setSelectedTanggal}
+          onSavePresensi={onSavePresensi}
+          onShowToast={onShowToast}
+        />
       )}
 
       {/* STUDENT EDIT/ADD MODAL */}

@@ -885,6 +885,24 @@ export const LiveChatView: React.FC<LiveChatViewProps> = ({
     }
   };
 
+  const handleClearAllSystemChat = () => {
+    if (!window.confirm('Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT CHAT SISTEM?\n\nTindakan ini akan mengosongkan semua riwayat percakapan di sistem secara permanen.')) {
+      return;
+    }
+
+    onUpdateAppData((prev) => ({
+      ...prev,
+      chatMessages: [],
+    }));
+
+    fetch('/api/chat/clear-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+
+    onShowToast('Seluruh riwayat chat sistem telah berhasil dihapus!', 'success');
+  };
+
   const handleToggleSelectMsg = (msgId: string) => {
     setSelectedMsgIds((prev) =>
       prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId]
@@ -921,7 +939,17 @@ export const LiveChatView: React.FC<LiveChatViewProps> = ({
         badge="Live Support & Help Desk"
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            {/* STATUS BADGE */}
+            {/* BUTTON CLEAR ALL CHAT */}
+            <button
+              type="button"
+              onClick={handleClearAllSystemChat}
+              className="px-4 py-2.5 bg-rose-600/90 hover:bg-rose-700 text-white font-bold text-xs rounded-2xl shadow-lg border border-rose-400/30 backdrop-blur-md flex items-center gap-2 transition cursor-pointer"
+              title="Hapus Seluruh Riwayat Chat di Sistem"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Hapus Semua Riwayat Chat</span>
+              <span className="sm:hidden">Hapus All Chat</span>
+            </button>
             <div className="px-4 py-3 bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl flex items-center gap-3">
               <div className="relative">
                 <div className={`w-3 h-3 rounded-full ${isLiveChatEnabled ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'}`} />

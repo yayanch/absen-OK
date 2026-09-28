@@ -292,6 +292,9 @@ export interface SiswaPresensiItem {
   pulangStatus?: 'H' | 'TAP' | '';
   suratBukti?: string; // Base64 image / document string for Surat Sakit, Izin, Dispen, or Ketidakhadiran
   catatan?: string;
+  sumberPresensi?: 'Online' | 'Manual' | 'QR Scan' | 'Sistem';
+  isOverridden?: boolean;
+  overriddenBy?: string;
 }
 
 // Map key: `${YYYY-MM-DD}_${kelasId}` -> array of SiswaPresensiItem
@@ -574,6 +577,7 @@ export interface AppData {
   mataPelajaran?: MataPelajaran[];
   guruMapelKelas?: GuruMapelKelasItem[];
   presensiMengajarGuru?: AbsensiMengajarGuruItem[];
+  presensiGuru?: Record<string, GuruPresensiItem[]>;
   pengumuman?: PengumumanSekolah[];
   securityIncidents?: SecurityIncident[];
   blockedIps?: BlockedIp[];
@@ -609,6 +613,26 @@ export interface AbsensiMengajarGuruItem {
   presensiSiswa: SiswaPresensiSesiGuru[];
   catatanGuru?: string;
   createdAt: string;
+}
+
+export interface GuruPresensiItem {
+  id: string;
+  guruId: string;
+  guruUsername?: string;
+  guruNama: string;
+  guruNip?: string;
+  tanggal: string; // YYYY-MM-DD
+  hari: string; // e.g. 'Senin', 'Selasa'
+  status: 'H' | 'S' | 'I' | 'A' | 'D' | 'T' | ''; // Hadir, Sakit, Izin, Alpha, Dinas Luar, Terlambat
+  jamMasuk?: string;
+  jamPulang?: string;
+  catatan?: string;
+  jadwalHariIni?: string;
+  sumberPresensi?: 'Online' | 'Manual' | 'QR Scan' | 'Sistem';
+  isOverridden?: boolean;
+  overriddenBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface MataPelajaran {

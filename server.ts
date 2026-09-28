@@ -694,52 +694,17 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
 }
 
 function mergePresensiServer(existingMap: any = {}, incomingMap: any = {}): any {
-  const merged: any = {};
-  const allKeys = new Set([
-    ...Object.keys(existingMap || {}),
-    ...Object.keys(incomingMap || {}),
-  ]);
+  const merged: any = { ...existingMap };
 
-  for (const key of allKeys) {
-    const existingRecs = Array.isArray(existingMap?.[key]) ? existingMap[key] : [];
-    const incomingRecs = Array.isArray(incomingMap?.[key]) ? incomingMap[key] : [];
-
-    if (existingRecs.length === 0 && incomingRecs.length === 0) continue;
-    if (incomingRecs.length === 0) {
-      merged[key] = [...existingRecs];
-      continue;
+  // For any key that is present in the incoming map, use the incoming array directly!
+  // This ensures that updates, deletions, cancellations, and resets for that class & date are fully respected.
+  for (const key of Object.keys(incomingMap || {})) {
+    const val = incomingMap[key];
+    if (Array.isArray(val)) {
+      merged[key] = [...val];
+    } else {
+      delete merged[key];
     }
-    if (existingRecs.length === 0) {
-      merged[key] = [...incomingRecs];
-      continue;
-    }
-
-    const studentMap = new Map<string, any>();
-    for (const item of existingRecs) {
-      if (item && item.siswaId) {
-        studentMap.set(String(item.siswaId), { ...item });
-      }
-    }
-    for (const item of incomingRecs) {
-      if (!item || !item.siswaId) continue;
-      const sId = String(item.siswaId);
-      const existing = studentMap.get(sId);
-      if (!existing) {
-        studentMap.set(sId, { ...item });
-      } else {
-        studentMap.set(sId, {
-          ...existing,
-          ...item,
-          status: item.status || existing.status,
-          time: item.time || existing.time,
-          pulangTime: item.pulangTime || existing.pulangTime,
-          pulangStatus: item.pulangStatus || existing.pulangStatus,
-          suratBukti: item.suratBukti || existing.suratBukti,
-          catatan: item.catatan !== undefined ? item.catatan : existing.catatan,
-        });
-      }
-    }
-    merged[key] = Array.from(studentMap.values());
   }
 
   return sanitizeAndDeduplicatePresensiMap(merged);
@@ -2642,13 +2607,27 @@ app.post("/api/chat/delete", (req, res) => {
 
 // 4. Clear Chat History
 app.post("/api/chat/clear-history", (req, res) => {
-  const { selectedThreadUser, currentUsername, deleteType, isAdmin, myIdVariants } = req.body;
+  const { selectedThreadUser, currentUsername, deleteType, isAdmin, myIdVariants, clearAllSystem } = req.body;
 
   if (!inMemoryAppDataCache) {
     inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
   }
   if (!Array.isArray(inMemoryAppDataCache.chatMessages)) {
     inMemoryAppDataCache.chatMessages = [];
+  }
+
+  if (clearAllSystem || deleteType === "clear_all_system") {
+    inMemoryAppDataCache.chatMessages = [];
+    appDataVersion = Date.now();
+    saveAppDataCache(inMemoryAppDataCache);
+    queueAppDataPersist({ immediateMySQL: true });
+
+    return res.json({
+      success: true,
+      message: "Semua riwayat obrolan sistem berhasil dihapus bersih",
+      chatMessages: [],
+      version: appDataVersion
+    });
   }
 
   const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
@@ -2691,6 +2670,24 @@ app.post("/api/chat/clear-history", (req, res) => {
     success: true,
     message: deleteType === "for_everyone" ? "Riwayat obrolan dihapus untuk semua orang" : "Riwayat obrolan dibersihkan untuk Anda",
     chatMessages: inMemoryAppDataCache.chatMessages,
+    version: appDataVersion
+  });
+});
+
+// 4b. Clear All Chat Messages System-wide
+app.post("/api/chat/clear-all", (req, res) => {
+  if (!inMemoryAppDataCache) {
+    inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
+  }
+  inMemoryAppDataCache.chatMessages = [];
+  appDataVersion = Date.now();
+  saveAppDataCache(inMemoryAppDataCache);
+  queueAppDataPersist({ immediateMySQL: true });
+
+  res.json({
+    success: true,
+    message: "Semua riwayat obrolan sistem berhasil dihapus bersih",
+    chatMessages: [],
     version: appDataVersion
   });
 });

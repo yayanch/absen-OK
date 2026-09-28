@@ -36,7 +36,8 @@ import {
   Layers,
   Briefcase,
   Sliders,
-  Award
+  Award,
+  Clock
 } from 'lucide-react';
 import { AppData, WaliKelas, UserSession } from '../../types';
 import { Pagination } from '../Pagination';
@@ -157,6 +158,472 @@ interface GuruFormModalContentProps {
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
+const ALL_DAYS_LIST = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+interface RoundDaySelectorProps {
+  selectedDays: string[];
+  onChange: (days: string[]) => void;
+  size?: 'normal' | 'small' | 'large';
+  readOnly?: boolean;
+}
+
+export const RoundDaySelector: React.FC<RoundDaySelectorProps> = ({
+  selectedDays = [],
+  onChange,
+  size = 'normal',
+  readOnly = false,
+}) => {
+  const toggleDay = (day: string) => {
+    if (readOnly) return;
+    if (selectedDays.includes(day)) {
+      onChange(selectedDays.filter((d) => d !== day));
+    } else {
+      onChange([...selectedDays, day]);
+    }
+  };
+
+  const handleSelect5Days = () => !readOnly && onChange(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
+  const handleSelect6Days = () => !readOnly && onChange(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']);
+  const handleSelectAll = () => !readOnly && onChange([...ALL_DAYS_LIST]);
+  const handleClear = () => !readOnly && onChange([]);
+
+  return (
+    <div className="space-y-2">
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+          <span className="font-bold text-slate-500 dark:text-slate-400">Pilihan Cepat:</span>
+          <button
+            type="button"
+            onClick={handleSelect5Days}
+            className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+          >
+            5 Hari (Sen-Jum)
+          </button>
+          <button
+            type="button"
+            onClick={handleSelect6Days}
+            className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+          >
+            6 Hari (Sen-Sab)
+          </button>
+          <button
+            type="button"
+            onClick={handleSelectAll}
+            className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+          >
+            Semua Hari
+          </button>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+          >
+            Kosongkan
+          </button>
+        </div>
+      )}
+
+      {/* Pemilihan hari berbentuk bulat untuk checklist */}
+      <div className="flex flex-wrap items-center gap-2">
+        {ALL_DAYS_LIST.map((day) => {
+          const isSelected = selectedDays.includes(day);
+          const shortName = day.substring(0, 3).toUpperCase();
+          return (
+            <button
+              key={day}
+              type="button"
+              disabled={readOnly}
+              onClick={() => toggleDay(day)}
+              className={`rounded-full flex items-center justify-center font-extrabold transition-all duration-200 cursor-pointer ${
+                size === 'small'
+                  ? 'w-7 h-7 text-[9px]'
+                  : size === 'large'
+                  ? 'w-12 h-12 text-xs'
+                  : 'w-10 h-10 text-[10px]'
+              } ${
+                isSelected
+                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-sm ring-2 ring-emerald-400/30 border-2 border-emerald-300 scale-105'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600'
+              }`}
+              title={`${day}: ${isSelected ? 'Aktif Mengajar (Dicentang)' : 'Tidak Mengajar'}`}
+            >
+              <div className="flex flex-col items-center justify-center leading-none">
+                <span>{shortName}</span>
+                {isSelected ? (
+                  <Check className={size === 'small' ? 'w-2.5 h-2.5 stroke-[3]' : 'w-3 h-3 stroke-[3] mt-0.5'} />
+                ) : (
+                  <div className={`rounded-full bg-slate-300 dark:bg-slate-600 ${size === 'small' ? 'w-1 h-1' : 'w-1.5 h-1.5 mt-0.5'}`} />
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+interface PengaturanHariMengajarModalContentProps {
+  appData: AppData;
+  onUpdateAppData: (appData: AppData) => void;
+  onCloseModal: () => void;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const PengaturanHariMengajarModalContent: React.FC<PengaturanHariMengajarModalContentProps> = ({
+  appData,
+  onUpdateAppData,
+  onCloseModal,
+  onShowToast,
+}) => {
+  const [shiftFilter, setShiftFilter] = useState<'semua' | 'pagi' | 'siang' | 'normal'>('semua');
+  const [kelompokFilter, setKelompokFilter] = useState<'semua' | 'guru' | 'wali' | 'struktural' | 'staf'>('semua');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Bulk Days state
+  const [bulkDays, setBulkDays] = useState<string[]>(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
+  const [bulkBatasiLogin, setBulkBatasiLogin] = useState<boolean>(false);
+
+  // Local Teachers list state for fine-tuning before saving
+  const [guruList, setGuruList] = useState<WaliKelas[]>(() => {
+    return (appData.waliKelas || []).map((g) => ({
+      ...g,
+      hariMengajar: Array.isArray(g.hariMengajar) && g.hariMengajar.length > 0 ? [...g.hariMengajar] : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
+      batasiLoginHariMengajar: Boolean(g.batasiLoginHariMengajar),
+    }));
+  });
+
+  // Filter teachers based on shift, kelompok, and search
+  const filteredGuru = useMemo(() => {
+    return guruList.filter((g) => {
+      // Search
+      const matchesSearch =
+        !searchQuery ||
+        g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (g.nip && g.nip.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (g.username && g.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (g.mataPelajaran && g.mataPelajaran.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      if (!matchesSearch) return false;
+
+      // Kelompok Filter
+      if (kelompokFilter === 'guru') {
+        if (g.role !== 'guru' && (!g.roles || !g.roles.includes('guru'))) return false;
+      } else if (kelompokFilter === 'wali') {
+        const isWali = g.role === 'wali' || (g.additionalRoles && g.additionalRoles.includes('wali')) || (g.tugasTambahanList && g.tugasTambahanList.some(t => t.toLowerCase().includes('wali')));
+        if (!isWali) return false;
+      } else if (kelompokFilter === 'struktural') {
+        const isStruktural = ['kesiswaan', 'kurikulum', 'hubin', 'admin'].includes(g.role) || (g.additionalRoles && g.additionalRoles.some(r => ['kesiswaan', 'kurikulum', 'hubin', 'admin'].includes(r)));
+        if (!isStruktural) return false;
+      } else if (kelompokFilter === 'staf') {
+        const isStaf = g.role === 'staf_jadwal' || (g.additionalRoles && g.additionalRoles.includes('staf_jadwal'));
+        if (!isStaf) return false;
+      }
+
+      // Shift Filter (based on class assignments or default heuristics)
+      if (shiftFilter !== 'semua') {
+        const hasSiangClass = (appData.kelas || []).some((k) => k.waliKelasId === g.id && k.nama.toLowerCase().includes('siang'));
+        if (shiftFilter === 'pagi' && hasSiangClass) return false;
+        if (shiftFilter === 'siang' && !hasSiangClass) return false;
+      }
+
+      return true;
+    });
+  }, [guruList, searchQuery, shiftFilter, kelompokFilter, appData.kelas]);
+
+  // Apply Bulk Days to currently filtered teachers
+  const handleApplyBulkToFiltered = () => {
+    if (filteredGuru.length === 0) {
+      onShowToast('Tidak ada guru yang sesuai dengan filter saat ini.', 'warning');
+      return;
+    }
+
+    const filteredIds = new Set(filteredGuru.map((g) => g.id));
+    setGuruList((prev) =>
+      prev.map((g) => {
+        if (filteredIds.has(g.id)) {
+          return {
+            ...g,
+            hariMengajar: [...bulkDays],
+            batasiLoginHariMengajar: bulkBatasiLogin,
+          };
+        }
+        return g;
+      })
+    );
+
+    onShowToast(`Hari mengajar berhasil diterapkan ke ${filteredGuru.length} guru terpilih!`, 'success');
+  };
+
+  // Toggle single teacher day
+  const handleTeacherDaysChange = (teacherId: string, days: string[]) => {
+    setGuruList((prev) =>
+      prev.map((g) => (g.id === teacherId ? { ...g, hariMengajar: days } : g))
+    );
+  };
+
+  // Toggle single teacher batasi login
+  const handleTeacherBatasiLoginToggle = (teacherId: string) => {
+    setGuruList((prev) =>
+      prev.map((g) => (g.id === teacherId ? { ...g, batasiLoginHariMengajar: !g.batasiLoginHariMengajar } : g))
+    );
+  };
+
+  // Save changes back to appData
+  const handleSaveAll = () => {
+    const updatedWaliKelas = appData.waliKelas.map((g) => {
+      const updated = guruList.find((x) => x.id === g.id);
+      if (updated) {
+        return {
+          ...g,
+          hariMengajar: updated.hariMengajar,
+          batasiLoginHariMengajar: updated.batasiLoginHariMengajar,
+        };
+      }
+      return g;
+    });
+
+    const updatedAppData = addAuditLog(
+      { ...appData, waliKelas: updatedWaliKelas },
+      'Pengaturan Hari Mengajar Guru',
+      'Memperbarui jadwal & hari mengajar guru pada semua shift dan kelompok'
+    );
+
+    onUpdateAppData(updatedAppData);
+    onCloseModal();
+    onShowToast('Pengaturan hari mengajar seluruh shift & kelompok berhasil disimpan!', 'success');
+  };
+
+  return (
+    <div className="space-y-4 text-slate-800 dark:text-slate-100 max-h-[80vh] overflow-y-auto pr-1">
+      {/* Header Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-md flex items-center justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-amber-200 shrink-0" />
+            <h3 className="font-black text-sm uppercase tracking-wide">
+              Pengaturan Hari Mengajar (Semua Shift &amp; Kelompok)
+            </h3>
+          </div>
+          <p className="text-xs text-amber-100 leading-relaxed">
+            Kelola hari efektif mengajar tenaga pendidik per shift KBM (Pagi/Siang) dan kelompok fungsional (Wali Kelas, Mapel, Struktural).
+          </p>
+        </div>
+        <div className="hidden sm:flex flex-col items-end shrink-0">
+          <span className="px-3 py-1 rounded-full text-xs font-black bg-white/20 backdrop-blur-md text-white border border-white/30 font-mono">
+            {guruList.length} Guru
+          </span>
+        </div>
+      </div>
+
+      {/* Filter Toolbar: Shift & Kelompok */}
+      <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Shift Filter */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-blue-600" />
+              <span>Filter Shift KBM</span>
+            </label>
+            <select
+              value={shiftFilter}
+              onChange={(e) => setShiftFilter(e.target.value as any)}
+              className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+            >
+              <option value="semua">Semua Shift (Pagi &amp; Siang)</option>
+              <option value="pagi">Shift Pagi (Kelompok 1 / Reguler)</option>
+              <option value="siang">Shift Siang (Kelompok 2 / Sore)</option>
+              <option value="normal">Shift Normal / Karyawan</option>
+            </select>
+          </div>
+
+          {/* Kelompok Filter */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Filter Kelompok Peran</span>
+            </label>
+            <select
+              value={kelompokFilter}
+              onChange={(e) => setKelompokFilter(e.target.value as any)}
+              className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+            >
+              <option value="semua">Semua Kelompok Peran Guru</option>
+              <option value="guru">Guru Pengampu Mapel Pokok</option>
+              <option value="wali">Kelompok Wali Kelas</option>
+              <option value="struktural">Kelompok Struktural &amp; WKS</option>
+              <option value="staf">Kelompok Staf Pengelola Jadwal</option>
+            </select>
+          </div>
+
+          {/* Search Box */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-amber-600" />
+              <span>Cari Nama / NIP / Mapel</span>
+            </label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari guru..."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Box A: Mass / Batch Apply Hari Mengajar (Round Circular Checklist) */}
+      <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-600" />
+            <span>Terapkan Hari Mengajar Massal ({filteredGuru.length} Guru Terpilih)</span>
+          </h4>
+          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/60 px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+            Batch Selector
+          </span>
+        </div>
+
+        <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 space-y-3">
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Pilih Hari Mengajar Massal (Gunakan tombol berbentuk bulat untuk centang hari):
+            </label>
+            <RoundDaySelector
+              selectedDays={bulkDays}
+              onChange={(days) => setBulkDays(days)}
+              size="normal"
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bulkBatasiLogin}
+                onChange={(e) => setBulkBatasiLogin(e.target.checked)}
+                className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+              />
+              <span>Batasi Login Akun Hanya Pada Hari Mengajar yang Dicentang</span>
+            </label>
+
+            <button
+              type="button"
+              onClick={handleApplyBulkToFiltered}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Terapkan Ke {filteredGuru.length} Guru</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Box B: Individual Teacher Fine-Tuning List */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-blue-600" />
+            <span>Rincian Hari Mengajar Per-Guru ({filteredGuru.length})</span>
+          </h4>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+            Gunakan tombol bulat di samping nama guru untuk penyesuaian khusus.
+          </span>
+        </div>
+
+        <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+          {filteredGuru.length === 0 ? (
+            <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-400 font-medium text-xs">
+              Tidak ada data guru yang cocok dengan kriteria filter atau pencarian.
+            </div>
+          ) : (
+            filteredGuru.map((guru) => {
+              const primaryBadge = getRoleBadgeMeta(guru.role, appData);
+              const days = guru.hariMengajar || [];
+              return (
+                <div
+                  key={guru.id}
+                  className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-300 dark:hover:border-amber-700 transition flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-[200px]">
+                    {guru.foto ? (
+                      <img
+                        src={guru.foto}
+                        alt={guru.nama}
+                        className="w-9 h-9 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                        {guru.nama ? guru.nama.charAt(0).toUpperCase() : 'G'}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-extrabold text-xs text-slate-900 dark:text-slate-100">
+                        {guru.nama}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${primaryBadge.badgeClass}`}>
+                          {primaryBadge.label}
+                        </span>
+                        {guru.nip && (
+                          <span className="text-[10px] font-mono text-slate-400">NIP: {guru.nip}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pemilihan Hari Bulat untuk checklist per Guru */}
+                  <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-end gap-3 w-full">
+                    <RoundDaySelector
+                      selectedDays={days}
+                      onChange={(newDays) => handleTeacherDaysChange(guru.id, newDays)}
+                      size="small"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => handleTeacherBatasiLoginToggle(guru.id)}
+                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition flex items-center gap-1 shrink-0 cursor-pointer border ${
+                        guru.batasiLoginHariMengajar
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-300'
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                      }`}
+                      title="Batasi Login"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      <span>{guru.batasiLoginHariMengajar ? 'Login Dibatasi' : 'Login Bebas'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={onCloseModal}
+          className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+        >
+          Batal
+        </button>
+        <button
+          type="button"
+          onClick={handleSaveAll}
+          className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Simpan Perubahan Hari Mengajar</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
   guruToEdit,
   appData,
@@ -212,6 +679,14 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
   });
   const [mataPelajaran, setMataPelajaran] = useState(guruToEdit?.mataPelajaran || '');
   const [customTugasInput, setCustomTugasInput] = useState('');
+  const [hariMengajar, setHariMengajar] = useState<string[]>(
+    guruToEdit?.hariMengajar && guruToEdit.hariMengajar.length > 0
+      ? [...guruToEdit.hariMengajar]
+      : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']
+  );
+  const [batasiLoginHariMengajar, setBatasiLoginHariMengajar] = useState<boolean>(
+    Boolean(guruToEdit?.batasiLoginHariMengajar)
+  );
 
   const COMMON_TUGAS_PRESETS = [
     'Wali Kelas',
@@ -345,8 +820,8 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
       jabatan: tugasTambahanList.join(', '),
       foto: foto.trim(),
       mataPelajaran: mataPelajaran.trim() || guruToEdit?.mataPelajaran || '',
-      hariMengajar: guruToEdit?.hariMengajar || ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
-      batasiLoginHariMengajar: Boolean(guruToEdit?.batasiLoginHariMengajar),
+      hariMengajar: hariMengajar,
+      batasiLoginHariMengajar: batasiLoginHariMengajar,
     };
 
     let updatedWali: WaliKelas[];
@@ -891,129 +1366,6 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
                 );
               })}
           </div>
-        </div>
-      </div>
-
-      {/* Section 5: Tugas Tambahan & Tanggung Jawab Fungsional Sekolah */}
-      <div className="space-y-3.5 p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/60">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-extrabold text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span>5. Tugas Tambahan &amp; Fungsional Sekolah</span>
-          </h4>
-          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-            Tanggung Jawab KBM / Sekolah
-          </span>
-        </div>
-
-        {/* Mata Pelajaran Diampu */}
-        <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
-            Mata Pelajaran yang Diampu (Opsional)
-          </label>
-          <input
-            type="text"
-            value={mataPelajaran}
-            onChange={(e) => setMataPelajaran(e.target.value)}
-            placeholder="misal: Matematika Wajib, Pemrograman Web, Bahasa Indonesia"
-            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none transition"
-          />
-        </div>
-
-        {/* Pilihan Cepat Tugas Tambahan Presets */}
-        <div className="space-y-2 pt-2 border-t border-amber-100 dark:border-amber-900/40">
-          <div className="flex items-center justify-between">
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
-              Pilihan Tugas Tambahan / Jabatan Fungsional
-            </label>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400">
-              {tugasTambahanList.length} tugas terpasang
-            </span>
-          </div>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400">
-            Tugas fungsional guru di sekolah di luar kewajiban jam mengajar pokok (klik untuk memilih/membatalkan):
-          </p>
-
-          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
-            {COMMON_TUGAS_PRESETS.map((tugasName) => {
-              const isSelected = tugasTambahanList.includes(tugasName);
-              return (
-                <button
-                  key={tugasName}
-                  type="button"
-                  onClick={() => handleToggleTugasTambahan(tugasName)}
-                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                    isSelected
-                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border-amber-400 dark:border-amber-600 shadow-xs'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
-                  }`}
-                >
-                  <div
-                    className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] ${
-                      isSelected
-                        ? 'bg-amber-600 text-white font-bold'
-                        : 'border border-slate-300 dark:border-slate-600'
-                    }`}
-                  >
-                    {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                  </div>
-                  <span>{tugasName}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Custom Tugas Input */}
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="text"
-              value={customTugasInput}
-              onChange={(e) => setCustomTugasInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddCustomTugas(e);
-                }
-              }}
-              placeholder="Ketik tugas tambahan lainnya lalu klik + Tambah..."
-              className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-amber-500 outline-none transition"
-            />
-            <button
-              type="button"
-              onClick={handleAddCustomTugas}
-              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition cursor-pointer shrink-0 shadow-xs"
-            >
-              + Tambah
-            </button>
-          </div>
-
-          {/* Active Tugas Badges List */}
-          {tugasTambahanList.length > 0 && (
-            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-1.5">
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                Daftar Tugas Tambahan Terpasang ({tugasTambahanList.length}):
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {tugasTambahanList.map((tugas) => (
-                  <span
-                    key={tugas}
-                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1"
-                  >
-                    <Award className="w-3 h-3 text-amber-600" />
-                    <span>{tugas}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleTugasTambahan(tugas)}
-                      className="hover:text-rose-600 cursor-pointer ml-0.5"
-                      title="Hapus tugas ini"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -2178,14 +2530,36 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
         icon={Users}
         actions={
           !readOnly ? (
-            <button
-              type="button"
-              onClick={() => handleOpenGuruModal()}
-              className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Guru Baru</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenModal(
+                    'Pengaturan Hari Mengajar Guru (Semua Shift & Kelompok)',
+                    <PengaturanHariMengajarModalContent
+                      appData={appData}
+                      onUpdateAppData={onUpdateAppData}
+                      onCloseModal={onCloseModal}
+                      onShowToast={onShowToast}
+                    />
+                  );
+                }}
+                className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                title="Atur Hari Mengajar Seluruh Shift & Kelompok Guru"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Pengaturan Hari Mengajar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenGuruModal()}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Guru Baru</span>
+              </button>
+            </div>
           ) : undefined
         }
       />
@@ -2333,9 +2707,29 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
               <option value="P">Perempuan (P)</option>
             </select>
 
-            {/* Excel Actions */}
+            {/* Excel & Schedule Actions */}
             {!readOnly && (
               <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenModal(
+                      'Pengaturan Hari Mengajar Guru (Semua Shift & Kelompok)',
+                      <PengaturanHariMengajarModalContent
+                        appData={appData}
+                        onUpdateAppData={onUpdateAppData}
+                        onCloseModal={onCloseModal}
+                        onShowToast={onShowToast}
+                      />
+                    );
+                  }}
+                  className="px-3 py-2 text-xs font-bold rounded-xl bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Pengaturan Hari Mengajar Massal Semua Shift & Kelompok"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">Hari Mengajar</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setIsImportModalOpen(true)}
@@ -2507,6 +2901,25 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
                             </span>
                           </div>
                         )}
+
+                        {/* 3. Baris Hari Mengajar */}
+                        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-emerald-600" />
+                            <span>Hari Mengajar</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {(guru.hariMengajar && guru.hariMengajar.length > 0 ? guru.hariMengajar : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']).map((d) => (
+                              <span
+                                key={d}
+                                className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[8px] font-black flex items-center justify-center shadow-2xs"
+                                title={`Hari Mengajar: ${d}`}
+                              >
+                                {d.substring(0, 1)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
 

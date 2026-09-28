@@ -824,6 +824,24 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
     setSelectedMsgIds([]);
   };
 
+  const handleClearAllSystemChat = () => {
+    if (!window.confirm('Apakah Anda yakin ingin MENGHAPUS SELURUH RIWAYAT CHAT SISTEM?\n\nTindakan ini akan mengosongkan semua riwayat percakapan di sistem secara permanen.')) {
+      return;
+    }
+
+    onUpdateAppData((prev) => ({
+      ...prev,
+      chatMessages: [],
+    }));
+
+    fetch('/api/chat/clear-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {});
+
+    onShowToast('Seluruh riwayat chat sistem telah berhasil dihapus!', 'success');
+  };
+
   const quickTemplates = [
     { label: '🔑 Reset Password', text: 'Halo Admin, mohon bantuan untuk reset password akun saya.' },
     { label: '📊 Kendala Presensi', text: 'Halo Admin, saya mengalami kendala pada saat input presensi siswa.' },
@@ -988,6 +1006,15 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
                       <ListChecks className="w-4 h-4" />
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={handleClearAllSystemChat}
+                    title="Hapus Semua Riwayat Chat Sistem"
+                    className="p-1.5 text-slate-300 hover:text-rose-400 hover:bg-white/10 rounded-xl transition cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
 
                   <button
                     type="button"

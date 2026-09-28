@@ -307,7 +307,9 @@ export default function App() {
               const mergedPelanggaran = mergePelanggaran(prev.pelanggaran, data.appData.pelanggaran, allDeletedPelanggaran);
               const mergedHomeVisits = mergeHomeVisits(prev.homeVisits, data.appData.homeVisits, allDeletedHomeVisits);
               const mergedSiswa = mergeSiswa(prev.siswa, data.appData.siswa, allDeletedSiswa);
-              const mergedPresensi = mergePresensi(prev.presensi, data.appData.presensi);
+              const incomingPresensi = data.appData.presensi || {};
+              const isServerPresensiReset = Object.keys(incomingPresensi).length === 0 && Object.keys(prev.presensi || {}).length > 0;
+              const mergedPresensi = isServerPresensiReset ? {} : mergePresensi(prev.presensi, incomingPresensi);
 
               // Preserve master data if server response is incomplete
               const mergedKelas = (Array.isArray(data.appData.kelas) && data.appData.kelas.length > 0) ? data.appData.kelas : prev.kelas;
@@ -370,7 +372,9 @@ export default function App() {
           const mergedMessages = mergeChatMessages(prev.chatMessages, customEvent.detail.chatMessages);
           const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(customEvent.detail.deletedSiswaIds || [])]));
           const mergedSiswa = mergeSiswa(prev.siswa, customEvent.detail.siswa, allDeletedSiswa);
-          const mergedPresensi = mergePresensi(prev.presensi, customEvent.detail.presensi);
+          const customPresensi = customEvent.detail.presensi || {};
+          const isCustomPresensiReset = Object.keys(customPresensi).length === 0;
+          const mergedPresensi = isCustomPresensiReset ? {} : mergePresensi(prev.presensi, customPresensi);
           return {
             ...customEvent.detail,
             siswa: mergedSiswa,
@@ -808,15 +812,29 @@ export default function App() {
   const handleResetPresensiData = () => {
     openConfirmModal(
       'Reset Data Presensi',
-      'PERINGATAN: Tindakan ini hanya akan MENGHAPUS SELURUH RIWAYAT PRESENSI SISWA. Data Master (Siswa, Kelas, Wali Kelas, Jurusan) tetap tersimpan aman. Lanjutkan?',
+      'PERINGATAN: Tindakan ini hanya akan MENGHAPUS SELURUH RIWAYAT PRESENSI SISWA DAN GURU. Data Master (Siswa, Kelas, Wali Kelas, Jurusan) tetap tersimpan aman. Lanjutkan?',
       'danger',
       () => {
         const resetPresensiData: AppData = {
           ...appData,
           presensi: {},
+          presensiGuru: {},
         };
-        handleUpdateAppData(resetPresensiData);
 
+        if (typeof localStorage !== 'undefined') {
+          try {
+            const keysToRemove: string[] = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && (k.startsWith('attendance-draft:') || k.startsWith('presensi_draft'))) {
+                keysToRemove.push(k);
+              }
+            }
+            keysToRemove.forEach((k) => localStorage.removeItem(k));
+          } catch (e) {}
+        }
+
+        handleUpdateAppData(resetPresensiData);
         showToast('Seluruh riwayat data presensi berhasil direset!', 'success');
       }
     );
@@ -1106,12 +1124,12 @@ export default function App() {
                   />
                 )}
 
-            {currentView === 'presensi_input' && currentUser.role !== 'kurikulum' && currentUser.role !== 'murid' && (
+            {currentView === 'presensi_input' && currentUser.role !== 'murid' && (
               <InputPresensiView
                 appData={appData}
                 currentUser={currentUser}
                 initialKelasId={selectedInputKelasId}
-                readOnly={currentUser.role === 'guru' || currentUser.role === 'user'}
+                readOnly={false}
                 onSavePresensi={handleSavePresensiFromView}
                 onShowToast={showToast}
                 onConfirmModal={openConfirmModal}
