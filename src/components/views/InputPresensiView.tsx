@@ -1442,7 +1442,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
         badge={contextBadgeText}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {onOpenServerQrModal && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan') && (
+            {onOpenServerQrModal && (['admin', 'kesiswaan', 'piket_kesiswaan', 'piket_guru', 'piket'].includes(String(currentUser.role).toLowerCase())) && (
               <button
                 type="button"
                 onClick={onOpenServerQrModal}

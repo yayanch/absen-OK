@@ -588,6 +588,35 @@ export interface AppData {
   activeUserSessions?: ActiveUserSession[];
   whatsappGateway?: WhatsAppGatewayConfig;
   whatsappLogs?: WhatsAppLog[];
+  ekstrakurikuler?: Ekstrakurikuler[];
+  anggotaEkskul?: AnggotaEkskul[];
+  presensiEkskul?: Record<string, PresensiEkskulItem[]>;
+}
+
+export interface Ekstrakurikuler {
+  id: string;
+  nama: string;
+  pembinaId: string; // ID dari waliKelas/guru
+  pembinaNama?: string;
+  jadwalHari?: string; // e.g. 'Sabtu'
+  jamMulai?: string; // e.g. '14:00'
+  jamSelesai?: string; // e.g. '16:00'
+  tempat?: string; // e.g. 'Lapangan Utama'
+  deskripsi?: string;
+}
+
+export interface AnggotaEkskul {
+  id: string;
+  ekskulId: string;
+  siswaId: string;
+  tanggalBergabung: string; // YYYY-MM-DD
+}
+
+export interface PresensiEkskulItem {
+  siswaId: string;
+  status: 'H' | 'S' | 'I' | 'A' | ''; // Hadir, Sakit, Izin, Alpha
+  catatan?: string;
+  time?: string;
 }
 
 export interface SiswaPresensiSesiGuru {
@@ -730,6 +759,7 @@ export type ViewType =
   | 'presensi_input'
   | 'home_visit'
   | 'catatan_pelanggaran'
+  | 'ekstrakurikuler'
   | 'live_chat'
   | 'rekap_harian'
   | 'rekap_mingguan'

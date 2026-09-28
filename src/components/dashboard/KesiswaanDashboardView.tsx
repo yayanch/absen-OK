@@ -80,13 +80,31 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
     return studentsWithRisk.filter((s) => s.alfa > 0).slice(0, 5);
   }, [studentsWithRisk]);
 
+  const isPiketKesiswaan = currentUser.role === 'piket_kesiswaan';
+  const isPiketGuru = currentUser.role === 'piket_guru';
+  const isAnyPiket = isPiketKesiswaan || isPiketGuru || currentUser.role === 'piket';
+
+  let titleText = "Pusat Perhatian Kesiswaan & BP/BK";
+  let descText = "Monitoring siswa berisiko, ketidakhadiran kumulatif, pelanggaran, dan tindak lanjut home visit.";
+  let badgeText = "Pusat Pembinaan & Kedisiplinan Siswa";
+
+  if (isPiketKesiswaan) {
+    titleText = "Dashboard Kerja Piket Kesiswaan";
+    descText = "Pindai QR kehadiran siswa, kelola draf presensi kelas, dan catat poin pelanggaran kedisiplinan harian.";
+    badgeText = "Sistem Kerja Piket Kesiswaan";
+  } else if (isPiketGuru) {
+    titleText = "Dashboard Kerja Guru Piket Harian";
+    descText = "Kelola kehadiran rombel hari ini, bantu input absen darurat, scan QR siswa, dan catat insiden kedisiplinan.";
+    badgeText = "Petugas Piket Guru Harian";
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         icon={ShieldAlert}
-        title="Pusat Perhatian Kesiswaan & BP/BK"
-        description="Monitoring siswa berisiko, ketidakhadiran kumulatif, pelanggaran, dan tindak lanjut home visit."
-        badge="Pusat Pembinaan & Kedisiplinan Siswa"
+        title={titleText}
+        description={descText}
+        badge={badgeText}
         actions={
           <input
             type="date"
@@ -97,8 +115,8 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
         }
       />
 
-      {/* Quick Actions Kesiswaan */}
-      <RoleQuickActions role="kesiswaan" onNavigateView={onNavigateView} />
+      {/* Quick Actions Kesiswaan / Piket */}
+      <RoleQuickActions role={currentUser.role} onNavigateView={onNavigateView} />
 
       {/* Statistik Utama Kesiswaan */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">

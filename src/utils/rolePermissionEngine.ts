@@ -176,6 +176,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     category: 'kegiatan',
     iconName: 'Home',
   },
+  {
+    id: 'ekstrakurikuler',
+    label: 'Kegiatan Ekstrakurikuler',
+    shortDesc: 'Manajemen klub ekstrakurikuler, keanggotaan siswa, dan presensi kegiatan',
+    category: 'kegiatan',
+    iconName: 'Sparkles',
+  },
 
   // 6. QR Code & Kartu
   {
@@ -407,6 +414,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'hari_libur',
       'catatan_pelanggaran',
       'home_visit',
+      'ekstrakurikuler',
       'absen_qr',
       'cetak_kartu_qr',
       'audit_logs',
@@ -527,6 +535,40 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'jadwal_mengajar',
       'catatan_pelanggaran',
       'live_chat',
+    ],
+  },
+  {
+    roleId: 'piket_kesiswaan',
+    roleName: 'Piket Kesiswaan',
+    description: 'Petugas piket kesiswaan dengan akses scan/tampil QR presensi, pencatatan pelanggaran, dan edit presensi siswa',
+    badgeColor: 'amber',
+    isSystem: true,
+    allowedMenus: [
+      'dashboard',
+      'presensi_input',
+      'catatan_pelanggaran',
+      'ekstrakurikuler',
+      'absen_qr',
+      'rekap_harian',
+      'live_chat',
+      'pengaturan_admin',
+    ],
+  },
+  {
+    roleId: 'piket_guru',
+    roleName: 'Piket Guru',
+    description: 'Guru piket harian dengan akses scan/tampil QR presensi, pencatatan pelanggaran, dan edit presensi siswa',
+    badgeColor: 'orange',
+    isSystem: true,
+    allowedMenus: [
+      'dashboard',
+      'presensi_input',
+      'catatan_pelanggaran',
+      'ekstrakurikuler',
+      'absen_qr',
+      'rekap_harian',
+      'live_chat',
+      'pengaturan_admin',
     ],
   },
 ];

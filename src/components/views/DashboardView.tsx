@@ -379,6 +379,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         );
 
       case 'kesiswaan':
+      case 'piket_kesiswaan':
+      case 'piket_guru':
+      case 'piket':
         return (
           <KesiswaanDashboardView
             appData={appData}

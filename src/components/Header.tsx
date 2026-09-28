@@ -163,6 +163,10 @@ export const Header: React.FC<HeaderProps> = ({
         return { label: 'Staf Jadwal', icon: BookOpen, color: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300' };
       case 'wali':
         return { label: 'Wali Kelas', icon: User, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300' };
+      case 'piket_kesiswaan':
+        return { label: 'Piket Kesiswaan', icon: UserCheck, color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300' };
+      case 'piket_guru':
+        return { label: 'Piket Guru', icon: UserCheck, color: 'bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300' };
       case 'guru':
         return { label: 'Guru Pengajar', icon: User, color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300' };
       case 'murid':

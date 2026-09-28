@@ -148,7 +148,7 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
     visible: true,
     isAccordion: false,
     description: 'Pencatatan poin kedisiplinan dan buku kunjungan rumah',
-    menuIds: ['catatan_pelanggaran', 'home_visit']
+    menuIds: ['catatan_pelanggaran', 'home_visit', 'ekstrakurikuler']
   },
   {
     id: 'qr',

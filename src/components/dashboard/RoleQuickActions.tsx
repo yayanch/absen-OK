@@ -11,6 +11,8 @@ import {
   ChevronRight,
   BookOpen,
   Layers,
+  QrCode,
+  UserCheck,
 } from 'lucide-react';
 import { UserRole, ViewType } from '../../types';
 
@@ -31,6 +33,77 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 }) => {
   if (role === 'admin') {
     return null;
+  }
+
+  if (role === 'piket_kesiswaan' || role === 'piket_guru') {
+    const isKesiswaanPiket = role === 'piket_kesiswaan';
+    return (
+      <div className="space-y-2">
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          Aksi Cepat Petugas Piket {isKesiswaanPiket ? 'Kesiswaan' : 'Harian Guru'}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <button
+            onClick={() => {
+              if (onNavigateToInput) onNavigateToInput();
+              else onNavigateView('presensi_input');
+            }}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0 group-hover:scale-105 transition">
+              <ClipboardCheck className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate">Input &amp; Edit Presensi</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Kelola kehadiran kelas</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              // Navigate to presensi_input to open QR Scanner or trigger the global QR Scan Modal
+              onNavigateView('presensi_input');
+            }}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:scale-105 transition">
+              <QrCode className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate">Scan / Tampil QR</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Presensi kartu pelajar</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onNavigateView('catatan_pelanggaran')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0 group-hover:scale-105 transition">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate">Catat Pelanggaran</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Poin disiplin &amp; tindakan</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onNavigateView('rekap_harian')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-slate-200/80 dark:border-slate-800 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition">
+              <FileText className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate">Rekap Kehadiran Rombel</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Laporan harian terpadu</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (role === 'kesiswaan') {

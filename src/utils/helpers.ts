@@ -2094,6 +2094,154 @@ export function calculateLiveJamStatus(now: Date = new Date()): LiveJamStatus {
   };
 }
 
+export function deduplicateSiswa(appData: AppData): { nextAppData: AppData; removedCount: number } {
+  const students = appData.siswa || [];
+  if (students.length === 0) return { nextAppData: appData, removedCount: 0 };
+
+  const duplicateIdPairs = new Map<string, string>(); // Key: duplicateId -> Value: correctConsolidatedId
+
+  // Group students by NISN
+  const nisnGroups = new Map<string, Siswa[]>();
+  students.forEach((s) => {
+    if (!s.nisn || s.nisn === '-' || s.nisn.trim() === '') {
+      return;
+    }
+    const cleanNisn = s.nisn.trim().toLowerCase();
+    if (!nisnGroups.has(cleanNisn)) {
+      nisnGroups.set(cleanNisn, []);
+    }
+    nisnGroups.get(cleanNisn)!.push(s);
+  });
+
+  const nextSiswaList: Siswa[] = [];
+
+  // Keep students without NISN
+  students.forEach((s) => {
+    if (!s.nisn || s.nisn === '-' || s.nisn.trim() === '') {
+      nextSiswaList.push(s);
+    }
+  });
+
+  let removedCount = 0;
+
+  // Process grouped students with NISN
+  for (const [nisn, group] of nisnGroups.entries()) {
+    if (group.length === 1) {
+      nextSiswaList.push(group[0]);
+    } else {
+      // Find the best/most complete student record in this group
+      let best = group[0];
+      let bestScore = -1;
+
+      group.forEach((s) => {
+        let score = 0;
+        if (s.namaOrangTua && s.namaOrangTua !== s.nama) score += 5;
+        if (s.noWaOrangTua) score += 2;
+        if (s.noWa) score += 2;
+        if (s.alamat) score += 1;
+        if (s.tempatLahir) score += 1;
+        if (s.tanggalLahir) score += 1;
+        if (s.foto) score += 1;
+
+        if (score > bestScore) {
+          best = s;
+          bestScore = score;
+        }
+      });
+
+      // Keep the best one
+      nextSiswaList.push(best);
+
+      // Map other duplicate IDs to the best ID
+      group.forEach((s) => {
+        if (s.id !== best.id) {
+          duplicateIdPairs.set(s.id, best.id);
+          removedCount++;
+        }
+      });
+    }
+  }
+
+  // Rewrite references in appData tables!
+  // 1. Presensi Map
+  const nextPresensi = { ...(appData.presensi || {}) };
+  Object.keys(nextPresensi).forEach((key) => {
+    const list = nextPresensi[key] || [];
+    let updatedList = list.map((item) => {
+      if (duplicateIdPairs.has(item.siswaId)) {
+        return { ...item, siswaId: duplicateIdPairs.get(item.siswaId)! };
+      }
+      return item;
+    });
+
+    // Deduplicate any overlapping attendance records on the same class/date after ID mapping
+    const uniqList: any[] = [];
+    const seenIds = new Set<string>();
+    updatedList.forEach((item) => {
+      if (!seenIds.has(item.siswaId)) {
+        seenIds.add(item.siswaId);
+        uniqList.push(item);
+      } else {
+        const idx = uniqList.findIndex((x) => x.siswaId === item.siswaId);
+        if (idx !== -1 && !uniqList[idx].status && item.status) {
+          uniqList[idx] = item;
+        }
+      }
+    });
+
+    nextPresensi[key] = uniqList;
+  });
+
+  // 2. Pelanggaran (Violations)
+  let nextPelanggaran = [...(appData.pelanggaran || [])];
+  nextPelanggaran = nextPelanggaran.map((p) => {
+    if (duplicateIdPairs.has(p.siswaId)) {
+      return { ...p, siswaId: duplicateIdPairs.get(p.siswaId)! };
+    }
+    return p;
+  });
+
+  // 3. Home Visits
+  let nextHomeVisits = [...(appData.homeVisits || [])];
+  nextHomeVisits = nextHomeVisits.map((h) => {
+    if (duplicateIdPairs.has(h.siswaId)) {
+      return { ...h, siswaId: duplicateIdPairs.get(h.siswaId)! };
+    }
+    return h;
+  });
+
+  // 4. Anggota Ekskul
+  let nextAnggotaEkskul = [...(appData.anggotaEkskul || [])];
+  nextAnggotaEkskul = nextAnggotaEkskul.map((ae) => {
+    if (duplicateIdPairs.has(ae.siswaId)) {
+      return { ...ae, siswaId: duplicateIdPairs.get(ae.siswaId)!, id: `AE_${duplicateIdPairs.get(ae.siswaId)!}_${ae.ekskulId}` };
+    }
+    return ae;
+  });
+
+  // Remove exact duplicates from Anggota Ekskul (same student in same ekskul)
+  const seenEkskulPairs = new Set<string>();
+  nextAnggotaEkskul = nextAnggotaEkskul.filter((ae) => {
+    const pair = `${ae.siswaId}_${ae.ekskulId}`;
+    if (seenEkskulPairs.has(pair)) {
+      return false;
+    }
+    seenEkskulPairs.add(pair);
+    return true;
+  });
+
+  const nextAppData = {
+    ...appData,
+    siswa: nextSiswaList,
+    presensi: nextPresensi,
+    pelanggaran: nextPelanggaran,
+    homeVisits: nextHomeVisits,
+    anggotaEkskul: nextAnggotaEkskul,
+  };
+
+  return { nextAppData, removedCount };
+}
+
 
 
 

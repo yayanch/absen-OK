@@ -60,17 +60,18 @@ export const PelanggaranView: React.FC<PelanggaranViewProps> = ({
   const siswaList = appData.siswa || [];
   const sekolah = appData.sekolah;
 
+  const isPiket = currentUser.role === 'piket_kesiswaan' || currentUser.role === 'piket_guru' || currentUser.role === 'piket';
   const isAdmin = currentUser.role === 'admin';
-  const isKesiswaan = currentUser.role === 'kesiswaan';
+  const isKesiswaan = currentUser.role === 'kesiswaan' || isPiket;
   const isWali = currentUser.role === 'wali';
-  const isGuru = currentUser.role === 'guru' || currentUser.role === 'user';
+  const isGuru = currentUser.role === 'guru' || currentUser.role === 'user' || isPiket;
   const isMurid = currentUser.role === 'murid';
 
-  const isGuruOnly = (currentUser.role === 'guru' || currentUser.role === 'user') && !isAdmin && !isKesiswaan && !isWali;
+  const isGuruOnly = (currentUser.role === 'guru' || currentUser.role === 'user') && !isAdmin && !isKesiswaan && !isWali && !isPiket;
   const currentNama = (currentUser.data as any)?.nama?.trim() || '';
   const currentUsername = String((currentUser.data as any)?.username || (currentUser.data as any)?.nip || '').trim().toLowerCase();
 
-  const canEdit = isAdmin || isKesiswaan || isWali || isGuru;
+  const canEdit = isAdmin || isKesiswaan || isWali || isGuru || isPiket;
 
   // Filter available classes according to user role
   const availableClasses = useMemo(() => {

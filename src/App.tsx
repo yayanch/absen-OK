@@ -38,6 +38,7 @@ const DashboardView = React.lazy(() => import('./components/views/DashboardView'
 const InputPresensiView = React.lazy(() => import('./components/views/InputPresensiView').then(m => ({ default: m.InputPresensiView })));
 const HomeVisitView = React.lazy(() => import('./components/views/HomeVisitView').then(m => ({ default: m.HomeVisitView })));
 const PelanggaranView = React.lazy(() => import('./components/views/PelanggaranView').then(m => ({ default: m.PelanggaranView })));
+const EkstrakurikulerView = React.lazy(() => import('./components/views/EkstrakurikulerView').then(m => ({ default: m.EkstrakurikulerView })));
 const RekapHarianView = React.lazy(() => import('./components/views/RekapHarianView').then(m => ({ default: m.RekapHarianView })));
 const RekapMingguanView = React.lazy(() => import('./components/views/RekapMingguanView').then(m => ({ default: m.RekapMingguanView })));
 const RekapBulananView = React.lazy(() => import('./components/views/RekapBulananView').then(m => ({ default: m.RekapBulananView })));
@@ -1154,6 +1155,18 @@ export default function App() {
                 onUpdateAppData={handleUpdateAppData}
                 onShowToast={showToast}
                 onConfirmModal={openConfirmModal}
+              />
+            )}
+
+            {currentView === 'ekstrakurikuler' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'piket_kesiswaan' || currentUser.role === 'piket_guru' || currentUser.role === 'piket') && (
+              <EkstrakurikulerView
+                appData={appData}
+                currentUser={currentUser}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onConfirmModal={openConfirmModal}
+                onOpenModal={openGeneralModal}
+                onCloseModal={closeGeneralModal}
               />
             )}
 

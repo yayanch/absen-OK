@@ -634,6 +634,30 @@ export const DEFAULT_WALI_KELAS: WaliKelas[] = [
     mataPelajaran: "Basis Data & Pemrograman Web",
     hariMengajar: ["Selasa", "Kamis"],
     batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_PIKET_1",
+    nip: "199001012015011002",
+    nama: "Fahrul Rozi, S.Pd (Piket Kesiswaan)",
+    username: "piket_kesiswaan",
+    password: "123",
+    noHp: "6285123456789",
+    role: "piket_kesiswaan",
+    mataPelajaran: "Pendidikan Jasmani",
+    hariMengajar: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    batasiLoginHariMengajar: false
+  },
+  {
+    id: "WAL_PIKET_2",
+    nip: "199202022016012004",
+    nama: "Diana Lestari, S.Pd (Piket Guru)",
+    username: "piket_guru",
+    password: "123",
+    noHp: "6285987654321",
+    role: "piket_guru",
+    mataPelajaran: "Bahasa Inggris",
+    hariMengajar: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    batasiLoginHariMengajar: false
   }
 ];
 
@@ -857,6 +881,40 @@ export const DEMO_DATASET: AppData = {
     { id: "JUR_3", kode: "DKV", nama: "Desain Komunikasi Visual" },
     { id: "JUR_4", kode: "TSM", nama: "Teknik Sepeda Motor" }
   ],
+  ekstrakurikuler: [
+    { id: "EKS_1", nama: "Pramuka Wajib", pembinaId: "WAL_1", pembinaNama: "Eko Prasetyo, S.Pd", jadwalHari: "Sabtu", jamMulai: "08:00", jamSelesai: "11:00", tempat: "Lapangan Utama", deskripsi: "Kegiatan kepramukaan kepemimpinan dan kemandirian siswa." },
+    { id: "EKS_2", nama: "PMR (Palang Merah Remaja)", pembinaId: "WAL_2", pembinaNama: "Siti Rahmawati, M.Pd", jadwalHari: "Jumat", jamMulai: "14:00", jamSelesai: "16:00", tempat: "Ruang UKS", deskripsi: "Pelatihan pertolongan pertama, kesehatan, dan aksi sosial." },
+    { id: "EKS_3", nama: "Paskibra Sekolah", pembinaId: "WAL_3", pembinaNama: "Agus Budiman, S.T", jadwalHari: "Sabtu", jamMulai: "13:00", jamSelesai: "16:00", tempat: "Lapangan Upacara", deskripsi: "Latihan baris-berbaris, formasi, kedisiplinan, dan upacara kenegaraan." },
+    { id: "EKS_4", nama: "Klub Futsal", pembinaId: "WAL_4", pembinaNama: "Dewi Lestari, S.Pd", jadwalHari: "Kamis", jamMulai: "15:30", jamSelesai: "17:30", tempat: "Lapangan Olahraga", deskripsi: "Latihan teknik futsal, taktik bermain, dan turnamen antarkelas." }
+  ],
+  anggotaEkskul: [
+    { id: "AE_1", ekskulId: "EKS_1", siswaId: "SIS_1", tanggalBergabung: "2026-07-15" },
+    { id: "AE_2", ekskulId: "EKS_1", siswaId: "SIS_2", tanggalBergabung: "2026-07-15" },
+    { id: "AE_3", ekskulId: "EKS_1", siswaId: "SIS_3", tanggalBergabung: "2026-07-15" },
+    { id: "AE_4", ekskulId: "EKS_2", siswaId: "SIS_4", tanggalBergabung: "2026-07-18" },
+    { id: "AE_5", ekskulId: "EKS_2", siswaId: "SIS_5", tanggalBergabung: "2026-07-18" },
+    { id: "AE_6", ekskulId: "EKS_3", siswaId: "SIS_1", tanggalBergabung: "2026-07-20" },
+    { id: "AE_7", ekskulId: "EKS_3", siswaId: "SIS_4", tanggalBergabung: "2026-07-20" },
+    { id: "AE_8", ekskulId: "EKS_4", siswaId: "SIS_2", tanggalBergabung: "2026-07-22" },
+    { id: "AE_9", ekskulId: "EKS_4", siswaId: "SIS_3", tanggalBergabung: "2026-07-22" },
+    { id: "AE_10", ekskulId: "EKS_4", siswaId: "SIS_5", tanggalBergabung: "2026-07-22" }
+  ],
+  presensiEkskul: {
+    "2026-09-12_EKS_1": [
+      { siswaId: "SIS_1", status: "H", catatan: "Hadir tepat waktu" },
+      { siswaId: "SIS_2", status: "H", catatan: "" },
+      { siswaId: "SIS_3", status: "I", catatan: "Izin acara keluarga" }
+    ],
+    "2026-09-19_EKS_1": [
+      { siswaId: "SIS_1", status: "H", catatan: "" },
+      { siswaId: "SIS_2", status: "S", catatan: "Sakit demam" },
+      { siswaId: "SIS_3", status: "H", catatan: "" }
+    ],
+    "2026-09-11_EKS_2": [
+      { siswaId: "SIS_4", status: "H", catatan: "" },
+      { siswaId: "SIS_5", status: "H", catatan: "" }
+    ]
+  },
   waliKelas: DEFAULT_WALI_KELAS,
   kelas: DEFAULT_KELAS,
   siswa: DEFAULT_SISWA,

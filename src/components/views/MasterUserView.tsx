@@ -125,6 +125,10 @@ export const getRoleLabel = (role?: string, customRoles?: CustomRole[]) => {
       return 'Guru';
     case 'wali':
       return 'Wali Kelas';
+    case 'piket_kesiswaan':
+      return 'Piket Kesiswaan';
+    case 'piket_guru':
+      return 'Piket Guru';
     case 'murid':
     case 'siswa':
       return 'Murid / Siswa';
@@ -142,6 +146,8 @@ export const getAvailableRoleOptionsList = (appData: AppData): AvailableRoleOpti
     { id: 'staf_jadwal', label: 'Staf Pengelola Jadwal', badgeColor: 'cyan', description: 'Pengaturan teknis alokasi jadwal pelajaran dan plotting jam', isSystem: true },
     { id: 'hubin', label: 'WKS Hubin / Humas', badgeColor: 'teal', description: 'Kemitraan industri, data kejuruan & penelusuran lulusan', isSystem: true },
     { id: 'wali', label: 'Wali Kelas', badgeColor: 'emerald', description: 'Pembina kelas binaan, presensi harian & rekapitulasi kelas', isSystem: true },
+    { id: 'piket_kesiswaan', label: 'Piket Kesiswaan', badgeColor: 'amber', description: 'Scan QR presensi, pencatatan pelanggaran & edit presensi siswa', isSystem: true },
+    { id: 'piket_guru', label: 'Piket Guru', badgeColor: 'orange', description: 'Scan QR presensi, pencatatan pelanggaran & edit presensi siswa', isSystem: true },
     { id: 'guru', label: 'Guru / Tenaga Pendidik', badgeColor: 'amber', description: 'Melihat jadwal ajar pribadi, kelas ajar & pencatatan KBM', isSystem: true },
     { id: 'murid', label: 'Siswa / Murid', badgeColor: 'rose', description: 'Portal mandiri siswa, scan kehadiran QR & kartu pelajar digital', isSystem: true },
   ];
