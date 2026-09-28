@@ -319,9 +319,51 @@ export default function App() {
               const mergedJadwal = (Array.isArray(data.appData.jadwalMengajar) && data.appData.jadwalMengajar.length > 0)
                 ? data.appData.jadwalMengajar
                 : (prev.jadwalMengajar || []);
+              const mergedMapel = (Array.isArray(data.appData.mataPelajaran) && data.appData.mataPelajaran.length > 0)
+                ? data.appData.mataPelajaran
+                : (prev.mataPelajaran || []);
+              const mergedGmk = (Array.isArray(data.appData.guruMapelKelas) && data.appData.guruMapelKelas.length > 0)
+                ? data.appData.guruMapelKelas
+                : (prev.guruMapelKelas || []);
+              const mergedPmg = (Array.isArray(data.appData.presensiMengajarGuru) && data.appData.presensiMengajarGuru.length > 0)
+                ? data.appData.presensiMengajarGuru
+                : (prev.presensiMengajarGuru || []);
               const mergedShiftConfig = (data.appData.shiftConfig && Array.isArray(data.appData.shiftConfig.periods) && data.appData.shiftConfig.periods.length > 0)
                 ? data.appData.shiftConfig
                 : (prev.shiftConfig || data.appData.shiftConfig);
+              const mergedHariLibur = (Array.isArray(data.appData.hariLibur) && data.appData.hariLibur.length > 0)
+                ? data.appData.hariLibur
+                : (prev.hariLibur || []);
+              const mergedPengumuman = (Array.isArray(data.appData.pengumuman) && data.appData.pengumuman.length > 0)
+                ? data.appData.pengumuman
+                : (prev.pengumuman || []);
+              const mergedEkskul = (Array.isArray(data.appData.ekstrakurikuler) && data.appData.ekstrakurikuler.length > 0)
+                ? data.appData.ekstrakurikuler
+                : (prev.ekstrakurikuler || []);
+              const mergedAnggotaEkskul = (Array.isArray(data.appData.anggotaEkskul) && data.appData.anggotaEkskul.length > 0)
+                ? data.appData.anggotaEkskul
+                : (prev.anggotaEkskul || []);
+              const mergedPresensiEkskul = (data.appData.presensiEkskul && Object.keys(data.appData.presensiEkskul).length > 0)
+                ? data.appData.presensiEkskul
+                : (prev.presensiEkskul || {});
+              const mergedAuditLogs = (Array.isArray(data.appData.auditLogs) && data.appData.auditLogs.length > 0)
+                ? data.appData.auditLogs
+                : (prev.auditLogs || []);
+              const mergedWhatsappLogs = (Array.isArray(data.appData.whatsappLogs) && data.appData.whatsappLogs.length > 0)
+                ? data.appData.whatsappLogs
+                : (prev.whatsappLogs || []);
+              const mergedRolePermissions = (Array.isArray(data.appData.rolePermissions) && data.appData.rolePermissions.length > 0)
+                ? data.appData.rolePermissions
+                : (prev.rolePermissions || []);
+              const mergedWhatsappGateway = (data.appData.whatsappGateway && Object.keys(data.appData.whatsappGateway).length > 0)
+                ? data.appData.whatsappGateway
+                : (prev.whatsappGateway || data.appData.whatsappGateway);
+              const mergedSecurityIncidents = (Array.isArray(data.appData.securityIncidents) && data.appData.securityIncidents.length > 0)
+                ? data.appData.securityIncidents
+                : (prev.securityIncidents || []);
+              const mergedBlockedIps = (Array.isArray(data.appData.blockedIps) && data.appData.blockedIps.length > 0)
+                ? data.appData.blockedIps
+                : (prev.blockedIps || []);
 
               const targetAppData = {
                 ...data.appData,
@@ -331,7 +373,21 @@ export default function App() {
                 waliKelas: mergedWaliKelas,
                 jurusan: mergedJurusan,
                 jadwalMengajar: mergedJadwal,
+                mataPelajaran: mergedMapel,
+                guruMapelKelas: mergedGmk,
+                presensiMengajarGuru: mergedPmg,
                 shiftConfig: mergedShiftConfig,
+                hariLibur: mergedHariLibur,
+                pengumuman: mergedPengumuman,
+                ekstrakurikuler: mergedEkskul,
+                anggotaEkskul: mergedAnggotaEkskul,
+                presensiEkskul: mergedPresensiEkskul,
+                auditLogs: mergedAuditLogs,
+                whatsappLogs: mergedWhatsappLogs,
+                rolePermissions: mergedRolePermissions,
+                whatsappGateway: mergedWhatsappGateway,
+                securityIncidents: mergedSecurityIncidents,
+                blockedIps: mergedBlockedIps,
                 chatMessages: mergedMessages,
                 pelanggaran: mergedPelanggaran,
                 homeVisits: mergedHomeVisits,
@@ -387,13 +443,47 @@ export default function App() {
           const customJadwal = (Array.isArray(customEvent.detail.jadwalMengajar) && customEvent.detail.jadwalMengajar.length > 0)
             ? customEvent.detail.jadwalMengajar
             : prev.jadwalMengajar;
+          const customMapel = (Array.isArray(customEvent.detail.mataPelajaran) && customEvent.detail.mataPelajaran.length > 0)
+            ? customEvent.detail.mataPelajaran
+            : prev.mataPelajaran;
+          const customGmk = (Array.isArray(customEvent.detail.guruMapelKelas) && customEvent.detail.guruMapelKelas.length > 0)
+            ? customEvent.detail.guruMapelKelas
+            : prev.guruMapelKelas;
+          const customPmg = (Array.isArray(customEvent.detail.presensiMengajarGuru) && customEvent.detail.presensiMengajarGuru.length > 0)
+            ? customEvent.detail.presensiMengajarGuru
+            : prev.presensiMengajarGuru;
           const customShiftConfig = customEvent.detail.shiftConfig || prev.shiftConfig;
+          const customHariLibur = customEvent.detail.hariLibur || prev.hariLibur;
+          const customPengumuman = customEvent.detail.pengumuman || prev.pengumuman;
+          const customEkskul = customEvent.detail.ekstrakurikuler || prev.ekstrakurikuler;
+          const customAnggotaEkskul = customEvent.detail.anggotaEkskul || prev.anggotaEkskul;
+          const customPresensiEkskul = customEvent.detail.presensiEkskul || prev.presensiEkskul;
+          const customAuditLogs = customEvent.detail.auditLogs || prev.auditLogs;
+          const customWhatsappLogs = customEvent.detail.whatsappLogs || prev.whatsappLogs;
+          const customRolePermissions = customEvent.detail.rolePermissions || prev.rolePermissions;
+          const customWhatsappGateway = customEvent.detail.whatsappGateway || prev.whatsappGateway;
+          const customSecurityIncidents = customEvent.detail.securityIncidents || prev.securityIncidents;
+          const customBlockedIps = customEvent.detail.blockedIps || prev.blockedIps;
           return {
             ...customEvent.detail,
             siswa: mergedSiswa,
             presensi: mergedPresensi,
             jadwalMengajar: customJadwal,
+            mataPelajaran: customMapel,
+            guruMapelKelas: customGmk,
+            presensiMengajarGuru: customPmg,
             shiftConfig: customShiftConfig,
+            hariLibur: customHariLibur,
+            pengumuman: customPengumuman,
+            ekstrakurikuler: customEkskul,
+            anggotaEkskul: customAnggotaEkskul,
+            presensiEkskul: customPresensiEkskul,
+            auditLogs: customAuditLogs,
+            whatsappLogs: customWhatsappLogs,
+            rolePermissions: customRolePermissions,
+            whatsappGateway: customWhatsappGateway,
+            securityIncidents: customSecurityIncidents,
+            blockedIps: customBlockedIps,
             chatMessages: mergedMessages,
             deletedSiswaIds: allDeletedSiswa,
           };

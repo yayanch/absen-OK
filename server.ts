@@ -768,8 +768,53 @@ function saveAppDataCache(data: any) {
     if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0 && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
       data.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar;
     }
+    if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
+      data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
+    }
+    if (Array.isArray(inMemoryAppDataCache.guruMapelKelas) && inMemoryAppDataCache.guruMapelKelas.length > 0 && (!Array.isArray(data.guruMapelKelas) || data.guruMapelKelas.length === 0)) {
+      data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas;
+    }
+    if (Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0 && (!Array.isArray(data.presensiMengajarGuru) || data.presensiMengajarGuru.length === 0)) {
+      data.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
+    }
     if (inMemoryAppDataCache.shiftConfig && inMemoryAppDataCache.shiftConfig.periods?.length > 0 && (!data.shiftConfig || !Array.isArray(data.shiftConfig.periods) || data.shiftConfig.periods.length === 0)) {
       data.shiftConfig = inMemoryAppDataCache.shiftConfig;
+    }
+    if (Array.isArray(inMemoryAppDataCache.hariLibur) && inMemoryAppDataCache.hariLibur.length > 0 && (!Array.isArray(data.hariLibur) || data.hariLibur.length === 0)) {
+      data.hariLibur = inMemoryAppDataCache.hariLibur;
+    }
+    if (Array.isArray(inMemoryAppDataCache.pengumuman) && inMemoryAppDataCache.pengumuman.length > 0 && (!Array.isArray(data.pengumuman) || data.pengumuman.length === 0)) {
+      data.pengumuman = inMemoryAppDataCache.pengumuman;
+    }
+    if (Array.isArray(inMemoryAppDataCache.ekstrakurikuler) && inMemoryAppDataCache.ekstrakurikuler.length > 0 && (!Array.isArray(data.ekstrakurikuler) || data.ekstrakurikuler.length === 0)) {
+      data.ekstrakurikuler = inMemoryAppDataCache.ekstrakurikuler;
+    }
+    if (Array.isArray(inMemoryAppDataCache.anggotaEkskul) && inMemoryAppDataCache.anggotaEkskul.length > 0 && (!Array.isArray(data.anggotaEkskul) || data.anggotaEkskul.length === 0)) {
+      data.anggotaEkskul = inMemoryAppDataCache.anggotaEkskul;
+    }
+    if (Array.isArray(inMemoryAppDataCache.chatMessages) && inMemoryAppDataCache.chatMessages.length > 0 && (!Array.isArray(data.chatMessages) || data.chatMessages.length === 0)) {
+      data.chatMessages = inMemoryAppDataCache.chatMessages;
+    }
+    if (inMemoryAppDataCache.presensiEkskul && Object.keys(inMemoryAppDataCache.presensiEkskul).length > 0 && (!data.presensiEkskul || Object.keys(data.presensiEkskul).length === 0)) {
+      data.presensiEkskul = inMemoryAppDataCache.presensiEkskul;
+    }
+    if (Array.isArray(inMemoryAppDataCache.auditLogs) && inMemoryAppDataCache.auditLogs.length > 0 && (!Array.isArray(data.auditLogs) || data.auditLogs.length === 0)) {
+      data.auditLogs = inMemoryAppDataCache.auditLogs;
+    }
+    if (Array.isArray(inMemoryAppDataCache.whatsappLogs) && inMemoryAppDataCache.whatsappLogs.length > 0 && (!Array.isArray(data.whatsappLogs) || data.whatsappLogs.length === 0)) {
+      data.whatsappLogs = inMemoryAppDataCache.whatsappLogs;
+    }
+    if (Array.isArray(inMemoryAppDataCache.rolePermissions) && inMemoryAppDataCache.rolePermissions.length > 0 && (!Array.isArray(data.rolePermissions) || data.rolePermissions.length === 0)) {
+      data.rolePermissions = inMemoryAppDataCache.rolePermissions;
+    }
+    if (inMemoryAppDataCache.whatsappGateway && Object.keys(inMemoryAppDataCache.whatsappGateway).length > 0 && (!data.whatsappGateway || Object.keys(data.whatsappGateway).length === 0)) {
+      data.whatsappGateway = inMemoryAppDataCache.whatsappGateway;
+    }
+    if (Array.isArray(inMemoryAppDataCache.securityIncidents) && inMemoryAppDataCache.securityIncidents.length > 0 && (!Array.isArray(data.securityIncidents) || data.securityIncidents.length === 0)) {
+      data.securityIncidents = inMemoryAppDataCache.securityIncidents;
+    }
+    if (Array.isArray(inMemoryAppDataCache.blockedIps) && inMemoryAppDataCache.blockedIps.length > 0 && (!Array.isArray(data.blockedIps) || data.blockedIps.length === 0)) {
+      data.blockedIps = inMemoryAppDataCache.blockedIps;
     }
   }
 
@@ -1552,6 +1597,518 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
     }
 
+    // Save mata_pelajaran
+    if (Array.isArray(appData.mataPelajaran) && appData.mataPelajaran.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.mataPelajaran.length; i += CHUNK_SIZE) {
+        const chunk = appData.mataPelajaran.slice(i, i + CHUNK_SIZE);
+        const batchVals: any[] = [];
+        const phs: string[] = [];
+        for (const m of chunk) {
+          phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchVals.push(
+            m.id,
+            m.kode || '',
+            m.nama || '',
+            m.kategori || 'Umum',
+            m.tingkat || 'Semua Tingkat',
+            m.jurusanId || '',
+            m.jurusanNama || '',
+            Number(m.alokasiJp) || 0,
+            Number(m.kkm) || 75,
+            m.deskripsi || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO mata_pelajaran (id, kode, nama, kategori, tingkat, jurusan_id, jurusan_nama, alokasi_jp, kkm, deskripsi)
+           VALUES ${phs.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             kode=VALUES(kode), nama=VALUES(nama), kategori=VALUES(kategori), tingkat=VALUES(tingkat),
+             jurusan_id=VALUES(jurusan_id), jurusan_nama=VALUES(jurusan_nama), alokasi_jp=VALUES(alokasi_jp),
+             kkm=VALUES(kkm), deskripsi=VALUES(deskripsi);`,
+          batchVals
+        ).catch(() => {});
+      }
+    }
+
+    // Save guru_mapel_kelas
+    if (Array.isArray(appData.guruMapelKelas) && appData.guruMapelKelas.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.guruMapelKelas.length; i += CHUNK_SIZE) {
+        const chunk = appData.guruMapelKelas.slice(i, i + CHUNK_SIZE);
+        const batchVals: any[] = [];
+        const phs: string[] = [];
+        for (const g of chunk) {
+          phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchVals.push(
+            g.id,
+            g.guruId || '',
+            g.guruUsername || '',
+            g.guruNama || '',
+            g.guruNip || '',
+            g.kodeMapel || '',
+            g.namaMapel || '',
+            g.kategori || '',
+            g.tingkat || '',
+            Number(g.alokasiJp) || 0,
+            Number(g.kkm) || 75,
+            g.deskripsi || '',
+            JSON.stringify(g.kelasIds || []),
+            g.catatan || '',
+            g.createdAt || new Date().toISOString()
+          );
+        }
+        await db.execute(
+          `INSERT INTO guru_mapel_kelas (id, guru_id, guru_username, guru_nama, guru_nip, kode_mapel, nama_mapel, kategori, tingkat, alokasi_jp, kkm, deskripsi, kelas_ids, catatan, created_at)
+           VALUES ${phs.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             guru_id=VALUES(guru_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama), guru_nip=VALUES(guru_nip),
+             kode_mapel=VALUES(kode_mapel), nama_mapel=VALUES(nama_mapel), kategori=VALUES(kategori), tingkat=VALUES(tingkat),
+             alokasi_jp=VALUES(alokasi_jp), kkm=VALUES(kkm), deskripsi=VALUES(deskripsi), kelas_ids=VALUES(kelas_ids),
+             catatan=VALUES(catatan), created_at=VALUES(created_at);`,
+          batchVals
+        ).catch(() => {});
+      }
+    }
+
+    // Save presensi_mengajar_guru
+    if (Array.isArray(appData.presensiMengajarGuru) && appData.presensiMengajarGuru.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.presensiMengajarGuru.length; i += CHUNK_SIZE) {
+        const chunk = appData.presensiMengajarGuru.slice(i, i + CHUNK_SIZE);
+        const batchVals: any[] = [];
+        const phs: string[] = [];
+        for (const p of chunk) {
+          phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+          batchVals.push(
+            p.id,
+            p.jadwalId || '',
+            p.guruUsername || '',
+            p.guruNama || '',
+            p.tanggal || '',
+            p.hari || '',
+            p.kelasId || '',
+            p.kelasNama || '',
+            p.mataPelajaran || '',
+            p.materiAjar || '',
+            p.jamPelajaran || '',
+            JSON.stringify(p.presensiSiswa || []),
+            p.catatanGuru || '',
+            p.createdAt || new Date().toISOString()
+          );
+        }
+        await db.execute(
+          `INSERT INTO presensi_mengajar_guru (id, jadwal_id, guru_username, guru_nama, tanggal, hari, kelas_id, kelas_nama, mata_pelajaran, materi_ajar, jam_pelajaran, presensi_siswa, catatan_guru, created_at)
+           VALUES ${phs.join(', ')}
+           ON DUPLICATE KEY UPDATE
+             jadwal_id=VALUES(jadwal_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama),
+             tanggal=VALUES(tanggal), hari=VALUES(hari), kelas_id=VALUES(kelas_id), kelas_nama=VALUES(kelas_nama),
+             mata_pelajaran=VALUES(mata_pelajaran), materi_ajar=VALUES(materi_ajar), jam_pelajaran=VALUES(jam_pelajaran),
+             presensi_siswa=VALUES(presensi_siswa), catatan_guru=VALUES(catatan_guru), created_at=VALUES(created_at);`,
+          batchVals
+        ).catch(() => {});
+      }
+    }
+
+    // Save shiftConfig
+    if (appData.shiftConfig) {
+      const sc = appData.shiftConfig;
+      await db.execute(
+        `INSERT INTO shift_config_settings (id, pagi_time, siang_time, is_jam_masuk_pagi_active, pagi_jam_masuk_mulai, pagi_jam_masuk_selesai, pagi_jam_pulang, is_jam_masuk_siang_active, siang_jam_masuk_mulai, siang_jam_masuk_selesai, siang_jam_pulang)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           pagi_time=VALUES(pagi_time), siang_time=VALUES(siang_time),
+           is_jam_masuk_pagi_active=VALUES(is_jam_masuk_pagi_active), pagi_jam_masuk_mulai=VALUES(pagi_jam_masuk_mulai),
+           pagi_jam_masuk_selesai=VALUES(pagi_jam_masuk_selesai), pagi_jam_pulang=VALUES(pagi_jam_pulang),
+           is_jam_masuk_siang_active=VALUES(is_jam_masuk_siang_active), siang_jam_masuk_mulai=VALUES(siang_jam_masuk_mulai),
+           siang_jam_masuk_selesai=VALUES(siang_jam_masuk_selesai), siang_jam_pulang=VALUES(siang_jam_pulang);`,
+        [
+          sc.pagiTime || '06.30 - 12.00',
+          sc.siangTime || '13.00 - 16.50',
+          sc.isJamMasukPagiActive !== false ? 1 : 0,
+          sc.pagiJamMasukMulai || '06:30',
+          sc.pagiJamMasukSelesai || '06:45',
+          sc.pagiJamPulang || '12:00',
+          sc.isJamMasukSiangActive !== false ? 1 : 0,
+          sc.siangJamMasukMulai || '12:45',
+          sc.siangJamMasukSelesai || '13:00',
+          sc.siangJamPulang || '16:50'
+        ]
+      ).catch(() => {});
+
+      if (Array.isArray(sc.periods) && sc.periods.length > 0) {
+        const ph = sc.periods.map(() => '(?, ?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const p of sc.periods) {
+          vals.push(p.id, p.startDate, p.endDate, p.kelompok1Type, p.kelompok2Type);
+        }
+        await db.execute(
+          `INSERT INTO shift_config_periods (id, start_date, end_date, kelompok1_type, kelompok2_type)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             start_date=VALUES(start_date), end_date=VALUES(end_date),
+             kelompok1_type=VALUES(kelompok1_type), kelompok2_type=VALUES(kelompok2_type);`,
+          vals
+        ).catch(() => {});
+      }
+    }
+
+    // Save hariLibur
+    if (Array.isArray(appData.hariLibur) && appData.hariLibur.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.hariLibur.length; i += CHUNK_SIZE) {
+        const chunk = appData.hariLibur.slice(i, i + CHUNK_SIZE);
+        const ph = chunk.map(() => '(?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const h of chunk) {
+          vals.push(h.id, h.tanggal, h.keterangan || '', h.jenis || 'nasional');
+        }
+        await db.execute(
+          `INSERT INTO hari_libur (id, tanggal, keterangan, jenis)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             tanggal=VALUES(tanggal), keterangan=VALUES(keterangan), jenis=VALUES(jenis);`,
+          vals
+        ).catch(() => {});
+      }
+    }
+
+    // Save pengumuman
+    if (Array.isArray(appData.pengumuman) && appData.pengumuman.length > 0) {
+      const ph = appData.pengumuman.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+      const vals: any[] = [];
+      for (const p of appData.pengumuman) {
+        vals.push(
+          p.id,
+          p.judul || '',
+          p.isi || '',
+          p.tanggal || '',
+          p.kategori || 'info',
+          p.target || 'semua',
+          p.aktif !== false ? 1 : 0,
+          p.pinToRunningText ? 1 : 0,
+          p.pinToLoginBanner ? 1 : 0,
+          p.pinToDashboard ? 1 : 0,
+          p.penulis || '',
+          p.linkUrl || '',
+          p.linkText || '',
+          p.createdAt || new Date().toISOString()
+        );
+      }
+      await db.execute(
+        `INSERT INTO pengumuman (id, judul, isi, tanggal, kategori, target, aktif, pin_to_running_text, pin_to_login_banner, pin_to_dashboard, penulis, link_url, link_text, created_at)
+         VALUES ${ph}
+         ON DUPLICATE KEY UPDATE
+           judul=VALUES(judul), isi=VALUES(isi), tanggal=VALUES(tanggal), kategori=VALUES(kategori), target=VALUES(target),
+           aktif=VALUES(aktif), pin_to_running_text=VALUES(pin_to_running_text), pin_to_login_banner=VALUES(pin_to_login_banner),
+           pin_to_dashboard=VALUES(pin_to_dashboard), penulis=VALUES(penulis), link_url=VALUES(link_url), link_text=VALUES(link_text), created_at=VALUES(created_at);`,
+        vals
+      ).catch(() => {});
+    }
+
+    // Save ekstrakurikuler & anggotaEkskul
+    if (Array.isArray(appData.ekstrakurikuler) && appData.ekstrakurikuler.length > 0) {
+      const ph = appData.ekstrakurikuler.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+      const vals: any[] = [];
+      for (const e of appData.ekstrakurikuler) {
+        vals.push(e.id, e.nama, e.pembinaId || '', e.pembinaNama || '', e.jadwalHari || '', e.jamMulai || '', e.jamSelesai || '', e.tempat || '', e.deskripsi || '');
+      }
+      await db.execute(
+        `INSERT INTO ekstrakurikuler (id, nama, pembina_id, pembina_nama, jadwal_hari, jam_mulai, jam_selesai, tempat, deskripsi)
+         VALUES ${ph}
+         ON DUPLICATE KEY UPDATE
+           nama=VALUES(nama), pembina_id=VALUES(pembina_id), pembina_nama=VALUES(pembina_nama), jadwal_hari=VALUES(jadwal_hari),
+           jam_mulai=VALUES(jam_mulai), jam_selesai=VALUES(jam_selesai), tempat=VALUES(tempat), deskripsi=VALUES(deskripsi);`,
+        vals
+      ).catch(() => {});
+    }
+
+    if (Array.isArray(appData.anggotaEkskul) && appData.anggotaEkskul.length > 0) {
+      const ph = appData.anggotaEkskul.map(() => '(?, ?, ?, ?)').join(', ');
+      const vals: any[] = [];
+      for (const a of appData.anggotaEkskul) {
+        vals.push(a.id, a.ekskulId, a.siswaId, a.tanggalBergabung || '');
+      }
+      await db.execute(
+        `INSERT INTO anggota_ekskul (id, ekskul_id, siswa_id, tanggal_bergabung)
+         VALUES ${ph}
+         ON DUPLICATE KEY UPDATE
+           ekskul_id=VALUES(ekskul_id), siswa_id=VALUES(siswa_id), tanggal_bergabung=VALUES(tanggal_bergabung);`,
+        vals
+      ).catch(() => {});
+    }
+
+    // Save chat_messages
+    if (Array.isArray(appData.chatMessages) && appData.chatMessages.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.chatMessages.length; i += CHUNK_SIZE) {
+        const chunk = appData.chatMessages.slice(i, i + CHUNK_SIZE);
+        const ph = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const c of chunk) {
+          vals.push(
+            c.id,
+            c.senderRole || '',
+            c.senderUsername || '',
+            c.senderNama || '',
+            c.senderFoto || '',
+            c.recipientUsername || 'all',
+            c.text || '',
+            c.image || '',
+            c.timestamp || new Date().toISOString(),
+            c.isRead ? 1 : 0,
+            c.status || 'sent',
+            c.isBot ? 1 : 0,
+            JSON.stringify(c.deletedFor || []),
+            c.isDeletedForEveryone ? 1 : 0
+          );
+        }
+        await db.execute(
+          `INSERT INTO chat_messages (id, sender_role, sender_username, sender_nama, sender_foto, recipient_username, text, image, timestamp, is_read, status, is_bot, deleted_for, is_deleted_for_everyone)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             sender_role=VALUES(sender_role), sender_username=VALUES(sender_username), sender_nama=VALUES(sender_nama),
+             sender_foto=VALUES(sender_foto), recipient_username=VALUES(recipient_username), text=VALUES(text),
+             image=VALUES(image), timestamp=VALUES(timestamp), is_read=VALUES(is_read), status=VALUES(status),
+             is_bot=VALUES(is_bot), deleted_for=VALUES(deleted_for), is_deleted_for_everyone=VALUES(is_deleted_for_everyone);`,
+          vals
+        ).catch(() => {});
+      }
+    }
+
+    // Save presensi_ekskul
+    if (appData.presensiEkskul && typeof appData.presensiEkskul === 'object') {
+      const peRows: any[] = [];
+      for (const sessionKey of Object.keys(appData.presensiEkskul)) {
+        const items = appData.presensiEkskul[sessionKey];
+        const parts = sessionKey.split('_');
+        const tanggal = parts[0] || '';
+        const ekskulId = parts.slice(1).join('_') || '';
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            peRows.push({
+              id: `${sessionKey}_${item.siswaId}`,
+              sessionKey,
+              ekskulId,
+              tanggal,
+              siswaId: item.siswaId,
+              status: item.status || 'H',
+              catatan: item.catatan || '',
+              time: item.time || ''
+            });
+          }
+        }
+      }
+      if (peRows.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < peRows.length; i += CHUNK_SIZE) {
+          const chunk = peRows.slice(i, i + CHUNK_SIZE);
+          const ph = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+          const vals: any[] = [];
+          for (const r of chunk) {
+            vals.push(r.id, r.sessionKey, r.ekskulId, r.tanggal, r.siswaId, r.status, r.catatan, r.time);
+          }
+          await db.execute(
+            `INSERT INTO presensi_ekskul (id, session_key, ekskul_id, tanggal, siswa_id, status, catatan, time)
+             VALUES ${ph}
+             ON DUPLICATE KEY UPDATE
+               session_key=VALUES(session_key), ekskul_id=VALUES(ekskul_id), tanggal=VALUES(tanggal),
+               siswa_id=VALUES(siswa_id), status=VALUES(status), catatan=VALUES(catatan), time=VALUES(time);`,
+            vals
+          ).catch(() => {});
+        }
+      }
+    }
+
+    // Save audit_logs
+    if (Array.isArray(appData.auditLogs) && appData.auditLogs.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.auditLogs.length; i += CHUNK_SIZE) {
+        const chunk = appData.auditLogs.slice(i, i + CHUNK_SIZE);
+        const ph = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const a of chunk) {
+          vals.push(
+            a.id,
+            a.timestamp || '',
+            a.role || '',
+            a.username || '',
+            a.nama || '',
+            a.aksi || '',
+            a.detail || '',
+            a.ipAddress || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO audit_logs (id, timestamp, role, username, nama, aksi, detail, ip_address)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             timestamp=VALUES(timestamp), role=VALUES(role), username=VALUES(username), nama=VALUES(nama),
+             aksi=VALUES(aksi), detail=VALUES(detail), ip_address=VALUES(ip_address);`,
+          vals
+        ).catch(() => {});
+      }
+    }
+
+    // Save whatsapp_logs
+    if (Array.isArray(appData.whatsappLogs) && appData.whatsappLogs.length > 0) {
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < appData.whatsappLogs.length; i += CHUNK_SIZE) {
+        const chunk = appData.whatsappLogs.slice(i, i + CHUNK_SIZE);
+        const ph = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const w of chunk) {
+          vals.push(
+            w.id,
+            w.timestamp || '',
+            w.recipientPhone || '',
+            w.recipientName || '',
+            w.messageType || '',
+            w.messageText || '',
+            w.status || '',
+            w.provider || '',
+            w.responseMessage || ''
+          );
+        }
+        await db.execute(
+          `INSERT INTO whatsapp_logs (id, timestamp, recipient_phone, recipient_name, message_type, message_text, status, provider, response_message)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             timestamp=VALUES(timestamp), recipient_phone=VALUES(recipient_phone), recipient_name=VALUES(recipient_name),
+             message_type=VALUES(message_type), message_text=VALUES(message_text), status=VALUES(status),
+             provider=VALUES(provider), response_message=VALUES(response_message);`,
+          vals
+        ).catch(() => {});
+      }
+    }
+
+    // Save role_permissions
+    if (Array.isArray(appData.rolePermissions) && appData.rolePermissions.length > 0) {
+      const ph = appData.rolePermissions.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+      const vals: any[] = [];
+      for (const r of appData.rolePermissions) {
+        vals.push(
+          r.roleId,
+          r.roleName || '',
+          r.description || '',
+          r.badgeColor || 'blue',
+          r.isSystem !== false ? 1 : 0,
+          JSON.stringify(r.allowedMenus || [])
+        );
+      }
+      await db.execute(
+        `INSERT INTO role_permissions (role_id, role_name, description, badge_color, is_system, allowed_menus)
+         VALUES ${ph}
+         ON DUPLICATE KEY UPDATE
+           role_name=VALUES(role_name), description=VALUES(description), badge_color=VALUES(badge_color),
+           is_system=VALUES(is_system), allowed_menus=VALUES(allowed_menus);`,
+        vals
+      ).catch(() => {});
+    }
+
+    // Save whatsapp_gateway_config
+    if (appData.whatsappGateway && typeof appData.whatsappGateway === 'object') {
+      const wg = appData.whatsappGateway;
+      await db.execute(
+        `INSERT INTO whatsapp_gateway_config (
+           id, enabled, provider, api_key, sender_number, domain_url, webhook_url,
+           send_otp_enabled, send_presensi_masuk_enabled, send_presensi_pulang_enabled,
+           send_presensi_terlambat_enabled, send_ketidakhadiran_enabled, send_to_student,
+           send_to_parent, template_otp, template_presensi_masuk, template_presensi_pulang,
+           template_presensi_terlambat, template_ketidakhadiran, template_broadcast
+         ) VALUES (
+           1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         ) ON DUPLICATE KEY UPDATE
+           enabled=VALUES(enabled), provider=VALUES(provider), api_key=VALUES(api_key),
+           sender_number=VALUES(sender_number), domain_url=VALUES(domain_url), webhook_url=VALUES(webhook_url),
+           send_otp_enabled=VALUES(send_otp_enabled), send_presensi_masuk_enabled=VALUES(send_presensi_masuk_enabled),
+           send_presensi_pulang_enabled=VALUES(send_presensi_pulang_enabled),
+           send_presensi_terlambat_enabled=VALUES(send_presensi_terlambat_enabled),
+           send_ketidakhadiran_enabled=VALUES(send_ketidakhadiran_enabled), send_to_student=VALUES(send_to_student),
+           send_to_parent=VALUES(send_to_parent), template_otp=VALUES(template_otp),
+           template_presensi_masuk=VALUES(template_presensi_masuk),
+           template_presensi_pulang=VALUES(template_presensi_pulang),
+           template_presensi_terlambat=VALUES(template_presensi_terlambat),
+           template_ketidakhadiran=VALUES(template_ketidakhadiran), template_broadcast=VALUES(template_broadcast);`,
+        [
+          wg.enabled ? 1 : 0,
+          wg.provider || 'fonnte',
+          wg.apiKey || '',
+          wg.senderNumber || '',
+          wg.domainUrl || '',
+          wg.webhookUrl || '',
+          wg.sendOtpEnabled !== false ? 1 : 0,
+          wg.sendPresensiMasukEnabled !== false ? 1 : 0,
+          wg.sendPresensiPulangEnabled !== false ? 1 : 0,
+          wg.sendPresensiTerlambatEnabled !== false ? 1 : 0,
+          wg.sendKetidakhadiranEnabled !== false ? 1 : 0,
+          wg.sendToStudent !== false ? 1 : 0,
+          wg.sendToParent !== false ? 1 : 0,
+          wg.templateOtp || '',
+          wg.templatePresensiMasuk || '',
+          wg.templatePresensiPulang || '',
+          wg.templatePresensiTerlambat || '',
+          wg.templateKetidakhadiran || '',
+          wg.templateBroadcast || ''
+        ]
+      ).catch(() => {});
+    }
+
+    // Save security_incidents
+    if (Array.isArray(appData.securityIncidents) && appData.securityIncidents.length > 0) {
+      const ph = appData.securityIncidents.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+      const vals: any[] = [];
+      for (const s of appData.securityIncidents) {
+        vals.push(
+          s.id,
+          s.timestamp || '',
+          s.formattedTime || '',
+          s.type || '',
+          s.ipAddress || '',
+          s.attemptedUsername || '',
+          s.payloadSnippet || '',
+          s.status || '',
+          s.actionTaken || '',
+          s.locationEstimate || ''
+        );
+      }
+      await db.execute(
+        `INSERT INTO security_incidents (id, timestamp, formatted_time, type, ip_address, attempted_username, payload_snippet, status, action_taken, location_estimate)
+         VALUES ${ph}
+         ON DUPLICATE KEY UPDATE
+           timestamp=VALUES(timestamp), formatted_time=VALUES(formatted_time), type=VALUES(type),
+           ip_address=VALUES(ip_address), attempted_username=VALUES(attempted_username),
+           payload_snippet=VALUES(payload_snippet), status=VALUES(status),
+           action_taken=VALUES(action_taken), location_estimate=VALUES(location_estimate);`,
+        vals
+      ).catch(() => {});
+    }
+
+    // Save blocked_ips
+    if (Array.isArray(appData.blockedIps) && appData.blockedIps.length > 0) {
+      const ph = appData.blockedIps.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+      const vals: any[] = [];
+      for (const b of appData.blockedIps) {
+        vals.push(
+          b.id,
+          b.ip,
+          b.reason || '',
+          b.blockedAt || '',
+          b.expiresAt || '',
+          b.blockedBy || '',
+          b.threatCount || 1
+        );
+      }
+      await db.execute(
+        `INSERT INTO blocked_ips (id, ip, reason, blocked_at, expires_at, blocked_by, threat_count)
+         VALUES ${ph}
+         ON DUPLICATE KEY UPDATE
+           ip=VALUES(ip), reason=VALUES(reason), blocked_at=VALUES(blocked_at),
+           expires_at=VALUES(expires_at), blocked_by=VALUES(blocked_by), threat_count=VALUES(threat_count);`,
+        vals
+      ).catch(() => {});
+    }
+
     await db.execute(`SET FOREIGN_KEY_CHECKS = 1;`);
   } catch (err: any) {
     if (isMySQLRateLimitError(err)) {
@@ -1597,6 +2154,23 @@ async function performMySQLLoad(config: any) {
     const [homeVisitRows]: any = await db.execute(`SELECT * FROM home_visit ORDER BY tanggal DESC;`).catch(() => [[]]);
     const [templateRows]: any = await db.execute(`SELECT * FROM violation_templates;`).catch(() => [[]]);
     const [jadwalRows]: any = await db.execute(`SELECT * FROM jadwal_mengajar;`).catch(() => [[]]);
+    const [mapelRows]: any = await db.execute(`SELECT * FROM mata_pelajaran;`).catch(() => [[]]);
+    const [gmkRows]: any = await db.execute(`SELECT * FROM guru_mapel_kelas;`).catch(() => [[]]);
+    const [pmgRows]: any = await db.execute(`SELECT * FROM presensi_mengajar_guru ORDER BY tanggal DESC;`).catch(() => [[]]);
+    const [shiftSettingsRows]: any = await db.execute(`SELECT * FROM shift_config_settings WHERE id = 1;`).catch(() => [[]]);
+    const [shiftPeriodsRows]: any = await db.execute(`SELECT * FROM shift_config_periods ORDER BY id ASC;`).catch(() => [[]]);
+    const [hariLiburRows]: any = await db.execute(`SELECT * FROM hari_libur;`).catch(() => [[]]);
+    const [pengumumanRows]: any = await db.execute(`SELECT * FROM pengumuman ORDER BY tanggal DESC;`).catch(() => [[]]);
+    const [ekskulRows]: any = await db.execute(`SELECT * FROM ekstrakurikuler;`).catch(() => [[]]);
+    const [anggotaEkskulRows]: any = await db.execute(`SELECT * FROM anggota_ekskul;`).catch(() => [[]]);
+    const [chatRows]: any = await db.execute(`SELECT * FROM chat_messages ORDER BY timestamp ASC;`).catch(() => [[]]);
+    const [presensiEkskulRows]: any = await db.execute(`SELECT * FROM presensi_ekskul;`).catch(() => [[]]);
+    const [auditRows]: any = await db.execute(`SELECT * FROM audit_logs ORDER BY timestamp DESC;`).catch(() => [[]]);
+    const [waRows]: any = await db.execute(`SELECT * FROM whatsapp_logs ORDER BY timestamp DESC;`).catch(() => [[]]);
+    const [rpRows]: any = await db.execute(`SELECT * FROM role_permissions;`).catch(() => [[]]);
+    const [wgRows]: any = await db.execute(`SELECT * FROM whatsapp_gateway_config WHERE id = 1;`).catch(() => [[]]);
+    const [siRows]: any = await db.execute(`SELECT * FROM security_incidents ORDER BY timestamp DESC;`).catch(() => [[]]);
+    const [blRows]: any = await db.execute(`SELECT * FROM blocked_ips;`).catch(() => [[]]);
 
     if (!appData) {
       appData = {};
@@ -1829,6 +2403,332 @@ async function performMySQLLoad(config: any) {
       });
     } else if (inMemoryAppDataCache?.jadwalMengajar && Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0) {
       appData.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar;
+    }
+
+    if (Array.isArray(mapelRows) && mapelRows.length > 0) {
+      appData.mataPelajaran = mapelRows.map((m: any) => ({
+        id: m.id,
+        kode: m.kode || '',
+        nama: m.nama || '',
+        kategori: m.kategori || 'Umum',
+        tingkat: m.tingkat || 'Semua Tingkat',
+        jurusanId: m.jurusan_id || '',
+        jurusanNama: m.jurusan_nama || '',
+        alokasiJp: Number(m.alokasi_jp) || 0,
+        kkm: Number(m.kkm) || 75,
+        deskripsi: m.deskripsi || ''
+      }));
+    } else if (inMemoryAppDataCache?.mataPelajaran && Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0) {
+      appData.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
+    }
+
+    if (Array.isArray(gmkRows) && gmkRows.length > 0) {
+      appData.guruMapelKelas = gmkRows.map((g: any) => {
+        let kelasIds: string[] = [];
+        try {
+          kelasIds = typeof g.kelas_ids === 'string' ? JSON.parse(g.kelas_ids) : (Array.isArray(g.kelas_ids) ? g.kelas_ids : []);
+        } catch (e) {}
+        return {
+          id: g.id,
+          guruId: g.guru_id || '',
+          guruUsername: g.guru_username || '',
+          guruNama: g.guru_nama || '',
+          guruNip: g.guru_nip || '',
+          kodeMapel: g.kode_mapel || '',
+          namaMapel: g.nama_mapel || '',
+          kategori: g.kategori || '',
+          tingkat: g.tingkat || '',
+          alokasiJp: Number(g.alokasi_jp) || 0,
+          kkm: Number(g.kkm) || 75,
+          deskripsi: g.deskripsi || '',
+          kelasIds,
+          catatan: g.catatan || '',
+          createdAt: g.created_at || ''
+        };
+      });
+    } else if (inMemoryAppDataCache?.guruMapelKelas && Array.isArray(inMemoryAppDataCache.guruMapelKelas) && inMemoryAppDataCache.guruMapelKelas.length > 0) {
+      appData.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas;
+    }
+
+    if (Array.isArray(pmgRows) && pmgRows.length > 0) {
+      appData.presensiMengajarGuru = pmgRows.map((p: any) => {
+        let presensiSiswa: any[] = [];
+        try {
+          presensiSiswa = typeof p.presensi_siswa === 'string' ? JSON.parse(p.presensi_siswa) : (Array.isArray(p.presensi_siswa) ? p.presensi_siswa : []);
+        } catch (e) {}
+        return {
+          id: p.id,
+          jadwalId: p.jadwal_id || '',
+          guruUsername: p.guru_username || '',
+          guruNama: p.guru_nama || '',
+          tanggal: p.tanggal || '',
+          hari: p.hari || '',
+          kelasId: p.kelas_id || '',
+          kelasNama: p.kelas_nama || '',
+          mataPelajaran: p.mata_pelajaran || '',
+          materiAjar: p.materi_ajar || '',
+          jamPelajaran: p.jam_pelajaran || '',
+          presensiSiswa,
+          catatanGuru: p.catatan_guru || '',
+          createdAt: p.created_at || ''
+        };
+      });
+    } else if (inMemoryAppDataCache?.presensiMengajarGuru && Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0) {
+      appData.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
+    }
+
+    // Shift Config
+    if (shiftSettingsRows && shiftSettingsRows.length > 0) {
+      const ss = shiftSettingsRows[0];
+      const periods = (shiftPeriodsRows && shiftPeriodsRows.length > 0)
+        ? shiftPeriodsRows.map((sp: any) => ({
+            id: Number(sp.id),
+            startDate: sp.start_date,
+            endDate: sp.end_date,
+            kelompok1Type: sp.kelompok1_type,
+            kelompok2Type: sp.kelompok2_type
+          }))
+        : (inMemoryAppDataCache?.shiftConfig?.periods || appData.shiftConfig?.periods || []);
+      appData.shiftConfig = {
+        pagiTime: ss.pagi_time || '06.30 - 12.00',
+        siangTime: ss.siang_time || '13.00 - 16.50',
+        periods,
+        isJamMasukPagiActive: Boolean(ss.is_jam_masuk_pagi_active),
+        pagiJamMasukMulai: ss.pagi_jam_masuk_mulai || '06:30',
+        pagiJamMasukSelesai: ss.pagi_jam_masuk_selesai || '06:45',
+        pagiJamPulang: ss.pagi_jam_pulang || '12:00',
+        isJamMasukSiangActive: Boolean(ss.is_jam_masuk_siang_active),
+        siangJamMasukMulai: ss.siang_jam_masuk_mulai || '12:45',
+        siangJamMasukSelesai: ss.siang_jam_masuk_selesai || '13:00',
+        siangJamPulang: ss.siang_jam_pulang || '16:50'
+      };
+    } else if (inMemoryAppDataCache?.shiftConfig) {
+      appData.shiftConfig = inMemoryAppDataCache.shiftConfig;
+    }
+
+    // Hari Libur
+    if (Array.isArray(hariLiburRows) && hariLiburRows.length > 0) {
+      appData.hariLibur = hariLiburRows.map((h: any) => ({
+        id: h.id,
+        tanggal: h.tanggal,
+        keterangan: h.keterangan || '',
+        jenis: h.jenis || 'nasional'
+      }));
+    } else if (inMemoryAppDataCache?.hariLibur && inMemoryAppDataCache.hariLibur.length > 0) {
+      appData.hariLibur = inMemoryAppDataCache.hariLibur;
+    }
+
+    // Pengumuman
+    if (Array.isArray(pengumumanRows) && pengumumanRows.length > 0) {
+      appData.pengumuman = pengumumanRows.map((p: any) => ({
+        id: p.id,
+        judul: p.judul || '',
+        isi: p.isi || '',
+        tanggal: p.tanggal || '',
+        kategori: p.kategori || 'info',
+        target: p.target || 'semua',
+        aktif: Boolean(p.aktif),
+        pinToRunningText: Boolean(p.pin_to_running_text),
+        pinToLoginBanner: Boolean(p.pin_to_login_banner),
+        pinToDashboard: Boolean(p.pin_to_dashboard),
+        penulis: p.penulis || '',
+        linkUrl: p.link_url || '',
+        linkText: p.link_text || '',
+        createdAt: p.created_at || ''
+      }));
+    } else if (inMemoryAppDataCache?.pengumuman && inMemoryAppDataCache.pengumuman.length > 0) {
+      appData.pengumuman = inMemoryAppDataCache.pengumuman;
+    }
+
+    // Ekstrakurikuler
+    if (Array.isArray(ekskulRows) && ekskulRows.length > 0) {
+      appData.ekstrakurikuler = ekskulRows.map((e: any) => ({
+        id: e.id,
+        nama: e.nama,
+        pembinaId: e.pembina_id || '',
+        pembinaNama: e.pembina_nama || '',
+        jadwalHari: e.jadwal_hari || '',
+        jamMulai: e.jam_mulai || '',
+        jamSelesai: e.jam_selesai || '',
+        tempat: e.tempat || '',
+        deskripsi: e.deskripsi || ''
+      }));
+    } else if (inMemoryAppDataCache?.ekstrakurikuler && inMemoryAppDataCache.ekstrakurikuler.length > 0) {
+      appData.ekstrakurikuler = inMemoryAppDataCache.ekstrakurikuler;
+    }
+
+    // Anggota Ekskul
+    if (Array.isArray(anggotaEkskulRows) && anggotaEkskulRows.length > 0) {
+      appData.anggotaEkskul = anggotaEkskulRows.map((a: any) => ({
+        id: a.id,
+        ekskulId: a.ekskul_id,
+        siswaId: a.siswa_id,
+        tanggalBergabung: a.tanggal_bergabung || ''
+      }));
+    } else if (inMemoryAppDataCache?.anggotaEkskul && inMemoryAppDataCache.anggotaEkskul.length > 0) {
+      appData.anggotaEkskul = inMemoryAppDataCache.anggotaEkskul;
+    }
+
+    // Chat Messages
+    if (Array.isArray(chatRows) && chatRows.length > 0) {
+      appData.chatMessages = chatRows.map((c: any) => {
+        let deletedFor: string[] = [];
+        try {
+          deletedFor = typeof c.deleted_for === 'string' ? JSON.parse(c.deleted_for) : (Array.isArray(c.deleted_for) ? c.deleted_for : []);
+        } catch (e) {}
+        return {
+          id: c.id,
+          senderRole: c.sender_role || '',
+          senderUsername: c.sender_username || '',
+          senderNama: c.sender_nama || '',
+          senderFoto: c.sender_foto || '',
+          recipientUsername: c.recipient_username || 'all',
+          text: c.text || '',
+          image: c.image || '',
+          timestamp: c.timestamp || '',
+          isRead: Boolean(c.is_read),
+          status: c.status || 'sent',
+          isBot: Boolean(c.is_bot),
+          deletedFor,
+          isDeletedForEveryone: Boolean(c.is_deleted_for_everyone)
+        };
+      });
+    } else if (inMemoryAppDataCache?.chatMessages && inMemoryAppDataCache.chatMessages.length > 0) {
+      appData.chatMessages = inMemoryAppDataCache.chatMessages;
+    }
+
+    // Presensi Ekskul
+    if (Array.isArray(presensiEkskulRows) && presensiEkskulRows.length > 0) {
+      const peMap: Record<string, any[]> = {};
+      for (const row of presensiEkskulRows) {
+        const key = row.session_key || `${row.tanggal}_${row.ekskul_id}`;
+        if (!peMap[key]) {
+          peMap[key] = [];
+        }
+        peMap[key].push({
+          siswaId: row.siswa_id,
+          status: row.status || 'H',
+          catatan: row.catatan || '',
+          time: row.time || ''
+        });
+      }
+      appData.presensiEkskul = peMap;
+    } else if (inMemoryAppDataCache?.presensiEkskul) {
+      appData.presensiEkskul = inMemoryAppDataCache.presensiEkskul;
+    }
+
+    // Audit Logs
+    if (Array.isArray(auditRows) && auditRows.length > 0) {
+      appData.auditLogs = auditRows.map((a: any) => ({
+        id: a.id,
+        timestamp: a.timestamp || '',
+        role: a.role || '',
+        username: a.username || '',
+        nama: a.nama || '',
+        aksi: a.aksi || '',
+        detail: a.detail || '',
+        ipAddress: a.ip_address || ''
+      }));
+    } else if (inMemoryAppDataCache?.auditLogs && inMemoryAppDataCache.auditLogs.length > 0) {
+      appData.auditLogs = inMemoryAppDataCache.auditLogs;
+    }
+
+    // WhatsApp Logs
+    if (Array.isArray(waRows) && waRows.length > 0) {
+      appData.whatsappLogs = waRows.map((w: any) => ({
+        id: w.id,
+        timestamp: w.timestamp || '',
+        recipientPhone: w.recipient_phone || '',
+        recipientName: w.recipient_name || '',
+        messageType: w.message_type || '',
+        messageText: w.message_text || '',
+        status: w.status || '',
+        provider: w.provider || '',
+        responseMessage: w.response_message || ''
+      }));
+    } else if (inMemoryAppDataCache?.whatsappLogs && inMemoryAppDataCache.whatsappLogs.length > 0) {
+      appData.whatsappLogs = inMemoryAppDataCache.whatsappLogs;
+    }
+
+    // Role Permissions
+    if (Array.isArray(rpRows) && rpRows.length > 0) {
+      appData.rolePermissions = rpRows.map((r: any) => {
+        let allowedMenus: string[] = [];
+        try {
+          allowedMenus = typeof r.allowed_menus === 'string' ? JSON.parse(r.allowed_menus) : (Array.isArray(r.allowed_menus) ? r.allowed_menus : []);
+        } catch (e) {}
+        return {
+          roleId: r.role_id,
+          roleName: r.role_name || '',
+          description: r.description || '',
+          badgeColor: r.badge_color || 'blue',
+          isSystem: Boolean(r.is_system),
+          allowedMenus
+        };
+      });
+    } else if (inMemoryAppDataCache?.rolePermissions && inMemoryAppDataCache.rolePermissions.length > 0) {
+      appData.rolePermissions = inMemoryAppDataCache.rolePermissions;
+    }
+
+    // WhatsApp Gateway Config
+    if (wgRows && wgRows.length > 0) {
+      const wg = wgRows[0];
+      appData.whatsappGateway = {
+        enabled: Boolean(wg.enabled),
+        provider: wg.provider || 'fonnte',
+        apiKey: wg.api_key || '',
+        senderNumber: wg.sender_number || '',
+        domainUrl: wg.domain_url || '',
+        webhookUrl: wg.webhook_url || '',
+        sendOtpEnabled: Boolean(wg.send_otp_enabled),
+        sendPresensiMasukEnabled: Boolean(wg.send_presensi_masuk_enabled),
+        sendPresensiPulangEnabled: Boolean(wg.send_presensi_pulang_enabled),
+        sendPresensiTerlambatEnabled: Boolean(wg.send_presensi_terlambat_enabled),
+        sendKetidakhadiranEnabled: Boolean(wg.send_ketidakhadiran_enabled),
+        sendToStudent: Boolean(wg.send_to_student),
+        sendToParent: Boolean(wg.send_to_parent),
+        templateOtp: wg.template_otp || '',
+        templatePresensiMasuk: wg.template_presensi_masuk || '',
+        templatePresensiPulang: wg.template_presensi_pulang || '',
+        templatePresensiTerlambat: wg.template_presensi_terlambat || '',
+        templateKetidakhadiran: wg.template_ketidakhadiran || '',
+        templateBroadcast: wg.template_broadcast || ''
+      };
+    } else if (inMemoryAppDataCache?.whatsappGateway) {
+      appData.whatsappGateway = inMemoryAppDataCache.whatsappGateway;
+    }
+
+    // Security Incidents
+    if (Array.isArray(siRows) && siRows.length > 0) {
+      appData.securityIncidents = siRows.map((s: any) => ({
+        id: s.id,
+        timestamp: s.timestamp || '',
+        formattedTime: s.formatted_time || '',
+        type: s.type || '',
+        ipAddress: s.ip_address || '',
+        attemptedUsername: s.attempted_username || '',
+        payloadSnippet: s.payload_snippet || '',
+        status: s.status || '',
+        actionTaken: s.action_taken || '',
+        locationEstimate: s.location_estimate || ''
+      }));
+    } else if (inMemoryAppDataCache?.securityIncidents && inMemoryAppDataCache.securityIncidents.length > 0) {
+      appData.securityIncidents = inMemoryAppDataCache.securityIncidents;
+    }
+
+    // Blocked IPs
+    if (Array.isArray(blRows) && blRows.length > 0) {
+      appData.blockedIps = blRows.map((b: any) => ({
+        id: b.id,
+        ip: b.ip,
+        reason: b.reason || '',
+        blockedAt: b.blocked_at || '',
+        expiresAt: b.expires_at || '',
+        blockedBy: b.blocked_by || '',
+        threatCount: Number(b.threat_count) || 1
+      }));
+    } else if (inMemoryAppDataCache?.blockedIps && inMemoryAppDataCache.blockedIps.length > 0) {
+      appData.blockedIps = inMemoryAppDataCache.blockedIps;
     }
 
     return appData;
