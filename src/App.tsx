@@ -146,6 +146,44 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // Keep currentUser in sync with the latest AppData (e.g. photo deletion/update, profile change)
+  useEffect(() => {
+    if (!currentUser || !currentUser.data) return;
+    const currentData = currentUser.data as any;
+
+    let updatedData: any = null;
+    if (currentUser.role === 'admin') {
+      if (appData.admin && (appData.admin.foto !== currentData.foto || appData.admin.nama !== currentData.nama)) {
+        updatedData = { ...currentData, ...appData.admin };
+      }
+    } else if (currentUser.role === 'murid' || currentUser.role === 'siswa') {
+      const match = (appData.siswa || []).find((s) => 
+        (currentData.id && s.id === currentData.id) ||
+        (currentData.nisn && s.nisn === currentData.nisn) ||
+        (currentData.username && s.username === currentData.username)
+      );
+      if (match && (match.foto !== currentData.foto || match.nama !== currentData.nama)) {
+        updatedData = { ...currentData, ...match };
+      }
+    } else {
+      const match = (appData.waliKelas || []).find((w) => 
+        (currentData.id && w.id === currentData.id) ||
+        (currentData.username && String(w.username).toLowerCase() === String(currentData.username).toLowerCase()) ||
+        (currentData.nip && String(w.nip).toLowerCase() === String(currentData.nip).toLowerCase())
+      );
+      if (match && (match.foto !== currentData.foto || match.nama !== currentData.nama)) {
+        updatedData = { ...currentData, ...match };
+      }
+    }
+
+    if (updatedData) {
+      const nextSession: UserSession = { ...currentUser, data: updatedData };
+      setCurrentUser(nextSession);
+      saveSessionUser(nextSession);
+    }
+  }, [appData.admin, appData.siswa, appData.waliKelas]);
+
   const [isServerQrModalOpen, setIsServerQrModalOpen] = useState<boolean>(false);
   const [isLiveChatOpen, setIsLiveChatOpen] = useState<boolean>(false);
 

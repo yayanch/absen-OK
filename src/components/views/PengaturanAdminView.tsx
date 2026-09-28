@@ -61,7 +61,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
         nama: a.nama || currentData.nama || 'Administrator Utama',
         username: a.username || currentData.username || 'admin',
         password: a.password || currentData.password || '',
-        foto: a.foto || currentData.foto || '',
+        foto: a.foto !== undefined ? a.foto : (currentData.foto || ''),
         jabatan: 'Administrator',
       };
     } else if (currentUser.role === 'murid' || currentUser.role === 'siswa') {
@@ -75,7 +75,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
         nama: s.nama || currentData.nama || '',
         username: s.username || s.nisn || currentData.username || currentData.nisn || '',
         password: s.password || s.nisn || currentData.password || currentData.nisn || '',
-        foto: s.foto || currentData.foto || '',
+        foto: s.foto !== undefined ? s.foto : (currentData.foto || ''),
         jabatan: 'Siswa / Murid',
       };
     } else if (currentUser.role === 'kesiswaan') {
@@ -86,7 +86,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
         nama: u.nama || currentData.nama || 'Tim WKS Kesiswaan & BP BK',
         username: u.username || currentData.username || 'kesiswaan',
         password: u.password || currentData.password || '123',
-        foto: u.foto || currentData.foto || '',
+        foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || 'WKS Kesiswaan / BP BK',
       };
     } else if (currentUser.role === 'kurikulum') {
@@ -97,7 +97,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
         nama: u.nama || currentData.nama || 'Tim Kurikulum & Akademik',
         username: u.username || currentData.username || 'kurikulum',
         password: u.password || currentData.password || '123',
-        foto: u.foto || currentData.foto || '',
+        foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || 'WKS Kurikulum',
       };
     } else if (currentUser.role === 'user' || currentUser.role === 'guru') {
@@ -108,7 +108,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
         nama: u.nama || currentData.nama || 'Guru / Staf Pengajar',
         username: u.username || currentData.username || u.nip || 'guru',
         password: u.password || currentData.password || '123',
-        foto: u.foto || currentData.foto || '',
+        foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || (u.mataPelajaran ? `Guru ${u.mataPelajaran}` : 'Guru Pengampu'),
       };
     } else {
@@ -119,7 +119,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
         nama: u.nama || currentData.nama || '',
         username: u.username || currentData.username || u.nip || '',
         password: u.password || currentData.password || '123',
-        foto: u.foto || currentData.foto || '',
+        foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || (currentUser.role === 'hubin' ? 'WKS Hubin / Humas' : 'Wali Kelas'),
       };
     }
@@ -140,7 +140,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
     setUsername(fresh.username);
     setPassword(fresh.password);
     setFotoBase64(fresh.foto);
-  }, [currentUser?.role, (currentUser?.data as any)?.id, (currentUser?.data as any)?.username, (currentUser?.data as any)?.nip, (currentUser?.data as any)?.nama]);
+  }, [currentUser?.role, (currentUser?.data as any)?.id, (currentUser?.data as any)?.username, (currentUser?.data as any)?.nip, (currentUser?.data as any)?.nama, (currentUser?.data as any)?.foto]);
 
   const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -306,7 +306,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
             nama: cleanNama || s.nama,
             username: cleanUsername || s.username || s.nisn,
             password: cleanPassword ? cleanPassword : (s.password || s.nisn || ''),
-            foto: fotoBase64 || s.foto,
+            foto: fotoBase64,
           };
           const newRoles = currentUser.roles || (s.roles) || ['murid'];
           const newSession: UserSession = { role: 'murid', roles: newRoles, data: newS };

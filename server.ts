@@ -2285,7 +2285,7 @@ async function performMySQLLoad(config: any) {
             noWaOrangTua: s.no_wa_orang_tua || prev.noWaOrangTua || '',
             username: s.username || prev.username || s.nisn || '',
             password: s.password || prev.password || s.nisn || '',
-            foto: s.foto || prev.foto || '',
+            foto: s.foto !== null && s.foto !== undefined ? s.foto : (prev.foto || ''),
             tempatLahir: s.tempat_lahir || prev.tempatLahir || '',
             tanggalLahir: s.tanggal_lahir || prev.tanggalLahir || '',
             alamat: s.alamat || prev.alamat || ''

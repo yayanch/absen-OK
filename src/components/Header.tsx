@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
   const userData = freshUser || (currentUser?.data as any);
   const userName = userData?.nama || 'Pengguna';
   const userUsername = userData?.username || (userData?.nisn ? `NISN: ${userData.nisn}` : '');
-  const userFoto = userData?.foto || (currentUser?.data as any)?.foto || '';
+  const userFoto = userData?.foto !== undefined ? (userData.foto || '') : ((currentUser?.data as any)?.foto || '');
 
   // Current Weekly Shift calculation for Header
   const shiftInfo = React.useMemo(() => {
