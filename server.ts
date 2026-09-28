@@ -655,11 +655,27 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
 
   // If incomingList is explicitly provided by the caller, incomingList is the authoritative set
   const map = new Map<string, any>();
+  const nisnToIdMap = new Map<string, string>();
 
   // 1. Seed with incoming list
   for (const inc of filteredIncoming) {
     if (inc && inc.id && !deletedSet.has(String(inc.id))) {
-      map.set(String(inc.id), { ...inc });
+      const sId = String(inc.id);
+      const cleanNisn = inc.nisn && inc.nisn !== '-' ? String(inc.nisn).trim().toLowerCase() : '';
+      if (cleanNisn && nisnToIdMap.has(cleanNisn)) {
+        const targetId = nisnToIdMap.get(cleanNisn)!;
+        const cur = map.get(targetId)!;
+        map.set(targetId, {
+          ...inc,
+          ...cur,
+          namaOrangTua: (cur.namaOrangTua && cur.namaOrangTua !== cur.nama) ? cur.namaOrangTua : (inc.namaOrangTua || cur.namaOrangTua || ''),
+          noWa: cur.noWa || inc.noWa || '',
+          noWaOrangTua: cur.noWaOrangTua || inc.noWaOrangTua || '',
+        });
+      } else {
+        map.set(sId, { ...inc });
+        if (cleanNisn) nisnToIdMap.set(cleanNisn, sId);
+      }
     }
   }
 
@@ -667,9 +683,12 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
   for (const ex of filteredExisting) {
     if (!ex || !ex.id || deletedSet.has(String(ex.id))) continue;
     const sId = String(ex.id);
-    if (map.has(sId)) {
-      const current = map.get(sId)!;
-      map.set(sId, {
+    const cleanNisn = ex.nisn && ex.nisn !== '-' ? String(ex.nisn).trim().toLowerCase() : '';
+
+    const targetId = map.has(sId) ? sId : (cleanNisn && nisnToIdMap.has(cleanNisn) ? nisnToIdMap.get(cleanNisn) : null);
+    if (targetId && map.has(targetId)) {
+      const current = map.get(targetId)!;
+      map.set(targetId, {
         ...ex,
         ...current,
         nama: current.nama || ex.nama,
@@ -678,7 +697,7 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
         kelasId: current.kelasId || ex.kelasId,
         status: current.status || ex.status || 'aktif',
         noWa: current.noWa || ex.noWa || '',
-        namaOrangTua: current.namaOrangTua || ex.namaOrangTua || '',
+        namaOrangTua: (current.namaOrangTua && current.namaOrangTua !== current.nama) ? current.namaOrangTua : (ex.namaOrangTua || current.namaOrangTua || ''),
         noWaOrangTua: current.noWaOrangTua || ex.noWaOrangTua || '',
         foto: current.foto || ex.foto || '',
         username: current.username || ex.username,
@@ -749,7 +768,26 @@ function saveAppDataCache(data: any) {
   }
 
   if (Array.isArray(data.siswa)) {
-    data.siswa = data.siswa.filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)));
+    const rawList = data.siswa.filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)));
+    const nisnSeen = new Map<string, any>();
+    const dedupedList: any[] = [];
+    for (const item of rawList) {
+      const cleanNisn = item.nisn && item.nisn !== '-' ? String(item.nisn).trim().toLowerCase() : '';
+      if (cleanNisn) {
+        if (!nisnSeen.has(cleanNisn)) {
+          nisnSeen.set(cleanNisn, item);
+          dedupedList.push(item);
+        } else {
+          const existing = nisnSeen.get(cleanNisn);
+          if (!existing.namaOrangTua && item.namaOrangTua) existing.namaOrangTua = item.namaOrangTua;
+          if (!existing.noWa && item.noWa) existing.noWa = item.noWa;
+          if (!existing.noWaOrangTua && item.noWaOrangTua) existing.noWaOrangTua = item.noWaOrangTua;
+        }
+      } else {
+        dedupedList.push(item);
+      }
+    }
+    data.siswa = dedupedList;
   }
 
   if (data.deletedPelanggaranIds && Array.isArray(data.deletedPelanggaranIds) && Array.isArray(data.pelanggaran)) {
@@ -1101,17 +1139,30 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
 
       if (Array.isArray(appData.deletedSiswaIds) && appData.deletedSiswaIds.length > 0) {
-        const delPlaceholders = appData.deletedSiswaIds.map(() => '?').join(',');
-        await db.execute(`DELETE FROM siswa WHERE id IN (${delPlaceholders});`, appData.deletedSiswaIds).catch(() => {});
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < appData.deletedSiswaIds.length; i += CHUNK_SIZE) {
+          const chunk = appData.deletedSiswaIds.slice(i, i + CHUNK_SIZE);
+          const delPlaceholders = chunk.map(() => '?').join(',');
+          await db.execute(`DELETE FROM siswa WHERE id IN (${delPlaceholders});`, chunk).catch(() => {});
+        }
       }
 
       if (appData.siswa.length === 0) {
         await db.execute(`DELETE FROM siswa;`).catch(() => {});
       } else {
-        const activeIds = appData.siswa.map((s: any) => s.id).filter(Boolean);
-        if (activeIds.length > 0) {
-          const activePlaceholders = activeIds.map(() => '?').join(',');
-          await db.execute(`DELETE FROM siswa WHERE id NOT IN (${activePlaceholders});`, activeIds).catch(() => {});
+        // Safely delete any orphan/duplicate IDs in DB in small, reliable chunks
+        const [existingDbRows]: any = await db.execute(`SELECT id FROM siswa;`).catch(() => [[]]);
+        if (Array.isArray(existingDbRows) && existingDbRows.length > 0) {
+          const activeIdSet = new Set(appData.siswa.map((s: any) => s.id).filter(Boolean));
+          const toRemove = existingDbRows.map((r: any) => r.id).filter((id: string) => !activeIdSet.has(id));
+          if (toRemove.length > 0) {
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < toRemove.length; i += CHUNK_SIZE) {
+              const chunk = toRemove.slice(i, i + CHUNK_SIZE);
+              const delPlaceholders = chunk.map(() => '?').join(',');
+              await db.execute(`DELETE FROM siswa WHERE id IN (${delPlaceholders});`, chunk).catch(() => {});
+            }
+          }
         }
 
         const CHUNK_SIZE = 50;
@@ -1558,9 +1609,12 @@ async function performMySQLLoad(config: any) {
     }
 
     if (siswaRows && siswaRows.length > 0) {
-      const deletedSiswaSet = new Set((appData.deletedSiswaIds || []).map((id: any) => String(id)));
+      const deletedSiswaSet = new Set([
+        ...(appData.deletedSiswaIds || []),
+        ...(inMemoryAppDataCache?.deletedSiswaIds || [])
+      ].map((id: any) => String(id)));
       const prevSiswaMap = new Map<string, any>((appData.siswa || []).map((s: any) => [s.id, s]));
-      appData.siswa = siswaRows
+      const rawList = siswaRows
         .filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)))
         .map((s: any) => {
           const prev = prevSiswaMap.get(s.id) || {};
@@ -1582,6 +1636,27 @@ async function performMySQLLoad(config: any) {
             alamat: s.alamat || prev.alamat || ''
           };
         });
+
+      // Strict deduplication by NISN
+      const nisnSeen = new Map<string, any>();
+      const dedupedList: any[] = [];
+      for (const item of rawList) {
+        const cleanNisn = item.nisn && item.nisn !== '-' ? String(item.nisn).trim().toLowerCase() : '';
+        if (cleanNisn) {
+          if (!nisnSeen.has(cleanNisn)) {
+            nisnSeen.set(cleanNisn, item);
+            dedupedList.push(item);
+          } else {
+            const existing = nisnSeen.get(cleanNisn);
+            if (!existing.namaOrangTua && item.namaOrangTua) existing.namaOrangTua = item.namaOrangTua;
+            if (!existing.noWa && item.noWa) existing.noWa = item.noWa;
+            if (!existing.noWaOrangTua && item.noWaOrangTua) existing.noWaOrangTua = item.noWaOrangTua;
+          }
+        } else {
+          dedupedList.push(item);
+        }
+      }
+      appData.siswa = dedupedList;
     }
 
     if (Array.isArray(presensiRows) && presensiRows.length > 0) {

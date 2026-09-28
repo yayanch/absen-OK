@@ -150,11 +150,28 @@ export function mergeSiswa(
   const filteredLocal = localList.filter((s) => s && s.id && !deletedSet.has(String(s.id)));
 
   const map = new Map<string, Siswa>();
+  const nisnToIdMap = new Map<string, string>();
 
   // If localList was provided, localList is prioritized
   for (const localS of filteredLocal) {
     if (localS && localS.id && !deletedSet.has(String(localS.id))) {
-      map.set(String(localS.id), { ...localS });
+      const sId = String(localS.id);
+      const cleanNisn = localS.nisn && localS.nisn !== '-' ? localS.nisn.trim().toLowerCase() : '';
+      if (cleanNisn && nisnToIdMap.has(cleanNisn)) {
+        // Already have a record with this NISN, merge details into existing
+        const existingId = nisnToIdMap.get(cleanNisn)!;
+        const existing = map.get(existingId)!;
+        map.set(existingId, {
+          ...localS,
+          ...existing,
+          namaOrangTua: (existing.namaOrangTua && existing.namaOrangTua !== existing.nama) ? existing.namaOrangTua : (localS.namaOrangTua || existing.namaOrangTua || ''),
+          noWa: existing.noWa || localS.noWa || '',
+          noWaOrangTua: existing.noWaOrangTua || localS.noWaOrangTua || '',
+        });
+      } else {
+        map.set(sId, { ...localS });
+        if (cleanNisn) nisnToIdMap.set(cleanNisn, sId);
+      }
     }
   }
 
@@ -162,9 +179,36 @@ export function mergeSiswa(
   for (const s of filteredServer) {
     if (!s || !s.id || deletedSet.has(String(s.id))) continue;
     const sId = String(s.id);
+    const cleanNisn = s.nisn && s.nisn !== '-' ? s.nisn.trim().toLowerCase() : '';
+
+    if (cleanNisn && nisnToIdMap.has(cleanNisn)) {
+      const targetId = nisnToIdMap.get(cleanNisn)!;
+      const existing = map.get(targetId)!;
+      map.set(targetId, {
+        ...s,
+        ...existing,
+        nama: existing.nama || s.nama,
+        nisn: existing.nisn || s.nisn,
+        gender: existing.gender || s.gender || 'L',
+        kelasId: existing.kelasId || s.kelasId,
+        status: existing.status || s.status || 'aktif',
+        noWa: existing.noWa || s.noWa || '',
+        namaOrangTua: (existing.namaOrangTua && existing.namaOrangTua !== existing.nama) ? existing.namaOrangTua : (s.namaOrangTua || existing.namaOrangTua || ''),
+        noWaOrangTua: existing.noWaOrangTua || s.noWaOrangTua || '',
+        foto: existing.foto || s.foto || '',
+        username: existing.username || s.username,
+        password: existing.password || s.password,
+        tempatLahir: existing.tempatLahir || s.tempatLahir,
+        tanggalLahir: existing.tanggalLahir || s.tanggalLahir,
+        alamat: existing.alamat || s.alamat,
+      });
+      continue;
+    }
+
     const existing = map.get(sId);
     if (!existing) {
       map.set(sId, { ...s });
+      if (cleanNisn) nisnToIdMap.set(cleanNisn, sId);
     } else {
       map.set(sId, {
         ...s,
@@ -184,6 +228,7 @@ export function mergeSiswa(
         tanggalLahir: existing.tanggalLahir || s.tanggalLahir,
         alamat: existing.alamat || s.alamat,
       });
+      if (cleanNisn) nisnToIdMap.set(cleanNisn, sId);
     }
   }
 
@@ -2230,6 +2275,11 @@ export function deduplicateSiswa(appData: AppData): { nextAppData: AppData; remo
     return true;
   });
 
+  const nextDeletedSiswaIds = Array.from(new Set([
+    ...(appData.deletedSiswaIds || []),
+    ...Array.from(duplicateIdPairs.keys())
+  ]));
+
   const nextAppData = {
     ...appData,
     siswa: nextSiswaList,
@@ -2237,6 +2287,7 @@ export function deduplicateSiswa(appData: AppData): { nextAppData: AppData; remo
     pelanggaran: nextPelanggaran,
     homeVisits: nextHomeVisits,
     anggotaEkskul: nextAnggotaEkskul,
+    deletedSiswaIds: nextDeletedSiswaIds,
   };
 
   return { nextAppData, removedCount };
