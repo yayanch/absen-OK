@@ -1,4 +1,4 @@
-import { AppData, Siswa, Kelas, WaliKelas, HomeVisit, ChatMessage, Pelanggaran, PresensiStatus, PresensiMap, ViolationTemplate, HariLibur, JadwalMengajarGuru, AbsensiMengajarGuruItem, PengumumanSekolah, MataPelajaran, GuruMapelKelasItem } from '../types';
+import { AppData, Siswa, Kelas, WaliKelas, HomeVisit, ChatMessage, Pelanggaran, PresensiStatus, PresensiMap, ViolationTemplate, HariLibur, JadwalMengajarGuru, AbsensiMengajarGuruItem, PengumumanSekolah, MataPelajaran, GuruMapelKelasItem, PetugasPiket, CatatanPiketHarian } from '../types';
 
 export const INITIAL_PENGUMUMAN: PengumumanSekolah[] = [
   {
@@ -634,30 +634,48 @@ export const DEFAULT_WALI_KELAS: WaliKelas[] = [
     mataPelajaran: "Basis Data & Pemrograman Web",
     hariMengajar: ["Selasa", "Kamis"],
     batasiLoginHariMengajar: false
-  },
+  }
+];
+
+export const DEFAULT_PETUGAS_PIKET: PetugasPiket[] = [
   {
-    id: "WAL_PIKET_1",
-    nip: "199001012015011002",
-    nama: "Fahrul Rozi, S.Pd (Piket Kesiswaan)",
-    username: "piket_kesiswaan",
-    password: "123",
-    noHp: "6285123456789",
-    role: "piket_kesiswaan",
-    mataPelajaran: "Pendidikan Jasmani",
-    hariMengajar: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
-    batasiLoginHariMengajar: false
-  },
-  {
-    id: "WAL_PIKET_2",
+    id: "PIKET_1",
+    nama: "Diana Lestari, S.Pd",
+    tipe: "piket_guru",
     nip: "199202022016012004",
-    nama: "Diana Lestari, S.Pd (Piket Guru)",
+    noHp: "6285987654321",
+    hariPiket: ["Senin", "Rabu", "Jumat"],
+    shiftPiket: "Pagi",
     username: "piket_guru",
     password: "123",
-    noHp: "6285987654321",
-    role: "piket_guru",
-    mataPelajaran: "Bahasa Inggris",
-    hariMengajar: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
-    batasiLoginHariMengajar: false
+    status: "aktif",
+    keterangan: "Petugas Guru Piket Harian Shift Pagi"
+  },
+  {
+    id: "PIKET_2",
+    nama: "Fahrul Rozi, S.Pd",
+    tipe: "piket_kesiswaan",
+    nip: "199001012015011002",
+    noHp: "6285123456789",
+    hariPiket: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    shiftPiket: "Semua",
+    username: "piket_kesiswaan",
+    password: "123",
+    status: "aktif",
+    keterangan: "Petugas Piket Tim Kesiswaan & Kedisiplinan Gerbang"
+  },
+  {
+    id: "PIKET_3",
+    nama: "Hendra Wijaya, S.Pd",
+    tipe: "piket_guru",
+    nip: "198904122014021003",
+    noHp: "6281345678901",
+    hariPiket: ["Selasa", "Kamis"],
+    shiftPiket: "Siang",
+    username: "piket_siang",
+    password: "123",
+    status: "aktif",
+    keterangan: "Petugas Guru Piket Harian Shift Siang"
   }
 ];
 
@@ -834,6 +852,34 @@ export const DEMO_DATASET: AppData = {
     runningTextAnnouncement: "Selamat datang di Sistem Presensi Digital SMKN 6 Garut Tahun Ajaran 2026/2027. Budayakan disiplin hadir tepat waktu setiap hari!",
     runningTextSpeed: "normal",
     loginAnnouncementModal: false,
+    loginCustomLinksDisplayMode: "dropdown",
+    loginCustomLinksTitle: "Tautan Cepat & Bantuan",
+    loginCustomLinks: [
+      {
+        id: 'LNK_1',
+        label: 'Website Sekolah Resmi',
+        description: 'Kunjungi portal website utama SMK Negeri 6 Garut',
+        url: 'https://smkn6garut.sch.id',
+        iconName: 'Globe',
+        openInNewTab: true,
+      },
+      {
+        id: 'LNK_2',
+        label: 'Pusat Bantuan WhatsApp',
+        description: 'Layanan konsultasi & kendala teknis presensi',
+        url: 'https://wa.me/6281234567890',
+        iconName: 'Phone',
+        openInNewTab: true,
+      },
+      {
+        id: 'LNK_3',
+        label: 'Panduan & Pengumuman',
+        description: 'Petunjuk cara absensi siswa & tata tertib',
+        url: '#',
+        iconName: 'BookOpen',
+        openInNewTab: false,
+      },
+    ],
     theme: "indigo",
     sidebarBehavior: "collapsed",
   },
@@ -930,6 +976,8 @@ export const DEMO_DATASET: AppData = {
   guruMapelKelas: DEFAULT_GURU_MAPEL_KELAS,
   presensiMengajarGuru: DEFAULT_PRESENSI_MENGAJAR_GURU,
   pengumuman: INITIAL_PENGUMUMAN,
+  petugasPiket: DEFAULT_PETUGAS_PIKET,
+  catatanPiketHarian: [],
   shiftConfig: {
     pagiTime: "06.30 - 12.00",
     siangTime: "13.00 - 16.50",

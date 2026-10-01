@@ -27,7 +27,8 @@ import {
   Check,
   Shield,
   Layers,
-  Sparkles
+  Sparkles,
+  Filter
 } from 'lucide-react';
 import { AppData, CustomRole, UserRole, UserSession, ViewType, WaliKelas } from '../../types';
 import { Pagination } from '../Pagination';
@@ -129,6 +130,8 @@ export const getRoleLabel = (role?: string, customRoles?: CustomRole[]) => {
       return 'Piket Kesiswaan';
     case 'piket_guru':
       return 'Piket Guru';
+    case 'piket_kelas':
+      return 'Piket Kelas';
     case 'murid':
     case 'siswa':
       return 'Murid / Siswa';
@@ -148,6 +151,7 @@ export const getAvailableRoleOptionsList = (appData: AppData): AvailableRoleOpti
     { id: 'wali', label: 'Wali Kelas', badgeColor: 'emerald', description: 'Pembina kelas binaan, presensi harian & rekapitulasi kelas', isSystem: true },
     { id: 'piket_kesiswaan', label: 'Piket Kesiswaan', badgeColor: 'amber', description: 'Scan QR presensi, pencatatan pelanggaran & edit presensi siswa', isSystem: true },
     { id: 'piket_guru', label: 'Piket Guru', badgeColor: 'orange', description: 'Scan QR presensi, pencatatan pelanggaran & edit presensi siswa', isSystem: true },
+    { id: 'piket_kelas', label: 'Piket Kelas', badgeColor: 'teal', description: 'Petugas piket kelas / sekretaris yang bertugas mengisi presensi kelas binaan', isSystem: true },
     { id: 'guru', label: 'Guru / Tenaga Pendidik', badgeColor: 'amber', description: 'Melihat jadwal ajar pribadi, kelas ajar & pencatatan KBM', isSystem: true },
     { id: 'murid', label: 'Siswa / Murid', badgeColor: 'rose', description: 'Portal mandiri siswa, scan kehadiran QR & kartu pelajar digital', isSystem: true },
   ];
@@ -984,6 +988,23 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       });
     });
 
+    // 7. Akun Otomatis Piket Kelas
+    (appData.kelas || []).forEach((k) => {
+      const clean = String(k.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      list.push({
+        id: `piket-${k.id}`,
+        nama: `Piket Kelas ${k.nama}`,
+        username: clean,
+        nip: k.nama,
+        password: String(k.piketPassword || clean),
+        role: 'piket_kelas',
+        roles: ['piket_kelas'],
+        originalType: 'user',
+        noHp: '',
+        kelasNama: k.nama,
+      });
+    });
+
     return list.sort((a, b) => a.nama.localeCompare(b.nama, 'id', { sensitivity: 'base' }));
   };
 
@@ -1554,6 +1575,9 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   const kurikulumCount = allUsers.filter((u) => userHasMatchingRole(u, 'kurikulum')).length;
   const stafJadwalCount = allUsers.filter((u) => userHasMatchingRole(u, 'staf_jadwal')).length;
   const hubinCount = allUsers.filter((u) => userHasMatchingRole(u, 'hubin')).length;
+  const piketGuruCount = allUsers.filter((u) => userHasMatchingRole(u, 'piket_guru')).length;
+  const piketKesiswaanCount = allUsers.filter((u) => userHasMatchingRole(u, 'piket_kesiswaan')).length;
+  const piketKelasCount = allUsers.filter((u) => userHasMatchingRole(u, 'piket_kelas')).length;
   const guruCount = allUsers.filter((u) => userHasMatchingRole(u, 'guru')).length;
   const waliCount = allUsers.filter((u) => userHasMatchingRole(u, 'wali')).length;
   const muridCount = allUsers.filter((u) => userHasMatchingRole(u, 'murid')).length;
@@ -1572,7 +1596,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       <PageHeader
         icon={UserCheck}
         title="Master Data User & Akun Login"
-        description="Kelola data pengguna, multi-role hak akses (Admin, Kesiswaan, Wali Kelas, BP/BK, WKS Kurikulum, WKS Hubin, Staf Jadwal, Guru), password, dan reset akun."
+        description="Kelola data pengguna, multi-role hak akses (Admin, Kesiswaan, Wali Kelas, BP/BK, WKS Kurikulum, WKS Hubin, Staf Jadwal, Guru, Piket), password, dan reset akun."
         badge="Manajemen Pengguna & Multi-Role"
       />
 
@@ -1594,156 +1618,47 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               />
             </div>
 
-            {/* Sort Selector */}
-            <div className="flex items-center gap-1.5">
-              <select
-                value={sortField}
-                onChange={(e) => handleSort(e.target.value as any)}
-                className="py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="nama">Urut: Nama Pengguna</option>
-                <option value="username">Urut: Username / NIP</option>
-                <option value="role">Urut: Role</option>
-                <option value="kelasNama">Urut: Kelas Wali</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer"
-                title={`Urutan: ${sortDirection === 'asc' ? 'A-Z / Naik' : 'Z-A / Turun'}`}
-              >
-                {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />}
-              </button>
-            </div>
+            {/* Role Filter Dropdown Model */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex items-center">
+                <Filter className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" />
+                <select
+                  value={roleTab}
+                  onChange={(e) => {
+                    setRoleTab(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-8.5 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs appearance-none"
+                >
+                  <option value="semua">Semua ({allUsers.length})</option>
+                  <option value="admin">Admin ({adminCount})</option>
+                  <option value="kesiswaan">Kesiswaan ({kesiswaanCount})</option>
+                  <option value="kurikulum">Kurikulum ({kurikulumCount})</option>
+                  <option value="staf_jadwal">Staf Jadwal ({stafJadwalCount})</option>
+                  <option value="hubin">Hubin ({hubinCount})</option>
+                  <option value="piket_guru">Piket Guru ({piketGuruCount})</option>
+                  <option value="piket_kesiswaan">Piket Kesiswaan ({piketKesiswaanCount})</option>
+                  <option value="piket_kelas">Piket Kelas ({piketKelasCount})</option>
+                  <option value="guru">Guru ({guruCount})</option>
+                  <option value="wali">Wali Kelas ({waliCount})</option>
+                  <option value="murid">Siswa / Murid ({muridCount})</option>
+                  {(appData.customRoles || []).map((cr) => {
+                    const count = allUsers.filter((u) => userHasMatchingRole(u, cr.id) || userHasMatchingRole(u, cr.name)).length;
+                    return (
+                      <option key={cr.id} value={cr.id}>
+                        {cr.label || cr.name} ({count})
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 text-slate-400 pointer-events-none" />
+              </div>
 
-            {/* Role Filter Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('semua');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'semua'
-                    ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Semua ({allUsers.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('admin');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'admin'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Admin ({adminCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('kesiswaan');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'kesiswaan'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Kesiswaan ({kesiswaanCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('kurikulum');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'kurikulum'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Kurikulum ({kurikulumCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('staf_jadwal');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'staf_jadwal'
-                    ? 'bg-sky-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Staf Jadwal ({stafJadwalCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('hubin');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'hubin'
-                    ? 'bg-cyan-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Hubin ({hubinCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('guru');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'guru' || roleTab === 'user'
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Guru ({guruCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('wali');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'wali'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Wali Kelas ({waliCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleTab('murid');
-                  setCurrentPage(1);
-                }}
-                className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                  roleTab === 'murid'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                Siswa / Murid ({muridCount})
-              </button>
+              {roleTab !== 'semua' && (
+                <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/60">
+                  {filteredUsers.length} pengguna
+                </span>
+              )}
             </div>
           </div>
 

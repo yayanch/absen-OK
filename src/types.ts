@@ -97,6 +97,20 @@ export interface SekolahConfig {
   showOfflineToastWarning?: boolean; // Tampilkan pop-up peringatan ketika jaringan terputus
   autoSyncOnReconnect?: boolean; // Otomatis trigger sinkronisasi data saat online kembali
   offlineNoticeMessage?: string; // Pesan informasi kustom pada tampilan offline
+
+  // Tautan Kustom Halaman Login
+  loginCustomLinks?: LoginCustomLink[];
+  loginCustomLinksDisplayMode?: 'dropdown' | 'inline';
+  loginCustomLinksTitle?: string;
+}
+
+export interface LoginCustomLink {
+  id: string;
+  label: string;
+  url: string;
+  description?: string;
+  iconName?: 'Globe' | 'HelpCircle' | 'BookOpen' | 'Phone' | 'ExternalLink' | 'FileText' | 'Shield' | 'School' | 'Sparkles' | 'Mail';
+  openInNewTab?: boolean;
 }
 
 export type WhatsAppProvider = 'fonnte' | 'wablas' | 'starsender' | 'twilio' | 'custom_webhook';
@@ -258,6 +272,7 @@ export interface Kelas {
   nama: string;
   jurusanId: string;
   waliKelasId: string;
+  piketPassword?: string;
 }
 
 export interface Siswa {
@@ -591,6 +606,40 @@ export interface AppData {
   ekstrakurikuler?: Ekstrakurikuler[];
   anggotaEkskul?: AnggotaEkskul[];
   presensiEkskul?: Record<string, PresensiEkskulItem[]>;
+  petugasPiket?: PetugasPiket[];
+  catatanPiketHarian?: CatatanPiketHarian[];
+}
+
+export interface PetugasPiket {
+  id: string;
+  nama: string;
+  tipe: 'piket_guru' | 'piket_kesiswaan';
+  nip?: string;
+  noHp?: string;
+  hariPiket: string[]; // e.g. ['Senin', 'Rabu', 'Jumat']
+  shiftPiket?: 'Pagi' | 'Siang' | 'Semua';
+  username: string;
+  password?: string;
+  foto?: string;
+  keterangan?: string;
+  status?: 'aktif' | 'nonaktif';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CatatanPiketHarian {
+  id: string;
+  tanggal: string; // YYYY-MM-DD
+  hari: string;
+  shift: 'Pagi' | 'Siang';
+  petugasNama: string;
+  petugasUsername: string;
+  tipePiket: 'piket_guru' | 'piket_kesiswaan';
+  kejadian: string;
+  tindakan?: string;
+  siswaTerlibat?: string[];
+  status: 'selesai' | 'tindak_lanjut' | 'info';
+  createdAt: string;
 }
 
 export interface Ekstrakurikuler {
@@ -744,10 +793,20 @@ export interface ShiftConfig {
 
 export type UserRole = string;
 
+export interface PiketKelasAccount {
+  id: string;
+  username: string;
+  nama: string;
+  kelasId: string;
+  kelasNama: string;
+  role: 'piket_kelas';
+  tugasTambahan?: string;
+}
+
 export interface UserSession {
   role: UserRole;
   roles?: string[];
-  data: AdminAccount | WaliKelas | KesiswaanAccount | KurikulumAccount | StafJadwalAccount | UserBiasaAccount | Siswa;
+  data: AdminAccount | WaliKelas | KesiswaanAccount | KurikulumAccount | StafJadwalAccount | UserBiasaAccount | Siswa | PiketKelasAccount | any;
 }
 
 export type ViewType =
@@ -760,11 +819,13 @@ export type ViewType =
   | 'home_visit'
   | 'catatan_pelanggaran'
   | 'ekstrakurikuler'
+  | 'petugas_piket'
   | 'live_chat'
   | 'rekap_harian'
   | 'rekap_mingguan'
   | 'rekap_bulanan'
   | 'rekap_ketidakhadiran_tertinggi'
+  | 'rekap_pengisian_kelas'
   | 'master_jurusan'
   | 'master_wali'
   | 'master_guru'

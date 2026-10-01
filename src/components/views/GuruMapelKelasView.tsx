@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   BookOpen,
@@ -95,7 +95,8 @@ export const GuruMapelKelasView: React.FC<GuruMapelKelasViewProps> = ({
         (w) =>
           w.id === uData.id ||
           (w.username && w.username.toLowerCase() === String(uData.username).toLowerCase()) ||
-          (w.nip && w.nip === uData.nip)
+          (w.nip && w.nip === uData.nip) ||
+          (w.nama && uData.nama && w.nama.trim().toLowerCase() === String(uData.nama).trim().toLowerCase())
       ) || undefined
     );
   }, [allTeachers, currentUser]);
@@ -106,6 +107,13 @@ export const GuruMapelKelasView: React.FC<GuruMapelKelasViewProps> = ({
     }
     return loggedTeacherObj ? loggedTeacherObj.id : allTeachers[0]?.id || 'all';
   });
+
+  // Otomatis sinkronisasi ID guru aktif saat akun guru/wali kelas berganti
+  useEffect(() => {
+    if (isTeacher && loggedTeacherObj && selectedTeacherId !== loggedTeacherObj.id) {
+      setSelectedTeacherId(loggedTeacherObj.id);
+    }
+  }, [isTeacher, loggedTeacherObj]);
 
   const activeTeacher = useMemo(() => {
     if (selectedTeacherId === 'all') return undefined;

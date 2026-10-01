@@ -544,13 +544,13 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
                 </div>
                 <div>
                   <div className="text-xs font-black text-rose-800 dark:text-rose-200 flex items-center gap-2">
-                    <span>Upacara Bendera</span>
+                    <span>Upacara Bendera (Bukan Jam Pelajaran)</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-200/80 dark:bg-rose-900/70 text-rose-900 dark:text-rose-200">
-                      Khusus Shift Pagi: Jam 1 s.d. 2 (06.30 - 08.00)
+                      Khusus Shift Pagi: Jam 1 - 2 (06.30 - 08.00)
                     </span>
                   </div>
                   <p className="text-[11px] font-medium text-rose-700/80 dark:text-rose-300/80">
-                    Wajib diikuti oleh guru &amp; siswa Shift Pagi. <strong>Semua kelas Shift Siang tidak ada upacara</strong> (langsung KBM reguler).
+                    Jam ke-1 dan 2 Shift Pagi adalah Upacara Bendera (wajib seluruh guru &amp; siswa), bukan jam pembelajaran mapel. Pembelajaran kelas dimulai dari <strong>Jam ke-3 (07.30 / 08.00 WIB)</strong>.
                   </p>
                 </div>
               </div>

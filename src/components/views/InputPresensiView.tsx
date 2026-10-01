@@ -124,6 +124,11 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     if (isPiketOrKesiswaanOrAdmin) {
       return sortedKelas;
     }
+    if (role === 'piket_kelas') {
+      const userData = currentUser.data as any;
+      const myClasses = sortedKelas.filter((k) => k.id === userData?.kelasId);
+      return myClasses.length > 0 ? myClasses : sortedKelas;
+    }
     if (role === 'wali' || role === 'walikelas') {
       const userData = currentUser.data as any;
       const myClasses = sortedKelas.filter((k) => {
@@ -1104,8 +1109,8 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       return true;
     }
 
-    // 3. Piket (Piket Kesiswaan / Piket Guru)
-    if (['piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan'].includes(role)) {
+    // 3. Piket (Piket Kesiswaan / Piket Guru / Piket Kelas)
+    if (['piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan', 'piket_kelas'].includes(role)) {
       return true;
     }
 

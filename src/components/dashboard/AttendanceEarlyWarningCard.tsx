@@ -148,11 +148,11 @@ export const AttendanceEarlyWarningCard: React.FC<AttendanceEarlyWarningCardProp
 
       // Search query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = item.siswa.nama.toLowerCase().includes(q);
-        const matchNisn = item.siswa.nisn?.toLowerCase().includes(q);
-        const matchKelas = item.kelas?.nama.toLowerCase().includes(q);
-        const matchOrtu = item.siswa.namaOrangTua?.toLowerCase().includes(q);
+        const q = String(searchQuery || '').toLowerCase();
+        const matchName = item.siswa?.nama ? String(item.siswa.nama).toLowerCase().includes(q) : false;
+        const matchNisn = item.siswa?.nisn ? String(item.siswa.nisn).toLowerCase().includes(q) : false;
+        const matchKelas = item.kelas?.nama ? String(item.kelas.nama).toLowerCase().includes(q) : false;
+        const matchOrtu = item.siswa?.namaOrangTua ? String(item.siswa.namaOrangTua).toLowerCase().includes(q) : false;
         if (!matchName && !matchNisn && !matchKelas && !matchOrtu) return false;
       }
 

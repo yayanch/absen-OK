@@ -94,7 +94,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
         icon={Building2}
         title={`Kelas ${currentClassName}`}
         description={`Total ${totalStudents} Siswa Terdaftar • Tanggal ${formatDateIndo(selectedDate)}`}
-        badge="Kelas Binaan Wali Kelas"
+        badge={currentUser.role === 'piket_kelas' ? 'Petugas Piket Kelas' : 'Kelas Binaan Wali Kelas'}
         actions={
           <button
             onClick={() => onNavigateToInput(targetClasses[0]?.id)}
@@ -106,9 +106,9 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
         }
       />
 
-      {/* Quick Actions Wali Kelas */}
+      {/* Quick Actions */}
       <RoleQuickActions
-        role="wali"
+        role={currentUser.role}
         onNavigateView={onNavigateView}
         onNavigateToInput={() => onNavigateToInput(targetClasses[0]?.id)}
       />

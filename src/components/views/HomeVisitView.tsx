@@ -357,11 +357,11 @@ export const HomeVisitView: React.FC<HomeVisitViewProps> = ({
         const query = searchTerm.toLowerCase();
         const siswaObj = siswaList.find((s) => s.id === hv.siswaId);
         const kelasObj = sortedKelas.find((k) => k.id === hv.kelasId);
-        const namaSiswa = siswaObj?.nama.toLowerCase() || '';
-        const nisnSiswa = siswaObj?.nisn.toLowerCase() || '';
-        const namaKelas = kelasObj?.nama.toLowerCase() || '';
-        const petugas = hv.petugas.toLowerCase();
-        const alasan = hv.alasan.toLowerCase();
+        const namaSiswa = String(siswaObj?.nama || '').toLowerCase();
+        const nisnSiswa = String(siswaObj?.nisn || '').toLowerCase();
+        const namaKelas = String(kelasObj?.nama || '').toLowerCase();
+        const petugas = String(hv.petugas || '').toLowerCase();
+        const alasan = String(hv.alasan || '').toLowerCase();
 
         return (
           namaSiswa.includes(query) ||

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, BookOpen, Users, ClipboardCheck, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Clock, BookOpen, Users, CheckCircle2, ChevronRight } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { cleanMapelName, normalizeWeeklyShiftPeriods, getTodayString } from '../../utils/helpers';
 import { determineKelasKelompok, parseJamKeList } from '../views/JadwalMengajarView';
@@ -259,16 +259,6 @@ export const TeacherScheduleWidget: React.FC<TeacherScheduleWidgetProps> = ({
                       })}
                     </div>
                   </div>
-                </div>
-
-                <div className="shrink-0">
-                  <button
-                    onClick={() => onNavigateToInput(targetK?.id || item.kelasId)}
-                    className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-theme-primary hover:bg-theme-primary-dark text-white text-xs font-bold shadow-xs active:scale-95 transition cursor-pointer"
-                  >
-                    <ClipboardCheck className="w-4 h-4" />
-                    <span>{isFilled ? 'Buka Presensi' : 'Isi Presensi Kelas'}</span>
-                  </button>
                 </div>
               </div>
             );

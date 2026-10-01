@@ -33,6 +33,8 @@ interface KesiswaanDashboardViewProps {
   targetClasses: any[];
   setSelectedStudentDetail: (item: any) => void;
   onNavigateView: (view: ViewType) => void;
+  onNavigateToInput?: (kelasId?: string) => void;
+  onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
@@ -50,6 +52,8 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
   targetClasses,
   setSelectedStudentDetail,
   onNavigateView,
+  onNavigateToInput,
+  onShowToast,
 }) => {
   // Map student risk levels (Prioritas, Perlu Perhatian)
   const studentsWithRisk = React.useMemo(() => {
@@ -116,7 +120,11 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
       />
 
       {/* Quick Actions Kesiswaan / Piket */}
-      <RoleQuickActions role={currentUser.role} onNavigateView={onNavigateView} />
+      <RoleQuickActions
+        role={currentUser.role}
+        onNavigateView={onNavigateView}
+        onNavigateToInput={onNavigateToInput}
+      />
 
       {/* Statistik Utama Kesiswaan */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">

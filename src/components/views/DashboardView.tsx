@@ -120,9 +120,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayStr = getTodayString();
   const sortedKelas = sortKelasList(appData.kelas);
 
+  const userScope = React.useMemo(() => {
+    if (currentUser.role === 'wali') {
+      return { waliKelasId: (currentUser.data as any)?.id };
+    }
+    if (currentUser.role === 'piket_kelas') {
+      return { kelasId: (currentUser.data as any)?.kelasId };
+    }
+    return undefined;
+  }, [currentUser]);
+
   let targetClasses = sortedKelas;
   if (currentUser.role === 'wali') {
-    targetClasses = sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any).id);
+    targetClasses = sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any)?.id);
+  } else if (currentUser.role === 'piket_kelas') {
+    targetClasses = sortedKelas.filter((k) => k.id === (currentUser.data as any)?.kelasId);
   }
 
   // Active Students Calculation
@@ -135,9 +147,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return calculateDailyAttendanceStats(
       appData,
       selectedDate,
-      currentUser.role === 'wali' ? { waliKelasId: (currentUser.data as any).id } : undefined
+      userScope
     );
-  }, [appData, selectedDate, currentUser]);
+  }, [appData, selectedDate, userScope]);
 
   const totalStudents = dailyStats.totalSiswa;
   const hadirCount = dailyStats.hadirCount;
@@ -161,17 +173,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const waliStudents = React.useMemo(() => {
     return getCanonicalActiveStudents(
       appData,
-      currentUser.role === 'wali' ? { waliKelasId: (currentUser.data as any).id } : undefined
+      userScope
     );
-  }, [appData, currentUser]);
+  }, [appData, userScope]);
 
   // Canonical Cumulative Student Stats
   const studentCumulativeStats = React.useMemo(() => {
     return calculateCumulativeStudentStats(appData, {
       maxDate: todayStr,
-      waliKelasId: currentUser.role === 'wali' ? (currentUser.data as any).id : undefined,
+      ...userScope,
     });
-  }, [appData, todayStr, currentUser]);
+  }, [appData, todayStr, userScope]);
 
   // Filtered Cumulative Table
   const filteredCumulativeStats = studentCumulativeStats.filter((item) => {
@@ -180,8 +192,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
 
     const matchSearch =
-      item.siswa.nama.toLowerCase().includes(rekapSearch.toLowerCase()) ||
-      item.siswa.nisn.toLowerCase().includes(rekapSearch.toLowerCase());
+      (item.siswa?.nama ? String(item.siswa.nama).toLowerCase().includes(rekapSearch.toLowerCase()) : false) ||
+      (item.siswa?.nisn ? String(item.siswa.nisn).toLowerCase().includes(rekapSearch.toLowerCase()) : false);
     if (!matchSearch) return false;
 
     if (rekapFilter === 'absent_only') return item.totalTidakHadir > 0;
@@ -266,7 +278,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const dayStat = calculateDailyAttendanceStats(
         appData,
         dStr,
-        currentUser.role === 'wali' ? { waliKelasId: (currentUser.data as any).id } : undefined
+        userScope
       );
 
       const dayHadir = dayStat.hadirCount;
@@ -398,10 +410,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             targetClasses={targetClasses}
             setSelectedStudentDetail={setSelectedStudentDetail}
             onNavigateView={onNavigateView}
+            onNavigateToInput={onNavigateToInput}
+            onShowToast={onShowToast}
           />
         );
 
       case 'wali':
+      case 'piket_kelas':
         return (
           <WaliKelasDashboardView
             appData={appData}

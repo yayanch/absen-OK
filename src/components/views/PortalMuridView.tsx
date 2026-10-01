@@ -48,6 +48,7 @@ import {
   CalendarDays,
   Search,
   ArrowLeft,
+  Flag,
   Sun,
   Sunset
 } from 'lucide-react';
@@ -2135,6 +2136,26 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {day === 'Senin' && selectedShiftView === 'pagi' && (
+                        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-rose-50 to-red-50 dark:from-rose-950/40 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between gap-3 md:col-span-2 shadow-2xs">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                              <Flag className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-rose-800 dark:text-rose-200 flex items-center gap-2">
+                                <span>Upacara Bendera (Bukan Jam Pelajaran)</span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-200/80 dark:bg-rose-900/70 text-rose-900 dark:text-rose-200">
+                                  Jam ke-1 &amp; 2 (06.30 - 08.00 WIB)
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-medium text-rose-700/80 dark:text-rose-300/80">
+                                Kegiatan rutin Upacara Bendera sekolah wajib diikuti seluruh siswa &amp; guru Shift Pagi. Pelajaran dimulai dari Jam ke-3.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {dayItems.map((item) => {
                         const status = getSubjectStatus(item, isToday);
 

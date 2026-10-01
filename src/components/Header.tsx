@@ -167,6 +167,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { label: 'Piket Kesiswaan', icon: UserCheck, color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300' };
       case 'piket_guru':
         return { label: 'Piket Guru', icon: UserCheck, color: 'bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300' };
+      case 'piket_kelas':
+        return { label: 'Piket Kelas', icon: UserCheck, color: 'bg-teal-100 text-teal-800 dark:bg-teal-950/80 dark:text-teal-300' };
       case 'guru':
         return { label: 'Guru Pengajar', icon: User, color: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300' };
       case 'murid':

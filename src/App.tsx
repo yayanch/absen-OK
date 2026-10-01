@@ -40,6 +40,7 @@ const HomeVisitView = React.lazy(() => import('./components/views/HomeVisitView'
 const PelanggaranView = React.lazy(() => import('./components/views/PelanggaranView').then(m => ({ default: m.PelanggaranView })));
 const EkstrakurikulerView = React.lazy(() => import('./components/views/EkstrakurikulerView').then(m => ({ default: m.EkstrakurikulerView })));
 const RekapHarianView = React.lazy(() => import('./components/views/RekapHarianView').then(m => ({ default: m.RekapHarianView })));
+const RekapPengisianKelasView = React.lazy(() => import('./components/views/RekapPengisianKelasView').then(m => ({ default: m.RekapPengisianKelasView })));
 const RekapMingguanView = React.lazy(() => import('./components/views/RekapMingguanView').then(m => ({ default: m.RekapMingguanView })));
 const RekapBulananView = React.lazy(() => import('./components/views/RekapBulananView').then(m => ({ default: m.RekapBulananView })));
 const RekapKetidakhadiranTertinggiView = React.lazy(() => import('./components/views/RekapKetidakhadiranTertinggiView').then(m => ({ default: m.RekapKetidakhadiranTertinggiView })));
@@ -59,6 +60,7 @@ const DataDemoView = React.lazy(() => import('./components/views/DataDemoView').
 const IntegrasiMySQLView = React.lazy(() => import('./components/views/IntegrasiMySQLView').then(m => ({ default: m.IntegrasiMySQLView })));
 const DatabaseTrafficView = React.lazy(() => import('./components/views/DatabaseTrafficView').then(m => ({ default: m.DatabaseTrafficView })));
 const CetakKartuQrView = React.lazy(() => import('./components/views/CetakKartuQrView').then(m => ({ default: m.CetakKartuQrView })));
+const PetugasPiketView = React.lazy(() => import('./components/views/PetugasPiketView').then(m => ({ default: m.PetugasPiketView })));
 const LiveChatView = React.lazy(() => import('./components/views/LiveChatView').then(m => ({ default: m.LiveChatView })));
 import { LiveChatWidget } from './components/chat/LiveChatWidget';
 import { OfflineView } from './components/views/OfflineView';
@@ -378,6 +380,12 @@ export default function App() {
               const mergedEkskul = (Array.isArray(data.appData.ekstrakurikuler) && data.appData.ekstrakurikuler.length > 0)
                 ? data.appData.ekstrakurikuler
                 : (prev.ekstrakurikuler || []);
+              const mergedPetugasPiket = (Array.isArray(data.appData.petugasPiket) && data.appData.petugasPiket.length > 0)
+                ? data.appData.petugasPiket
+                : (prev.petugasPiket || []);
+              const mergedCatatanPiket = Array.isArray(data.appData.catatanPiketHarian)
+                ? data.appData.catatanPiketHarian
+                : (prev.catatanPiketHarian || []);
               const mergedAnggotaEkskul = (Array.isArray(data.appData.anggotaEkskul) && data.appData.anggotaEkskul.length > 0)
                 ? data.appData.anggotaEkskul
                 : (prev.anggotaEkskul || []);
@@ -418,6 +426,8 @@ export default function App() {
                 hariLibur: mergedHariLibur,
                 pengumuman: mergedPengumuman,
                 ekstrakurikuler: mergedEkskul,
+                petugasPiket: mergedPetugasPiket,
+                catatanPiketHarian: mergedCatatanPiket,
                 anggotaEkskul: mergedAnggotaEkskul,
                 presensiEkskul: mergedPresensiEkskul,
                 auditLogs: mergedAuditLogs,
@@ -494,6 +504,8 @@ export default function App() {
           const customHariLibur = customEvent.detail.hariLibur || prev.hariLibur;
           const customPengumuman = customEvent.detail.pengumuman || prev.pengumuman;
           const customEkskul = customEvent.detail.ekstrakurikuler || prev.ekstrakurikuler;
+          const customPetugasPiket = customEvent.detail.petugasPiket || prev.petugasPiket;
+          const customCatatanPiket = customEvent.detail.catatanPiketHarian || prev.catatanPiketHarian;
           const customAnggotaEkskul = customEvent.detail.anggotaEkskul || prev.anggotaEkskul;
           const customPresensiEkskul = customEvent.detail.presensiEkskul || prev.presensiEkskul;
           const customAuditLogs = customEvent.detail.auditLogs || prev.auditLogs;
@@ -514,6 +526,8 @@ export default function App() {
             hariLibur: customHariLibur,
             pengumuman: customPengumuman,
             ekstrakurikuler: customEkskul,
+            petugasPiket: customPetugasPiket,
+            catatanPiketHarian: customCatatanPiket,
             anggotaEkskul: customAnggotaEkskul,
             presensiEkskul: customPresensiEkskul,
             auditLogs: customAuditLogs,
@@ -1309,6 +1323,31 @@ export default function App() {
                 onConfirmModal={openConfirmModal}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
+              />
+            )}
+
+            {currentView === 'petugas_piket' && (
+              <PetugasPiketView
+                appData={appData}
+                currentUser={currentUser}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
+                onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
+                readOnly={currentUser.role !== 'admin' && currentUser.role !== 'kesiswaan'}
+              />
+            )}
+
+            {currentView === 'rekap_pengisian_kelas' && (
+              <RekapPengisianKelasView
+                appData={appData}
+                currentUser={currentUser}
+                onNavigateToInput={(kelasId) => {
+                  setSelectedInputKelasId(kelasId);
+                  handleNavigate('presensi_input');
+                }}
+                onNavigateView={handleNavigate}
+                onShowToast={showToast}
               />
             )}
 

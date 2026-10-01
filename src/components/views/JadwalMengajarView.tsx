@@ -217,11 +217,26 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   // Modal state untuk formulir input/edit jadwal (hanya muncul saat klik "+ Isi" pada matriks atau edit)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
-  // Master Data collections
+  // Master Data collections (excludes piket petugas from teaching schedules)
   const guruList: WaliKelas[] = useMemo(() => {
-    return [...(appData.waliKelas || [])].sort((a, b) =>
-      (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' })
-    );
+    return (appData.waliKelas || [])
+      .filter((g) => {
+        const r = String(g.role || '').toLowerCase();
+        const u = String(g.username || '').toLowerCase();
+        const n = String(g.nama || '').toLowerCase();
+        return !(
+          r === 'piket' ||
+          r === 'piket_guru' ||
+          r === 'piket_kesiswaan' ||
+          u === 'piket_guru' ||
+          u === 'piket_kesiswaan' ||
+          u.startsWith('piket_') ||
+          n.includes('(piket')
+        );
+      })
+      .sort((a, b) =>
+        (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' })
+      );
   }, [appData.waliKelas]);
 
   const kelasList: Kelas[] = useMemo(() => {
@@ -505,12 +520,23 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
   // Toggle Jam Bulatan Biru
   const toggleJam = (jamNum: number) => {
+    if (formHari === 'Senin' && formShift === 'Pagi' && (jamNum === 1 || jamNum === 2)) {
+      onShowToast('Jam pelajaran 1-2 shift pagi adalah Upacara Bendera, bukan jam pelajaran!', 'warning');
+      return;
+    }
     if (formSelectedJam.includes(jamNum)) {
       setFormSelectedJam(formSelectedJam.filter((j) => j !== jamNum));
     } else {
       setFormSelectedJam([...formSelectedJam, jamNum].sort((a, b) => a - b));
     }
   };
+
+  // Auto-clear jam 1 and 2 if user selects Hari Senin on Shift Pagi
+  useEffect(() => {
+    if (formHari === 'Senin' && formShift === 'Pagi') {
+      setFormSelectedJam((prev) => prev.filter((j) => j !== 1 && j !== 2));
+    }
+  }, [formHari, formShift]);
 
   // =========================================================================
   // ACUAN MAPEL & KELAS GURU LOGIC & SYNCHRONIZATION
@@ -838,6 +864,10 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   // Open Form modal for specific cell in the Matrix
   const handleOpenFormForCell = useCallback(
     (hari: HariKerja, jamNum: number) => {
+      if (activeMatrixOption.shift === 'Pagi' && hari === 'Senin' && (jamNum === 1 || jamNum === 2)) {
+        onShowToast('Jam pelajaran 1-2 shift pagi adalah Upacara Bendera, bukan jam pelajaran!', 'warning');
+        return;
+      }
       resetForm();
       setFormHari(hari);
       setFormShift(activeMatrixOption.shift);
@@ -1023,6 +1053,10 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     }
     if (formSelectedJam.length === 0) {
       onShowToast('Pilih minimal 1 jam pelajaran pada bulatan biru angka 1 - 10!', 'warning');
+      return;
+    }
+    if (formShift === 'Pagi' && formHari === 'Senin' && formSelectedJam.some((j) => j === 1 || j === 2)) {
+      onShowToast('Jam pelajaran 1-2 shift pagi pada hari Senin adalah Upacara Bendera, bukan jam pelajaran!', 'error');
       return;
     }
     if (!formMataPelajaran.trim()) {
@@ -1845,8 +1879,23 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               <div className="pt-2 pb-1">
                 <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                   {LIST_JAM_ANGKA.map((num) => {
+                    const isSeninPagiUpacara = formHari === 'Senin' && formShift === 'Pagi' && (num === 1 || num === 2);
                     const isSelected = formSelectedJam.includes(num);
                     const timeStr = getJamPelajaranTime(num, formShift);
+
+                    if (isSeninPagiUpacara) {
+                      return (
+                        <div
+                          key={num}
+                          className="group relative w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black transition-all select-none bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border-2 border-rose-300 dark:border-rose-800 shadow-2xs cursor-not-allowed"
+                          title={`Jam ke-${num} (${formShift}: ${timeStr}) - Upacara Bendera (Bukan Jam Pelajaran)`}
+                        >
+                          <Flag className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                          <span className="text-[9px] font-black uppercase text-rose-700 dark:text-rose-300">Upacara</span>
+                        </div>
+                      );
+                    }
+
                     return (
                       <button
                         key={num}
@@ -1865,6 +1914,15 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   })}
                 </div>
               </div>
+
+              {formHari === 'Senin' && formShift === 'Pagi' && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center gap-2.5 text-xs text-rose-800 dark:text-rose-200">
+                  <Flag className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>
+                    <strong>Pemberitahuan:</strong> Jam ke-1 &amp; 2 Shift Pagi dialokasikan khusus untuk <strong>Upacara Bendera</strong> (bukan jam pelajaran). KBM reguler dimulai dari <strong>Jam ke-3 (07.30 WIB)</strong>.
+                  </span>
+                </div>
+              )}
 
               {/* Live Info Banner for Selected Hours */}
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-white dark:bg-slate-900 border border-blue-100 dark:border-slate-800 text-xs">
@@ -2722,24 +2780,13 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                   </div>
                                 </div>
                               ) : isUpacara ? (
-                                <div className="p-2 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/70 space-y-1 shadow-2xs">
-                                  <div className="flex items-center gap-1 font-black text-rose-700 dark:text-rose-300 text-xs">
+                                <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/70 space-y-1 shadow-2xs">
+                                  <div className="flex items-center gap-1.5 font-black text-rose-700 dark:text-rose-300 text-xs">
                                     <Flag className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                                    <span className="truncate">Upacara</span>
+                                    <span className="truncate">Upacara Bendera</span>
                                   </div>
-                                  <div className="text-[10px] font-medium text-rose-700/90 dark:text-rose-300/90 flex items-center justify-between gap-1">
-                                    <span className="truncate">Wajib Bersama</span>
-                                    {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenFormForCell(hari, jamNum)}
-                                        className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-200 hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
-                                        title={`Isi penugasan / catatan Hari ${hari}, Jam ${jamNum}`}
-                                      >
-                                        <Plus className="w-3 h-3" />
-                                        <span>Isi</span>
-                                      </button>
-                                    )}
+                                  <div className="text-[10px] font-semibold text-rose-700/80 dark:text-rose-300/80 leading-tight">
+                                    Bukan Pelajaran (Wajib Bersama)
                                   </div>
                                 </div>
                               ) : isPembiasaan ? (

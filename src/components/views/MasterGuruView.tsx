@@ -37,9 +37,11 @@ import {
   Briefcase,
   Sliders,
   Award,
-  Clock
+  Clock,
+  ClipboardList,
+  ChevronRight
 } from 'lucide-react';
-import { AppData, WaliKelas, UserSession } from '../../types';
+import { AppData, WaliKelas, UserSession, ViewType } from '../../types';
 import { Pagination } from '../Pagination';
 import { PageHeader } from '../common/UIComponents';
 import { addAuditLog, compressBase64Image } from '../../utils/helpers';
@@ -52,6 +54,31 @@ import {
   mapDutiesToRoles,
   reconcileRolesAndDuties,
 } from '../../utils/rolePermissionEngine';
+
+// Strict helper to distinguish picket accounts (Piket Guru & Piket Kesiswaan) from teaching teachers
+export const isPiketAccount = (g: any): boolean => {
+  if (!g) return false;
+  const r = String(g.role || '').toLowerCase();
+  const u = String(g.username || '').toLowerCase();
+  const n = String(g.nama || '').toLowerCase();
+  const t = String(g.tugasTambahan || '').toLowerCase();
+  const j = String(g.jabatan || '').toLowerCase();
+  return (
+    r === 'piket' ||
+    r === 'piket_guru' ||
+    r === 'piket_kesiswaan' ||
+    u === 'piket' ||
+    u === 'piket_guru' ||
+    u === 'piket_kesiswaan' ||
+    u.startsWith('piket_') ||
+    n.includes('(piket kesiswaan)') ||
+    n.includes('(piket guru)') ||
+    n.includes('piket kesiswaan') ||
+    n.includes('piket guru') ||
+    t.includes('piket') ||
+    j.includes('piket')
+  );
+};
 
 const NAMA_BULAN_INDONESIA = [
   'Januari',
@@ -130,6 +157,7 @@ interface MasterGuruViewProps {
     onConfirm: () => void
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onNavigateView?: (view: ViewType) => void;
   initialSearchQuery?: string;
 }
 
@@ -284,13 +312,15 @@ const PengaturanHariMengajarModalContent: React.FC<PengaturanHariMengajarModalCo
   const [bulkDays, setBulkDays] = useState<string[]>(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
   const [bulkBatasiLogin, setBulkBatasiLogin] = useState<boolean>(false);
 
-  // Local Teachers list state for fine-tuning before saving
+  // Local Teachers list state for fine-tuning before saving (strictly excludes piket)
   const [guruList, setGuruList] = useState<WaliKelas[]>(() => {
-    return (appData.waliKelas || []).map((g) => ({
-      ...g,
-      hariMengajar: Array.isArray(g.hariMengajar) && g.hariMengajar.length > 0 ? [...g.hariMengajar] : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
-      batasiLoginHariMengajar: Boolean(g.batasiLoginHariMengajar),
-    }));
+    return (appData.waliKelas || [])
+      .filter((g) => !isPiketAccount(g))
+      .map((g) => ({
+        ...g,
+        hariMengajar: Array.isArray(g.hariMengajar) && g.hariMengajar.length > 0 ? [...g.hariMengajar] : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
+        batasiLoginHariMengajar: Boolean(g.batasiLoginHariMengajar),
+      }));
   });
 
   // Filter teachers based on shift, kelompok, and search
@@ -693,7 +723,6 @@ const GuruFormModalContent: React.FC<GuruFormModalContentProps> = ({
     'Pembina OSIS',
     'Koordinator BP / BK',
     'Kepala Perpustakaan',
-    'Guru Piket',
     'Bendahara BOS / Sekolah',
     'Koordinator P5',
     'Tim Ketertiban & Disiplin (Tatib)',
@@ -1427,7 +1456,6 @@ const QuickRoleModalContent: React.FC<QuickRoleModalContentProps> = ({
     'Pembina OSIS',
     'Koordinator BP / BK',
     'Kepala Perpustakaan',
-    'Guru Piket',
     'Bendahara BOS / Sekolah',
     'Koordinator P5',
     'Tim Ketertiban & Disiplin (Tatib)',
@@ -1845,6 +1873,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
   onCloseModal,
   onConfirmModal,
   onShowToast,
+  onNavigateView,
   initialSearchQuery,
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearchQuery || '');
@@ -1867,8 +1896,8 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
   // List of all registered roles
   const allRoles = useMemo(() => getAllRolePermissions(appData), [appData]);
 
-  // List of all teachers (biodata)
-  const guruList: WaliKelas[] = appData.waliKelas || [];
+  // List of all teachers (biodata) - strictly excludes piket accounts
+  const guruList: WaliKelas[] = (appData.waliKelas || []).filter((g) => !isPiketAccount(g));
 
   // Filter list
   let filteredGuru = guruList.filter((g) => {
@@ -2563,6 +2592,33 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
           ) : undefined
         }
       />
+
+      {/* Info Callout: Petugas Piket Dipisahkan */}
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <ClipboardList className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-xs">
+              Pemberitahuan Pemisahan Petugas Piket:
+            </span>
+            <p className="text-[11px] text-amber-800/85 dark:text-amber-300/85 mt-0.5">
+              Petugas Piket Guru dan Piket Kesiswaan tidak dimasukkan sebagai Guru Pengajar, melainkan dikelola pada menu tersendiri: <strong>Petugas Piket Sekolah</strong>.
+            </p>
+          </div>
+        </div>
+        {onNavigateView && (
+          <button
+            type="button"
+            onClick={() => onNavigateView('petugas_piket')}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-center"
+          >
+            <span>Buka Bagian Petugas Piket</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

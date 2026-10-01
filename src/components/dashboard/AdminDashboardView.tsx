@@ -25,6 +25,7 @@ import { formatDateIndo, calculateDailyAttendanceStats } from '../../utils/helpe
 import { AttendanceTrendChart, AttendanceRecapChart, TrendRangeOption } from './AttendanceTrendChart';
 import { PageHeader, StatCard } from '../common/UIComponents';
 import { WhatsAppLiveMonitoringCard } from './WhatsAppLiveMonitoringCard';
+import { RoleQuickActions } from './RoleQuickActions';
 
 interface AdminDashboardViewProps {
   appData: AppData;
@@ -189,6 +190,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-theme-primary"
           />
         }
+      />
+
+      {/* Aksi Cepat Administrator */}
+      <RoleQuickActions
+        role={currentUser.role}
+        onNavigateView={onNavigateView}
+        onNavigateToInput={onNavigateToInput}
       />
 
       {/* Statistik Utama Admin */}

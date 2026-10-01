@@ -61,6 +61,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
 
   // 3. Laporan & Rekapitulasi
   {
+    id: 'rekap_pengisian_kelas',
+    label: 'Status Pengisian Presensi',
+    shortDesc: 'Rekapitulasi status kelas yang sudah dan belum mengisi absensi hari ini',
+    category: 'laporan',
+    iconName: 'CheckCircle2',
+  },
+  {
     id: 'rekap_harian',
     label: 'Rekap Presensi Harian',
     shortDesc: 'Laporan kehadiran harian seluruh kelas beserta filter tanggal',
@@ -110,6 +117,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     shortDesc: 'Master data guru pengampu, NIP, jabatan, dan nomor telepon',
     category: 'master',
     iconName: 'UserCheck',
+  },
+  {
+    id: 'petugas_piket',
+    label: 'Data Petugas Piket',
+    shortDesc: 'Master data penugasan guru piket harian, jadwal shift piket, dan buku logbook',
+    category: 'master',
+    iconName: 'ClipboardList',
   },
   {
     id: 'master_mapel',
@@ -398,6 +412,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'rekap_pengisian_kelas',
       'rekap_harian',
       'rekap_mingguan',
       'rekap_bulanan',
@@ -415,6 +430,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'catatan_pelanggaran',
       'home_visit',
       'ekstrakurikuler',
+      'petugas_piket',
       'absen_qr',
       'cetak_kartu_qr',
       'audit_logs',
@@ -545,7 +561,9 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     isSystem: true,
     allowedMenus: [
       'dashboard',
+      'petugas_piket',
       'presensi_input',
+      'rekap_pengisian_kelas',
       'catatan_pelanggaran',
       'ekstrakurikuler',
       'absen_qr',
@@ -562,13 +580,28 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     isSystem: true,
     allowedMenus: [
       'dashboard',
+      'petugas_piket',
       'presensi_input',
+      'rekap_pengisian_kelas',
       'catatan_pelanggaran',
       'ekstrakurikuler',
       'absen_qr',
       'rekap_harian',
       'live_chat',
       'pengaturan_admin',
+    ],
+  },
+  {
+    roleId: 'piket_kelas',
+    roleName: 'Piket Kelas',
+    description: 'Petugas piket kelas / sekretaris yang bertugas merekam dan mengisi kehadiran siswa kelas binaannya',
+    badgeColor: 'teal',
+    isSystem: true,
+    allowedMenus: [
+      'dashboard',
+      'presensi_input',
+      'rekap_siswa',
+      'live_chat',
     ],
   },
 ];
