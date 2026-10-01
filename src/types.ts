@@ -826,6 +826,7 @@ export type ViewType =
   | 'rekap_bulanan'
   | 'rekap_ketidakhadiran_tertinggi'
   | 'rekap_pengisian_kelas'
+  | 'broadcast_wa'
   | 'master_jurusan'
   | 'master_wali'
   | 'master_guru'

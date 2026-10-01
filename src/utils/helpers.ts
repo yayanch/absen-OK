@@ -1204,10 +1204,19 @@ export function loadAppData(): AppData {
     if (stored) {
       const parsed = JSON.parse(stored);
       const merged = { ...DEMO_DATASET, ...parsed };
-      if (parsed.siswa && Array.isArray(parsed.siswa) && parsed.siswa.length > 0) {
+      if (Array.isArray(parsed.siswa)) {
         merged.siswa = parsed.siswa;
       }
-      if (parsed.presensi && typeof parsed.presensi === 'object' && Object.keys(parsed.presensi).length > 0) {
+      if (Array.isArray(parsed.kelas) && parsed.kelas.length > 0) {
+        merged.kelas = parsed.kelas;
+      }
+      if (Array.isArray(parsed.jurusan) && parsed.jurusan.length > 0) {
+        merged.jurusan = parsed.jurusan;
+      }
+      if (Array.isArray(parsed.waliKelas) && parsed.waliKelas.length > 0) {
+        merged.waliKelas = parsed.waliKelas;
+      }
+      if (parsed.presensi && typeof parsed.presensi === 'object') {
         merged.presensi = parsed.presensi;
       }
       if (merged.sekolah) {
@@ -1312,13 +1321,7 @@ export function loadAppData(): AppData {
     console.error('Failed to load local storage data', e);
   }
   const defaultData = JSON.parse(JSON.stringify(DEMO_DATASET));
-  if (defaultData.siswa && Array.isArray(defaultData.siswa)) {
-    defaultData.siswa = defaultData.siswa.map((s: any) => ({
-      ...s,
-      noWa: '',
-      noWaOrangTua: '',
-    }));
-  }
+  defaultData.siswa = [];
   if (!defaultData.securityConfig) {
     defaultData.securityConfig = DEFAULT_SECURITY_CONFIG;
   }

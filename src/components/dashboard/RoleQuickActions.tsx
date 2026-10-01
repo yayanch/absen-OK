@@ -14,6 +14,7 @@ import {
   QrCode,
   UserCheck,
   CheckCircle2,
+  Send,
 } from 'lucide-react';
 import { UserRole, ViewType } from '../../types';
 
@@ -489,6 +490,20 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
               <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate">Ringkasan KBM sepekan</div>
             </div>
           </button>
+
+          {/* 8. Broadcast WA */}
+          <button
+            onClick={() => onNavigateView('broadcast_wa')}
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-emerald-500/30 shadow-xs"
+          >
+            <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+              <Send className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-extrabold text-xs truncate text-emerald-950 dark:text-emerald-100">Broadcast WA</div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">Siaran ke ortu/siswa</div>
+            </div>
+          </button>
         </div>
       </div>
     );
@@ -588,7 +603,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
       <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
         Aksi Cepat Guru Pengajar
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* 1. Mapel & Kelas Ajar */}
         <button
           onClick={() => onNavigateView('mapel_kelas_guru')}
@@ -628,6 +643,20 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           <div className="min-w-0">
             <div className="font-extrabold text-xs truncate text-blue-950 dark:text-blue-100">Jadwal Mengajar Minggu Ini</div>
             <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold truncate">Ringkasan KBM sepekan</div>
+          </div>
+        </button>
+
+        {/* 4. Broadcast WA */}
+        <button
+          onClick={() => onNavigateView('broadcast_wa')}
+          className="flex items-center gap-3 p-3.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-slate-800 dark:text-slate-100 transition text-left cursor-pointer group border border-indigo-200/80 dark:border-indigo-800/60 shadow-xs"
+        >
+          <div className="p-2.5 rounded-xl bg-indigo-600 text-white shrink-0 group-hover:scale-105 transition shadow-xs">
+            <Send className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-extrabold text-xs truncate text-indigo-950 dark:text-indigo-100">Broadcast WA</div>
+            <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold truncate">Siaran info tugas &amp; mapel</div>
           </div>
         </button>
       </div>

@@ -52,6 +52,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     iconName: 'ClipboardCheck',
   },
   {
+    id: 'broadcast_wa',
+    label: 'Tulis Broadcast WA',
+    shortDesc: 'Tulis dan kirim pesan broadcast WhatsApp untuk Guru dan Wali Kelas kepada siswa / orang tua',
+    category: 'presensi',
+    iconName: 'Send',
+  },
+  {
     id: 'mapel_kelas_guru',
     label: 'Mapel & Kelas Ajar',
     shortDesc: 'Pengaturan penugasan mata pelajaran dan kelas ajar guru',
@@ -412,6 +419,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'broadcast_wa',
       'rekap_pengisian_kelas',
       'rekap_harian',
       'rekap_mingguan',
@@ -470,6 +478,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'broadcast_wa',
       'rekap_harian',
       'rekap_mingguan',
       'rekap_bulanan',
@@ -494,6 +503,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'broadcast_wa',
       'mapel_kelas_guru',
       'jadwal_mengajar',
       'jadwal_minggu_ini',
@@ -563,6 +573,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'dashboard',
       'petugas_piket',
       'presensi_input',
+      'broadcast_wa',
       'rekap_pengisian_kelas',
       'catatan_pelanggaran',
       'ekstrakurikuler',
@@ -582,6 +593,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'dashboard',
       'petugas_piket',
       'presensi_input',
+      'broadcast_wa',
       'rekap_pengisian_kelas',
       'catatan_pelanggaran',
       'ekstrakurikuler',

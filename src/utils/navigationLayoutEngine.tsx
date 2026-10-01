@@ -109,8 +109,8 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
     order: 2,
     visible: true,
     isAccordion: false,
-    description: 'Pencatatan kehadiran harian siswa dan alokasi mapel guru',
-    menuIds: ['presensi_input', 'mapel_kelas_guru']
+    description: 'Pencatatan kehadiran harian siswa, tulis broadcast WA, dan alokasi mapel guru',
+    menuIds: ['presensi_input', 'broadcast_wa', 'mapel_kelas_guru']
   },
   {
     id: 'laporan',
@@ -264,6 +264,17 @@ export function getNavigationLayout(appData?: AppData): NavigationLayoutConfig {
   const laporanSec = clonedSections.find((s) => s.id === 'laporan');
   if (laporanSec && !laporanSec.menuIds.includes('rekap_pengisian_kelas')) {
     laporanSec.menuIds.unshift('rekap_pengisian_kelas');
+  }
+
+  // Ensure broadcast_wa is in the 'presensi' section
+  const presensiSec = clonedSections.find((s) => s.id === 'presensi');
+  if (presensiSec && !presensiSec.menuIds.includes('broadcast_wa')) {
+    const inputIdx = presensiSec.menuIds.indexOf('presensi_input');
+    if (inputIdx !== -1) {
+      presensiSec.menuIds.splice(inputIdx + 1, 0, 'broadcast_wa');
+    } else {
+      presensiSec.menuIds.push('broadcast_wa');
+    }
   }
 
   // Remove any legacy standalone piket_section

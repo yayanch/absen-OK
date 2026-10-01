@@ -755,14 +755,37 @@ function saveAppDataCache(data: any) {
       data.presensi = inMemoryAppDataCache.presensi;
     }
 
-    // Preserve master collections if incoming is empty
-    if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
+    // Preserve master collections if incoming is empty or accidental demo dataset
+    const isIncomingDemoClasses = (
+      Array.isArray(data.kelas) &&
+      data.kelas.length <= 4 &&
+      data.kelas.some((k: any) => k.id === 'KEL_1' || k.nama === 'XII RPL 1')
+    );
+    if (Array.isArray(inMemoryAppDataCache.kelas) && inMemoryAppDataCache.kelas.length > 4 && isIncomingDemoClasses) {
+      data.kelas = inMemoryAppDataCache.kelas;
+    } else if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
       data.kelas = inMemoryAppDataCache.kelas;
     }
-    if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
+
+    const isIncomingDemoWali = (
+      Array.isArray(data.waliKelas) &&
+      data.waliKelas.length <= 4 &&
+      data.waliKelas.some((w: any) => w.id === 'WAL_1' || w.nama === 'Budi Santoso, S.Kom')
+    );
+    if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 4 && isIncomingDemoWali) {
+      data.waliKelas = inMemoryAppDataCache.waliKelas;
+    } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
       data.waliKelas = inMemoryAppDataCache.waliKelas;
     }
-    if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
+
+    const isIncomingDemoJurusan = (
+      Array.isArray(data.jurusan) &&
+      data.jurusan.length <= 4 &&
+      data.jurusan.some((j: any) => j.id === 'JUR_1' || j.kode === 'RPL')
+    );
+    if (Array.isArray(inMemoryAppDataCache.jurusan) && inMemoryAppDataCache.jurusan.length > 4 && isIncomingDemoJurusan) {
+      data.jurusan = inMemoryAppDataCache.jurusan;
+    } else if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
       data.jurusan = inMemoryAppDataCache.jurusan;
     }
     if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0 && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
@@ -1028,7 +1051,16 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       );
     }
 
-    if (Array.isArray(appData.jurusan)) {
+    const isIncomingDemoClasses = (
+      Array.isArray(appData.kelas) &&
+      appData.kelas.length <= 4 &&
+      appData.kelas.some((k: any) => k.id === 'KEL_1' || k.nama === 'XII RPL 1')
+    );
+
+    const [[{ dbKelasCount }]]: any = await db.execute(`SELECT COUNT(*) as dbKelasCount FROM kelas;`).catch(() => [[{ dbKelasCount: 0 }]]);
+    const shouldProtectMasterData = isIncomingDemoClasses && Number(dbKelasCount) > 4;
+
+    if (!shouldProtectMasterData && Array.isArray(appData.jurusan)) {
       await db.execute(`DELETE FROM jurusan;`);
       if (appData.jurusan.length > 0) {
         const CHUNK_SIZE = 50;
@@ -1051,7 +1083,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
     }
 
-    if (Array.isArray(appData.waliKelas)) {
+    if (!shouldProtectMasterData && Array.isArray(appData.waliKelas)) {
       await db.execute(`DELETE FROM wali_kelas;`);
       if (appData.waliKelas.length > 0) {
         const CHUNK_SIZE = 50;
@@ -1131,7 +1163,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
     }
 
-    if (Array.isArray(appData.kelas)) {
+    if (!shouldProtectMasterData && Array.isArray(appData.kelas)) {
       await db.execute(`DELETE FROM kelas;`);
       if (appData.kelas.length > 0) {
         const CHUNK_SIZE = 50;
@@ -1189,7 +1221,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         await db.execute(q).catch(() => {});
       }
 
-      if (Array.isArray(appData.deletedSiswaIds) && appData.deletedSiswaIds.length > 0) {
+      if (!shouldProtectMasterData && Array.isArray(appData.deletedSiswaIds) && appData.deletedSiswaIds.length > 0) {
         const CHUNK_SIZE = 50;
         for (let i = 0; i < appData.deletedSiswaIds.length; i += CHUNK_SIZE) {
           const chunk = appData.deletedSiswaIds.slice(i, i + CHUNK_SIZE);
@@ -1198,7 +1230,9 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         }
       }
 
-      if (appData.siswa.length === 0) {
+      if (shouldProtectMasterData) {
+        // Skip deleting or clearing real students if incoming data is demo dataset
+      } else if (appData.siswa.length === 0) {
         await db.execute(`DELETE FROM siswa;`).catch(() => {});
       } else {
         // Safely delete any orphan/duplicate IDs in DB in small, reliable chunks

@@ -41,6 +41,7 @@ const PelanggaranView = React.lazy(() => import('./components/views/PelanggaranV
 const EkstrakurikulerView = React.lazy(() => import('./components/views/EkstrakurikulerView').then(m => ({ default: m.EkstrakurikulerView })));
 const RekapHarianView = React.lazy(() => import('./components/views/RekapHarianView').then(m => ({ default: m.RekapHarianView })));
 const RekapPengisianKelasView = React.lazy(() => import('./components/views/RekapPengisianKelasView').then(m => ({ default: m.RekapPengisianKelasView })));
+const BroadcastWaView = React.lazy(() => import('./components/views/BroadcastWaView').then(m => ({ default: m.BroadcastWaView })));
 const RekapMingguanView = React.lazy(() => import('./components/views/RekapMingguanView').then(m => ({ default: m.RekapMingguanView })));
 const RekapBulananView = React.lazy(() => import('./components/views/RekapBulananView').then(m => ({ default: m.RekapBulananView })));
 const RekapKetidakhadiranTertinggiView = React.lazy(() => import('./components/views/RekapKetidakhadiranTertinggiView').then(m => ({ default: m.RekapKetidakhadiranTertinggiView })));
@@ -1348,6 +1349,16 @@ export default function App() {
                 }}
                 onNavigateView={handleNavigate}
                 onShowToast={showToast}
+              />
+            )}
+
+            {currentView === 'broadcast_wa' && (
+              <BroadcastWaView
+                appData={appData}
+                currentUser={currentUser}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
               />
             )}
 
