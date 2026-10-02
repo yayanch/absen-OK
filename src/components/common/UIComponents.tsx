@@ -406,15 +406,19 @@ export const StatCard: React.FC<StatCardProps> = ({
       initial="hidden"
       animate="show"
       transition={{ delay: index !== undefined ? index * 0.05 : 0 }}
-      whileHover={onClick ? { y: -4, transition: { duration: 0.2 } } : undefined}
-      whileTap={onClick ? { scale: 0.98 } : undefined}
-      className="h-full"
+      whileHover={{
+        scale: 1.05,
+        y: -4,
+        transition: { type: 'spring', stiffness: 400, damping: 22 },
+      }}
+      whileTap={{ scale: 0.98 }}
+      className="h-full transform-gpu"
     >
       <Card
-        hoverable={!!onClick}
+        hoverable={true}
         padding="sm"
         onClick={onClick}
-        className={`h-full ${onClick ? 'cursor-pointer' : ''}`}
+        className={`h-full transition-all duration-200 ${onClick ? 'cursor-pointer' : ''}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0">

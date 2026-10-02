@@ -21,7 +21,8 @@ import {
   mergePelanggaran,
   mergeHomeVisits,
   mergeSiswa,
-  mergePresensi
+  mergePresensi,
+  getTodayString
 } from './utils/helpers';
 import { DEMO_DATASET } from './data/initialData';
 
@@ -78,6 +79,7 @@ const WhatsAppGatewayView = React.lazy(() => import('./components/views/WhatsApp
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';
 import { hasMenuAccess } from './utils/rolePermissionEngine';
+import { getAccessToken, uploadBackupToGoogleDrive } from './services/googleDriveService';
 
 export default function App() {
   const getInitialView = (): ViewType => {
@@ -603,6 +605,61 @@ export default function App() {
       clearInterval(chatInterval);
     };
   }, []);
+
+  // Google Drive Background Auto-Backup Handler
+  useEffect(() => {
+    let isExecuting = false;
+    const checkGoogleDriveAutoBackup = async () => {
+      if (isExecuting) return;
+      const config = appData.backupConfig;
+      if (!config || !config.googleDriveAutoBackup) return;
+
+      const token = await getAccessToken();
+      if (!token) return; // Google account not authenticated in memory
+
+      const today = getTodayString();
+      const lastBackup = config.lastGoogleDriveBackup || '';
+      const alreadyBackedUpToday = lastBackup.startsWith(today);
+
+      if (config.googleDriveAutoFrequency === 'daily') {
+        const targetTime = config.googleDriveDailyTime || '23:00';
+        const currentTime = new Date().toLocaleTimeString('id-ID', {
+          timeZone: 'Asia/Jakarta',
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        if (!alreadyBackedUpToday && currentTime >= targetTime) {
+          isExecuting = true;
+          try {
+            const res = await uploadBackupToGoogleDrive(appData, {
+              isAuto: true,
+              note: `Cadangan Otomatis Harian (${today})`,
+              token,
+            });
+            handleUpdateAppData({
+              ...appData,
+              backupConfig: {
+                ...config,
+                lastGoogleDriveBackup: `${today} ${currentTime} WIB`,
+                lastGoogleDriveFileId: res.fileId,
+              },
+            });
+            console.log('Google Drive auto-backup completed successfully:', res.fileName);
+          } catch (e) {
+            console.warn('Google Drive auto-backup failed:', e);
+          } finally {
+            isExecuting = false;
+          }
+        }
+      }
+    };
+
+    const driveInterval = setInterval(checkGoogleDriveAutoBackup, 60000);
+    checkGoogleDriveAutoBackup();
+    return () => clearInterval(driveInterval);
+  }, [appData.backupConfig, appData]);
 
   // System Theme / Dark Mode Sync Effect
   useEffect(() => {

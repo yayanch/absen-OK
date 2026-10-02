@@ -1112,15 +1112,21 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* SAVE / SYNC / CONFLICT STATUS BADGE */}
             {saveStatus === 'saving' && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 animate-pulse">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600 dark:text-amber-400" />
-                <span>Menyimpan...</span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50/90 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs">
+                <div className="relative flex items-center justify-center w-3.5 h-3.5 shrink-0">
+                  <span className="absolute inset-0 rounded-full border-2 border-amber-500/20 border-t-amber-600 dark:border-t-amber-400 animate-spin" />
+                  <RefreshCw className="w-2 h-2 text-amber-600 dark:text-amber-400 animate-spin" style={{ animationDuration: '2.5s' }} />
+                </div>
+                <span className="tracking-tight">Menyimpan...</span>
               </div>
             )}
             {saveStatus === 'syncing' && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 animate-pulse">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600 dark:text-blue-400" />
-                <span>Menyinkronkan...</span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50/90 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs">
+                <div className="relative flex items-center justify-center w-3.5 h-3.5 shrink-0">
+                  <span className="absolute inset-0 rounded-full border-2 border-blue-500/20 border-t-blue-600 dark:border-t-blue-400 animate-spin" />
+                  <RefreshCw className="w-2 h-2 text-blue-600 dark:text-blue-400 animate-spin" style={{ animationDuration: '2.5s' }} />
+                </div>
+                <span className="tracking-tight">Menyinkronkan...</span>
               </div>
             )}
             {saveStatus === 'conflict' && (

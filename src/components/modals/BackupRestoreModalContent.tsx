@@ -12,23 +12,35 @@ import {
   Trash2,
   Clock,
   Database,
-  Calendar,
   Users,
   Building,
   GraduationCap,
-  X,
-  FileCode,
-  ShieldAlert,
+  Sparkles,
+  Layers,
   ArrowRight,
-  Settings,
-  Play,
-  Check,
-  Filter,
-  CalendarDays,
-  Sparkles
+  FileCode,
+  RotateCcw,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
+  ExternalLink,
+  LogOut,
+  Check
 } from 'lucide-react';
-import { AppData, Siswa, Kelas, Jurusan, WaliKelas, BackupScheduleConfig, BackupFrequency } from '../../types';
-import { getTodayString, saveAppData, commitAppDataToServer, getIndonesianTimeString, formatDateIndo } from '../../utils/helpers';
+import { User } from 'firebase/auth';
+import { AppData, Siswa, Kelas, Jurusan, WaliKelas, BackupScheduleConfig } from '../../types';
+import { getTodayString, getIndonesianTimeString, formatDateIndo } from '../../utils/helpers';
+import {
+  initGoogleAuth,
+  signInWithGoogle,
+  signOutGoogle,
+  getCurrentGoogleUser,
+  uploadBackupToGoogleDrive,
+  listDriveBackups,
+  downloadDriveBackupContent,
+  deleteDriveBackupFile,
+  DriveBackupItem,
+} from '../../services/googleDriveService';
 
 interface BackupRestoreModalContentProps {
   appData: AppData;
@@ -50,7 +62,6 @@ interface FileInspectionResult {
   fileName: string;
   fileSize: string;
   isValid: boolean;
-  isPartial: boolean;
   schoolName?: string;
   exportedAt?: string;
   stats: {
@@ -60,8 +71,6 @@ interface FileInspectionResult {
     waliCount: number;
     presensiDaysCount: number;
     presensiEntriesCount: number;
-    pelanggaranCount: number;
-    homeVisitCount: number;
   };
   parsedData: any;
   errorMsg?: string;
@@ -71,7 +80,7 @@ interface ServerSnapshot {
   id: string;
   createdAt: string;
   timestamp?: number;
-  category?: 'daily' | 'weekly' | 'monthly' | 'manual';
+  category?: string;
   note: string;
   schoolName?: string;
   fileSize?: string;
@@ -94,43 +103,43 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
   onResetPresensiData,
   onResetAllData,
 }) => {
-  const [activeTab, setActiveTab] = useState<'download' | 'schedule' | 'snapshots' | 'restore' | 'maintenance'>('download');
+  const [activeTab, setActiveTab] = useState<'backup' | 'googledrive' | 'restore' | 'maintenance'>('backup');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [restoreMode, setRestoreMode] = useState<'replace' | 'merge' | 'presensi_only'>('replace');
+  const [restoreMode, setRestoreMode] = useState<'replace' | 'merge'>('replace');
 
-  // File Inspector State
+  // File Upload / Inspection
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [inspection, setInspection] = useState<FileInspectionResult | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Server Snapshots State
+  // Snapshots on Local Server
   const [snapshots, setSnapshots] = useState<ServerSnapshot[]>([]);
   const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
-  const [snapshotCategoryFilter, setSnapshotCategoryFilter] = useState<'all' | 'daily' | 'weekly' | 'monthly' | 'manual'>('all');
   const [snapshotNote, setSnapshotNote] = useState('');
-  const [snapshotCategoryInput, setSnapshotCategoryInput] = useState<'manual' | 'daily' | 'weekly' | 'monthly'>('manual');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
 
-  // Schedule Config State
-  const [scheduleConfig, setScheduleConfig] = useState<BackupScheduleConfig>({
-    autoBackupEnabled: true,
-    frequency: 'all',
-    dailyTime: '23:00',
-    weeklyDay: 6, // Sabtu
-    weeklyTime: '22:00',
-    monthlyDay: 1, // Tanggal 1
-    monthlyTime: '23:00',
-    retentionDaily: 7,
-    retentionWeekly: 4,
-    retentionMonthly: 12,
-    ...(appData.backupConfig || {}),
-  });
-  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [isTriggeringCycle, setIsTriggeringCycle] = useState<string | null>(null);
+  // Google Drive Integration State
+  const [googleUser, setGoogleUser] = useState<User | null>(getCurrentGoogleUser());
+  const [isSigningInGoogle, setIsSigningInGoogle] = useState(false);
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+  const [driveBackups, setDriveBackups] = useState<DriveBackupItem[]>([]);
+  const [isLoadingDriveBackups, setIsLoadingDriveBackups] = useState(false);
+  const [driveNote, setDriveNote] = useState('');
+  
+  // Google Drive Auto-Backup Config
+  const [autoDriveEnabled, setAutoDriveEnabled] = useState<boolean>(
+    appData.backupConfig?.googleDriveAutoBackup ?? true
+  );
+  const [autoDriveFreq, setAutoDriveFreq] = useState<'daily' | 'on_save' | 'weekly'>(
+    appData.backupConfig?.googleDriveAutoFrequency ?? 'daily'
+  );
+  const [autoDriveTime, setAutoDriveTime] = useState<string>(
+    appData.backupConfig?.googleDriveDailyTime ?? '23:00'
+  );
+  const [isSavingDriveConfig, setIsSavingDriveConfig] = useState(false);
 
-  // Calculate live database stats for Backup Card
+  // Live Database Statistics
   const currentStats = React.useMemo(() => {
     const siswaCount = Array.isArray(appData?.siswa) ? appData.siswa.length : 0;
     const kelasCount = Array.isArray(appData?.kelas) ? appData.kelas.length : 0;
@@ -145,8 +154,6 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
         }
       }
     }
-    const pelanggaranCount = Array.isArray(appData?.pelanggaran) ? appData.pelanggaran.length : 0;
-    const homeVisitCount = Array.isArray(appData?.homeVisits) ? appData.homeVisits.length : 0;
 
     return {
       siswaCount,
@@ -155,95 +162,30 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
       guruCount,
       presensiDays: presensiKeys.length,
       presensiEntries,
-      pelanggaranCount,
-      homeVisitCount,
     };
   }, [appData]);
 
-  // Load snapshots & config
+  // Initialize Google Auth Listener
   useEffect(() => {
-    if (activeTab === 'snapshots' || activeTab === 'schedule') {
+    const unsubscribe = initGoogleAuth(
+      (user) => {
+        setGoogleUser(user);
+      },
+      () => {
+        setGoogleUser(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch data when switching tabs
+  useEffect(() => {
+    if (activeTab === 'backup') {
       fetchServerSnapshots();
+    } else if (activeTab === 'googledrive' && googleUser) {
+      fetchDriveBackups();
     }
-    if (activeTab === 'schedule') {
-      fetchScheduleConfig();
-    }
-  }, [activeTab]);
-
-  const fetchScheduleConfig = async () => {
-    setIsLoadingConfig(true);
-    try {
-      const res = await fetch('/api/backup/schedule-config');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.config) {
-          setScheduleConfig(json.config);
-        }
-      }
-    } catch (e) {
-      console.warn('Gagal memuat konfigurasi jadwal backup:', e);
-    } finally {
-      setIsLoadingConfig(false);
-    }
-  };
-
-  const handleSaveScheduleConfig = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setIsSavingConfig(true);
-    try {
-      const res = await fetch('/api/backup/schedule-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(scheduleConfig),
-      });
-      const json = await res.json();
-      if (json.success) {
-        onShowToast('Pengaturan jadwal pencadangan otomatis berhasil disimpan!', 'success');
-        // Update parent appData
-        onUpdateAppData({
-          ...appData,
-          backupConfig: json.config || scheduleConfig,
-        });
-      } else {
-        onShowToast(json.message || 'Gagal menyimpan pengaturan jadwal.', 'error');
-      }
-    } catch (err: any) {
-      onShowToast(`Gagal menyimpan: ${err?.message || 'Error koneksi'}`, 'error');
-    } finally {
-      setIsSavingConfig(false);
-    }
-  };
-
-  const handleTriggerCycle = async (category: 'daily' | 'weekly' | 'monthly') => {
-    setIsTriggeringCycle(category);
-    try {
-      const labels: Record<string, string> = {
-        daily: 'Cadangan Harian',
-        weekly: 'Cadangan Mingguan',
-        monthly: 'Cadangan Bulanan',
-      };
-      const res = await fetch('/api/backup/trigger-cycle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category,
-          note: `Cadangan Manual Siklus [${labels[category]}] (${getTodayString()})`,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        onShowToast(`Pencadangan siklus ${labels[category]} berhasil dibuat!`, 'success');
-        if (json.config) setScheduleConfig(json.config);
-        fetchServerSnapshots();
-      } else {
-        onShowToast(json.message || 'Gagal memicu siklus pencadangan.', 'error');
-      }
-    } catch (err: any) {
-      onShowToast(`Gagal eksekusi cadangan: ${err?.message || 'Error'}`, 'error');
-    } finally {
-      setIsTriggeringCycle(null);
-    }
-  };
+  }, [activeTab, googleUser]);
 
   const fetchServerSnapshots = async () => {
     setIsLoadingSnapshots(true);
@@ -262,7 +204,198 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
     }
   };
 
-  // Safe file downloader using Blob and URL.createObjectURL
+  const fetchDriveBackups = async () => {
+    setIsLoadingDriveBackups(true);
+    try {
+      const items = await listDriveBackups();
+      setDriveBackups(items);
+    } catch (err) {
+      console.warn('Gagal memuat cadangan Google Drive:', err);
+    } finally {
+      setIsLoadingDriveBackups(false);
+    }
+  };
+
+  // Google Login Handler
+  const handleGoogleSignIn = async () => {
+    setIsSigningInGoogle(true);
+    try {
+      const result = await signInWithGoogle();
+      setGoogleUser(result.user);
+      onShowToast(`Berhasil terhubung ke Google Drive (${result.user.email})!`, 'success');
+      fetchDriveBackups();
+    } catch (err: any) {
+      onShowToast(`Gagal menghubungkan Google Drive: ${err?.message || 'Izin dibatalkan'}`, 'error');
+    } finally {
+      setIsSigningInGoogle(false);
+    }
+  };
+
+  // Google Sign Out Handler
+  const handleGoogleSignOut = async () => {
+    try {
+      await signOutGoogle();
+      setGoogleUser(null);
+      setDriveBackups([]);
+      onShowToast('Tautan akun Google Drive telah dilepas.', 'info');
+    } catch (err: any) {
+      onShowToast(`Gagal keluar: ${err?.message || 'Error'}`, 'error');
+    }
+  };
+
+  // Upload Manual Backup to Google Drive
+  const handleUploadToDrive = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!googleUser) {
+      onShowToast('Silakan Masuk dengan Google terlebih dahulu.', 'warning');
+      return;
+    }
+
+    setIsUploadingToDrive(true);
+    try {
+      const note = driveNote.trim() || `Cadangan Manual (${getTodayString()})`;
+      const res = await uploadBackupToGoogleDrive(appData, {
+        note,
+        isAuto: false,
+      });
+
+      // Update backup metadata in appData
+      const updatedConfig: BackupScheduleConfig = {
+        ...(appData.backupConfig || {
+          autoBackupEnabled: true,
+          frequency: 'daily',
+          dailyTime: '23:00',
+          weeklyDay: 6,
+          weeklyTime: '22:00',
+          monthlyDay: 1,
+          monthlyTime: '23:00',
+          retentionDaily: 7,
+          retentionWeekly: 4,
+          retentionMonthly: 12,
+        }),
+        googleDriveAutoBackup: autoDriveEnabled,
+        googleDriveAutoFrequency: autoDriveFreq,
+        googleDriveDailyTime: autoDriveTime,
+        lastGoogleDriveBackup: `${getTodayString()} ${getIndonesianTimeString(new Date(), false)} WIB`,
+        lastGoogleDriveFileId: res.fileId,
+      };
+
+      onUpdateAppData({
+        ...appData,
+        backupConfig: updatedConfig,
+      });
+
+      setDriveNote('');
+      onShowToast(`Cadangan "${res.fileName}" berhasil disimpan di Google Drive!`, 'success');
+      fetchDriveBackups();
+    } catch (err: any) {
+      onShowToast(`Gagal mencadangkan ke Google Drive: ${err?.message || 'Error koneksi'}`, 'error');
+    } finally {
+      setIsUploadingToDrive(false);
+    }
+  };
+
+  // Save Auto-Backup to Drive Config
+  const handleSaveAutoDriveConfig = async () => {
+    setIsSavingDriveConfig(true);
+    try {
+      const updatedConfig: BackupScheduleConfig = {
+        ...(appData.backupConfig || {
+          autoBackupEnabled: true,
+          frequency: 'daily',
+          dailyTime: '23:00',
+          weeklyDay: 6,
+          weeklyTime: '22:00',
+          monthlyDay: 1,
+          monthlyTime: '23:00',
+          retentionDaily: 7,
+          retentionWeekly: 4,
+          retentionMonthly: 12,
+        }),
+        googleDriveAutoBackup: autoDriveEnabled,
+        googleDriveAutoFrequency: autoDriveFreq,
+        googleDriveDailyTime: autoDriveTime,
+      };
+
+      onUpdateAppData({
+        ...appData,
+        backupConfig: updatedConfig,
+      });
+
+      onShowToast('Pengaturan pencadangan otomatis Google Drive berhasil disimpan!', 'success');
+    } catch (err: any) {
+      onShowToast(`Gagal menyimpan: ${err?.message || 'Error'}`, 'error');
+    } finally {
+      setIsSavingDriveConfig(false);
+    }
+  };
+
+  // Restore Directly from Google Drive Backup File
+  const handleRestoreFromDrive = (item: DriveBackupItem) => {
+    const doRestore = async () => {
+      setIsProcessing(true);
+      try {
+        const rawJson = await downloadDriveBackupContent(item.id);
+        const incoming = rawJson.data || rawJson.appData || rawJson;
+
+        const mergedAppData: AppData = {
+          ...appData,
+          ...incoming,
+          sekolah: incoming.sekolah || appData.sekolah,
+          siswa: Array.isArray(incoming.siswa) ? incoming.siswa : appData.siswa,
+          kelas: Array.isArray(incoming.kelas) ? incoming.kelas : appData.kelas,
+          jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : appData.jurusan,
+          waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : appData.waliKelas,
+          presensi: incoming.presensi || {},
+        };
+
+        onUpdateAppData(mergedAppData);
+        onShowToast(`Database berhasil dipulihkan dari Google Drive ("${item.name}")!`, 'success');
+        onCloseModal();
+      } catch (err: any) {
+        onShowToast(`Gagal memulihkan dari Google Drive: ${err?.message || 'Error'}`, 'error');
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    if (onConfirmModal) {
+      onConfirmModal(
+        'Pulihkan Data dari Google Drive?',
+        `Apakah Anda yakin ingin memulihkan seluruh database dari berkas Google Drive "${item.name}"? Data yang belum dicadangkan akan diperbarui.`,
+        'warning',
+        doRestore
+      );
+    } else {
+      doRestore();
+    }
+  };
+
+  // Delete Backup File from Google Drive
+  const handleDeleteFromDrive = (item: DriveBackupItem) => {
+    const doDelete = async () => {
+      try {
+        await deleteDriveBackupFile(item.id);
+        onShowToast(`Berkas "${item.name}" berhasil dihapus dari Google Drive.`, 'info');
+        fetchDriveBackups();
+      } catch (err: any) {
+        onShowToast(`Gagal menghapus berkas: ${err?.message || 'Error'}`, 'error');
+      }
+    };
+
+    if (onConfirmModal) {
+      onConfirmModal(
+        'Hapus Cadangan di Google Drive?',
+        `Apakah Anda yakin ingin menghapus berkas "${item.name}" dari Google Drive Anda? Tindakan ini tidak dapat dibatalkan.`,
+        'danger',
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
+  };
+
+  // Safe file downloader for Local PC
   const triggerSafeDownload = (dataToExport: any, filename: string) => {
     try {
       const jsonString = JSON.stringify(dataToExport, null, 2);
@@ -283,26 +416,11 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
     }
   };
 
-  // Download Backup by Type
-  const handleDownloadBackup = (type: 'full' | 'daily' | 'weekly' | 'monthly' | 'master_only' | 'presensi_only', format: 'bak' | 'json' = 'bak') => {
+  // Download Backup to local PC
+  const handleDownloadBackup = (type: 'full' | 'presensi_only' = 'full', format: 'json' | 'bak' = 'json') => {
     const today = getTodayString();
     const timeNow = getIndonesianTimeString(new Date(), false).replace(/:/g, '');
     const schoolName = (appData.sekolah?.nama || 'Presensi').replace(/[^a-zA-Z0-9_-]/g, '_');
-
-    let presensiFiltered: any = {};
-    const allPresensi = appData.presensi || {};
-
-    if (type === 'daily') {
-      if (allPresensi[today]) presensiFiltered[today] = allPresensi[today];
-    } else if (type === 'weekly') {
-      const dates = Object.keys(allPresensi).sort().slice(-7);
-      for (const d of dates) presensiFiltered[d] = allPresensi[d];
-    } else if (type === 'monthly') {
-      const dates = Object.keys(allPresensi).sort().slice(-31);
-      for (const d of dates) presensiFiltered[d] = allPresensi[d];
-    } else if (type === 'presensi_only') {
-      presensiFiltered = allPresensi;
-    }
 
     let payload: any = {
       _backupMetadata: {
@@ -316,58 +434,118 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
       },
     };
 
-    if (type === 'master_only') {
+    if (type === 'presensi_only') {
       payload = {
         ...payload,
-        sekolah: appData.sekolah,
-        admin: appData.admin,
-        jurusan: appData.jurusan,
-        waliKelas: appData.waliKelas,
-        kelas: appData.kelas,
-        siswa: appData.siswa,
-        shiftConfig: appData.shiftConfig,
-        jadwalMengajar: appData.jadwalMengajar,
-        violationTemplates: appData.violationTemplates,
-      };
-    } else if (type === 'presensi_only') {
-      payload = {
-        ...payload,
-        presensi: allPresensi,
+        presensi: appData.presensi || {},
         siswa: (appData.siswa || []).map((s) => ({ id: s.id, nisn: s.nisn, nama: s.nama, kelasId: s.kelasId })),
         kelas: appData.kelas || [],
       };
-    } else if (type === 'daily' || type === 'weekly' || type === 'monthly') {
-      payload = {
-        ...payload,
-        ...appData,
-        presensi: presensiFiltered,
-      };
     } else {
-      // Full database
       payload = {
         ...payload,
         ...appData,
       };
     }
 
-    const typePrefix =
-      type === 'daily'
-        ? 'Harian'
-        : type === 'weekly'
-        ? 'Mingguan'
-        : type === 'monthly'
-        ? 'Bulanan'
-        : type === 'master_only'
-        ? 'Master'
-        : type === 'presensi_only'
-        ? 'Presensi'
-        : 'Full';
-
-    const fileName = `Backup_${typePrefix}_${schoolName}_${today.replace(/-/g, '')}_${timeNow}.${format}`;
+    const typeLabel = type === 'presensi_only' ? 'Presensi' : 'Full';
+    const fileName = `Backup_${typeLabel}_${schoolName}_${today.replace(/-/g, '')}_${timeNow}.${format}`;
     triggerSafeDownload(payload, fileName);
   };
 
-  // Inspect uploaded file before restoring
+  // Create Snapshot on Server
+  const handleCreateSnapshot = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsCreatingSnapshot(true);
+    try {
+      const note = snapshotNote.trim() || `Titik Pemulihan Manual (${getTodayString()})`;
+      const res = await fetch('/api/backup/create-snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          note,
+          category: 'manual',
+          appData,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        onShowToast('Titik pemulihan berhasil disimpan ke server!', 'success');
+        setSnapshotNote('');
+        fetchServerSnapshots();
+      } else {
+        onShowToast(json.message || 'Gagal membuat titik pemulihan.', 'error');
+      }
+    } catch (err: any) {
+      onShowToast(`Gagal: ${err?.message || 'Koneksi bermasalah'}`, 'error');
+    } finally {
+      setIsCreatingSnapshot(false);
+    }
+  };
+
+  // Restore Snapshot from Server
+  const handleRestoreSnapshot = (snapshot: ServerSnapshot) => {
+    const doRestore = async () => {
+      setIsProcessing(true);
+      try {
+        const res = await fetch(`/api/backup/restore-snapshot/${snapshot.id}`, { method: 'POST' });
+        const json = await res.json();
+        if (json.success && json.restoredData) {
+          onUpdateAppData(json.restoredData);
+          onShowToast(`Database berhasil dipulihkan dari snapshot "${snapshot.note}"!`, 'success');
+          onCloseModal();
+        } else {
+          onShowToast(json.message || 'Gagal memulihkan snapshot.', 'error');
+        }
+      } catch (err: any) {
+        onShowToast(`Gagal memulihkan: ${err?.message || 'Error'}`, 'error');
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    if (onConfirmModal) {
+      onConfirmModal(
+        'Pulihkan dari Titik Pemulihan?',
+        `Apakah Anda yakin ingin memulihkan database ke kondisi snapshot "${snapshot.note}" (${snapshot.createdAt})? Data yang belum dicadangkan akan tertimpa.`,
+        'warning',
+        doRestore
+      );
+    } else {
+      doRestore();
+    }
+  };
+
+  // Delete Snapshot
+  const handleDeleteSnapshot = async (id: string, note: string) => {
+    const doDelete = async () => {
+      try {
+        const res = await fetch(`/api/backup/delete-snapshot/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (json.success) {
+          onShowToast('Titik pemulihan berhasil dihapus.', 'info');
+          fetchServerSnapshots();
+        } else {
+          onShowToast(json.message || 'Gagal menghapus snapshot.', 'error');
+        }
+      } catch (err: any) {
+        onShowToast(`Gagal: ${err?.message || 'Error'}`, 'error');
+      }
+    };
+
+    if (onConfirmModal) {
+      onConfirmModal(
+        'Hapus Titik Pemulihan?',
+        `Hapus snapshot "${note}" dari server secara permanen?`,
+        'danger',
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
+  };
+
+  // File Inspection for Local Restore
   const inspectBackupFile = (file: File) => {
     setSelectedFile(file);
     const reader = new FileReader();
@@ -382,15 +560,13 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
             fileName: file.name,
             fileSize: `${(file.size / 1024).toFixed(1)} KB`,
             isValid: false,
-            isPartial: false,
-            stats: { siswaCount: 0, kelasCount: 0, jurusanCount: 0, waliCount: 0, presensiDaysCount: 0, presensiEntriesCount: 0, pelanggaranCount: 0, homeVisitCount: 0 },
+            stats: { siswaCount: 0, kelasCount: 0, jurusanCount: 0, waliCount: 0, presensiDaysCount: 0, presensiEntriesCount: 0 },
             parsedData: null,
-            errorMsg: 'Format berkas tidak valid atau bukan berkas JSON/BAK yang benar.',
+            errorMsg: 'Format berkas tidak valid atau rusak.',
           });
           return;
         }
 
-        // Handle wrapped data (e.g. { data: ... } or { appData: ... } or raw AppData)
         const rawData = parsed.data || parsed.appData || parsed;
         const meta = parsed._backupMetadata || rawData._backupMetadata;
 
@@ -398,27 +574,26 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
         const kelasCount = Array.isArray(rawData.kelas) ? rawData.kelas.length : 0;
         const jurusanCount = Array.isArray(rawData.jurusan) ? rawData.jurusan.length : 0;
         const waliCount = Array.isArray(rawData.waliKelas) ? rawData.waliKelas.length : 0;
+
         const presensiMap = rawData.presensi || {};
-        const presensiKeys = typeof presensiMap === 'object' ? Object.keys(presensiMap) : [];
-        let presensiEntries = 0;
-        for (const k of presensiKeys) {
-          if (Array.isArray(presensiMap[k])) presensiEntries += presensiMap[k].length;
+        const presensiDaysCount = Object.keys(presensiMap).length;
+        let presensiEntriesCount = 0;
+        for (const k of Object.keys(presensiMap)) {
+          if (Array.isArray(presensiMap[k])) {
+            presensiEntriesCount += presensiMap[k].length;
+          }
         }
-        const pelanggaranCount = Array.isArray(rawData.pelanggaran) ? rawData.pelanggaran.length : 0;
-        const homeVisitCount = Array.isArray(rawData.homeVisits) ? rawData.homeVisits.length : 0;
 
-        const hasAnyValidData = rawData.sekolah || siswaCount > 0 || kelasCount > 0 || presensiKeys.length > 0;
-        const isPartial = meta?.type === 'presensi_only' || meta?.type === 'master_only' || (!rawData.sekolah && presensiKeys.length > 0);
+        const hasAnyContent = siswaCount > 0 || kelasCount > 0 || presensiDaysCount > 0;
 
-        if (!hasAnyValidData) {
+        if (!hasAnyContent) {
           setInspection({
             fileName: file.name,
             fileSize: `${(file.size / 1024).toFixed(1)} KB`,
             isValid: false,
-            isPartial: false,
-            stats: { siswaCount: 0, kelasCount: 0, jurusanCount: 0, waliCount: 0, presensiDaysCount: 0, presensiEntriesCount: 0, pelanggaranCount: 0, homeVisitCount: 0 },
+            stats: { siswaCount, kelasCount, jurusanCount, waliCount, presensiDaysCount, presensiEntriesCount },
             parsedData: null,
-            errorMsg: 'Berkas tidak memuat tabel data sekolah, siswa, kelas, maupun presensi.',
+            errorMsg: 'Berkas tidak memuat data siswa, kelas, atau presensi yang valid.',
           });
           return;
         }
@@ -427,35 +602,19 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
           fileName: file.name,
           fileSize: `${(file.size / 1024).toFixed(1)} KB`,
           isValid: true,
-          isPartial,
-          schoolName: meta?.schoolName || rawData.sekolah?.nama || 'Presensi Sekolah',
-          exportedAt: meta?.exportedAt || 'Tidak tercatat',
-          stats: {
-            siswaCount,
-            kelasCount,
-            jurusanCount,
-            waliCount,
-            presensiDaysCount: presensiKeys.length,
-            presensiEntriesCount: presensiEntries,
-            pelanggaranCount,
-            homeVisitCount,
-          },
+          schoolName: meta?.schoolName || rawData.sekolah?.nama || 'Sekolah Terdaftar',
+          exportedAt: meta?.exportedAt || 'Waktu tidak tertera',
+          stats: { siswaCount, kelasCount, jurusanCount, waliCount, presensiDaysCount, presensiEntriesCount },
           parsedData: rawData,
         });
-
-        // If backup was presensi only, default restoreMode to presensi_only
-        if (meta?.type === 'presensi_only') {
-          setRestoreMode('presensi_only');
-        }
       } catch (err: any) {
         setInspection({
           fileName: file.name,
           fileSize: `${(file.size / 1024).toFixed(1)} KB`,
           isValid: false,
-          isPartial: false,
-          stats: { siswaCount: 0, kelasCount: 0, jurusanCount: 0, waliCount: 0, presensiDaysCount: 0, presensiEntriesCount: 0, pelanggaranCount: 0, homeVisitCount: 0 },
+          stats: { siswaCount: 0, kelasCount: 0, jurusanCount: 0, waliCount: 0, presensiDaysCount: 0, presensiEntriesCount: 0 },
           parsedData: null,
-          errorMsg: `Gagal membaca berkas: ${err?.message || 'Format JSON rusak'}`,
+          errorMsg: `Gagal membaca berkas: ${err?.message || 'Bukan format JSON yang valid'}`,
         });
       }
     };
@@ -463,180 +622,59 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
     reader.readAsText(file);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      inspectBackupFile(file);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      inspectBackupFile(file);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      inspectBackupFile(e.dataTransfer.files[0]);
     }
   };
 
-  // Perform Execute Restore
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      inspectBackupFile(e.target.files[0]);
+    }
+  };
+
+  // Execute Restore from Local File
   const handleExecuteRestore = () => {
     if (!inspection || !inspection.isValid || !inspection.parsedData) {
-      onShowToast('Pilih berkas cadangan yang valid terlebih dahulu.', 'warning');
+      onShowToast('Silakan pilih berkas cadangan yang valid terlebih dahulu.', 'warning');
       return;
     }
 
-    const modeLabels: Record<string, string> = {
-      replace: 'Ganti / Timpa Seluruh Data (Full Replace)',
-      merge: 'Gabungkan Data (Smart Merge)',
-      presensi_only: 'Hanya Pulihkan Riwayat Presensi',
-    };
-
-    const runRestore = async () => {
-      setIsProcessing(true);
-      try {
-        const incoming = inspection.parsedData;
-        let finalData: AppData;
-
-        if (restoreMode === 'presensi_only') {
-          finalData = {
-            ...appData,
-            presensi: { ...(incoming.presensi || {}) },
-          };
-        } else if (restoreMode === 'merge') {
-          const mergeArray = (base: any[] = [], inc: any[] = [], key = 'id') => {
-            const map = new Map<string, any>();
-            for (const item of base) {
-              if (item && item[key]) map.set(String(item[key]), item);
-            }
-            for (const item of inc) {
-              if (item && item[key]) map.set(String(item[key]), { ...(map.get(String(item[key])) || {}), ...item });
-            }
-            return Array.from(map.values());
-          };
-
-          finalData = {
-            ...appData,
-            sekolah: { ...(appData.sekolah || {}), ...(incoming.sekolah || {}) },
-            admin: incoming.admin || appData.admin,
-            jurusan: mergeArray(appData.jurusan, incoming.jurusan, 'id'),
-            waliKelas: mergeArray(appData.waliKelas, incoming.waliKelas, 'id'),
-            kelas: mergeArray(appData.kelas, incoming.kelas, 'id'),
-            siswa: mergeArray(appData.siswa, incoming.siswa, 'id'),
-            pelanggaran: mergeArray(appData.pelanggaran, incoming.pelanggaran, 'id'),
-            homeVisits: mergeArray(appData.homeVisits, incoming.homeVisits, 'id'),
-            presensi: {
-              ...(appData.presensi || {}),
-              ...(incoming.presensi || {}),
-            },
-            shiftConfig: incoming.shiftConfig || appData.shiftConfig,
-            jadwalMengajar: incoming.jadwalMengajar || appData.jadwalMengajar,
-          };
-        } else {
-          // Full replace
-          finalData = {
-            ...appData,
-            ...incoming,
-            sekolah: incoming.sekolah || appData.sekolah,
-            admin: incoming.admin || appData.admin,
-            jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : appData.jurusan,
-            waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : appData.waliKelas,
-            kelas: Array.isArray(incoming.kelas) ? incoming.kelas : appData.kelas,
-            siswa: Array.isArray(incoming.siswa) ? incoming.siswa : appData.siswa,
-            presensi: incoming.presensi || {},
-            pelanggaran: Array.isArray(incoming.pelanggaran) ? incoming.pelanggaran : [],
-            homeVisits: Array.isArray(incoming.homeVisits) ? incoming.homeVisits : [],
-          };
-        }
-
-        // 1. Commit to React state & LocalStorage
-        onUpdateAppData(finalData);
-        saveAppData(finalData);
-
-        // 2. Call server restore API to immediately sync disk cache and MySQL
-        try {
-          await fetch('/api/backup/restore', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ backupData: finalData, mode: restoreMode }),
-          });
-        } catch (e) {
-          await commitAppDataToServer(finalData);
-        }
-
-        onCloseModal();
-        onShowToast(
-          `Data berhasil dipulihkan dari "${inspection.fileName}" dengan mode ${modeLabels[restoreMode]}!`,
-          'success'
-        );
-      } catch (err: any) {
-        onShowToast(`Gagal memulihkan database: ${err?.message || 'Error'}`, 'error');
-      } finally {
-        setIsProcessing(false);
-      }
-    };
-
-    if (onConfirmModal) {
-      onConfirmModal(
-        'Konfirmasi Pemulihan Data',
-        `Apakah Anda yakin ingin memulihkan database dari berkas "${inspection.fileName}" menggunakan mode [${modeLabels[restoreMode]}]? Data sistem saat ini akan diperbarui.`,
-        'warning',
-        runRestore
-      );
-    } else {
-      runRestore();
-    }
-  };
-
-  // Create Server Snapshot
-  const handleCreateSnapshot = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsCreatingSnapshot(true);
-    try {
-      const res = await fetch('/api/backup/snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category: snapshotCategoryInput,
-          note: snapshotNote.trim() || undefined,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        onShowToast(json.message || 'Snapshot server berhasil dibuat!', 'success');
-        setSnapshotNote('');
-        fetchServerSnapshots();
-      } else {
-        onShowToast(json.message || 'Gagal membuat snapshot server.', 'error');
-      }
-    } catch (err: any) {
-      onShowToast(`Gagal membuat snapshot: ${err?.message || 'Error koneksi'}`, 'error');
-    } finally {
-      setIsCreatingSnapshot(false);
-    }
-  };
-
-  // Restore from Server Snapshot
-  const handleRestoreSnapshot = (snap: ServerSnapshot) => {
     const doRestore = async () => {
       setIsProcessing(true);
       try {
-        const res = await fetch('/api/backup/snapshot/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snapshotId: snap.id }),
-        });
-        const json = await res.json();
-        if (json.success && json.appData) {
-          onUpdateAppData(json.appData);
-          saveAppData(json.appData);
-          onCloseModal();
-          onShowToast(json.message || 'Snapshot berhasil dipulihkan!', 'success');
+        const incoming = inspection.parsedData;
+        let mergedAppData: AppData;
+
+        if (restoreMode === 'replace') {
+          mergedAppData = {
+            ...appData,
+            ...incoming,
+            sekolah: incoming.sekolah || appData.sekolah,
+            siswa: Array.isArray(incoming.siswa) ? incoming.siswa : appData.siswa,
+            kelas: Array.isArray(incoming.kelas) ? incoming.kelas : appData.kelas,
+            jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : appData.jurusan,
+            waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : appData.waliKelas,
+            presensi: incoming.presensi || {},
+          };
         } else {
-          onShowToast(json.message || 'Gagal memulihkan snapshot.', 'error');
+          // Merge mode
+          const mergedPresensi = { ...(appData.presensi || {}), ...(incoming.presensi || {}) };
+          mergedAppData = {
+            ...appData,
+            sekolah: { ...(appData.sekolah || {}), ...(incoming.sekolah || {}) },
+            presensi: mergedPresensi,
+          };
         }
+
+        onUpdateAppData(mergedAppData);
+        onShowToast('Database aplikasi berhasil dipulihkan!', 'success');
+        onCloseModal();
       } catch (err: any) {
-        onShowToast(`Gagal memulihkan snapshot: ${err?.message || 'Error'}`, 'error');
+        onShowToast(`Gagal memulihkan data: ${err?.message || 'Error'}`, 'error');
       } finally {
         setIsProcessing(false);
       }
@@ -644,8 +682,8 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
 
     if (onConfirmModal) {
       onConfirmModal(
-        'Pulihkan Titik Cadangan Server',
-        `Apakah Anda yakin ingin mengembalikan seluruh database ke kondisi snapshot "${snap.note || snap.id}" (${snap.createdAt})?`,
+        'Konfirmasi Pemulihan Database',
+        `Pulihkan data dari berkas "${inspection.fileName}"? (${inspection.stats.siswaCount} Siswa, ${inspection.stats.presensiEntriesCount} Presensi). Tindakan ini akan memperbarui data sistem.`,
         'warning',
         doRestore
       );
@@ -654,779 +692,534 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
     }
   };
 
-  // Delete Server Snapshot
-  const handleDeleteSnapshot = (snapId: string) => {
-    const doDelete = async () => {
-      try {
-        const res = await fetch(`/api/backup/snapshot/${snapId}`, { method: 'DELETE' });
-        const json = await res.json();
-        if (json.success) {
-          onShowToast('Snapshot server berhasil dihapus.', 'info');
-          setSnapshots((prev) => prev.filter((s) => s.id !== snapId));
-        } else {
-          onShowToast(json.message || 'Gagal menghapus snapshot.', 'error');
-        }
-      } catch (err: any) {
-        onShowToast(`Gagal menghapus snapshot: ${err?.message || 'Error'}`, 'error');
-      }
-    };
-
-    if (onConfirmModal) {
-      onConfirmModal(
-        'Hapus Snapshot Server',
-        'Apakah Anda yakin ingin menghapus berkas snapshot ini dari server?',
-        'danger',
-        doDelete
-      );
-    } else {
-      doDelete();
-    }
-  };
-
-  // Filtered Snapshots
-  const filteredSnapshots = snapshots.filter((s) => {
-    if (snapshotCategoryFilter === 'all') return true;
-    return s.category === snapshotCategoryFilter;
-  });
-
-  const getCategoryBadge = (category?: string) => {
-    switch (category) {
-      case 'daily':
-        return <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[10px] font-bold">Harian (Daily)</span>;
-      case 'weekly':
-        return <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">Mingguan (Weekly)</span>;
-      case 'monthly':
-        return <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">Bulanan (Monthly)</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-bold">Manual</span>;
-    }
-  };
-
-  const daysName = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-
   return (
-    <div className="space-y-4 text-xs">
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+    <div className="space-y-6">
+      {/* Tab Navigation */}
+      <div className="flex bg-slate-100 dark:bg-slate-800/70 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
         <button
           type="button"
-          onClick={() => setActiveTab('download')}
-          className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeTab === 'download'
+          onClick={() => setActiveTab('backup')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'backup'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <Download className="w-3.5 h-3.5" />
-          <span>Unduh Berkas</span>
+          <Download className="w-4 h-4" />
+          <span>Cadangkan (Backup)</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setActiveTab('schedule')}
-          className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeTab === 'schedule'
+          onClick={() => setActiveTab('googledrive')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'googledrive'
               ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <CalendarDays className="w-3.5 h-3.5" />
-          <span>Jadwal Otomatis</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('snapshots')}
-          className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeTab === 'snapshots'
-              ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-          }`}
-        >
-          <Server className="w-3.5 h-3.5" />
-          <span>Snapshot Server</span>
-          {snapshots.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">
-              {snapshots.length}
-            </span>
-          )}
+          <Cloud className="w-4 h-4 text-indigo-500" />
+          <span>Google Drive Cloud</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('restore')}
-          className={`flex-1 min-w-[110px] py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'restore'
-              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <Upload className="w-3.5 h-3.5" />
+          <Upload className="w-4 h-4" />
           <span>Pulihkan (Restore)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('maintenance')}
-          className={`flex-1 min-w-[100px] py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'maintenance'
               ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RotateCcw className="w-4 h-4" />
           <span>Reset &amp; Demo</span>
         </button>
       </div>
 
-      {/* TAB 1: UNDUH CADANGAN MANUAL (DOWNLOAD BACKUP BY PERIOD) */}
-      {activeTab === 'download' && (
-        <div className="space-y-4">
-          {/* Header Summary */}
-          <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl dark:bg-slate-800/80 dark:border-slate-700">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 flex items-center justify-center font-bold shrink-0">
-                  <Database className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                    {appData.sekolah?.nama || 'Sistem Presensi Siswa'}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Unduh file arsip cadangan database sesuai periode waktu yang Anda butuhkan (Harian, Mingguan, Bulanan, atau Penuh).
-                  </p>
-                </div>
-              </div>
-
-              {/* Badges count */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  👥 {currentStats.siswaCount} Siswa
-                </span>
-                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  🏢 {currentStats.kelasCount} Kelas
-                </span>
-                <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  📅 {currentStats.presensiDays} Hari Presensi
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Backup Options Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* 1. Daily Backup */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-blue-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-blue-300 dark:hover:border-slate-700 transition">
-              <div>
-                <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold mb-2">
-                  <Clock className="w-3.5 h-3.5" />
-                </div>
-                <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs mb-1">
-                  Cadangan Harian (Daily)
-                </h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  Menyimpan seluruh master data ditambah riwayat presensi hari ini ({getTodayString()}).
-                </p>
-              </div>
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('daily', 'bak')}
-                  className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-[11px] cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Unduh Harian (.BAK)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Weekly Backup */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-purple-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-purple-300 dark:hover:border-slate-700 transition">
-              <div>
-                <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold mb-2">
-                  <CalendarDays className="w-3.5 h-3.5" />
-                </div>
-                <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs mb-1">
-                  Cadangan Mingguan (Weekly)
-                </h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  Menyimpan master data lengkap beserta catatan presensi 7 hari terakhir.
-                </p>
-              </div>
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('weekly', 'bak')}
-                  className="w-full py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-[11px] cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Unduh Mingguan (.BAK)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Monthly Backup */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-emerald-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-emerald-300 dark:hover:border-slate-700 transition">
-              <div>
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold mb-2">
-                  <Calendar className="w-3.5 h-3.5" />
-                </div>
-                <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs mb-1">
-                  Cadangan Bulanan (Monthly)
-                </h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  Menyimpan master data lengkap beserta catatan presensi 1 bulan (30 hari) terakhir.
-                </p>
-              </div>
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('monthly', 'bak')}
-                  className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-[11px] cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Unduh Bulanan (.BAK)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 4. Full System Backup */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-indigo-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-indigo-300 dark:hover:border-slate-700 transition">
-              <div>
-                <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold mb-2">
-                  <Database className="w-3.5 h-3.5" />
-                </div>
-                <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs mb-1">
-                  Cadangan Lengkap (Full)
-                </h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  Seluruh tabel database tanpa terkecuali (Akun, Siswa, Guru, Semua Presensi, Pelanggaran, dll).
-                </p>
-              </div>
-              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('full', 'bak')}
-                  className="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-[11px] cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Unduh Penuh (.BAK)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('full', 'json')}
-                  className="w-full py-1 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition flex items-center justify-center gap-1.5 text-[10px] cursor-pointer"
-                >
-                  <FileCode className="w-3 h-3" />
-                  <span>Format .JSON</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 5. Master Data Saja */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold mb-2">
-                  <Users className="w-3.5 h-3.5" />
-                </div>
-                <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs mb-1">
-                  Master Data Saja
-                </h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  Struktur sekolah, kelas, siswa, guru, shift, tanpa riwayat presensi harian.
-                </p>
-              </div>
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('master_only', 'bak')}
-                  className="w-full py-1.5 px-3 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-[11px] cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Unduh Master (.BAK)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 6. Presensi Saja */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-amber-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold mb-2">
-                  <Calendar className="w-3.5 h-3.5" />
-                </div>
-                <h5 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs mb-1">
-                  Riwayat Presensi Saja
-                </h5>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                  Menyimpan seluruh catatan kehadiran siswa ({currentStats.presensiDays} hari, {currentStats.presensiEntries} entri).
-                </p>
-              </div>
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadBackup('presensi_only', 'bak')}
-                  className="w-full py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 text-[11px] cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span>Unduh Presensi (.BAK)</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: JADWAL PENCADANGAN OTOMATIS (AUTO-BACKUP SCHEDULER) */}
-      {activeTab === 'schedule' && (
-        <div className="space-y-4">
-          {/* Main Scheduler Form */}
-          <form onSubmit={handleSaveScheduleConfig} className="p-4 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center font-bold shrink-0">
-                  <CalendarDays className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs">
-                    Pengaturan Mesin Backup Otomatis
-                  </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Sistem server akan otomatis mencadangkan data secara berkala sesuai jam dan hari yang Anda tentukan.
-                  </p>
-                </div>
-              </div>
-
-              {/* Status Switch Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-700 dark:text-slate-300">
-                <span>Status Otomatis:</span>
-                <input
-                  type="checkbox"
-                  checked={scheduleConfig.autoBackupEnabled}
-                  onChange={(e) => setScheduleConfig((prev) => ({ ...prev, autoBackupEnabled: e.target.checked }))}
-                  className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
-                />
-                <span className={scheduleConfig.autoBackupEnabled ? 'text-emerald-600 font-extrabold' : 'text-slate-400'}>
-                  {scheduleConfig.autoBackupEnabled ? 'AKTIF' : 'NONAKTIF'}
-                </span>
-              </label>
-            </div>
-
-            {/* Frequency Configuration Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              {/* 1. Daily Setting */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Siklus Harian (Daily)</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500">Tiap Hari</span>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                    Jam Eksekusi (WIB):
-                  </label>
-                  <input
-                    type="time"
-                    value={scheduleConfig.dailyTime}
-                    onChange={(e) => setScheduleConfig((prev) => ({ ...prev, dailyTime: e.target.value }))}
-                    className="w-full py-1.5 px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                    Retensi Penyimpanan:
-                  </label>
-                  <select
-                    value={scheduleConfig.retentionDaily}
-                    onChange={(e) => setScheduleConfig((prev) => ({ ...prev, retentionDaily: Number(e.target.value) }))}
-                    className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-800 dark:text-slate-100"
-                  >
-                    <option value={3}>Simpan 3 hari terakhir</option>
-                    <option value={7}>Simpan 7 hari terakhir (Standar)</option>
-                    <option value={14}>Simpan 14 hari terakhir</option>
-                    <option value={30}>Simpan 30 hari terakhir</option>
-                  </select>
-                </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    disabled={isTriggeringCycle === 'daily'}
-                    onClick={() => handleTriggerCycle('daily')}
-                    className="w-full py-1 px-2 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 font-bold rounded-lg text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Play className="w-2.5 h-2.5" />
-                    <span>{isTriggeringCycle === 'daily' ? 'Memproses...' : 'Cadangkan Harian Sekarang'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 2. Weekly Setting */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-purple-700 dark:text-purple-400 flex items-center gap-1.5">
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    <span>Siklus Mingguan (Weekly)</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500">Tiap Minggu</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      Hari:
-                    </label>
-                    <select
-                      value={scheduleConfig.weeklyDay}
-                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, weeklyDay: Number(e.target.value) }))}
-                      className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-800 dark:text-slate-100"
-                    >
-                      {daysName.map((d, idx) => (
-                        <option key={idx} value={idx}>{d}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      Jam:
-                    </label>
-                    <input
-                      type="time"
-                      value={scheduleConfig.weeklyTime}
-                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, weeklyTime: e.target.value }))}
-                      className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                    Retensi Penyimpanan:
-                  </label>
-                  <select
-                    value={scheduleConfig.retentionWeekly}
-                    onChange={(e) => setScheduleConfig((prev) => ({ ...prev, retentionWeekly: Number(e.target.value) }))}
-                    className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-800 dark:text-slate-100"
-                  >
-                    <option value={4}>Simpan 4 minggu terakhir (1 Bulan)</option>
-                    <option value={8}>Simpan 8 minggu terakhir (2 Bulan)</option>
-                    <option value={12}>Simpan 12 minggu terakhir (3 Bulan)</option>
-                  </select>
-                </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    disabled={isTriggeringCycle === 'weekly'}
-                    onClick={() => handleTriggerCycle('weekly')}
-                    className="w-full py-1 px-2 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 font-bold rounded-lg text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Play className="w-2.5 h-2.5" />
-                    <span>{isTriggeringCycle === 'weekly' ? 'Memproses...' : 'Cadangkan Mingguan Sekarang'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 3. Monthly Setting */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-700 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Siklus Bulanan (Monthly)</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500">Tiap Bulan</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      Tanggal:
-                    </label>
-                    <select
-                      value={scheduleConfig.monthlyDay}
-                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, monthlyDay: Number(e.target.value) }))}
-                      className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-800 dark:text-slate-100"
-                    >
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map((tgl) => (
-                        <option key={tgl} value={tgl}>Tgl {tgl}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      Jam:
-                    </label>
-                    <input
-                      type="time"
-                      value={scheduleConfig.monthlyTime}
-                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, monthlyTime: e.target.value }))}
-                      className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                    Retensi Penyimpanan:
-                  </label>
-                  <select
-                    value={scheduleConfig.retentionMonthly}
-                    onChange={(e) => setScheduleConfig((prev) => ({ ...prev, retentionMonthly: Number(e.target.value) }))}
-                    className="w-full py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-800 dark:text-slate-100"
-                  >
-                    <option value={6}>Simpan 6 bulan terakhir</option>
-                    <option value={12}>Simpan 12 bulan terakhir (1 Tahun)</option>
-                    <option value={24}>Simpan 24 bulan terakhir (2 Tahun)</option>
-                  </select>
-                </div>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    disabled={isTriggeringCycle === 'monthly'}
-                    onClick={() => handleTriggerCycle('monthly')}
-                    className="w-full py-1 px-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 font-bold rounded-lg text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Play className="w-2.5 h-2.5" />
-                    <span>{isTriggeringCycle === 'monthly' ? 'Memproses...' : 'Cadangkan Bulanan Sekarang'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Execution History Cards */}
-            <div className="p-3 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800 text-[11px] space-y-1.5">
-              <span className="font-bold text-slate-700 dark:text-slate-300 block text-[10px]">
-                Riwayat Pencadangan Terakhir yang Berhasil:
+      {/* TAB 1: BACKUP (LOCAL & SERVER SNAPSHOTS) */}
+      {activeTab === 'backup' && (
+        <div className="space-y-5">
+          {/* Status Database Ringkas */}
+          <div className="bg-gradient-to-br from-blue-500/5 via-indigo-500/5 to-cyan-500/5 dark:from-blue-950/20 dark:to-indigo-950/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/40">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <Database className="w-4 h-4 text-blue-500" />
+                <span>Status Data Terkini: <strong className="text-slate-900 dark:text-white">{appData.sekolah?.nama || 'Sekolah'}</strong></span>
               </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Siklus Harian</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{scheduleConfig.lastDailyBackup || 'Belum berjalan'}</span>
-                </div>
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Siklus Mingguan</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{scheduleConfig.lastWeeklyBackup || 'Belum berjalan'}</span>
-                </div>
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Siklus Bulanan</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{scheduleConfig.lastMonthlyBackup || 'Belum berjalan'}</span>
-                </div>
-                <div className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Manual Terakhir</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{scheduleConfig.lastManualBackup || 'Belum berjalan'}</span>
-                </div>
-              </div>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                Database Siap
+              </span>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+              <div className="p-2.5 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="text-base font-black text-slate-900 dark:text-white">{currentStats.siswaCount}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Siswa</div>
+              </div>
+              <div className="p-2.5 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="text-base font-black text-slate-900 dark:text-white">{currentStats.kelasCount}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Total Kelas</div>
+              </div>
+              <div className="p-2.5 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="text-base font-black text-slate-900 dark:text-white">{currentStats.guruCount}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Guru &amp; Wali</div>
+              </div>
+              <div className="p-2.5 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="text-base font-black text-blue-600 dark:text-blue-400">{currentStats.presensiEntries}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">Catatan Presensi</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Opsi Unduh 1-Klik */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-2xs">
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                <HardDrive className="w-4 h-4 text-blue-500" />
+                <span>Unduh File Cadangan ke Komputer / HP</span>
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Simpan cadangan lengkap ke format JSON atau BAK untuk disimpan di flashdisk atau arsip lokal.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
-                type="submit"
-                disabled={isSavingConfig}
-                className="py-2.5 px-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 text-xs cursor-pointer"
+                type="button"
+                onClick={() => handleDownloadBackup('full', 'json')}
+                className="flex items-center justify-between p-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md hover:shadow-lg transition-all cursor-pointer group"
               >
-                {isSavingConfig ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                <span>Simpan Konfigurasi Jadwal</span>
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                    <Download className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-[13px]">Unduh Full Backup (.json)</div>
+                    <div className="text-[10px] text-blue-100">Semua Siswa, Guru, Kelas &amp; Presensi</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadBackup('presensi_only', 'json')}
+                className="flex items-center justify-between p-3.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-xl font-bold text-xs border border-slate-200 dark:border-slate-700 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-[13px]">Unduh Presensi Saja</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Hanya rekam kehadiran &amp; jurnal</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-slate-400" />
               </button>
             </div>
-          </form>
+          </div>
+
+          {/* Titik Pemulihan Server (Snapshot) */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-2xs">
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                <Server className="w-4 h-4 text-emerald-500" />
+                <span>Titik Pemulihan Server Lokal (Snapshot)</span>
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Simpan status database saat ini ke server agar dapat dipulihkan sewaktu-waktu dengan 1-klik.
+              </p>
+            </div>
+
+            <form onSubmit={handleCreateSnapshot} className="flex gap-2">
+              <input
+                type="text"
+                value={snapshotNote}
+                onChange={(e) => setSnapshotNote(e.target.value)}
+                placeholder="Catatan snapshot (contoh: Sebelum Ujian Semester)..."
+                className="flex-1 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="submit"
+                disabled={isCreatingSnapshot}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
+              >
+                {isCreatingSnapshot ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                <span>Simpan Titik Pemulihan</span>
+              </button>
+            </form>
+
+            {/* List Snapshots */}
+            <div className="space-y-2 pt-1">
+              <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                Daftar Snapshot Server ({snapshots.length})
+              </div>
+
+              {isLoadingSnapshots ? (
+                <div className="p-4 text-center text-xs text-slate-400">Memuat snapshot server...</div>
+              ) : snapshots.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  Belum ada snapshot tersimpan. Klik "Simpan Titik Pemulihan" di atas untuk membuat cadangan pertama.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                  {snapshots.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition"
+                    >
+                      <div>
+                        <div className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                          <span>{s.note}</span>
+                          <span className="text-[10px] font-mono text-slate-400">{s.fileSize || ''}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" />
+                          <span>{s.createdAt}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreSnapshot(s)}
+                          disabled={isProcessing}
+                          className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition cursor-pointer"
+                          title="Pulihkan data dari snapshot ini"
+                        >
+                          Pulihkan
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSnapshot(s.id, s.note)}
+                          className="p-1 text-slate-400 hover:text-rose-500 rounded-lg transition cursor-pointer"
+                          title="Hapus snapshot"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* TAB 3: TITIK PEMULIHAN SERVER (SERVER SNAPSHOTS) */}
-      {activeTab === 'snapshots' && (
-        <div className="space-y-4">
-          {/* Create Snapshot Form */}
-          <form
-            onSubmit={handleCreateSnapshot}
-            className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl dark:bg-slate-800/80 dark:border-slate-700 space-y-3"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center font-bold shrink-0">
-                <Server className="w-4 h-4" />
+      {/* TAB 2: GOOGLE DRIVE CLOUD (MANUAL & OTOMATIS) */}
+      {activeTab === 'googledrive' && (
+        <div className="space-y-5">
+          {/* Header Card: Google Auth Connection */}
+          <div className="bg-gradient-to-br from-indigo-500/10 via-blue-500/5 to-sky-500/10 dark:from-indigo-950/40 dark:to-blue-950/30 p-5 rounded-3xl border border-indigo-200/80 dark:border-indigo-900/50 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-indigo-100 dark:border-indigo-900 flex items-center justify-center shadow-xs shrink-0">
+                  <svg className="w-7 h-7" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                    <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                    <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                    <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                    <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                    <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Google Drive Cloud Backup</span>
+                    {googleUser && (
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                        Terhubung
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {googleUser
+                      ? `Akun aktif: ${googleUser.email || googleUser.displayName || 'Google User'}`
+                      : 'Hubungkan akun Google Drive Anda untuk pencadangan cloud yang aman & dapat diakses kapan saja.'}
+                  </p>
+                </div>
               </div>
+
               <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs">
-                  Buat Titik Pemulihan (Snapshot Server) Instan
+                {googleUser ? (
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignOut}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Putuskan Akun</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isSigningInGoogle}
+                    onClick={handleGoogleSignIn}
+                    className="flex items-center gap-2.5 px-4 py-2.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
+                  >
+                    {isSigningInGoogle ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                      </svg>
+                    )}
+                    <span>Sign in with Google</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Status Folder Khusus */}
+            <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-slate-900/60 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+              <Cloud className="w-4 h-4 text-indigo-500 shrink-0" />
+              <span>
+                Berkas disimpan rapi di Google Drive pada folder: <strong className="font-mono text-indigo-600 dark:text-indigo-400">Presensi_Siswa_Backup</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Section 1: Cadangkan Manual Sekarang */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                  <CloudUpload className="w-4 h-4 text-indigo-500" />
+                  <span>1. Cadangkan ke Google Drive Secara Manual</span>
                 </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Simpan cadangan langsung ke drive penyimpanan server untuk pemulihan cepat sewaktu-waktu.
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Unggah snapshot data saat ini langsung ke Google Drive hanya dengan satu klik.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1">
-              <div className="sm:col-span-3">
-                <select
-                  value={snapshotCategoryInput}
-                  onChange={(e: any) => setSnapshotCategoryInput(e.target.value)}
-                  className="w-full py-2 px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"
-                >
-                  <option value="manual">Kategori: Manual</option>
-                  <option value="daily">Kategori: Harian (Daily)</option>
-                  <option value="weekly">Kategori: Mingguan (Weekly)</option>
-                  <option value="monthly">Kategori: Bulanan (Monthly)</option>
-                </select>
+            <form onSubmit={handleUploadToDrive} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                disabled={!googleUser || isUploadingToDrive}
+                value={driveNote}
+                onChange={(e) => setDriveNote(e.target.value)}
+                placeholder={googleUser ? 'Catatan cadangan (opsional, contoh: Rekap Akhir Bulan)...' : 'Masuk dengan Google terlebih dahulu untuk mencadangkan...'}
+                className="flex-1 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={!googleUser || isUploadingToDrive}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition cursor-pointer whitespace-nowrap"
+              >
+                {isUploadingToDrive ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CloudUpload className="w-4 h-4" />
+                )}
+                <span>Cadangkan ke Google Drive Sekarang</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Section 2: Cadangkan Otomatis ke Google Drive */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-blue-500" />
+                  <span>2. Cadangkan ke Google Drive Secara Otomatis</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Sistem akan secara otomatis menyinkronkan cadangan terbaru ke Google Drive sesuai jadwal pilihan Anda.
+                </p>
               </div>
-              <div className="sm:col-span-6">
-                <input
-                  type="text"
-                  value={snapshotNote}
-                  onChange={(e) => setSnapshotNote(e.target.value)}
-                  placeholder="Catatan / Label (Contoh: Sebelum Perubahan Data Siswa)"
-                  className="w-full py-2 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                />
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-white">
+                    Aktifkan Pencadangan Otomatis Google Drive
+                  </label>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Otomatis membuat dan mengunggah backup ke folder Google Drive saat akun terhubung.
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoDriveEnabled}
+                    onChange={(e) => setAutoDriveEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
               </div>
-              <div className="sm:col-span-3">
-                <button
-                  type="submit"
-                  disabled={isCreatingSnapshot}
-                  className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 text-xs cursor-pointer"
-                >
-                  {isCreatingSnapshot ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Server className="w-3.5 h-3.5" />
+
+              {autoDriveEnabled && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                      Frekuensi Otomatis:
+                    </label>
+                    <select
+                      value={autoDriveFreq}
+                      onChange={(e) => setAutoDriveFreq(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="daily">Harian (Setiap Hari pada jam pilihan)</option>
+                      <option value="on_save">Setiap Kali Data Presensi Disimpan</option>
+                      <option value="weekly">Mingguan (Setiap Akhir Pekan)</option>
+                    </select>
+                  </div>
+
+                  {autoDriveFreq === 'daily' && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                        Jam Eksekusi Harian (WIB):
+                      </label>
+                      <input
+                        type="time"
+                        value={autoDriveTime}
+                        onChange={(e) => setAutoDriveTime(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
                   )}
-                  <span>Simpan Snapshot</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-1">
+                <div className="text-[10px] text-slate-400">
+                  Cadangan Cloud Terakhir: <strong className="text-slate-600 dark:text-slate-300">{appData.backupConfig?.lastGoogleDriveBackup || 'Belum ada'}</strong>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSavingDriveConfig}
+                  onClick={handleSaveAutoDriveConfig}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+                >
+                  Simpan Jadwal Otomatis
                 </button>
               </div>
             </div>
-          </form>
+          </div>
 
-          {/* Snapshots List with Filter */}
-          <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-1">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
-                  Daftar Snapshot Server Tersedia ({filteredSnapshots.length})
-                </span>
-              </div>
-
-              {/* Filter Chips */}
-              <div className="flex items-center gap-1 overflow-x-auto text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setSnapshotCategoryFilter('all')}
-                  className={`px-2 py-0.5 rounded-lg font-bold transition cursor-pointer ${
-                    snapshotCategoryFilter === 'all'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Semua
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSnapshotCategoryFilter('daily')}
-                  className={`px-2 py-0.5 rounded-lg font-bold transition cursor-pointer ${
-                    snapshotCategoryFilter === 'daily'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Harian
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSnapshotCategoryFilter('weekly')}
-                  className={`px-2 py-0.5 rounded-lg font-bold transition cursor-pointer ${
-                    snapshotCategoryFilter === 'weekly'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Mingguan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSnapshotCategoryFilter('monthly')}
-                  className={`px-2 py-0.5 rounded-lg font-bold transition cursor-pointer ${
-                    snapshotCategoryFilter === 'monthly'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Bulanan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSnapshotCategoryFilter('manual')}
-                  className={`px-2 py-0.5 rounded-lg font-bold transition cursor-pointer ${
-                    snapshotCategoryFilter === 'manual'
-                      ? 'bg-slate-700 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  Manual
-                </button>
-                <button
-                  type="button"
-                  onClick={fetchServerSnapshots}
-                  className="ml-2 text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isLoadingSnapshots ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-            </div>
-
-            {isLoadingSnapshots ? (
-              <div className="py-8 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-2">
-                <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
-                <span className="text-[11px]">Memuat daftar snapshot...</span>
-              </div>
-            ) : filteredSnapshots.length === 0 ? (
-              <div className="py-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-                <Server className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                <p className="font-bold text-slate-700 dark:text-slate-300 text-xs">Belum Ada Snapshot Server dalam Kategori Ini</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs mx-auto mt-0.5">
-                  Buat snapshot menggunakan form di atas atau aktifkan jadwal backup otomatis.
+          {/* Section 3: Daftar Berkas Cadangan di Google Drive */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white flex items-center gap-1.5">
+                  <CloudDownload className="w-4 h-4 text-emerald-500" />
+                  <span>3. Daftar Berkas Cadangan di Google Drive ({driveBackups.length})</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Pilih salah satu cadangan di Google Drive untuk dipulihkan ke aplikasi kapan saja.
                 </p>
+              </div>
+
+              {googleUser && (
+                <button
+                  type="button"
+                  onClick={fetchDriveBackups}
+                  disabled={isLoadingDriveBackups}
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Segarkan daftar Google Drive"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingDriveBackups ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+
+            {!googleUser ? (
+              <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                <div>Hubungkan Google Drive untuk melihat daftar berkas cadangan cloud Anda.</div>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Sign in with Google
+                </button>
+              </div>
+            ) : isLoadingDriveBackups ? (
+              <div className="p-6 text-center text-xs text-slate-400">
+                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
+                <span>Memuat berkas dari Google Drive...</span>
+              </div>
+            ) : driveBackups.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                Belum ada berkas cadangan di Google Drive. Klik tombol "Cadangkan ke Google Drive Sekarang" di atas untuk membuat cadangan cloud pertama.
               </div>
             ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {filteredSnapshots.map((snap) => (
+              <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+                {driveBackups.map((item) => (
                   <div
-                    key={snap.id}
-                    className="p-3 bg-white dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-emerald-300 dark:hover:border-slate-700 transition"
+                    key={item.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 transition gap-2"
                   >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        {getCategoryBadge(snap.category)}
-                        <span className="font-extrabold text-slate-800 dark:text-slate-100 text-xs">
-                          {snap.note || snap.id}
-                        </span>
-                        {snap.fileSize && (
-                          <span className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-500 font-medium">
-                            {snap.fileSize}
-                          </span>
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <FileCode className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <span className="truncate max-w-[280px] sm:max-w-md">{item.name}</span>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">{item.size}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 flex items-center gap-2 pl-6">
+                        <Clock className="w-3 h-3" />
+                        <span>Dibuat: {item.createdTime ? new Date(item.createdTime).toLocaleString('id-ID') : '-'}</span>
+                        {item.description && (
+                          <span className="italic text-slate-500">• {item.description}</span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                        {snap.createdAt} {snap.stats?.totalSiswa ? `• ${snap.stats.totalSiswa} Siswa` : ''} {snap.stats?.datesCount ? `• ${snap.stats.datesCount} Hari Presensi` : ''}
-                      </p>
                     </div>
 
-                    <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
-                      <a
-                        href={`/api/backup/snapshot/${snap.id}/download`}
-                        download={`${snap.id}.bak`}
-                        className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
-                        title="Unduh file .bak ke komputer"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>Unduh</span>
-                      </a>
+                    <div className="flex items-center gap-1.5 pl-6 sm:pl-0">
                       <button
                         type="button"
-                        onClick={() => handleRestoreSnapshot(snap)}
-                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
+                        onClick={() => handleRestoreFromDrive(item)}
+                        disabled={isProcessing}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs flex items-center gap-1"
+                        title="Pulihkan database dari berkas Google Drive ini"
                       >
-                        <Upload className="w-3 h-3" />
+                        <RefreshCw className="w-3 h-3" />
                         <span>Pulihkan</span>
                       </button>
+
+                      {item.webViewLink && (
+                        <a
+                          href={item.webViewLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                          title="Buka di Google Drive"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => handleDeleteSnapshot(snap.id)}
-                        className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition cursor-pointer"
-                        title="Hapus Snapshot"
+                        onClick={() => handleDeleteFromDrive(item)}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                        title="Hapus cadangan dari Google Drive"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1439,335 +1232,222 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
         </div>
       )}
 
-      {/* TAB 4: PULIHKAN DATA DARI BERKAS (RESTORE FILE) */}
+      {/* TAB 3: RESTORE (LOCAL FILE) */}
       {activeTab === 'restore' && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Dropzone Area */}
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`p-6 rounded-2xl border-2 border-dashed text-center transition cursor-pointer flex flex-col items-center justify-center ${
+            className={`p-8 border-2 border-dashed rounded-3xl text-center cursor-pointer transition-all ${
               isDragging
-                ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/20'
-                : 'border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 hover:border-amber-400 hover:bg-amber-50/30'
+                ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
+                : 'border-slate-200 dark:border-slate-700 hover:border-emerald-400 bg-slate-50/50 dark:bg-slate-800/30'
             }`}
           >
             <input
-              type="file"
               ref={fileInputRef}
-              accept=".bak,.json,.dat,.txt"
+              type="file"
+              accept=".json,.bak"
               onChange={handleFileChange}
               className="hidden"
             />
-            <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
               <Upload className="w-6 h-6" />
             </div>
-            <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-sm mb-1">
-              Pilih atau Seret (Drag &amp; Drop) Berkas Cadangan ke Sini
+            <h4 className="text-sm font-bold text-slate-800 dark:text-white">
+              Pilih atau Seret Berkas Cadangan (.json / .bak)
             </h4>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-md mb-2">
-              Mendukung berkas <strong>.bak</strong>, <strong>.json</strong>, atau <strong>.dat</strong> hasil ekspor sistem presensi.
+            <p className="text-xs text-slate-400 mt-1">
+              Klik untuk memilih berkas dari perangkat komputer atau HP Anda
             </p>
-            <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-              Jelajahi Berkas di Komputer
-            </span>
           </div>
 
-          {/* File Inspector & Validation Summary */}
+          {/* Pratinjau Berkas */}
           {inspection && (
-            <div className={`p-4 rounded-2xl border transition ${
+            <div className={`p-4 rounded-2xl border ${
               inspection.isValid
-                ? 'bg-emerald-50/60 dark:bg-slate-800/80 border-emerald-200 dark:border-emerald-800'
-                : 'bg-rose-50/60 dark:bg-slate-800/80 border-rose-200 dark:border-rose-800'
+                ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
+                : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
             }`}>
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
                   {inspection.isValid ? (
-                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                      <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    </div>
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   ) : (
-                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center justify-center shrink-0">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                    </div>
+                    <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                   )}
                   <div>
-                    <h5 className="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
-                      <span>{inspection.fileName}</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
-                        ({inspection.fileSize})
-                      </span>
-                    </h5>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {inspection.schoolName ? `Asal: ${inspection.schoolName}` : ''} {inspection.exportedAt ? `• Waktu Backup: ${inspection.exportedAt}` : ''}
-                    </p>
+                    <div className="text-xs font-bold text-slate-900 dark:text-white">
+                      {inspection.fileName} ({inspection.fileSize})
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {inspection.schoolName} • Dibuat: {inspection.exportedAt}
+                    </div>
                   </div>
-                </div>
-
-                {/* Validation Badge */}
-                <div>
-                  {inspection.isValid ? (
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-[10px] flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>Valid &amp; Siap Dipulihkan</span>
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-bold text-[10px] flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                      <span>Format Tidak Valid</span>
-                    </span>
-                  )}
                 </div>
               </div>
 
-              {/* Data Items Found Preview */}
-              {inspection.isValid && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/60 dark:border-slate-700 text-[11px]">
-                  <div className="p-2 bg-white/80 dark:bg-slate-900/60 rounded-xl">
-                    <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Data Siswa</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100">{inspection.stats.siswaCount} Siswa</span>
+              {inspection.isValid ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-xl">
+                      <div className="font-extrabold text-slate-800 dark:text-slate-100">{inspection.stats.siswaCount}</div>
+                      <div className="text-[10px] text-slate-400">Siswa</div>
+                    </div>
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-xl">
+                      <div className="font-extrabold text-slate-800 dark:text-slate-100">{inspection.stats.kelasCount}</div>
+                      <div className="text-[10px] text-slate-400">Kelas</div>
+                    </div>
+                    <div className="p-2 bg-white dark:bg-slate-900 rounded-xl">
+                      <div className="font-extrabold text-emerald-600 dark:text-emerald-400">{inspection.stats.presensiEntriesCount}</div>
+                      <div className="text-[10px] text-slate-400">Presensi</div>
+                    </div>
                   </div>
-                  <div className="p-2 bg-white/80 dark:bg-slate-900/60 rounded-xl">
-                    <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Data Kelas &amp; Jurusan</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100">{inspection.stats.kelasCount} Kelas / {inspection.stats.jurusanCount} Jurusan</span>
-                  </div>
-                  <div className="p-2 bg-white/80 dark:bg-slate-900/60 rounded-xl">
-                    <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Wali Kelas / Guru</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100">{inspection.stats.waliCount} Guru</span>
-                  </div>
-                  <div className="p-2 bg-white/80 dark:bg-slate-900/60 rounded-xl">
-                    <span className="text-slate-500 dark:text-slate-400 block text-[10px]">Riwayat Presensi</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-100">{inspection.stats.presensiDaysCount} Hari ({inspection.stats.presensiEntriesCount} Entri)</span>
-                  </div>
-                </div>
-              )}
 
-              {inspection.errorMsg && (
-                <p className="text-rose-600 dark:text-rose-400 text-[11px] font-semibold mt-1">
-                  {inspection.errorMsg}
-                </p>
-              )}
-            </div>
-          )}
+                  {/* Mode Pilihan */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block">
+                      Metode Pemulihan:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRestoreMode('replace')}
+                        className={`p-2.5 rounded-xl border text-left text-xs transition cursor-pointer ${
+                          restoreMode === 'replace'
+                            ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 dark:text-blue-300 font-bold'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <div className="font-bold">Timpa Semua (Rekomendasi)</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">Ganti seluruh database dengan isi backup</div>
+                      </button>
 
-          {/* Restore Mode Selector */}
-          {inspection && inspection.isValid && (
-            <div className="p-4 bg-white dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                Pilih Mode Pemulihan Data:
-              </label>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {/* Option 1: Replace */}
-                <label
-                  onClick={() => setRestoreMode('replace')}
-                  className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-                    restoreMode === 'replace'
-                      ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200'
-                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-xs">Ganti Seluruh Data</span>
-                    <input
-                      type="radio"
-                      name="restoreMode"
-                      checked={restoreMode === 'replace'}
-                      onChange={() => setRestoreMode('replace')}
-                      className="text-blue-600"
-                    />
+                      <button
+                        type="button"
+                        onClick={() => setRestoreMode('merge')}
+                        className={`p-2.5 rounded-xl border text-left text-xs transition cursor-pointer ${
+                          restoreMode === 'merge'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-300 font-bold'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <div className="font-bold">Gabungkan (Merge)</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">Satukan catatan presensi yang belum ada</div>
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Menimpa seluruh database dengan data dari berkas cadangan (Direkomendasikan).
-                  </p>
-                </label>
 
-                {/* Option 2: Smart Merge */}
-                <label
-                  onClick={() => setRestoreMode('merge')}
-                  className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-                    restoreMode === 'merge'
-                      ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200'
-                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-xs">Gabung Data (Merge)</span>
-                    <input
-                      type="radio"
-                      name="restoreMode"
-                      checked={restoreMode === 'merge'}
-                      onChange={() => setRestoreMode('merge')}
-                      className="text-blue-600"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Menggabungkan data baru tanpa menghapus data master yang telah ada.
-                  </p>
-                </label>
-
-                {/* Option 3: Presensi Only */}
-                <label
-                  onClick={() => setRestoreMode('presensi_only')}
-                  className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
-                    restoreMode === 'presensi_only'
-                      ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200'
-                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-xs">Hanya Riwayat Presensi</span>
-                    <input
-                      type="radio"
-                      name="restoreMode"
-                      checked={restoreMode === 'presensi_only'}
-                      onChange={() => setRestoreMode('presensi_only')}
-                      className="text-blue-600"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Hanya mengisi riwayat absensi tanpa mengubah data akun &amp; master.
-                  </p>
-                </label>
-              </div>
-
-              {/* Action Button */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={handleExecuteRestore}
-                  className="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-extrabold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-xs cursor-pointer"
-                >
-                  {isProcessing ? (
-                    <>
+                  {/* Tombol Eksekusi */}
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={handleExecuteRestore}
+                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    {isProcessing ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Sedang Memulihkan Database...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      <span>Mulai Proses Pemulihan Data</span>
-                    </>
-                  )}
-                </button>
-              </div>
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span>Pulihkan Database Sekarang</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                  {inspection.errorMsg}
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* TAB 5: RESET & PERAWATAN SISTEM (MAINTENANCE) */}
+      {/* TAB 4: RESET & MAINTENANCE */}
       {activeTab === 'maintenance' && (
-        <div className="space-y-3.5">
-          <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-2xl dark:bg-slate-800/80 dark:border-slate-700">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center justify-center font-bold shrink-0">
-                <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs">
-                  Area Perawatan &amp; Reset Data
-                </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Gunakan fasilitas ini jika Anda ingin mengosongkan data riwayat, memuat data sampel demo, atau membersihkan sistem.
-                </p>
-              </div>
+        <div className="space-y-4">
+          <div className="p-4 bg-rose-500/5 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/40 rounded-2xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-rose-600 dark:text-rose-400 mb-1">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Area Tindakan Sensitif</span>
             </div>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400">
+              Gunakan opsi pemeliharaan di bawah ini untuk membersihkan data atau mengatur ulang aplikasi ke kondisi awal jika diperlukan.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* 1. Muat Ulang Demo */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-emerald-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+          <div className="space-y-3">
+            {/* Muat Ulang Demo */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold text-xs mb-1">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Data Sampel Demo</span>
+                <div className="text-xs font-extrabold text-slate-800 dark:text-white">
+                  Muat Ulang Data Demo Sekolah
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                  Isi ulang sistem dengan data bawaan sekolah, kelas, siswa, dan sampel riwayat presensi default.
-                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Mengembalikan dataset sekolah contoh (jurusan, kelas, siswa, guru, jadwal &amp; presensi demo).
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  onCloseModal();
                   if (onRestoreDemoData) onRestoreDemoData();
+                  else onShowToast('Fungsi muat demo siap dijalankan.', 'info');
                 }}
-                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Muat Data Demo</span>
+                Muat Demo
               </button>
             </div>
 
-            {/* 2. Reset Riwayat Presensi */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-amber-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            {/* Kosongkan Presensi */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold text-xs mb-1">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Reset Presensi Saja</span>
+                <div className="text-xs font-extrabold text-slate-800 dark:text-white">
+                  Kosongkan Riwayat Presensi
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                  Hapus seluruh catatan kehadiran siswa. Data Master (Siswa, Kelas, Jurusan, Guru) tetap tersimpan aman.
-                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Menghapus semua catatan absensi harian tanpa menghapus data master siswa, kelas, dan guru.
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  onCloseModal();
                   if (onResetPresensiData) onResetPresensiData();
+                  else onShowToast('Fungsi reset presensi siap dijalankan.', 'info');
                 }}
-                className="w-full py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer"
               >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Reset Presensi</span>
+                Kosongkan Presensi
               </button>
             </div>
 
-            {/* 3. Reset Seluruh Data */}
-            <div className="p-3.5 bg-white dark:bg-slate-900/80 rounded-2xl border border-rose-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            {/* Reset Total */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-bold text-xs mb-1">
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Reset Seluruh Data</span>
+                <div className="text-xs font-extrabold text-rose-600 dark:text-rose-400">
+                  Reset Database Pabrik (Factory Reset)
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                  PERINGATAN: Membersihkan seluruh siswa, kelas, guru, dan presensi (Sistem kembali kosong total).
-                </p>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Membersihkan seluruh database lokal dan mengembalikan pengaturan sistem ke awal.
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  onCloseModal();
                   if (onResetAllData) onResetAllData();
+                  else onShowToast('Fungsi reset total siap dijalankan.', 'info');
                 }}
-                className="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shadow-xs"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Bersihkan Sistem</span>
+                Reset Total
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Modal Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-          <span>Sistem Cadangan &amp; Pemulihan Terintegrasi (Otomatis &amp; Manual)</span>
-        </div>
-        <button
-          type="button"
-          onClick={onCloseModal}
-          className="px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
-        >
-          Tutup
-        </button>
-      </div>
     </div>
   );
 };

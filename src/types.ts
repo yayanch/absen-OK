@@ -530,6 +530,12 @@ export interface BackupScheduleConfig {
   lastWeeklyBackup?: string;
   lastMonthlyBackup?: string;
   lastManualBackup?: string;
+  googleDriveAutoBackup?: boolean;
+  googleDriveAutoFrequency?: 'daily' | 'on_save' | 'weekly';
+  googleDriveDailyTime?: string;
+  lastGoogleDriveBackup?: string;
+  lastGoogleDriveFileId?: string;
+  googleDriveFolderName?: string;
 }
 
 export interface NavigationSectionConfig {
