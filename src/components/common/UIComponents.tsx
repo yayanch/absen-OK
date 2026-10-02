@@ -1,5 +1,30 @@
 import React from 'react';
 import { LucideIcon, AlertCircle, RefreshCw, Check, AlertTriangle, Info, X } from 'lucide-react';
+import { motion, HTMLMotionProps, Variants } from 'framer-motion';
+
+export const cardContainerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.06,
+      delayChildren: 0.02,
+    },
+  },
+};
+
+export const cardItemVariants: Variants = {
+  hidden: { opacity: 0, y: 14, scale: 0.98 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.35,
+      ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
+    },
+  },
+};
 
 /* ==========================================================================
    1. PAGE HEADER COMPONENT
@@ -269,13 +294,16 @@ Select.displayName = 'Select';
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   hoverable?: boolean;
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  animateIn?: boolean;
 }
 
 export const Card: React.FC<CardProps> = ({
   hoverable = false,
   padding = 'md',
+  animateIn = false,
   children,
   className = '',
+  onClick,
   ...props
 }) => {
   const paddingStyles = {
@@ -285,8 +313,30 @@ export const Card: React.FC<CardProps> = ({
     lg: 'p-6 md:p-8',
   };
 
+  const isInteractive = hoverable || !!onClick;
+
+  if (animateIn || isInteractive) {
+    return (
+      <motion.div
+        initial={animateIn ? { opacity: 0, y: 12, scale: 0.99 } : false}
+        animate={animateIn ? { opacity: 1, y: 0, scale: 1 } : undefined}
+        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        whileHover={isInteractive ? { y: -3, transition: { duration: 0.2, ease: 'easeOut' } } : undefined}
+        whileTap={isInteractive ? { scale: 0.985 } : undefined}
+        onClick={onClick}
+        className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm transition-shadow duration-200 ${
+          isInteractive ? 'hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer' : ''
+        } ${paddingStyles[padding]} ${className}`}
+        {...(props as any)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
   return (
     <div
+      onClick={onClick}
       className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm transition-all duration-200 ${
         hoverable ? 'hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-slate-700' : ''
       } ${paddingStyles[padding]} ${className}`}
@@ -310,6 +360,7 @@ export interface StatCardProps {
   trend?: { value: string | number; isPositive?: boolean; label?: string };
   loading?: boolean;
   onClick?: () => void;
+  index?: number;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -325,6 +376,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   trend,
   loading = false,
   onClick,
+  index,
 }) => {
   const displayTitle = label || title || '';
   const displaySubtitle = description || subtitle || '';
@@ -349,67 +401,79 @@ export const StatCard: React.FC<StatCardProps> = ({
   };
 
   return (
-    <Card
-      hoverable={!!onClick}
-      padding="sm"
-      onClick={onClick}
-      className={onClick ? 'cursor-pointer' : ''}
+    <motion.div
+      variants={cardItemVariants}
+      initial="hidden"
+      animate="show"
+      transition={{ delay: index !== undefined ? index * 0.05 : 0 }}
+      whileHover={onClick ? { y: -4, transition: { duration: 0.2 } } : undefined}
+      whileTap={onClick ? { scale: 0.98 } : undefined}
+      className="h-full"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1 min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{displayTitle}</p>
-          {loading ? (
-            <div className="h-7 w-20 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md my-1" />
-          ) : (
-            <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              {value}
-            </p>
-          )}
-          {displaySubtitle && (
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{displaySubtitle}</p>
-          )}
-          {trend && (
-            <div className="flex items-center gap-1.5 pt-0.5">
+      <Card
+        hoverable={!!onClick}
+        padding="sm"
+        onClick={onClick}
+        className={`h-full ${onClick ? 'cursor-pointer' : ''}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{displayTitle}</p>
+            {loading ? (
+              <div className="h-7 w-20 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-md my-1" />
+            ) : (
+              <p className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                {value}
+              </p>
+            )}
+            {displaySubtitle && (
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{displaySubtitle}</p>
+            )}
+            {trend && (
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span
+                  className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                    trend.isPositive !== false
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
+                  }`}
+                >
+                  {trend.isPositive !== false ? '+' : ''}
+                  {trend.value}
+                </span>
+                {trend.label && (
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{trend.label}</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {Icon && (
+              <motion.div
+                whileHover={{ rotate: [0, -6, 6, 0], scale: 1.08 }}
+                transition={{ duration: 0.3 }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-xs font-bold ${
+                  accentColor ? '' : `${iconStyle.bg} ${iconStyle.text}`
+                }`}
+                style={accentColor ? { backgroundColor: accentColor, color: '#ffffff' } : undefined}
+              >
+                <Icon className="w-5 h-5" />
+              </motion.div>
+            )}
+            {badge && (
               <span
-                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                  trend.isPositive !== false
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
-                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
+                className={`px-2 py-0.5 text-[10px] rounded-md ${
+                  badgeColors[badge.type || 'neutral']
                 }`}
               >
-                {trend.isPositive !== false ? '+' : ''}
-                {trend.value}
+                {badge.label}
               </span>
-              {trend.label && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{trend.label}</span>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          {Icon && (
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-xs font-bold ${
-                accentColor ? '' : `${iconStyle.bg} ${iconStyle.text}`
-              }`}
-              style={accentColor ? { backgroundColor: accentColor, color: '#ffffff' } : undefined}
-            >
-              <Icon className="w-5 h-5" />
-            </div>
-          )}
-          {badge && (
-            <span
-              className={`px-2 py-0.5 text-[10px] rounded-md ${
-                badgeColors[badge.type || 'neutral']
-              }`}
-            >
-              {badge.label}
-            </span>
-          )}
-        </div>
-      </div>
-    </Card>
+      </Card>
+    </motion.div>
   );
 };
 

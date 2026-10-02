@@ -13,10 +13,11 @@ import {
   ShieldCheck,
   Plus,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, cleanMapelName } from '../../utils/helpers';
 import { RoleQuickActions } from './RoleQuickActions';
-import { PageHeader, StatCard } from '../common/UIComponents';
+import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
 interface StafJadwalDashboardViewProps {
   appData: AppData;
@@ -151,8 +152,14 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
       <RoleQuickActions role="staf_jadwal" onNavigateView={onNavigateView} />
 
       {/* Statistik Ringkasan */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3.5"
+        variants={cardContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
         <StatCard
+          index={0}
           label="Total Jadwal Terplotting"
           value={totalJadwal}
           subtitle={`${todaySchedules.length} jadwal pada hari ${currentDayName}`}
@@ -161,6 +168,7 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
           onClick={() => onNavigateView('jadwal_mengajar')}
         />
         <StatCard
+          index={1}
           label="Guru Terjadwal"
           value={guruWithSchedule.size}
           subtitle={`dari ${totalGuru} guru terdaftar`}
@@ -169,6 +177,7 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
           onClick={() => onNavigateView('jadwal_mengajar')}
         />
         <StatCard
+          index={2}
           label="Kesiapan Rombel"
           value={`${rombelScheduledPercent}%`}
           subtitle={`${kelasWithSchedule.size} dari ${totalKelas} kelas aktif`}
@@ -177,6 +186,7 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
           onClick={() => onNavigateView('jadwal_mengajar')}
         />
         <StatCard
+          index={3}
           label="Total Jam Pelajaran"
           value={`${totalJp} JP`}
           subtitle={`Rata-rata ${Math.round(totalJp / (hariList.length || 1))} JP / hari`}
@@ -184,12 +194,17 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
           variant="neutral"
           onClick={() => onNavigateView('jadwal_mengajar')}
         />
-      </div>
+      </motion.div>
 
       {/* Grid Distribusi & Monitoring KBM */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Distribusi Beban Jadwal per Hari */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+        <motion.div
+          variants={cardItemVariants}
+          initial="hidden"
+          animate="show"
+          className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5"
+        >
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-extrabold text-sm sm:text-base text-slate-800 dark:text-white flex items-center gap-2">
@@ -215,7 +230,8 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
               const count = jadwalPerHari[h] || 0;
               const isToday = h.toLowerCase() === currentDayName.toLowerCase();
               return (
-                <div
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
                   key={h}
                   onClick={() => onNavigateView('jadwal_mengajar')}
                   className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
@@ -242,7 +258,7 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
                       style={{ width: `${totalJadwal > 0 ? Math.min(100, Math.round((count / (totalJadwal / 3 || 1)) * 100)) : 0}%` }}
                     />
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -272,7 +288,8 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
                     : (j.jamMulai ? `${j.jamMulai} - ${j.jamSelesai}` : `${j.jumlahJp || 2} JP`);
 
                   return (
-                    <div
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
                       key={j.id}
                       onClick={() => onNavigateView('jadwal_mengajar')}
                       className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/60 hover:bg-sky-50 dark:hover:bg-sky-950/30 border border-slate-200/60 dark:border-slate-700/60 hover:border-sky-300 dark:hover:border-sky-800 transition cursor-pointer flex items-center justify-between gap-3 group"
@@ -293,17 +310,22 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
                           {displayJam}
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Panel Informasi & Panduan Plotting */}
         <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+          <motion.div
+            variants={cardItemVariants}
+            initial="hidden"
+            animate="show"
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+          >
             <h3 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
               <Layers className="w-4 h-4 text-sky-500" />
               <span>Panduan Plotting Jadwal</span>
@@ -341,15 +363,17 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
               </div>
             </div>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               type="button"
               onClick={() => onNavigateView('jadwal_mengajar')}
               className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
             >
               <Calendar className="w-4 h-4" />
               <span>Buka Menu Jadwal Mengajar</span>
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         </div>
       </div>
     </div>

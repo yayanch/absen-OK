@@ -23,9 +23,10 @@ import {
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, calculateDailyAttendanceStats } from '../../utils/helpers';
 import { AttendanceTrendChart, AttendanceRecapChart, TrendRangeOption } from './AttendanceTrendChart';
-import { PageHeader, StatCard } from '../common/UIComponents';
+import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 import { WhatsAppLiveMonitoringCard } from './WhatsAppLiveMonitoringCard';
 import { RoleQuickActions } from './RoleQuickActions';
+import { motion } from 'framer-motion';
 
 interface AdminDashboardViewProps {
   appData: AppData;
@@ -200,8 +201,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       />
 
       {/* Statistik Utama Admin */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        variants={cardContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
         <StatCard
+          index={0}
           label="Total Siswa"
           value={totalStudents}
           subtitle="Siswa Terdaftar Aktif"
@@ -223,6 +230,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         />
 
         <StatCard
+          index={1}
           label="Total Guru"
           value={appData.waliKelas?.length || (appData as any).users?.filter((u: any) => u.role === 'guru' || u.role === 'wali').length || 0}
           subtitle="Tenaga Pendidik & Wali"
@@ -232,6 +240,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         />
 
         <StatCard
+          index={2}
           label="Total Kelas"
           value={targetClasses.length}
           subtitle="Rombongan Belajar"
@@ -241,6 +250,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         />
 
         <StatCard
+          index={3}
           label="Kehadiran Hari Ini"
           value={hadirCount}
           subtitle={`${sakitCount} Sakit • ${izinCount} Izin • ${alpaCount} Alpha`}
@@ -249,30 +259,40 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           badge={{ label: `${hadirPercentage}%`, type: 'success' }}
           onClick={() => onNavigateView('rekap_harian')}
         />
-      </div>
+      </motion.div>
 
       {/* Attendance Overview: Tren Kehadiran 7 Hari & Rankings */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Rekapitulasi & Tren Kehadiran Siswa */}
-        <div className="lg:col-span-8 space-y-6">
-          <AttendanceRecapChart
-            trendData={trendData}
-            trendRange={trendRange}
-            onRangeChange={setTrendRange}
-            customStartDate={customStartDate}
-            customEndDate={customEndDate}
-            onCustomRangeChange={onCustomRangeChange}
-            appData={appData}
-            selectedDate={selectedDate}
-            currentUser={currentUser}
-            targetClasses={targetClasses}
-            title="Grafik Tren Kehadiran Siswa"
-            subtitle="Grafik persentase tingkat kehadiran harian siswa dalam rentang waktu terpilih."
-            onNavigateView={onNavigateView}
-          />
+        <motion.div
+          className="lg:col-span-8 space-y-6"
+          variants={cardContainerVariants}
+          initial="hidden"
+          animate="show"
+        >
+          <motion.div variants={cardItemVariants}>
+            <AttendanceRecapChart
+              trendData={trendData}
+              trendRange={trendRange}
+              onRangeChange={setTrendRange}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onCustomRangeChange={onCustomRangeChange}
+              appData={appData}
+              selectedDate={selectedDate}
+              currentUser={currentUser}
+              targetClasses={targetClasses}
+              title="Grafik Tren Kehadiran Siswa"
+              subtitle="Grafik persentase tingkat kehadiran harian siswa dalam rentang waktu terpilih."
+              onNavigateView={onNavigateView}
+            />
+          </motion.div>
 
           {/* Tabel Rekapitulasi Presensi Harian */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <motion.div
+            variants={cardItemVariants}
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs"
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-theme-primary" />
@@ -362,13 +382,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Right Column: Rankings & Live Activity */}
-        <div className="lg:col-span-4 space-y-6">
+        <motion.div
+          className="lg:col-span-4 space-y-6"
+          variants={cardContainerVariants}
+          initial="hidden"
+          animate="show"
+        >
           {/* Kelas Kehadiran Tertinggi & Perlu Perhatian */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+          <motion.div
+            variants={cardItemVariants}
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+          >
             <div>
               <h3 className="text-sm font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
                 <Award className="w-4 h-4 text-amber-500" />
@@ -402,10 +430,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 )}
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Aktivitas Sistem Terbaru */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <motion.div
+            variants={cardItemVariants}
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs"
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
                 <Activity className="w-4 h-4 text-emerald-500" />
@@ -427,21 +458,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
 
       {/* Live WhatsApp Gateway Delivery & Failed Messages Telemetry */}
-      <WhatsAppLiveMonitoringCard
-        appData={appData}
-        currentUser={currentUser}
-        onNavigateView={onNavigateView}
-        onUpdateAppData={onUpdateAppData}
-        onShowToast={onShowToast}
-      />
+      <motion.div variants={cardItemVariants} initial="hidden" animate="show">
+        <WhatsAppLiveMonitoringCard
+          appData={appData}
+          currentUser={currentUser}
+          onNavigateView={onNavigateView}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+        />
+      </motion.div>
 
       {/* Monitoring Login Pengguna (Live Sesi Online) */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+      <motion.div
+        variants={cardItemVariants}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center">
@@ -470,14 +508,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
             onClick={() => onNavigateView('monitoring_login')}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition border border-slate-200 dark:border-slate-700 shadow-2xs group"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition border border-slate-200 dark:border-slate-700 shadow-2xs group cursor-pointer"
           >
             <span>Buka Panel Monitoring Login</span>
             <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-sky-600 dark:text-sky-400" />
-          </button>
+          </motion.button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
@@ -526,10 +566,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <span className="text-[10px] text-slate-400 block truncate">Firewall IDS</span>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Monitoring Sumber Daya Server (CPU, RAM, Harddisk, Traffic Jaringan) */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+      <motion.div
+        variants={cardItemVariants}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -549,14 +594,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
             onClick={() => onNavigateView('monitoring_server')}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition border border-slate-200 dark:border-slate-700 shadow-2xs group"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition border border-slate-200 dark:border-slate-700 shadow-2xs group cursor-pointer"
           >
             <span>Buka Panel Monitoring Lengkap</span>
             <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform text-emerald-600 dark:text-emerald-400" />
-          </button>
+          </motion.button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
@@ -650,7 +697,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </span>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

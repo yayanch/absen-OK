@@ -5,6 +5,7 @@ import {
   PieChart,
   SlidersHorizontal,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
 import { sortKelasList } from '../../data/initialData';
 import {
@@ -483,7 +484,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      className="space-y-6 max-w-7xl mx-auto pb-16"
+    >
       {renderRoleDashboard()}
 
       {/* Customization Modal */}
@@ -618,6 +624,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };

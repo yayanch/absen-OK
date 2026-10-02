@@ -1,6 +1,8 @@
 import React from 'react';
 import { ShieldAlert, ChevronRight, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { ViewType } from '../../types';
+import { cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
 interface StudentAttentionItem {
   siswa: any;
@@ -86,12 +88,20 @@ export const StudentAttentionWidget: React.FC<StudentAttentionWidgetProps> = ({
           <p className="text-[11px] text-slate-400 mt-0.5">Tingkat kehadiran siswa terjaga dengan baik.</p>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <motion.div
+          className="space-y-2.5"
+          variants={cardContainerVariants}
+          initial="hidden"
+          animate="show"
+        >
           {displayStudents.map((item, idx) => (
-            <div
+            <motion.div
+              variants={cardItemVariants}
+              whileHover={{ scale: 1.015, y: -2 }}
+              whileTap={{ scale: 0.985 }}
               key={item.siswa.id || idx}
               onClick={() => onOpenDetail && onOpenDetail(item)}
-              className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800 transition active:scale-[0.99]"
+              className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800 transition shadow-2xs"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -125,9 +135,9 @@ export const StudentAttentionWidget: React.FC<StudentAttentionWidgetProps> = ({
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   );

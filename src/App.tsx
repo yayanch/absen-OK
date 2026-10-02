@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Lock, ShieldAlert } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   AppData,
   UserSession,
@@ -41,7 +41,6 @@ const PelanggaranView = React.lazy(() => import('./components/views/PelanggaranV
 const EkstrakurikulerView = React.lazy(() => import('./components/views/EkstrakurikulerView').then(m => ({ default: m.EkstrakurikulerView })));
 const RekapHarianView = React.lazy(() => import('./components/views/RekapHarianView').then(m => ({ default: m.RekapHarianView })));
 const RekapPengisianKelasView = React.lazy(() => import('./components/views/RekapPengisianKelasView').then(m => ({ default: m.RekapPengisianKelasView })));
-const BroadcastWaView = React.lazy(() => import('./components/views/BroadcastWaView').then(m => ({ default: m.BroadcastWaView })));
 const RekapMingguanView = React.lazy(() => import('./components/views/RekapMingguanView').then(m => ({ default: m.RekapMingguanView })));
 const RekapBulananView = React.lazy(() => import('./components/views/RekapBulananView').then(m => ({ default: m.RekapBulananView })));
 const RekapKetidakhadiranTertinggiView = React.lazy(() => import('./components/views/RekapKetidakhadiranTertinggiView').then(m => ({ default: m.RekapKetidakhadiranTertinggiView })));
@@ -1193,20 +1192,22 @@ export default function App() {
           className={`flex-1 overflow-x-clip min-w-0 ${isStudentPortal ? 'student-portal-main !p-0 !pt-0 !px-0 !m-0 !mx-0 pb-16 sm:pb-12 w-full' : 'p-3 sm:p-5 md:p-6 pb-3 md:pb-6'}`}
           style={isStudentPortal ? { paddingLeft: 0, paddingRight: 0, paddingTop: 0, marginLeft: 0, marginRight: 0, width: '100%' } : undefined}
         >
-          <motion.div
-            key={currentView}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="w-full h-full min-w-full"
-            style={isStudentPortal ? { paddingLeft: 0, paddingRight: 0, paddingTop: 0, marginLeft: 0, marginRight: 0, width: '100%' } : undefined}
-          >
-            <React.Suspense fallback={
-              <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
-                <div className="w-10 h-10 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Memuat Halaman...</p>
-              </div>
-            }>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentView}
+              initial={{ opacity: 0, y: 10, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.995 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full min-w-full"
+              style={isStudentPortal ? { paddingLeft: 0, paddingRight: 0, paddingTop: 0, marginLeft: 0, marginRight: 0, width: '100%' } : undefined}
+            >
+              <React.Suspense fallback={
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
+                  <div className="w-10 h-10 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Memuat Halaman...</p>
+                </div>
+              }>
               {((currentUser.role === 'murid' &&
               currentView !== 'catatan_pelanggaran' &&
               currentView !== 'live_chat') ||
@@ -1353,12 +1354,12 @@ export default function App() {
             )}
 
             {currentView === 'broadcast_wa' && (
-              <BroadcastWaView
+              <WhatsAppGatewayView
                 appData={appData}
                 currentUser={currentUser}
                 onUpdateAppData={handleUpdateAppData}
                 onShowToast={showToast}
-                onNavigateView={handleNavigate}
+                onConfirmModal={openConfirmModal}
               />
             )}
 
@@ -1706,6 +1707,7 @@ export default function App() {
             )}
             </React.Suspense>
           </motion.div>
+        </AnimatePresence>
         </main>
 
         <Footer sekolah={appData.sekolah} />

@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit } from '../types';
 import { DEMO_DATASET, DEFAULT_TOGA_LOGO, getTodayString, randomizeWaForStudents } from '../data/initialData';
 import {
@@ -1606,7 +1605,7 @@ export function formatDateIndo(dateStr: string): string {
   });
 }
 
-export function exportRekapHarianExcel(
+export async function exportRekapHarianExcel(
   namaKelas: string,
   tanggal: string,
   siswaList: any[],
@@ -1640,14 +1639,16 @@ export function exportRekapHarianExcel(
     };
   });
 
+  const XLSX = await import('xlsx');
   const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Rekap Harian');
-  saveExcelFile(wb, `Rekap_Harian_${namaKelas}_${tanggal}.xlsx`);
+  await saveExcelFile(wb, `Rekap_Harian_${namaKelas}_${tanggal}.xlsx`);
 }
 
-export function saveExcelFile(wb: XLSX.WorkBook, filename: string) {
+export async function saveExcelFile(wb: any, filename: string) {
   try {
+    const XLSX = await import('xlsx');
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1656,6 +1657,7 @@ export function saveExcelFile(wb: XLSX.WorkBook, filename: string) {
   } catch (err) {
     console.error('Error in saveExcelFile, falling back to XLSX.writeFile:', err);
     try {
+      const XLSX = await import('xlsx');
       XLSX.writeFile(wb, filename);
     } catch (fallbackErr) {
       console.error('XLSX.writeFile failed:', fallbackErr);

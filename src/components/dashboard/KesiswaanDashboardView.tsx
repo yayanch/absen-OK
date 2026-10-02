@@ -12,11 +12,12 @@ import {
   Mail,
   Users,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo } from '../../utils/helpers';
 import { RoleQuickActions } from './RoleQuickActions';
 import { StudentAttentionWidget } from './StudentAttentionWidget';
-import { PageHeader, StatCard } from '../common/UIComponents';
+import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
 interface KesiswaanDashboardViewProps {
   appData: AppData;
@@ -127,8 +128,14 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
       />
 
       {/* Statistik Utama Kesiswaan */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-5 gap-3.5"
+        variants={cardContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
         <StatCard
+          index={0}
           label="Hadir Hari Ini"
           value={hadirCount}
           icon={UserCheck}
@@ -136,6 +143,7 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
           onClick={() => onNavigateView('rekap_harian')}
         />
         <StatCard
+          index={1}
           label="Belum Presensi"
           value={Math.max(0, activeSiswa.length - (hadirCount + sakitCount + izinCount + alpaCount))}
           subtitle={unrecordedClasses.length > 0 ? `${unrecordedClasses.length} rombel belum kirim` : undefined}
@@ -143,38 +151,48 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
           variant="neutral"
         />
         <StatCard
+          index={2}
           label="Sakit"
           value={sakitCount}
           icon={Calendar}
           variant="warning"
         />
         <StatCard
+          index={3}
           label="Izin"
           value={izinCount}
           icon={Calendar}
           variant="info"
         />
         <StatCard
+          index={4}
           label="Alpha / Tanpa Ket."
           value={alpaCount}
           icon={AlertTriangle}
           variant="danger"
         />
-      </div>
+      </motion.div>
 
       {/* Widget Utama: Siswa Perlu Perhatian */}
-      <StudentAttentionWidget
-        students={studentsWithRisk}
-        title="Siswa Perlu Perhatian &amp; Pembinaan"
-        subtitle="Daftar siswa terpantau berdasarkan akumulasi ketidakhadiran (Alpha / Sakit / Izin)"
-        onOpenDetail={setSelectedStudentDetail}
-        onNavigateView={onNavigateView}
-      />
+      <motion.div variants={cardItemVariants} initial="hidden" animate="show">
+        <StudentAttentionWidget
+          students={studentsWithRisk}
+          title="Siswa Perlu Perhatian & Pembinaan"
+          subtitle="Daftar siswa terpantau berdasarkan akumulasi ketidakhadiran (Alpha / Sakit / Izin)"
+          onOpenDetail={setSelectedStudentDetail}
+          onNavigateView={onNavigateView}
+        />
+      </motion.div>
 
       {/* Layout Grid 2 Kolom: Pelanggaran & Home Visit & Alpha Tinggi */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Catatan Pelanggaran Terbaru */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+        <motion.div
+          variants={cardItemVariants}
+          initial="hidden"
+          animate="show"
+          className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+        >
           <div className="flex items-center justify-between">
             <h3 className="text-base font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-theme-primary" />
@@ -195,7 +213,11 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
               {appData.pelanggaran.slice(0, 4).map((p: any) => {
                 const s = activeSiswa.find((item) => item.id === p.siswaId || item.nisn === p.siswaId);
                 return (
-                  <div key={p.id} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
+                    key={p.id}
+                    className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs"
+                  >
                     <div>
                       <div className="font-bold text-slate-800 dark:text-white">{s?.nama || p.siswaNama || 'Siswa'}</div>
                       <div className="text-[10px] text-slate-400">{p.jenisPelanggaran || p.kategori} • {p.tanggal}</div>
@@ -203,16 +225,21 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
                     <span className="px-2.5 py-1 bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-extrabold rounded-lg text-[10px]">
                       +{p.poin || 10} Poin
                     </span>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Right: Status Kunjungan Rumah (Home Visit) & Top Alpha */}
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+          <motion.div
+            variants={cardItemVariants}
+            initial="hidden"
+            animate="show"
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
                 <Home className="w-5 h-5 text-cyan-600" />
@@ -231,7 +258,11 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
             ) : (
               <div className="space-y-2.5">
                 {appData.homeVisits.slice(0, 3).map((hv: any) => (
-                  <div key={hv.id} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
+                    key={hv.id}
+                    className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs"
+                  >
                     <div>
                       <div className="font-bold text-slate-800 dark:text-white">{hv.siswaNama}</div>
                       <div className="text-[10px] text-slate-400">Petugas: {hv.petugasNama || 'Tim BK'} • {hv.tanggal}</div>
@@ -239,13 +270,18 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
                     <span className="px-2.5 py-1 bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 font-extrabold rounded-lg text-[10px]">
                       {hv.status || 'Direncanakan'}
                     </span>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}
-          </div>
+          </motion.div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
+          <motion.div
+            variants={cardItemVariants}
+            initial="hidden"
+            animate="show"
+            className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3"
+          >
             <h3 className="text-sm font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
               <UserX className="w-4 h-4 text-rose-600" />
               <span>Siswa Dengan Akumulasi Alpha Tinggi</span>
@@ -258,7 +294,7 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>

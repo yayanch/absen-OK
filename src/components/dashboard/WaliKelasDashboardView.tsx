@@ -12,12 +12,13 @@ import {
   AlertTriangle,
   TrendingUp,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo } from '../../utils/helpers';
 import { RoleQuickActions } from './RoleQuickActions';
 import { StudentAttentionWidget } from './StudentAttentionWidget';
 import { AttendanceTrendChart } from './AttendanceTrendChart';
-import { PageHeader, StatCard } from '../common/UIComponents';
+import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
 interface WaliKelasDashboardViewProps {
   appData: AppData;
@@ -114,41 +115,49 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
       />
 
       {/* Status Presensi Hari Ini Banner */}
-      {isFullyRecorded ? (
-        <div className="bg-emerald-100/90 border border-emerald-300 rounded-2xl p-4 text-slate-900 shadow-xs flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-200 text-emerald-950 shrink-0">
-              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-            </div>
-            <div>
-              <span className="font-bold text-xs md:text-sm text-black">Presensi Kelas Hari Ini Sudah Lengkap!</span>
-              <p className="text-xs text-slate-800 font-medium mt-0.5">Seluruh data presensi kelas {currentClassName} telah tercatat.</p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-rose-100/90 border border-rose-300 rounded-2xl p-4 text-slate-900 shadow-xs flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-rose-200 text-rose-950 shrink-0">
-              <AlertTriangle className="w-4 h-4 stroke-[2.5]" />
-            </div>
-            <div>
-              <span className="font-bold text-xs md:text-sm text-black">Presensi Kelas Hari Ini Belum Diisi</span>
-              <p className="text-xs text-slate-800 font-medium mt-0.5">Silahkan lakukan pengisian presensi siswa kelas Anda.</p>
+      <motion.div variants={cardItemVariants} initial="hidden" animate="show">
+        {isFullyRecorded ? (
+          <div className="bg-emerald-100/90 border border-emerald-300 rounded-2xl p-4 text-slate-900 shadow-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-200 text-emerald-950 shrink-0">
+                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <span className="font-bold text-xs md:text-sm text-black">Presensi Kelas Hari Ini Sudah Lengkap!</span>
+                <p className="text-xs text-slate-800 font-medium mt-0.5">Seluruh data presensi kelas {currentClassName} telah tercatat.</p>
+              </div>
             </div>
           </div>
-          <button
-            onClick={() => onNavigateToInput(targetClasses[0]?.id)}
-            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-          >
-            Isi Sekarang
-          </button>
-        </div>
-      )}
+        ) : (
+          <div className="bg-rose-100/90 border border-rose-300 rounded-2xl p-4 text-slate-900 shadow-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-rose-200 text-rose-950 shrink-0">
+                <AlertTriangle className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <span className="font-bold text-xs md:text-sm text-black">Presensi Kelas Hari Ini Belum Diisi</span>
+                <p className="text-xs text-slate-800 font-medium mt-0.5">Silahkan lakukan pengisian presensi siswa kelas Anda.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => onNavigateToInput(targetClasses[0]?.id)}
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
+            >
+              Isi Sekarang
+            </button>
+          </div>
+        )}
+      </motion.div>
 
       {/* Statistik Kehadiran Kelas (Hadir, Belum, Sakit, Izin, Alpha) */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-5 gap-3.5"
+        variants={cardContainerVariants}
+        initial="hidden"
+        animate="show"
+      >
         <StatCard
+          index={0}
           label="Hadir"
           value={hadirCount}
           subtitle={`${hadirPercentage}% Kehadiran`}
@@ -157,35 +166,39 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
           onClick={() => onNavigateView('rekap_harian')}
         />
         <StatCard
+          index={1}
           label="Belum Presensi"
           value={isFullyRecorded ? 0 : totalStudents - (hadirCount + sakitCount + izinCount + alpaCount)}
           icon={Users}
           variant="neutral"
         />
         <StatCard
+          index={2}
           label="Sakit"
           value={sakitCount}
           icon={Calendar}
           variant="info"
         />
         <StatCard
+          index={3}
           label="Izin"
           value={izinCount}
           icon={Calendar}
           variant="warning"
         />
         <StatCard
+          index={4}
           label="Alpha"
           value={alpaCount}
           icon={AlertTriangle}
           variant="danger"
         />
-      </div>
+      </motion.div>
 
       {/* Main Section: 5 Siswa Perlu Perhatian & Tren Kelas */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: 5 Siswa Perlu Perhatian Widget */}
-        <div className="lg:col-span-7">
+        <motion.div className="lg:col-span-7" variants={cardItemVariants} initial="hidden" animate="show">
           <StudentAttentionWidget
             students={topAttention}
             title={topAttention.length > 0 ? `${topAttention.length} Siswa Perlu Perhatian di Kelas` : 'Siswa Perlu Perhatian di Kelas'}
@@ -194,21 +207,26 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
             onOpenDetail={setSelectedStudentDetail}
             onNavigateView={onNavigateView}
           />
-        </div>
+        </motion.div>
 
         {/* Right: Tren Kehadiran Kelas */}
-        <div className="lg:col-span-5">
+        <motion.div className="lg:col-span-5" variants={cardItemVariants} initial="hidden" animate="show">
           <AttendanceTrendChart
             data={trendData}
             title={`Tren Kehadiran ${currentClassName}`}
             subtitle={`Grafik persentase kehadiran harian kelas ${currentClassName}`}
             height={200}
           />
-        </div>
+        </motion.div>
       </div>
 
       {/* Ringkasan Siswa Kelas */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+      <motion.div
+        variants={cardItemVariants}
+        initial="hidden"
+        animate="show"
+        className="bg-white dark:bg-slate-900 rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4"
+      >
         <div className="flex items-center justify-between">
           <h3 className="text-base font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
             <Users className="w-5 h-5 text-theme-primary" />
@@ -226,7 +244,9 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
           {waliStudents.map((s) => {
             const stat = studentCumulativeStats.find((st) => st.siswa.id === s.id);
             return (
-              <div
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 key={s.id}
                 onClick={() => stat && setSelectedStudentDetail(stat)}
                 className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
@@ -242,11 +262,11 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
                     <span className="text-rose-600">A:{stat.alfa}</span>
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

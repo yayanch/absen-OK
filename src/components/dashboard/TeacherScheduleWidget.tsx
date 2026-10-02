@@ -1,8 +1,10 @@
 import React from 'react';
 import { Clock, BookOpen, Users, CheckCircle2, ChevronRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
 import { cleanMapelName, normalizeWeeklyShiftPeriods, getTodayString } from '../../utils/helpers';
 import { determineKelasKelompok, parseJamKeList } from '../views/JadwalMengajarView';
+import { cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
 interface TeacherScheduleWidgetProps {
   appData: AppData;
@@ -181,7 +183,12 @@ export const TeacherScheduleWidget: React.FC<TeacherScheduleWidgetProps> = ({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <motion.div
+          className="space-y-3"
+          variants={cardContainerVariants}
+          initial="hidden"
+          animate="show"
+        >
           {teacherClasses.map((item: any, idx: number) => {
             const targetK = item.targetK || (appData.kelas || []).find((k) => k.id === item.kelasId || k.nama === item.kelasNama);
             const classStudents = targetK
@@ -200,9 +207,11 @@ export const TeacherScheduleWidget: React.FC<TeacherScheduleWidgetProps> = ({
             }
 
             return (
-              <div
+              <motion.div
+                variants={cardItemVariants}
+                whileHover={{ scale: 1.01 }}
                 key={item.id || idx}
-                className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 transition shadow-xs"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -260,10 +269,10 @@ export const TeacherScheduleWidget: React.FC<TeacherScheduleWidgetProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       )}
     </div>
   );
