@@ -82,7 +82,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           Aksi Cepat Administrator
         </div>
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3"
           variants={cardContainerVariants}
           initial="hidden"
           animate="show"
@@ -96,38 +96,11 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           />
 
           <QuickActionBtn
-            onClick={() => {
-              if (onNavigateToInput) onNavigateToInput();
-              else onNavigateView('presensi_input');
-            }}
-            iconBgClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-            icon={<ClipboardCheck className="w-4 h-4 stroke-[2.5]" />}
-            title="Input Presensi"
-            subtitle="Pencatatan kehadiran"
-          />
-
-          <QuickActionBtn
-            onClick={() => onNavigateView('rekap_harian')}
-            iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
-            icon={<FileText className="w-4 h-4" />}
-            title="Laporan Harian"
-            subtitle="Rekap kehadiran siswa"
-          />
-
-          <QuickActionBtn
             onClick={() => onNavigateView('master_siswa')}
             iconBgClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
             icon={<Users className="w-4 h-4" />}
             title="Data Siswa"
             subtitle="Master peserta didik"
-          />
-
-          <QuickActionBtn
-            onClick={() => onNavigateView('absen_qr')}
-            iconBgClass="bg-teal-500/10 text-teal-600 dark:text-teal-400"
-            icon={<QrCode className="w-4 h-4" />}
-            title="QR Gerbang"
-            subtitle="Scanner & server QR"
           />
 
           <QuickActionBtn
