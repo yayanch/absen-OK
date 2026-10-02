@@ -29,15 +29,6 @@ export default defineConfig(() => {
               if (id.includes('recharts') || id.includes('d3')) {
                 return 'vendor-recharts';
               }
-              if (id.includes('framer-motion')) {
-                return 'vendor-motion';
-              }
-              if (id.includes('lucide-react')) {
-                return 'vendor-lucide';
-              }
-              if (id.includes('html5-qrcode') || id.includes('qrcode')) {
-                return 'vendor-qr';
-              }
               return 'vendor-core';
             }
           }
