@@ -1010,7 +1010,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       )}
 
       {/* MAIN CONTAINER: LEFT TEXT & RIGHT LOGIN CARD */}
-      <main className={`w-full flex-1 grid grid-cols-1 ${sekolah.loginLeftShowPanel !== false ? 'md:grid-cols-12' : 'max-w-md mx-auto'} items-center justify-between p-4 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-auto overflow-y-auto w-full`}>
+      <main className={`w-full flex-1 ${sekolah.loginLeftShowPanel !== false ? 'grid grid-cols-1 md:grid-cols-12 items-center justify-between' : 'flex justify-center items-center'} p-3.5 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-0 sm:my-auto overflow-y-auto w-full h-full min-h-screen sm:min-h-0`}>
         {/* LEFT SIDE TEXT: Sistem Absensi Siswa */}
         {sekolah.loginLeftShowPanel !== false && (
           <div className="hidden md:flex md:col-span-6 lg:col-span-7 flex-col justify-center space-y-6 pr-6 lg:pr-10 xl:pr-14 pl-2 lg:pl-6">
@@ -1110,13 +1110,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
         )}
 
         {/* RIGHT SIDE LOGIN CARD */}
-        <div className={`w-full ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} my-auto`}>
-          <div className="w-full max-w-md my-auto space-y-2.5">
-            {/* Main Card Container */}
+        <div className={`w-full ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-center my-auto`}>
+          <div className="w-full max-w-md flex flex-col justify-center my-auto">
+            {/* Main Card Container with Slight Rounded Corners */}
             <div
-              className={`${getCardBlurClass()} border rounded-3xl p-5 sm:p-6 relative space-y-4 transition-all ${
+              className={`${getCardBlurClass()} border rounded-2xl sm:rounded-3xl px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
                 isDarkMode
-                  ? 'shadow-2xl shadow-black/70 text-zinc-100'
+                  ? 'shadow-xl shadow-black/70 text-zinc-100'
                   : 'shadow-xl shadow-slate-900/10 text-slate-900'
               }`}
               style={{
@@ -1128,8 +1128,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   : `rgba(255, 255, 255, ${Math.min(0.9, (cardOpacity / 100) * 0.6 + 0.2)})`,
               }}
             >
-              {/* School Branding Header */}
-              <div className="text-center space-y-3 pb-1">
+              <div className="w-full space-y-4 my-auto">
+                {/* School Branding Header */}
+                <div className="text-center space-y-3 pb-1">
                 <div className="inline-flex justify-center transition-transform hover:scale-105">
                   {logoSrc ? (
                     <img
@@ -1621,10 +1622,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
                 );
               })()}
-            </div>
+              </div>
 
             {/* FOOTER BAR */}
-            <footer className={`w-full relative z-20 pt-1 text-center shrink-0 ${isBackgroundDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+            <footer className={`w-full relative z-20 pt-3 sm:pt-1 pb-4 sm:pb-0 text-center shrink-0 ${isBackgroundDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
               <p className="text-[11px] font-bold drop-shadow-xs opacity-90">
                 {sekolah.footerTeks || `© ${new Date().getFullYear()} ${sekolah.nama || 'SMKN 6 Garut'}. Hak Cipta Dilindungi.`}
               </p>
@@ -1632,6 +1633,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {sekolah.footerSubTeks || 'Sistem Rekapitulasi Presensi & Kehadiran Digital'}
               </p>
             </footer>
+            </div>
           </div>
         </div>
       </main>
