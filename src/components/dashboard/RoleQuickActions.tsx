@@ -12,6 +12,10 @@ import {
   Layers,
   QrCode,
   CheckCircle2,
+  UserCheck,
+  Activity,
+  HardDriveDownload,
+  Server,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { UserRole, ViewType } from '../../types';
@@ -24,6 +28,7 @@ interface RoleQuickActionsProps {
   onOpenImportModal?: () => void;
   onOpenWeeklyScheduleModal?: () => void;
   onScrollToClassSubmission?: () => void;
+  onOpenBackupModal?: () => void;
 }
 
 interface QuickActionBtnProps {
@@ -69,6 +74,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   role,
   onNavigateView,
   onNavigateToInput,
+  onOpenBackupModal,
 }) => {
   const handleOpenClassSubmission = () => {
     onNavigateView('rekap_pengisian_kelas');
@@ -82,7 +88,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           Aksi Cepat Administrator
         </div>
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
           variants={cardContainerVariants}
           initial="hidden"
           animate="show"
@@ -109,6 +115,36 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             icon={<ShieldAlert className="w-4 h-4" />}
             title="Hak Akses Role"
             subtitle="Konfigurasi izin menu"
+          />
+
+          <QuickActionBtn
+            onClick={() => onNavigateView('master_user')}
+            iconBgClass="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+            icon={<UserCheck className="w-4 h-4 stroke-[2.5]" />}
+            title="Akun & User"
+            subtitle="Kelola pengguna & staf"
+          />
+
+          <QuickActionBtn
+            onClick={() => onNavigateView('monitoring_server')}
+            iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+            icon={<Activity className="w-4 h-4 stroke-[2.5]" />}
+            title="Monitoring Server"
+            subtitle="Status server & resource"
+          />
+
+          <QuickActionBtn
+            onClick={() => {
+              if (onOpenBackupModal) {
+                onOpenBackupModal();
+              } else {
+                onNavigateView('audit_logs');
+              }
+            }}
+            iconBgClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+            icon={<HardDriveDownload className="w-4 h-4 stroke-[2.5]" />}
+            title="Backup & Restore"
+            subtitle="Cadangan data sistem"
           />
         </motion.div>
       </div>

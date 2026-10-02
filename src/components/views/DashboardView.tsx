@@ -29,6 +29,7 @@ interface DashboardViewProps {
   onNavigateToInput: (kelasId?: string) => void;
   onNavigateView: (view: ViewType) => void;
   onRestoreDemo?: () => void;
+  onOpenBackupModal?: () => void;
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
@@ -38,6 +39,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   currentUser,
   onNavigateToInput,
   onNavigateView,
+  onOpenBackupModal,
   onUpdateAppData,
   onShowToast,
 }) => {
@@ -386,6 +388,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             setCardModalData={setCardModalData}
             onNavigateView={onNavigateView}
             onNavigateToInput={onNavigateToInput}
+            onOpenBackupModal={onOpenBackupModal}
             onUpdateAppData={onUpdateAppData}
             onShowToast={onShowToast}
           />

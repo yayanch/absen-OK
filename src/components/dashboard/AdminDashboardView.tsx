@@ -65,6 +65,7 @@ interface AdminDashboardViewProps {
   onNavigateView: (view: ViewType) => void;
   onNavigateToInput: (kelasId?: string) => void;
   onOpenImportModal?: () => void;
+  onOpenBackupModal?: () => void;
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
@@ -106,6 +107,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onNavigateView,
   onNavigateToInput,
   onOpenImportModal,
+  onOpenBackupModal,
   onUpdateAppData,
   onShowToast,
 }) => {
@@ -198,6 +200,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         role={currentUser.role}
         onNavigateView={onNavigateView}
         onNavigateToInput={onNavigateToInput}
+        onOpenBackupModal={onOpenBackupModal}
       />
 
       {/* Statistik Utama Admin */}

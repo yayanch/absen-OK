@@ -1335,6 +1335,7 @@ export default function App() {
                       handleNavigate('presensi_input');
                     }}
                     onNavigateView={(v) => handleNavigate(v)}
+                    onOpenBackupModal={handleOpenBackupModal}
                     onUpdateAppData={handleUpdateAppData}
                     onShowToast={showToast}
                   />
