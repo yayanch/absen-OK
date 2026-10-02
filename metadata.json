@@ -1,5 +1,5 @@
 {
-  "name": "Remix Sistem Presensi Siswa MySQL V3.0",
+  "name": "Sistem Absensi Siswa SMKN 6 Garut",
   "description": "Aplikasi presensi dan rekapitulasi kehadiran siswa sekolah terintegrasi dengan laporan harian, mingguan, bulanan, notifikasi WhatsApp ortu, serta import/export Excel dan Google Sheets.",
   "requestFramePermissions": [
     "camera"
