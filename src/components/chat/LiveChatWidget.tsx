@@ -90,6 +90,7 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
   const isWali = currentUser.role === 'wali' || (currentUser.data as any)?.nip;
   const isGuru = currentUser.role === 'guru' || currentUser.role === 'user' || Boolean((currentUser.data as any)?.mataPelajaran);
   const isSiswa = currentUser.role === 'siswa' || (currentUser.data as any)?.nisn || currentUser.role === 'murid';
+  const isPiket = currentUser.role === 'piket' || currentUser.role === 'piket_kelas' || currentUser.role === 'piket_guru' || currentUser.role === 'piket_kesiswaan';
 
   const rawUsername = (currentUser.data as any)?.username || (currentUser.data as any)?.nip || (currentUser.data as any)?.id || (currentUser.data as any)?.nisn || currentUser.role || 'user';
   const currentUsername = String(rawUsername).toLowerCase();
@@ -390,6 +391,43 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
         lastText: 'Koordinasi Kesiswaan & BP/BK',
         foto: appData.kesiswaan?.foto,
       };
+    } else if (isPiket) {
+      // 1. Admin
+      threadMap['admin'] = {
+        username: 'admin',
+        nama: appData.admin?.nama ? `${appData.admin.nama} (Helpdesk)` : 'Administrator Utama',
+        role: 'admin',
+        lastTime: '',
+        unread: 0,
+        lastText: 'Pusat Bantuan & Helpdesk',
+        foto: appData.admin?.foto,
+      };
+
+      // 2. Wali Kelas (Khusus kontak petugas piket hanya Admin & Wali Kelas)
+      if (Array.isArray(appData.waliKelas)) {
+        const piketKelasId = (currentUser.data as any)?.kelasId;
+        const myClassWaliId = piketKelasId
+          ? appData.kelas?.find((k) => k.id === piketKelasId)?.waliKelasId
+          : null;
+
+        appData.waliKelas.forEach((w) => {
+          const uKey = String(w.username || w.nip || w.id).toLowerCase();
+          if (uKey && uKey !== 'admin') {
+            const isMyClassWali = myClassWaliId && w.id === myClassWaliId;
+            const assignedKelas = appData.kelas?.find((k) => k.waliKelasId === w.id);
+            const kelasSuffix = assignedKelas ? ` (${assignedKelas.nama})` : ' (Wali Kelas)';
+            threadMap[uKey] = {
+              username: String(w.username || w.nip || w.id),
+              nama: `${w.nama}${kelasSuffix}`,
+              role: 'wali',
+              lastTime: '',
+              unread: 0,
+              lastText: isMyClassWali ? 'Wali Kelas Binaan Anda' : 'Koordinasi Presensi & Siswa',
+              foto: w.foto,
+            };
+          }
+        });
+      }
     } else if (isSiswa) {
       // 1. Admin
       threadMap['admin'] = {
@@ -441,6 +479,11 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
 
       // If user is Wali Kelas or Guru, strictly only allow permitted contacts in threadMap
       if ((isWali || isGuru) && !threadMap[otherUserKey]) {
+        return;
+      }
+
+      // If user is Piket, strictly only allow Admin and Wali Kelas
+      if (isPiket && !threadMap[otherUserKey]) {
         return;
       }
 

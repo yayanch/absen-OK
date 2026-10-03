@@ -306,7 +306,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
             icon={<FileText className="w-4 h-4" />}
             title="Pusat Pesan & Bantuan"
-            subtitle="Hubungi wali / piket"
+            subtitle="Hubungi Admin & Wali Kelas"
           />
         </motion.div>
       </div>

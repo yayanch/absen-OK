@@ -1112,20 +1112,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
         {/* RIGHT SIDE LOGIN CARD */}
         <div className={`w-full ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-center my-auto`}>
           <div className="w-full max-w-md flex flex-col justify-center my-auto">
-            {/* Main Card Container with Slight Rounded Corners */}
+            {/* Main Card Container with White Gradient Styling */}
             <div
               className={`${getCardBlurClass()} border rounded-2xl sm:rounded-3xl px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
                 isDarkMode
-                  ? 'shadow-xl shadow-black/70 text-zinc-100'
-                  : 'shadow-xl shadow-slate-900/10 text-slate-900'
+                  ? 'shadow-2xl shadow-black/80 text-zinc-100 border-zinc-800/80'
+                  : 'shadow-2xl shadow-slate-900/10 text-slate-900 border-white/90 ring-1 ring-black/5'
               }`}
               style={{
-                backgroundColor: isDarkMode
-                  ? `rgba(9, 9, 11, ${cardOpacity / 100})`
-                  : `rgba(255, 255, 255, ${cardOpacity / 100})`,
-                borderColor: isDarkMode
-                  ? `rgba(63, 63, 70, ${Math.min(0.8, (cardOpacity / 100) * 0.6 + 0.2)})`
-                  : `rgba(255, 255, 255, ${Math.min(0.9, (cardOpacity / 100) * 0.6 + 0.2)})`,
+                background: isDarkMode
+                  ? `linear-gradient(145deg, rgba(24, 24, 27, ${Math.min(0.95, (cardOpacity / 100) + 0.15)}) 0%, rgba(9, 9, 11, ${cardOpacity / 100}) 100%)`
+                  : `linear-gradient(145deg, rgba(255, 255, 255, ${Math.min(0.98, (cardOpacity / 100) + 0.25)}) 0%, rgba(255, 255, 255, ${Math.min(0.92, (cardOpacity / 100) + 0.15)}) 45%, rgba(248, 250, 252, ${Math.min(0.96, (cardOpacity / 100) + 0.2)}) 100%)`,
+                boxShadow: isDarkMode
+                  ? '0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 1px 1px 0 rgba(255, 255, 255, 0.1)'
+                  : '0 20px 45px -12px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.9) inset, 0 2px 4px 0 rgba(255, 255, 255, 0.8) inset',
               }}
             >
               <div className="w-full space-y-4 my-auto">
@@ -1250,12 +1250,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className={`absolute inset-y-0 right-0 pr-3.5 flex items-center cursor-pointer ${
-                        isDarkMode ? 'text-zinc-400 hover:text-blue-400' : 'text-slate-500 hover:text-zinc-900'
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                      title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                      className={`absolute inset-y-0 right-0 my-auto h-8 w-8 mr-1.5 flex items-center justify-center rounded-lg transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 active:scale-95 ${
+                        isDarkMode
+                          ? 'text-zinc-400 hover:text-blue-400 hover:bg-zinc-800/70'
+                          : 'text-slate-500 hover:text-zinc-900 hover:bg-slate-100/80'
                       }`}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4 sm:w-4.5 sm:h-4.5" /> : <Eye className="w-4 h-4 sm:w-4.5 sm:h-4.5" />}
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform" />
+                      ) : (
+                        <Eye className="w-4 h-4 sm:w-4.5 sm:h-4.5 transition-transform" />
+                      )}
                     </button>
                   </div>
 
