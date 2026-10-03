@@ -2790,6 +2790,49 @@ async function performMySQLLoad(config: any) {
   }
 }
 
+// Server-side authentication. Password compatibility is intentionally kept with the existing data model
+// so the UI can migrate without exposing database credentials to the browser.
+app.post("/api/auth/login", (req, res) => {
+  const username = String(req.body?.username || "").trim().toLowerCase();
+  const password = String(req.body?.password || "");
+  if (!username || !password) return res.status(400).json({ success: false, message: "Username dan password wajib diisi." });
+
+  const data = inMemoryAppDataCache || loadSavedAppDataCache() || {};
+  const candidates: Array<{ role: string; user: any; aliases?: string[]; defaults?: string[] }> = [];
+  if (data.admin) candidates.push({ role: "admin", user: data.admin, aliases: ["admin", "administrator"], defaults: ["admin123", "admin", "123"] });
+  if (data.kurikulum) candidates.push({ role: "kurikulum", user: data.kurikulum, aliases: ["kurikulum", "wks_kurikulum", "wkskurikulum"], defaults: ["123", "kurikulum", "kurikulum123"] });
+  if (data.hubin) candidates.push({ role: "hubin", user: data.hubin, aliases: ["hubin", "wks_hubin", "wkshubin", "humas"], defaults: ["123", "hubin", "hubin123"] });
+  if (data.kesiswaan) candidates.push({ role: "kesiswaan", user: data.kesiswaan, aliases: ["kesiswaan", "bk", "bp", "bpbk"], defaults: ["123", "kesiswaan", "kesiswaan123"] });
+  for (const u of (Array.isArray(data.waliKelas) ? data.waliKelas : [])) candidates.push({ role: u.role || "guru", user: u });
+  for (const u of (Array.isArray(data.siswa) ? data.siswa : [])) candidates.push({ role: u.role || "siswa", user: u });
+
+  const candidate = candidates.find(({ user, aliases = [] }) => {
+    const ids = [user?.username, user?.nip, user?.nisn, ...aliases].filter(Boolean).map((v: any) => String(v).trim().toLowerCase());
+    return ids.includes(username);
+  });
+  if (!candidate) return res.status(401).json({ success: false, message: "Username atau password salah." });
+
+  const expected = String(candidate.user?.password || "");
+  const accepted = new Set([expected, ...(candidate.defaults || [])].filter(Boolean));
+  if (!accepted.has(password)) return res.status(401).json({ success: false, message: "Username atau password salah." });
+
+  const sessionId = createSession(username, candidate.role);
+  res.setHeader("Set-Cookie", `absen_session=${sessionId}; HttpOnly; Path=/; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+  res.json({ success: true, user: { ...candidate.user, password: undefined }, role: candidate.role });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  const user = parseSession(req);
+  if (user) sessions.delete(user.id);
+  res.setHeader("Set-Cookie", "absen_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.json({ success: true });
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  const user = (req as any).user;
+  res.json({ success: true, user: { username: user.username, role: user.role } });
+});
+
 // API: Health Check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
