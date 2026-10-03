@@ -304,26 +304,13 @@ export default function App() {
     let isMounted = true;
 
     const fetchGlobalState = async () => {
+      if (!currentUser) return;
       try {
-        const host = localStorage.getItem('mysql_host') || '';
-        const database = localStorage.getItem('mysql_database') || '';
-        const user = localStorage.getItem('mysql_user') || '';
-        const password = localStorage.getItem('mysql_password') || '';
-        const port = localStorage.getItem('mysql_port') || '3306';
-
         const headers: Record<string, string> = {};
         if (lastEtagRef.current) {
           headers['If-None-Match'] = lastEtagRef.current;
         }
-        if (host && database && user) {
-          headers['x-mysql-host'] = host;
-          headers['x-mysql-database'] = database;
-          headers['x-mysql-user'] = user;
-          headers['x-mysql-password'] = password;
-          headers['x-mysql-port'] = port;
-        }
-
-        const res = await fetch('/api/global-state', { headers });
+        const res = await fetch('/api/global-state', { headers, credentials: 'include' });
         if (res.status === 304) {
           // Data is completely unchanged, zero bytes transferred
           return;
@@ -455,14 +442,7 @@ export default function App() {
               return prev;
             });
           }
-          if (data.mysqlConfig) {
-            if (data.mysqlConfig.host) localStorage.setItem('mysql_host', data.mysqlConfig.host);
-            if (data.mysqlConfig.port) localStorage.setItem('mysql_port', data.mysqlConfig.port);
-            if (data.mysqlConfig.user) localStorage.setItem('mysql_user', data.mysqlConfig.user);
-            if (data.mysqlConfig.password !== undefined) localStorage.setItem('mysql_password', data.mysqlConfig.password);
-            if (data.mysqlConfig.database) localStorage.setItem('mysql_database', data.mysqlConfig.database);
-          }
-        }
+            }
       } catch (e) {
         // silent
       }
@@ -567,7 +547,7 @@ export default function App() {
         channel.close();
       }
     };
-  }, []);
+  }, [currentUser]);
 
   // Real-time Chat Sync poller (every 1.5 seconds) to ensure deletions & new messages instantly reflect across all devices/recipients
   useEffect(() => {
