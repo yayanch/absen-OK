@@ -304,6 +304,7 @@ export default function App() {
     let isMounted = true;
 
     const fetchGlobalState = async () => {
+      if (!currentUser) return;
       try {
         const headers: Record<string, string> = {};
         if (lastEtagRef.current) {
@@ -546,7 +547,7 @@ export default function App() {
         channel.close();
       }
     };
-  }, []);
+  }, [currentUser]);
 
   // Real-time Chat Sync poller (every 1.5 seconds) to ensure deletions & new messages instantly reflect across all devices/recipients
   useEffect(() => {
