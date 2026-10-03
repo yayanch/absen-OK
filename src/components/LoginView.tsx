@@ -358,7 +358,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   // -------------------------------------------------------------
   // STANDARD LOGIN PROCESS (Guru, Pegawai, Staf, Admin)
   // -------------------------------------------------------------
-  const executeLoginProcess = (rawUser: string, rawPass: string) => {
+  const executeLoginProcess = async (rawUser: string, rawPass: string) => {
     const uInput = rawUser.trim().toLowerCase();
     const pInput = rawPass.trim();
 
@@ -428,6 +428,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     setIsLoggingIn(true);
+
+    // Authenticate on the server first. Keep the legacy local flow as a temporary
+    // offline fallback until all existing roles are migrated to server auth.
+    try {
+      const authRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: rawUser, password: rawPass }),
+      });
+      if (authRes.ok) {
+        const auth = await authRes.json();
+        if (auth?.success && auth.user) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin(auth.role, auth.user);
+          onShowToast('Selamat datang, ' + (auth.user.nama || uInput) + '!', 'success');
+          return;
+        }
+      }
+    } catch (_) {
+      // Server unavailable: preserve existing offline/local compatibility flow.
+    }
+
 
     setTimeout(() => {
       // 1. Check Administrator
