@@ -3579,17 +3579,7 @@ app.get("/api/global-state", requireAuth, async (req, res) => {
   res.setHeader("ETag", currentEtag);
   res.setHeader("Cache-Control", "public, no-cache");
 
-  const queryHost = (req.query.host as string) || (req.headers["x-mysql-host"] as string);
-  const queryDb = (req.query.database as string) || (req.headers["x-mysql-database"] as string);
-  const queryUser = (req.query.user as string) || (req.headers["x-mysql-user"] as string);
-  const queryPass = (req.query.password !== undefined ? req.query.password : req.headers["x-mysql-password"]) as string;
-  const queryPort = (req.query.port as string) || (req.headers["x-mysql-port"] as string) || "3306";
-
-  let config = loadSavedServerConfig();
-  if (!config && queryHost && queryDb && queryUser) {
-    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort };
-    saveServerConfig(config);
-  }
+  const config = loadSavedServerConfig();
 
   const force = req.query.force === "true";
   const ifNoneMatch = req.headers["if-none-match"];
@@ -3606,7 +3596,6 @@ app.get("/api/global-state", requireAuth, async (req, res) => {
     return res.json({
       success: true,
       appData: inMemoryAppDataCache,
-      mysqlConfig: config,
       version: appDataVersion,
       source: "memory"
     });
@@ -3643,11 +3632,7 @@ app.get("/api/global-state", requireAuth, async (req, res) => {
 });
 
 app.post("/api/global-state", requireAuth, async (req, res) => {
-  const { appData, mysqlConfig } = req.body;
-
-  if (mysqlConfig && mysqlConfig.host) {
-    saveServerConfig(mysqlConfig);
-  }
+  const { appData } = req.body;
 
   if (appData) {
     saveAppDataCache(appData);
@@ -3663,7 +3648,7 @@ app.post("/api/global-state", requireAuth, async (req, res) => {
 // ==========================================
 
 // 1. Get Chat Messages
-app.get("/api/chat/messages", (req, res) => {
+app.get("/api/chat/messages", requireAuth, (req, res) => {
   const messages = (inMemoryAppDataCache && Array.isArray(inMemoryAppDataCache.chatMessages))
     ? inMemoryAppDataCache.chatMessages
     : [];
