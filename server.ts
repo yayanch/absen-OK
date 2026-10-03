@@ -2792,19 +2792,32 @@ async function performMySQLLoad(config: any) {
 
 // Server-side authentication. Password compatibility is intentionally kept with the existing data model
 // so the UI can migrate without exposing database credentials to the browser.
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const username = String(req.body?.username || "").trim().toLowerCase();
   const password = String(req.body?.password || "");
   if (!username || !password) return res.status(400).json({ success: false, message: "Username dan password wajib diisi." });
 
-  const data = inMemoryAppDataCache || loadSavedAppDataCache() || {};
+  let data = inMemoryAppDataCache || loadSavedAppDataCache() || null;
+  if (!data) {
+    const config = loadSavedServerConfig();
+    if (config && Date.now() >= mysqlCooldownUntil) {
+      try {
+        data = await performMySQLLoad(config);
+        if (data) {
+          inMemoryAppDataCache = data;
+          rebuildFastIndices(data);
+        }
+      } catch (_) {}
+    }
+  }
+  if (!data) return res.status(503).json({ success: false, message: "Data pengguna belum tersedia di server." });
   const candidates: Array<{ role: string; user: any; aliases?: string[]; defaults?: string[] }> = [];
-  if (data.admin) candidates.push({ role: "admin", user: data.admin, aliases: ["admin", "administrator"], defaults: ["admin123", "admin", "123"] });
-  if (data.kurikulum) candidates.push({ role: "kurikulum", user: data.kurikulum, aliases: ["kurikulum", "wks_kurikulum", "wkskurikulum"], defaults: ["123", "kurikulum", "kurikulum123"] });
-  if (data.hubin) candidates.push({ role: "hubin", user: data.hubin, aliases: ["hubin", "wks_hubin", "wkshubin", "humas"], defaults: ["123", "hubin", "hubin123"] });
-  if (data.kesiswaan) candidates.push({ role: "kesiswaan", user: data.kesiswaan, aliases: ["kesiswaan", "bk", "bp", "bpbk"], defaults: ["123", "kesiswaan", "kesiswaan123"] });
-  if (data.stafJadwal) candidates.push({ role: "staf_jadwal", user: data.stafJadwal, aliases: ["jadwal", "staf_jadwal", "stafjadwal", "operator_jadwal"], defaults: ["jadwal123", "jadwal", "123"] });
-  if (data.userBiasa) candidates.push({ role: "guru", user: data.userBiasa, aliases: ["guru", "user"], defaults: ["123", "guru", "guru123"] });
+  if (data.admin) candidates.push({ role: "admin", user: data.admin, aliases: ["admin", "administrator"] });
+  if (data.kurikulum) candidates.push({ role: "kurikulum", user: data.kurikulum, aliases: ["kurikulum", "wks_kurikulum", "wkskurikulum"] });
+  if (data.hubin) candidates.push({ role: "hubin", user: data.hubin, aliases: ["hubin", "wks_hubin", "wkshubin", "humas"] });
+  if (data.kesiswaan) candidates.push({ role: "kesiswaan", user: data.kesiswaan, aliases: ["kesiswaan", "bk", "bp", "bpbk"] });
+  if (data.stafJadwal) candidates.push({ role: "staf_jadwal", user: data.stafJadwal, aliases: ["jadwal", "staf_jadwal", "stafjadwal", "operator_jadwal"] });
+  if (data.userBiasa) candidates.push({ role: "guru", user: data.userBiasa, aliases: ["guru", "user"] });
   for (const u of (Array.isArray(data.waliKelas) ? data.waliKelas : [])) candidates.push({ role: u.role || "guru", user: u });
   for (const u of (Array.isArray(data.siswa) ? data.siswa : [])) candidates.push({ role: u.role || "siswa", user: u });
 
@@ -2815,7 +2828,7 @@ app.post("/api/auth/login", (req, res) => {
   if (!candidate) return res.status(401).json({ success: false, message: "Username atau password salah." });
 
   const expected = String(candidate.user?.password || "");
-  const accepted = new Set([expected, ...(candidate.defaults || [])].filter(Boolean));
+  const accepted = new Set([expected].filter(Boolean));
   if (!accepted.has(password)) return res.status(401).json({ success: false, message: "Username atau password salah." });
 
   const sessionId = createSession(username, candidate.role);
