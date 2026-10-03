@@ -438,17 +438,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
         credentials: 'include',
         body: JSON.stringify({ username: rawUser, password: rawPass }),
       });
-      if (authRes.ok) {
-        const auth = await authRes.json();
-        if (auth?.success && auth.user) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin(auth.role, auth.user);
-          onShowToast('Selamat datang, ' + (auth.user.nama || uInput) + '!', 'success');
-          return;
-        }
+      const auth = await authRes.json().catch(() => ({}));
+      if (!authRes.ok || !auth?.success || !auth.user) {
+        setIsLoggingIn(false);
+        handleRecordFailedAttempt(uInput, 'unknown');
+        onShowToast(auth?.message || 'Username atau password salah.', 'error');
+        return;
       }
+      setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+      handleSuccessfulLogin(auth.role, auth.user);
+      onShowToast('Selamat datang, ' + (auth.user.nama || uInput) + '!', 'success');
+      return;
     } catch (_) {
-      // Server unavailable: preserve existing offline/local compatibility flow.
+      // Network/server unavailable: preserve the existing offline/local compatibility flow.
     }
 
 
