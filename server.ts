@@ -6,9 +6,17 @@ import mysql from "mysql2/promise";
 import fs from "fs";
 import QRCode from "qrcode";
 import compression from "compression";
+import crypto from "crypto";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const SESSION_SECRET = process.env.SESSION_SECRET || "";
+if (!SESSION_SECRET && process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET wajib diatur pada production");
+const sessions = new Map<string, { username: string; role: string; createdAt: number; expiresAt: number }>();
+function createSession(username: string, role: string) { const id = crypto.randomBytes(32).toString("base64url"); const now = Date.now(); sessions.set(id, { username, role, createdAt: now, expiresAt: now + 8 * 60 * 60 * 1000 }); return id; }
+function parseSession(req: express.Request) { const raw = req.headers.cookie?.split(";").map(v => v.trim()).find(v => v.startsWith("absen_session=")); const id = raw?.slice("absen_session=".length); if (!id) return null; const s = sessions.get(id); if (!s || s.expiresAt < Date.now()) { if (id) sessions.delete(id); return null; } return { id, ...s }; }
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) { const user = parseSession(req); if (!user) return res.status(401).json({ success: false, message: "Authentication diperlukan." }); (req as any).user = user; next(); }
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) { const user = parseSession(req); if (!user) return res.status(401).json({ success: false, message: "Authentication diperlukan." }); if (user.role !== "admin") return res.status(403).json({ success: false, message: "Akses administrator diperlukan." }); (req as any).user = user; next(); }
 
 // ==========================================
 // SERVER RESOURCE & TELEMETRY MONITORING
@@ -267,6 +275,8 @@ setInterval(() => {
 // Enable gzip/brotli response compression for ultra-fast multi-client throughput
 app.use(compression());
 app.use(express.json({ limit: "50mb" }));
+app.disable("x-powered-by");
+app.use((req, res, next) => { res.setHeader("X-Content-Type-Options", "nosniff"); res.setHeader("X-Frame-Options", "DENY"); res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin"); res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()"); if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); next(); });
 
 // Telemetry request interceptor middleware
 app.use((req, res, next) => {
@@ -397,11 +407,11 @@ function getOrCreateServerQrToken(force = false, intervalSeconds = 60) {
   if (!force && serverActiveQrToken && serverActiveQrToken.dateStr === todayStr && now < serverActiveQrToken.expiresAt) {
     return serverActiveQrToken;
   }
-  const randomSegment = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const randomSegment = crypto.randomBytes(16).toString("hex").toUpperCase();
   const token = `PRESENSI-${todayStr}-${randomSegment}`;
   serverActiveQrToken = {
     token,
-    secretHash: `HASH-${now}-${randomSegment}`,
+    secretHash: crypto.createHash("sha256").update(`${token}:${SESSION_SECRET || crypto.randomBytes(16).toString("hex")}`).digest("hex"),
     createdAt: now,
     expiresAt: now + validDurationMs,
     dateStr: todayStr,
@@ -2786,7 +2796,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // API: Real-Time Server Resources & Telemetry (CPU, RAM, Harddisk, Traffic)
-app.get("/api/server/resources", (req, res) => {
+app.get("/api/server/resources", requireAdmin, (req, res) => {
   try {
     const cpu = getCpuUsagePercent();
     const ram = getMemoryUsage();
@@ -2888,7 +2898,7 @@ app.get("/api/user-logins", (req, res) => {
 });
 
 // POST: Record New Login Attempt
-app.post("/api/user-logins", (req, res) => {
+app.post("/api/user-logins", requireAuth, (req, res) => {
   try {
     const body = req.body;
     if (!body || !body.username) {
@@ -2967,7 +2977,7 @@ app.post("/api/user-sessions/heartbeat", (req, res) => {
 });
 
 // POST: Terminate a single active session
-app.post("/api/user-sessions/terminate", (req, res) => {
+app.post("/api/user-sessions/terminate", requireAdmin, (req, res) => {
   const { sessionId, terminatedBy } = req.body;
   if (!sessionId) {
     return res.status(400).json({ success: false, message: "sessionId diperlukan" });
@@ -3003,7 +3013,7 @@ app.post("/api/user-sessions/terminate", (req, res) => {
 });
 
 // POST: Terminate all other sessions except current
-app.post("/api/user-sessions/terminate-all", (req, res) => {
+app.post("/api/user-sessions/terminate-all", requireAdmin, (req, res) => {
   const { keepUsername } = req.body;
   const termUsers = serverActiveUserSessions.filter(
     s => !keepUsername || s.username.toLowerCase() !== keepUsername.toLowerCase()
@@ -3483,7 +3493,7 @@ app.post("/api/qr/absen", async (req, res) => {
 });
 
 // 4. API: Get Live QR Code Attendance Logs from Server
-app.get("/api/qr/logs", (req, res) => {
+app.get("/api/qr/logs", requireAuth, (req, res) => {
   const { dateStr: todayWib } = getIndonesianDateTime();
   const dateQuery = (req.query.date as string) || todayWib;
   const logsForDate = serverQrLogs.filter((l) => l.tanggal === dateQuery);
@@ -3497,7 +3507,7 @@ app.get("/api/qr/logs", (req, res) => {
 });
 
 // API: Reset / Clear QR Attendance Logs for Date
-app.delete("/api/qr/logs", (req, res) => {
+app.delete("/api/qr/logs", requireAdmin, (req, res) => {
   const { dateStr: todayWib } = getIndonesianDateTime();
   const dateQuery = (req.query.date as string) || todayWib;
   serverQrLogs = serverQrLogs.filter((l) => l.tanggal !== dateQuery);
@@ -3510,7 +3520,7 @@ app.delete("/api/qr/logs", (req, res) => {
 });
 
 // API: Get Current Server MySQL Config
-app.get("/api/mysql/config", (req, res) => {
+app.get("/api/mysql/config", requireAdmin, (req, res) => {
   const config = loadSavedServerConfig();
   res.json({
     success: !!config,
@@ -3519,7 +3529,7 @@ app.get("/api/mysql/config", (req, res) => {
 });
 
 // API: Global Sync Endpoint for Dev & Shared Run Preview Links (with ETag conditional 304 caching)
-app.get("/api/global-state", async (req, res) => {
+app.get("/api/global-state", requireAuth, async (req, res) => {
   const currentEtag = `"v${appDataVersion}"`;
   res.setHeader("ETag", currentEtag);
   res.setHeader("Cache-Control", "public, no-cache");
@@ -3587,7 +3597,7 @@ app.get("/api/global-state", async (req, res) => {
   });
 });
 
-app.post("/api/global-state", async (req, res) => {
+app.post("/api/global-state", requireAuth, async (req, res) => {
   const { appData, mysqlConfig } = req.body;
 
   if (mysqlConfig && mysqlConfig.host) {
@@ -3792,7 +3802,7 @@ app.post("/api/chat/clear-history", (req, res) => {
 });
 
 // 4b. Clear All Chat Messages System-wide
-app.post("/api/chat/clear-all", (req, res) => {
+app.post("/api/chat/clear-all", requireAdmin, (req, res) => {
   if (!inMemoryAppDataCache) {
     inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
   }
@@ -3851,7 +3861,7 @@ app.post("/api/chat/mark-read", (req, res) => {
 });
 
 // API: Test MySQL Connection & Auto-Setup Tables
-app.post("/api/mysql/test", async (req, res) => {
+app.post("/api/mysql/test", requireAdmin, async (req, res) => {
   const { host, port, user, password, database } = req.body;
   if (!host || !user || !database) {
     return res.status(400).json({ success: false, message: "Host, user, dan nama database wajib diisi." });
@@ -4083,7 +4093,7 @@ app.post("/api/mysql/test", async (req, res) => {
 });
 
 // API: Save App Data to Relational MySQL Tables
-app.post("/api/mysql/save", async (req, res) => {
+app.post("/api/mysql/save", requireAdmin, async (req, res) => {
   const { host, port, user, password, database, appData } = req.body;
   if (!host || !user || !database || !appData) {
     return res.status(400).json({ success: false, message: "Parameter koneksi dan data aplikasi wajib diisi." });
@@ -4119,7 +4129,7 @@ app.post("/api/mysql/save", async (req, res) => {
 });
 
 // API: Load App Data from MySQL
-app.post("/api/mysql/load", async (req, res) => {
+app.post("/api/mysql/load", requireAdmin, async (req, res) => {
   const { host, port, user, password, database } = req.body;
   if (!host || !user || !database) {
     return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
@@ -4158,7 +4168,7 @@ app.post("/api/mysql/load", async (req, res) => {
 });
 
 // API: Preview Database Statistics & Sample Rows
-app.post("/api/mysql/preview", async (req, res) => {
+app.post("/api/mysql/preview", requireAdmin, async (req, res) => {
   const { host, port, user, password, database } = req.body;
   if (!host || !user || !database) {
     return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
@@ -4625,7 +4635,7 @@ app.get("/api/backup/export", (req, res) => {
 });
 
 // 5. Restore System Backup (Replace, Merge, or Presensi-Only)
-app.post("/api/backup/restore", async (req, res) => {
+app.post("/api/backup/restore", requireAdmin, async (req, res) => {
   const { backupData, mode = "replace" } = req.body;
   if (!backupData || typeof backupData !== "object") {
     return res.status(400).json({ success: false, message: "Data backup tidak valid atau kosong." });
@@ -4746,7 +4756,7 @@ app.post("/api/backup/restore", async (req, res) => {
 });
 
 // 6. Create Server-Side Snapshot (Manual or Triggered)
-app.post("/api/backup/snapshot", (req, res) => {
+app.post("/api/backup/snapshot", requireAdmin, (req, res) => {
   try {
     const { note, category = "manual" } = req.body;
     const snapshotMetadata = createServerSnapshot(category, note);
