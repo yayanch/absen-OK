@@ -2921,7 +2921,7 @@ let serverUserLoginLogs: any[] = [];
 let serverActiveUserSessions: any[] = [];
 
 // GET: All Login Logs & Active Sessions
-app.get("/api/user-logins", (req, res) => {
+app.get("/api/user-logins", requireAdmin, (req, res) => {
   const successCount = serverUserLoginLogs.filter(l => l.status === "success").length;
   const failedCount = serverUserLoginLogs.filter(l => l.status !== "success" && l.status !== "session_terminated").length;
   const total = serverUserLoginLogs.length;
@@ -3001,7 +3001,7 @@ app.post("/api/user-logins", requireAuth, (req, res) => {
 });
 
 // POST: User Heartbeat to keep active session updated
-app.post("/api/user-sessions/heartbeat", (req, res) => {
+app.post("/api/user-sessions/heartbeat", requireAuth, (req, res) => {
   const { sessionId, username } = req.body;
   const now = new Date().toISOString();
   if (sessionId) {
@@ -3095,7 +3095,7 @@ app.post("/api/user-sessions/terminate-all", requireAdmin, (req, res) => {
 });
 
 // POST: Clear User Login Logs
-app.post("/api/user-logins/clear", (req, res) => {
+app.post("/api/user-logins/clear", requireAdmin, (req, res) => {
   serverUserLoginLogs = [];
   res.json({ success: true, message: "Seluruh riwayat log login berhasil dibersihkan." });
 });
@@ -3661,7 +3661,7 @@ app.get("/api/chat/messages", requireAuth, (req, res) => {
 });
 
 // 2. Send Message Atomically
-app.post("/api/chat/send", (req, res) => {
+app.post("/api/chat/send", requireAuth, (req, res) => {
   const { message } = req.body;
   if (!message || !message.id || (!message.text && !message.image)) {
     return res.status(400).json({ success: false, message: "Data pesan tidak valid" });
@@ -3695,7 +3695,7 @@ app.post("/api/chat/send", (req, res) => {
 });
 
 // 3. Delete Message(s) Atomically (for everyone or for me only)
-app.post("/api/chat/delete", (req, res) => {
+app.post("/api/chat/delete", requireAuth, (req, res) => {
   const { messageId, messageIds, deleteType, username, myIdVariants } = req.body;
   const targetIds: string[] = messageIds && Array.isArray(messageIds)
     ? messageIds
@@ -3763,7 +3763,7 @@ app.post("/api/chat/delete", (req, res) => {
 });
 
 // 4. Clear Chat History
-app.post("/api/chat/clear-history", (req, res) => {
+app.post("/api/chat/clear-history", requireAuth, (req, res) => {
   const { selectedThreadUser, currentUsername, deleteType, isAdmin, myIdVariants, clearAllSystem } = req.body;
 
   if (!inMemoryAppDataCache) {
@@ -3850,7 +3850,7 @@ app.post("/api/chat/clear-all", requireAdmin, (req, res) => {
 });
 
 // 5. Mark Messages as Read
-app.post("/api/chat/mark-read", (req, res) => {
+app.post("/api/chat/mark-read", requireAuth, (req, res) => {
   const { threadUser, currentUsername, myIdVariants } = req.body;
 
   if (!inMemoryAppDataCache || !Array.isArray(inMemoryAppDataCache.chatMessages)) {
@@ -4507,7 +4507,7 @@ setInterval(() => {
 // ==========================================
 
 // 1. Get Auto-Backup Schedule Config
-app.get("/api/backup/schedule-config", (req, res) => {
+app.get("/api/backup/schedule-config", requireAdmin, (req, res) => {
   res.json({
     success: true,
     config: activeBackupConfig,
@@ -4515,7 +4515,7 @@ app.get("/api/backup/schedule-config", (req, res) => {
 });
 
 // 2. Update Auto-Backup Schedule Config
-app.post("/api/backup/schedule-config", (req, res) => {
+app.post("/api/backup/schedule-config", requireAdmin, (req, res) => {
   try {
     const newConfig = { ...activeBackupConfig, ...(req.body || {}) };
     activeBackupConfig = newConfig;
@@ -4538,7 +4538,7 @@ app.post("/api/backup/schedule-config", (req, res) => {
 });
 
 // 3. Trigger Immediate Manual Run of Daily / Weekly / Monthly Cycle
-app.post("/api/backup/trigger-cycle", (req, res) => {
+app.post("/api/backup/trigger-cycle", requireAdmin, (req, res) => {
   try {
     const { category = "daily", note } = req.body;
     if (!["daily", "weekly", "monthly", "manual"].includes(category)) {
@@ -4558,7 +4558,7 @@ app.post("/api/backup/trigger-cycle", (req, res) => {
 });
 
 // 4. Export / Download System Backup (Full, Daily, Weekly, Monthly, Master, Presensi)
-app.get("/api/backup/export", (req, res) => {
+app.get("/api/backup/export", requireAdmin, (req, res) => {
   const currentData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
   const backupType = (req.query.type as string) || "full"; // 'full' | 'daily' | 'weekly' | 'monthly' | 'presensi_only' | 'master_only'
   const isDownload = req.query.download === "true";
@@ -4802,7 +4802,7 @@ app.post("/api/backup/snapshot", requireAdmin, (req, res) => {
 });
 
 // 7. List Server-Side Snapshots
-app.get("/api/backup/snapshots", (req, res) => {
+app.get("/api/backup/snapshots", requireAdmin, (req, res) => {
   try {
     if (!fs.existsSync(BACKUP_DIR)) {
       return res.json({ success: true, snapshots: [] });
@@ -4844,7 +4844,7 @@ app.get("/api/backup/snapshots", (req, res) => {
 });
 
 // 8. Download a Server Snapshot File directly
-app.get("/api/backup/snapshot/:id/download", (req, res) => {
+app.get("/api/backup/snapshot/:id/download", requireAdmin, (req, res) => {
   try {
     const snapshotId = req.params.id;
     const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
@@ -4861,7 +4861,7 @@ app.get("/api/backup/snapshot/:id/download", (req, res) => {
 });
 
 // 9. Restore from Server Snapshot
-app.post("/api/backup/snapshot/restore", (req, res) => {
+app.post("/api/backup/snapshot/restore", requireAdmin, (req, res) => {
   try {
     const { snapshotId } = req.body;
     if (!snapshotId) {
@@ -4893,7 +4893,7 @@ app.post("/api/backup/snapshot/restore", (req, res) => {
 });
 
 // 10. Delete Server Snapshot
-app.delete("/api/backup/snapshot/:id", (req, res) => {
+app.delete("/api/backup/snapshot/:id", requireAdmin, (req, res) => {
   try {
     const snapshotId = req.params.id;
     const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
