@@ -2802,7 +2802,7 @@ app.post("/api/auth/login", (req, res) => {
   if (data.admin) candidates.push({ role: "admin", user: data.admin, aliases: ["admin", "administrator"], defaults: ["admin123", "admin", "123"] });
   if (data.kurikulum) candidates.push({ role: "kurikulum", user: data.kurikulum, aliases: ["kurikulum", "wks_kurikulum", "wkskurikulum"], defaults: ["123", "kurikulum", "kurikulum123"] });
   if (data.hubin) candidates.push({ role: "hubin", user: data.hubin, aliases: ["hubin", "wks_hubin", "wkshubin", "humas"], defaults: ["123", "hubin", "hubin123"] });
-  if (data.kesiswaan) candidates.push({ role: "kesiswaan", user: data.kesiswaan, aliases: ["kesiswaan", "bk", "bp", "bpbk"], defaults: ["123", "kesiswaan", "kesiswaan123"] });
+  if (data.kesiswaan) candidates.push({ role: "kesiswaan", user: data.kesiswaan, aliases: ["kesiswaan", "bk", "bp", "bpbk"], defaults: ["123", "kesiswaan", "kesiswaan123"] });\n  if (data.stafJadwal) candidates.push({ role: "staf_jadwal", user: data.stafJadwal, aliases: ["jadwal", "staf_jadwal", "stafjadwal", "operator_jadwal"], defaults: ["jadwal123", "jadwal", "123"] });\n  if (data.userBiasa) candidates.push({ role: "guru", user: data.userBiasa, aliases: ["guru", "user"], defaults: ["123", "guru", "guru123"] });
   for (const u of (Array.isArray(data.waliKelas) ? data.waliKelas : [])) candidates.push({ role: u.role || "guru", user: u });
   for (const u of (Array.isArray(data.siswa) ? data.siswa : [])) candidates.push({ role: u.role || "siswa", user: u });
 
