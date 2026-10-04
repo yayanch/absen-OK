@@ -18,6 +18,11 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm run build
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Package source archive
         run: zip -r absen-OK-security-hardening-2026-10.zip . -x ".git/*"
       - name: Upload source archive
