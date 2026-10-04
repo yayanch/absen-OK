@@ -2858,7 +2858,7 @@ app.post("/api/auth/login", async (req, res) => {
   if (!accepted.has(password)) return res.status(401).json({ success: false, message: "Username atau password salah." });
 
   const sessionId = createSession(username, candidate.role);
-  res.setHeader("Set-Cookie", `absen_session=${sessionId}; HttpOnly; Path=/; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+  res.setHeader("Set-Cookie", `absen_session=${sessionId}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
   res.json({ success: true, user: { ...candidate.user, password: undefined }, role: candidate.role });
 });
 
@@ -2925,7 +2925,7 @@ app.get("/api/server/resources", requireAdmin, (req, res) => {
 });
 
 // API: Server Network Connectivity & Ping Latency Check
-app.post("/api/server/ping", (req, res) => {
+app.post("/api/server/ping", requireAuth, (req, res) => {
   res.json({
     success: true,
     message: "Pong! Server merespons normal dengan latensi sangat rendah.",
@@ -2937,7 +2937,7 @@ app.post("/api/server/ping", (req, res) => {
 });
 
 // API: Clean Server Temporary Telemetry & In-Memory Cache
-app.post("/api/server/cache-clean", (req, res) => {
+app.post("/api/server/cache-clean", requireAdmin, (req, res) => {
   try {
     if ((global as any).gc) {
       (global as any).gc();
@@ -3170,7 +3170,7 @@ app.get("/api/qr/token", async (req, res) => {
 });
 
 // 2. API: Force Generate New Dynamic Server QR Token
-app.post("/api/qr/generate-new", async (req, res) => {
+app.post("/api/qr/generate-new", requireAdmin, async (req, res) => {
   const intervalSec = parseInt(String(req.body?.interval || req.query?.interval || "60"), 10) || 60;
   const tokenObj = getOrCreateServerQrToken(true, intervalSec);
   cachedQrImageDataUrl = await generateQrDataUrl(tokenObj);
@@ -3254,7 +3254,7 @@ function getShiftTimingForStudent(appData: any, siswa: any, dateStr: string) {
 }
 
 // 3. API: Process Attendance via QR Code on Server
-app.post("/api/qr/absen", async (req, res) => {
+app.post("/api/qr/absen", requireAuth, async (req, res) => {
   try {
     const { scannedCode, siswaId, nisn, scanMode } = req.body;
     const { dateStr: todayWib, timeStr: timeWib } = getIndonesianDateTime();
@@ -3549,7 +3549,7 @@ app.post("/api/qr/absen", async (req, res) => {
       namaOrangTua: namaOrtu,
       notifWaText,
       notifWaUrl,
-      updatedAppData: req.body?.includeAppData ? inMemoryAppDataCache : undefined
+      updatedAppData: undefined
     });
   } catch (err: any) {
     console.error("Error in /api/qr/absen:", err?.message || err);
