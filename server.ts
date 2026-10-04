@@ -13,6 +13,28 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || "";
 if (!SESSION_SECRET && process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET wajib diatur pada production");
 const sessions = new Map<string, { username: string; role: string; createdAt: number; expiresAt: number }>();
+const loginAttempts = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number }>();
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function getClientAddress(req: express.Request) {
+  return String(req.ip || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+}
+function allowLoginAttempt(address: string) {
+  const now = Date.now();
+  const current = loginAttempts.get(address);
+  if (!current || now - current.windowStartedAt >= LOGIN_WINDOW_MS) {
+    loginAttempts.set(address, { count: 1, windowStartedAt: now, blockedUntil: 0 });
+    return true;
+  }
+  if (current.blockedUntil > now) return false;
+  current.count += 1;
+  if (current.count > LOGIN_MAX_ATTEMPTS) {
+    current.blockedUntil = now + LOGIN_WINDOW_MS;
+    return false;
+  }
+  return true;
+}
+function clearLoginAttempts(address: string) { loginAttempts.delete(address); }
 function createSession(username: string, role: string) { const id = crypto.randomBytes(32).toString("base64url"); const now = Date.now(); sessions.set(id, { username, role, createdAt: now, expiresAt: now + 8 * 60 * 60 * 1000 }); return id; }
 function parseSession(req: express.Request) { const raw = req.headers.cookie?.split(";").map(v => v.trim()).find(v => v.startsWith("absen_session=")); const id = raw?.slice("absen_session=".length); if (!id) return null; const s = sessions.get(id); if (!s || s.expiresAt < Date.now()) { if (id) sessions.delete(id); return null; } return { id, ...s }; }
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) { const user = parseSession(req); if (!user) return res.status(401).json({ success: false, message: "Authentication diperlukan." }); (req as any).user = user; next(); }
@@ -2793,6 +2815,10 @@ async function performMySQLLoad(config: any) {
 // Server-side authentication. Password compatibility is intentionally kept with the existing data model
 // so the UI can migrate without exposing database credentials to the browser.
 app.post("/api/auth/login", async (req, res) => {
+  const clientAddress = getClientAddress(req);
+  if (!allowLoginAttempt(clientAddress)) {
+    return res.status(429).json({ success: false, message: "Terlalu banyak percobaan login. Silakan coba lagi beberapa saat." });
+  }
   const username = String(req.body?.username || "").trim().toLowerCase();
   const password = String(req.body?.password || "");
   if (!username || !password) return res.status(400).json({ success: false, message: "Username dan password wajib diisi." });
