@@ -6,9 +6,39 @@ import mysql from "mysql2/promise";
 import fs from "fs";
 import QRCode from "qrcode";
 import compression from "compression";
+import crypto from "crypto";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const SESSION_SECRET = process.env.SESSION_SECRET || "";
+if (!SESSION_SECRET && process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET wajib diatur pada production");
+const sessions = new Map<string, { username: string; role: string; createdAt: number; expiresAt: number }>();
+const loginAttempts = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number }>();
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function getClientAddress(req: express.Request) {
+  return String(req.ip || req.socket.remoteAddress || "unknown").replace(/^::ffff:/, "");
+}
+function allowLoginAttempt(address: string) {
+  const now = Date.now();
+  const current = loginAttempts.get(address);
+  if (!current || now - current.windowStartedAt >= LOGIN_WINDOW_MS) {
+    loginAttempts.set(address, { count: 1, windowStartedAt: now, blockedUntil: 0 });
+    return true;
+  }
+  if (current.blockedUntil > now) return false;
+  current.count += 1;
+  if (current.count > LOGIN_MAX_ATTEMPTS) {
+    current.blockedUntil = now + LOGIN_WINDOW_MS;
+    return false;
+  }
+  return true;
+}
+function clearLoginAttempts(address: string) { loginAttempts.delete(address); }
+function createSession(username: string, role: string) { const id = crypto.randomBytes(32).toString("base64url"); const now = Date.now(); sessions.set(id, { username, role, createdAt: now, expiresAt: now + 8 * 60 * 60 * 1000 }); return id; }
+function parseSession(req: express.Request) { const raw = req.headers.cookie?.split(";").map(v => v.trim()).find(v => v.startsWith("absen_session=")); const id = raw?.slice("absen_session=".length); if (!id) return null; const s = sessions.get(id); if (!s || s.expiresAt < Date.now()) { if (id) sessions.delete(id); return null; } return { id, ...s }; }
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) { const user = parseSession(req); if (!user) return res.status(401).json({ success: false, message: "Authentication diperlukan." }); (req as any).user = user; next(); }
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) { const user = parseSession(req); if (!user) return res.status(401).json({ success: false, message: "Authentication diperlukan." }); if (user.role !== "admin") return res.status(403).json({ success: false, message: "Akses administrator diperlukan." }); (req as any).user = user; next(); }
 
 // ==========================================
 // SERVER RESOURCE & TELEMETRY MONITORING
@@ -267,6 +297,8 @@ setInterval(() => {
 // Enable gzip/brotli response compression for ultra-fast multi-client throughput
 app.use(compression());
 app.use(express.json({ limit: "50mb" }));
+app.disable("x-powered-by");
+app.use((req, res, next) => { res.setHeader("X-Content-Type-Options", "nosniff"); res.setHeader("X-Frame-Options", "DENY"); res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin"); res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()"); if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); next(); });
 
 // Telemetry request interceptor middleware
 app.use((req, res, next) => {
@@ -397,11 +429,11 @@ function getOrCreateServerQrToken(force = false, intervalSeconds = 60) {
   if (!force && serverActiveQrToken && serverActiveQrToken.dateStr === todayStr && now < serverActiveQrToken.expiresAt) {
     return serverActiveQrToken;
   }
-  const randomSegment = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const randomSegment = crypto.randomBytes(16).toString("hex").toUpperCase();
   const token = `PRESENSI-${todayStr}-${randomSegment}`;
   serverActiveQrToken = {
     token,
-    secretHash: `HASH-${now}-${randomSegment}`,
+    secretHash: crypto.createHash("sha256").update(`${token}:${SESSION_SECRET || crypto.randomBytes(16).toString("hex")}`).digest("hex"),
     createdAt: now,
     expiresAt: now + validDurationMs,
     dateStr: todayStr,
@@ -2780,13 +2812,75 @@ async function performMySQLLoad(config: any) {
   }
 }
 
+// Server-side authentication. Password compatibility is intentionally kept with the existing data model
+// so the UI can migrate without exposing database credentials to the browser.
+app.post("/api/auth/login", async (req, res) => {
+  const clientAddress = getClientAddress(req);
+  if (!allowLoginAttempt(clientAddress)) {
+    return res.status(429).json({ success: false, message: "Terlalu banyak percobaan login. Silakan coba lagi beberapa saat." });
+  }
+  const username = String(req.body?.username || "").trim().toLowerCase();
+  const password = String(req.body?.password || "");
+  if (!username || !password) return res.status(400).json({ success: false, message: "Username dan password wajib diisi." });
+
+  let data = inMemoryAppDataCache || loadSavedAppDataCache() || null;
+  if (!data) {
+    const config = loadSavedServerConfig();
+    if (config && Date.now() >= mysqlCooldownUntil) {
+      try {
+        data = await performMySQLLoad(config);
+        if (data) {
+          inMemoryAppDataCache = data;
+          rebuildFastIndices(data);
+        }
+      } catch (_) {}
+    }
+  }
+  if (!data) return res.status(503).json({ success: false, message: "Data pengguna belum tersedia di server." });
+  const candidates: Array<{ role: string; user: any; aliases?: string[]; defaults?: string[] }> = [];
+  if (data.admin) candidates.push({ role: "admin", user: data.admin, aliases: ["admin", "administrator"] });
+  if (data.kurikulum) candidates.push({ role: "kurikulum", user: data.kurikulum, aliases: ["kurikulum", "wks_kurikulum", "wkskurikulum"] });
+  if (data.hubin) candidates.push({ role: "hubin", user: data.hubin, aliases: ["hubin", "wks_hubin", "wkshubin", "humas"] });
+  if (data.kesiswaan) candidates.push({ role: "kesiswaan", user: data.kesiswaan, aliases: ["kesiswaan", "bk", "bp", "bpbk"] });
+  if (data.stafJadwal) candidates.push({ role: "staf_jadwal", user: data.stafJadwal, aliases: ["jadwal", "staf_jadwal", "stafjadwal", "operator_jadwal"] });
+  if (data.userBiasa) candidates.push({ role: "guru", user: data.userBiasa, aliases: ["guru", "user"] });
+  for (const u of (Array.isArray(data.waliKelas) ? data.waliKelas : [])) candidates.push({ role: u.role || "guru", user: u });
+  for (const u of (Array.isArray(data.siswa) ? data.siswa : [])) candidates.push({ role: u.role || "siswa", user: u });
+
+  const candidate = candidates.find(({ user, aliases = [] }) => {
+    const ids = [user?.username, user?.nip, user?.nisn, ...aliases].filter(Boolean).map((v: any) => String(v).trim().toLowerCase());
+    return ids.includes(username);
+  });
+  if (!candidate) return res.status(401).json({ success: false, message: "Username atau password salah." });
+
+  const expected = String(candidate.user?.password || "");
+  const accepted = new Set([expected].filter(Boolean));
+  if (!accepted.has(password)) return res.status(401).json({ success: false, message: "Username atau password salah." });
+
+  const sessionId = createSession(username, candidate.role);
+  res.setHeader("Set-Cookie", `absen_session=${sessionId}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+  res.json({ success: true, user: { ...candidate.user, password: undefined }, role: candidate.role });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  const user = parseSession(req);
+  if (user) sessions.delete(user.id);
+  res.setHeader("Set-Cookie", "absen_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.json({ success: true });
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  const user = (req as any).user;
+  res.json({ success: true, user: { username: user.username, role: user.role } });
+});
+
 // API: Health Check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // API: Real-Time Server Resources & Telemetry (CPU, RAM, Harddisk, Traffic)
-app.get("/api/server/resources", (req, res) => {
+app.get("/api/server/resources", requireAdmin, (req, res) => {
   try {
     const cpu = getCpuUsagePercent();
     const ram = getMemoryUsage();
@@ -2831,7 +2925,7 @@ app.get("/api/server/resources", (req, res) => {
 });
 
 // API: Server Network Connectivity & Ping Latency Check
-app.post("/api/server/ping", (req, res) => {
+app.post("/api/server/ping", requireAuth, (req, res) => {
   res.json({
     success: true,
     message: "Pong! Server merespons normal dengan latensi sangat rendah.",
@@ -2843,7 +2937,7 @@ app.post("/api/server/ping", (req, res) => {
 });
 
 // API: Clean Server Temporary Telemetry & In-Memory Cache
-app.post("/api/server/cache-clean", (req, res) => {
+app.post("/api/server/cache-clean", requireAdmin, (req, res) => {
   try {
     if ((global as any).gc) {
       (global as any).gc();
@@ -2866,7 +2960,7 @@ let serverUserLoginLogs: any[] = [];
 let serverActiveUserSessions: any[] = [];
 
 // GET: All Login Logs & Active Sessions
-app.get("/api/user-logins", (req, res) => {
+app.get("/api/user-logins", requireAdmin, (req, res) => {
   const successCount = serverUserLoginLogs.filter(l => l.status === "success").length;
   const failedCount = serverUserLoginLogs.filter(l => l.status !== "success" && l.status !== "session_terminated").length;
   const total = serverUserLoginLogs.length;
@@ -2887,30 +2981,27 @@ app.get("/api/user-logins", (req, res) => {
   });
 });
 
-// POST: Record New Login Attempt
-app.post("/api/user-logins", (req, res) => {
+// POST: Record authenticated Login
+app.post("/api/user-logins", requireAuth, (req, res) => {
   try {
-    const body = req.body;
-    if (!body || !body.username) {
-      return res.status(400).json({ success: false, message: "Parameter username wajib diisi" });
-    }
-
+    const body = req.body || {};
+    const authUser = (req as any).user;
+    const now = new Date().toISOString();
     const logEntry = {
       id: body.id || `log-${Date.now()}`,
-      timestamp: body.timestamp || new Date().toISOString(),
-      formattedTime: body.formattedTime || new Date().toLocaleString("id-ID"),
-      username: body.username,
-      nama: body.nama || body.username,
-      role: body.role || "unknown",
-      status: body.status || "success",
-      statusLabel: body.statusLabel || (body.status === "success" ? "Berhasil Masuk" : "Percobaan Gagal"),
-      ipAddress: body.ipAddress || req.ip || "127.0.0.1",
+      timestamp: now,
+      formattedTime: new Date().toLocaleString("id-ID"),
+      username: authUser.username,
+      nama: body.nama || authUser.username,
+      role: authUser.role,
+      status: "success",
+      statusLabel: "Berhasil Masuk",
+      ipAddress: req.ip || "127.0.0.1",
       location: body.location || "Jaringan Lokal Sekolah",
       device: body.device || "Desktop",
       browser: body.browser || "Browser",
-      userAgent: body.userAgent || req.headers["user-agent"] || "",
-      failureReason: body.failureReason,
-      sessionId: body.sessionId,
+      userAgent: req.headers["user-agent"] || "",
+      sessionId: authUser.id,
     };
 
     serverUserLoginLogs.unshift(logEntry);
@@ -2918,26 +3009,23 @@ app.post("/api/user-logins", (req, res) => {
       serverUserLoginLogs = serverUserLoginLogs.slice(0, 1000);
     }
 
-    // If successful login, register session
-    if (body.status === "success" && body.sessionId) {
-      serverActiveUserSessions = serverActiveUserSessions.filter(
-        s => !(s.username.toLowerCase() === body.username.toLowerCase() && s.ipAddress === logEntry.ipAddress)
-      );
-      serverActiveUserSessions.unshift({
-        id: body.sessionId,
-        username: body.username,
-        nama: body.nama || body.username,
-        role: body.role || "unknown",
-        loginAt: logEntry.timestamp,
-        lastActiveAt: new Date().toISOString(),
-        formattedLoginTime: logEntry.formattedTime,
-        ipAddress: logEntry.ipAddress,
-        location: logEntry.location,
-        device: logEntry.device,
-        browser: logEntry.browser,
-        userAgent: logEntry.userAgent,
-      });
-    }
+    serverActiveUserSessions = serverActiveUserSessions.filter(
+      s => !(s.username.toLowerCase() === authUser.username.toLowerCase() && s.ipAddress === logEntry.ipAddress)
+    );
+    serverActiveUserSessions.unshift({
+      id: authUser.id,
+      username: authUser.username,
+      nama: logEntry.nama,
+      role: authUser.role,
+      loginAt: logEntry.timestamp,
+      lastActiveAt: now,
+      formattedLoginTime: logEntry.formattedTime,
+      ipAddress: logEntry.ipAddress,
+      location: logEntry.location,
+      device: logEntry.device,
+      browser: logEntry.browser,
+      userAgent: logEntry.userAgent,
+    });
 
     res.json({ success: true, message: "Log login berhasil dicatat", log: logEntry });
   } catch (err: any) {
@@ -2946,28 +3034,21 @@ app.post("/api/user-logins", (req, res) => {
 });
 
 // POST: User Heartbeat to keep active session updated
-app.post("/api/user-sessions/heartbeat", (req, res) => {
-  const { sessionId, username } = req.body;
+app.post("/api/user-sessions/heartbeat", requireAuth, (req, res) => {
+  const user = (req as any).user;
   const now = new Date().toISOString();
-  if (sessionId) {
-    const s = serverActiveUserSessions.find(s => s.id === sessionId);
-    if (s) {
-      s.lastActiveAt = now;
-      return res.json({ success: true, lastActiveAt: now });
-    }
-  }
-  if (username) {
-    const s = serverActiveUserSessions.find(s => s.username.toLowerCase() === username.toLowerCase());
-    if (s) {
-      s.lastActiveAt = now;
-      return res.json({ success: true, lastActiveAt: now });
-    }
+  const s = serverActiveUserSessions.find(
+    session => session.id === user.id || session.username.toLowerCase() === user.username.toLowerCase()
+  );
+  if (s) {
+    s.lastActiveAt = now;
+    return res.json({ success: true, lastActiveAt: now });
   }
   res.json({ success: true, message: "Heartbeat received" });
 });
 
 // POST: Terminate a single active session
-app.post("/api/user-sessions/terminate", (req, res) => {
+app.post("/api/user-sessions/terminate", requireAdmin, (req, res) => {
   const { sessionId, terminatedBy } = req.body;
   if (!sessionId) {
     return res.status(400).json({ success: false, message: "sessionId diperlukan" });
@@ -3003,7 +3084,7 @@ app.post("/api/user-sessions/terminate", (req, res) => {
 });
 
 // POST: Terminate all other sessions except current
-app.post("/api/user-sessions/terminate-all", (req, res) => {
+app.post("/api/user-sessions/terminate-all", requireAdmin, (req, res) => {
   const { keepUsername } = req.body;
   const termUsers = serverActiveUserSessions.filter(
     s => !keepUsername || s.username.toLowerCase() !== keepUsername.toLowerCase()
@@ -3040,7 +3121,7 @@ app.post("/api/user-sessions/terminate-all", (req, res) => {
 });
 
 // POST: Clear User Login Logs
-app.post("/api/user-logins/clear", (req, res) => {
+app.post("/api/user-logins/clear", requireAdmin, (req, res) => {
   serverUserLoginLogs = [];
   res.json({ success: true, message: "Seluruh riwayat log login berhasil dibersihkan." });
 });
@@ -3076,7 +3157,7 @@ app.get("/api/qr/token", async (req, res) => {
 });
 
 // 2. API: Force Generate New Dynamic Server QR Token
-app.post("/api/qr/generate-new", async (req, res) => {
+app.post("/api/qr/generate-new", requireAdmin, async (req, res) => {
   const intervalSec = parseInt(String(req.body?.interval || req.query?.interval || "60"), 10) || 60;
   const tokenObj = getOrCreateServerQrToken(true, intervalSec);
   cachedQrImageDataUrl = await generateQrDataUrl(tokenObj);
@@ -3160,11 +3241,11 @@ function getShiftTimingForStudent(appData: any, siswa: any, dateStr: string) {
 }
 
 // 3. API: Process Attendance via QR Code on Server
-app.post("/api/qr/absen", async (req, res) => {
+app.post("/api/qr/absen", requireAuth, async (req, res) => {
   try {
-    const { scannedCode, siswaId, nisn, dateStr, clientAppData, scanMode } = req.body;
+    const { scannedCode, siswaId, nisn, scanMode } = req.body;
     const { dateStr: todayWib, timeStr: timeWib } = getIndonesianDateTime();
-    const today = dateStr || todayWib;
+    const today = todayWib;
     const nowTimeStr = timeWib;
 
     if (!scannedCode && !siswaId && !nisn) {
@@ -3174,23 +3255,7 @@ app.post("/api/qr/absen", async (req, res) => {
       });
     }
 
-    // Sync clientAppData if provided
-    if (clientAppData && typeof clientAppData === 'object' && Array.isArray(clientAppData.siswa)) {
-      if (!inMemoryAppDataCache) {
-        inMemoryAppDataCache = clientAppData;
-      } else {
-        inMemoryAppDataCache.siswa = clientAppData.siswa;
-        if (Array.isArray(clientAppData.kelas)) inMemoryAppDataCache.kelas = clientAppData.kelas;
-        if (clientAppData.sekolah) inMemoryAppDataCache.sekolah = clientAppData.sekolah;
-        if (clientAppData.shiftConfig) inMemoryAppDataCache.shiftConfig = clientAppData.shiftConfig;
-        if (clientAppData.presensi) {
-          inMemoryAppDataCache.presensi = { ...inMemoryAppDataCache.presensi, ...clientAppData.presensi };
-        }
-      }
-      saveAppDataCache(inMemoryAppDataCache);
-    }
-
-    // Ensure cache is loaded
+    // Attendance data is authoritative on the server; never merge client-supplied app data here.\n\n    // Ensure cache is loaded
     if (!inMemoryAppDataCache) {
       inMemoryAppDataCache = loadSavedAppDataCache() || {};
     }
@@ -3471,7 +3536,7 @@ app.post("/api/qr/absen", async (req, res) => {
       namaOrangTua: namaOrtu,
       notifWaText,
       notifWaUrl,
-      updatedAppData: req.body?.includeAppData ? inMemoryAppDataCache : undefined
+      updatedAppData: undefined
     });
   } catch (err: any) {
     console.error("Error in /api/qr/absen:", err?.message || err);
@@ -3483,7 +3548,7 @@ app.post("/api/qr/absen", async (req, res) => {
 });
 
 // 4. API: Get Live QR Code Attendance Logs from Server
-app.get("/api/qr/logs", (req, res) => {
+app.get("/api/qr/logs", requireAuth, (req, res) => {
   const { dateStr: todayWib } = getIndonesianDateTime();
   const dateQuery = (req.query.date as string) || todayWib;
   const logsForDate = serverQrLogs.filter((l) => l.tanggal === dateQuery);
@@ -3497,7 +3562,7 @@ app.get("/api/qr/logs", (req, res) => {
 });
 
 // API: Reset / Clear QR Attendance Logs for Date
-app.delete("/api/qr/logs", (req, res) => {
+app.delete("/api/qr/logs", requireAdmin, (req, res) => {
   const { dateStr: todayWib } = getIndonesianDateTime();
   const dateQuery = (req.query.date as string) || todayWib;
   serverQrLogs = serverQrLogs.filter((l) => l.tanggal !== dateQuery);
@@ -3510,7 +3575,7 @@ app.delete("/api/qr/logs", (req, res) => {
 });
 
 // API: Get Current Server MySQL Config
-app.get("/api/mysql/config", (req, res) => {
+app.get("/api/mysql/config", requireAdmin, (req, res) => {
   const config = loadSavedServerConfig();
   res.json({
     success: !!config,
@@ -3519,22 +3584,12 @@ app.get("/api/mysql/config", (req, res) => {
 });
 
 // API: Global Sync Endpoint for Dev & Shared Run Preview Links (with ETag conditional 304 caching)
-app.get("/api/global-state", async (req, res) => {
+app.get("/api/global-state", requireAuth, async (req, res) => {
   const currentEtag = `"v${appDataVersion}"`;
   res.setHeader("ETag", currentEtag);
   res.setHeader("Cache-Control", "public, no-cache");
 
-  const queryHost = (req.query.host as string) || (req.headers["x-mysql-host"] as string);
-  const queryDb = (req.query.database as string) || (req.headers["x-mysql-database"] as string);
-  const queryUser = (req.query.user as string) || (req.headers["x-mysql-user"] as string);
-  const queryPass = (req.query.password !== undefined ? req.query.password : req.headers["x-mysql-password"]) as string;
-  const queryPort = (req.query.port as string) || (req.headers["x-mysql-port"] as string) || "3306";
-
-  let config = loadSavedServerConfig();
-  if (!config && queryHost && queryDb && queryUser) {
-    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort };
-    saveServerConfig(config);
-  }
+  const config = loadSavedServerConfig();
 
   const force = req.query.force === "true";
   const ifNoneMatch = req.headers["if-none-match"];
@@ -3551,7 +3606,6 @@ app.get("/api/global-state", async (req, res) => {
     return res.json({
       success: true,
       appData: inMemoryAppDataCache,
-      mysqlConfig: config,
       version: appDataVersion,
       source: "memory"
     });
@@ -3587,12 +3641,8 @@ app.get("/api/global-state", async (req, res) => {
   });
 });
 
-app.post("/api/global-state", async (req, res) => {
-  const { appData, mysqlConfig } = req.body;
-
-  if (mysqlConfig && mysqlConfig.host) {
-    saveServerConfig(mysqlConfig);
-  }
+app.post("/api/global-state", requireAuth, async (req, res) => {
+  const { appData } = req.body;
 
   if (appData) {
     saveAppDataCache(appData);
@@ -3608,7 +3658,7 @@ app.post("/api/global-state", async (req, res) => {
 // ==========================================
 
 // 1. Get Chat Messages
-app.get("/api/chat/messages", (req, res) => {
+app.get("/api/chat/messages", requireAuth, (req, res) => {
   const messages = (inMemoryAppDataCache && Array.isArray(inMemoryAppDataCache.chatMessages))
     ? inMemoryAppDataCache.chatMessages
     : [];
@@ -3621,7 +3671,7 @@ app.get("/api/chat/messages", (req, res) => {
 });
 
 // 2. Send Message Atomically
-app.post("/api/chat/send", (req, res) => {
+app.post("/api/chat/send", requireAuth, (req, res) => {
   const { message } = req.body;
   if (!message || !message.id || (!message.text && !message.image)) {
     return res.status(400).json({ success: false, message: "Data pesan tidak valid" });
@@ -3655,8 +3705,8 @@ app.post("/api/chat/send", (req, res) => {
 });
 
 // 3. Delete Message(s) Atomically (for everyone or for me only)
-app.post("/api/chat/delete", (req, res) => {
-  const { messageId, messageIds, deleteType, username, myIdVariants } = req.body;
+app.post("/api/chat/delete", requireAuth, (req, res) => {
+  const { messageId, messageIds, deleteType } = req.body;
   const targetIds: string[] = messageIds && Array.isArray(messageIds)
     ? messageIds
     : messageId ? [messageId] : [];
@@ -3673,9 +3723,8 @@ app.post("/api/chat/delete", (req, res) => {
   }
 
   const idSet = new Set(targetIds);
-  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
-    ? myIdVariants.map((v: string) => String(v).toLowerCase())
-    : [String(username || "").toLowerCase()].filter(Boolean);
+  const authenticatedUsername = String((req as any).user?.username || "").toLowerCase();
+  const userVariants = authenticatedUsername ? [authenticatedUsername] : [];
 
   if (deleteType === "for_everyone") {
     // Validate if any message being deleted is older than 2 minutes (120,000 ms)
@@ -3723,7 +3772,7 @@ app.post("/api/chat/delete", (req, res) => {
 });
 
 // 4. Clear Chat History
-app.post("/api/chat/clear-history", (req, res) => {
+app.post("/api/chat/clear-history", requireAuth, (req, res) => {
   const { selectedThreadUser, currentUsername, deleteType, isAdmin, myIdVariants, clearAllSystem } = req.body;
 
   if (!inMemoryAppDataCache) {
@@ -3747,9 +3796,8 @@ app.post("/api/chat/clear-history", (req, res) => {
     });
   }
 
-  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
-    ? myIdVariants.map((v: string) => String(v).toLowerCase())
-    : [String(currentUsername || "").toLowerCase()].filter(Boolean);
+  const authenticatedUsername = String((req as any).user?.username || "").toLowerCase();
+  const userVariants = authenticatedUsername ? [authenticatedUsername] : [];
 
   const isThreadMatch = (m: any) => {
     const s = String(m.senderUsername || "").toLowerCase();
@@ -3792,7 +3840,7 @@ app.post("/api/chat/clear-history", (req, res) => {
 });
 
 // 4b. Clear All Chat Messages System-wide
-app.post("/api/chat/clear-all", (req, res) => {
+app.post("/api/chat/clear-all", requireAdmin, (req, res) => {
   if (!inMemoryAppDataCache) {
     inMemoryAppDataCache = loadSavedAppDataCache() || { chatMessages: [] };
   }
@@ -3810,8 +3858,8 @@ app.post("/api/chat/clear-all", (req, res) => {
 });
 
 // 5. Mark Messages as Read
-app.post("/api/chat/mark-read", (req, res) => {
-  const { threadUser, currentUsername, myIdVariants } = req.body;
+app.post("/api/chat/mark-read", requireAuth, (req, res) => {
+  const { threadUser } = req.body;
 
   if (!inMemoryAppDataCache || !Array.isArray(inMemoryAppDataCache.chatMessages)) {
     return res.json({ success: true, chatMessages: [] });
@@ -3851,7 +3899,7 @@ app.post("/api/chat/mark-read", (req, res) => {
 });
 
 // API: Test MySQL Connection & Auto-Setup Tables
-app.post("/api/mysql/test", async (req, res) => {
+app.post("/api/mysql/test", requireAdmin, async (req, res) => {
   const { host, port, user, password, database } = req.body;
   if (!host || !user || !database) {
     return res.status(400).json({ success: false, message: "Host, user, dan nama database wajib diisi." });
@@ -4083,7 +4131,7 @@ app.post("/api/mysql/test", async (req, res) => {
 });
 
 // API: Save App Data to Relational MySQL Tables
-app.post("/api/mysql/save", async (req, res) => {
+app.post("/api/mysql/save", requireAdmin, async (req, res) => {
   const { host, port, user, password, database, appData } = req.body;
   if (!host || !user || !database || !appData) {
     return res.status(400).json({ success: false, message: "Parameter koneksi dan data aplikasi wajib diisi." });
@@ -4119,7 +4167,7 @@ app.post("/api/mysql/save", async (req, res) => {
 });
 
 // API: Load App Data from MySQL
-app.post("/api/mysql/load", async (req, res) => {
+app.post("/api/mysql/load", requireAdmin, async (req, res) => {
   const { host, port, user, password, database } = req.body;
   if (!host || !user || !database) {
     return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
@@ -4158,7 +4206,7 @@ app.post("/api/mysql/load", async (req, res) => {
 });
 
 // API: Preview Database Statistics & Sample Rows
-app.post("/api/mysql/preview", async (req, res) => {
+app.post("/api/mysql/preview", requireAdmin, async (req, res) => {
   const { host, port, user, password, database } = req.body;
   if (!host || !user || !database) {
     return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
@@ -4467,7 +4515,7 @@ setInterval(() => {
 // ==========================================
 
 // 1. Get Auto-Backup Schedule Config
-app.get("/api/backup/schedule-config", (req, res) => {
+app.get("/api/backup/schedule-config", requireAdmin, (req, res) => {
   res.json({
     success: true,
     config: activeBackupConfig,
@@ -4475,7 +4523,7 @@ app.get("/api/backup/schedule-config", (req, res) => {
 });
 
 // 2. Update Auto-Backup Schedule Config
-app.post("/api/backup/schedule-config", (req, res) => {
+app.post("/api/backup/schedule-config", requireAdmin, (req, res) => {
   try {
     const newConfig = { ...activeBackupConfig, ...(req.body || {}) };
     activeBackupConfig = newConfig;
@@ -4498,7 +4546,7 @@ app.post("/api/backup/schedule-config", (req, res) => {
 });
 
 // 3. Trigger Immediate Manual Run of Daily / Weekly / Monthly Cycle
-app.post("/api/backup/trigger-cycle", (req, res) => {
+app.post("/api/backup/trigger-cycle", requireAdmin, (req, res) => {
   try {
     const { category = "daily", note } = req.body;
     if (!["daily", "weekly", "monthly", "manual"].includes(category)) {
@@ -4518,7 +4566,7 @@ app.post("/api/backup/trigger-cycle", (req, res) => {
 });
 
 // 4. Export / Download System Backup (Full, Daily, Weekly, Monthly, Master, Presensi)
-app.get("/api/backup/export", (req, res) => {
+app.get("/api/backup/export", requireAdmin, (req, res) => {
   const currentData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
   const backupType = (req.query.type as string) || "full"; // 'full' | 'daily' | 'weekly' | 'monthly' | 'presensi_only' | 'master_only'
   const isDownload = req.query.download === "true";
@@ -4625,7 +4673,7 @@ app.get("/api/backup/export", (req, res) => {
 });
 
 // 5. Restore System Backup (Replace, Merge, or Presensi-Only)
-app.post("/api/backup/restore", async (req, res) => {
+app.post("/api/backup/restore", requireAdmin, async (req, res) => {
   const { backupData, mode = "replace" } = req.body;
   if (!backupData || typeof backupData !== "object") {
     return res.status(400).json({ success: false, message: "Data backup tidak valid atau kosong." });
@@ -4746,7 +4794,7 @@ app.post("/api/backup/restore", async (req, res) => {
 });
 
 // 6. Create Server-Side Snapshot (Manual or Triggered)
-app.post("/api/backup/snapshot", (req, res) => {
+app.post("/api/backup/snapshot", requireAdmin, (req, res) => {
   try {
     const { note, category = "manual" } = req.body;
     const snapshotMetadata = createServerSnapshot(category, note);
@@ -4762,7 +4810,7 @@ app.post("/api/backup/snapshot", (req, res) => {
 });
 
 // 7. List Server-Side Snapshots
-app.get("/api/backup/snapshots", (req, res) => {
+app.get("/api/backup/snapshots", requireAdmin, (req, res) => {
   try {
     if (!fs.existsSync(BACKUP_DIR)) {
       return res.json({ success: true, snapshots: [] });
@@ -4804,9 +4852,10 @@ app.get("/api/backup/snapshots", (req, res) => {
 });
 
 // 8. Download a Server Snapshot File directly
-app.get("/api/backup/snapshot/:id/download", (req, res) => {
+app.get("/api/backup/snapshot/:id/download", requireAdmin, (req, res) => {
   try {
-    const snapshotId = req.params.id;
+    const snapshotId = String(req.params.id || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) return res.status(400).json({ success: false, message: "ID snapshot tidak valid." });
     const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
     if (!fs.existsSync(snapshotFile)) {
       return res.status(404).json({ success: false, message: "Berkas snapshot tidak ditemukan." });
@@ -4821,9 +4870,10 @@ app.get("/api/backup/snapshot/:id/download", (req, res) => {
 });
 
 // 9. Restore from Server Snapshot
-app.post("/api/backup/snapshot/restore", (req, res) => {
+app.post("/api/backup/snapshot/restore", requireAdmin, (req, res) => {
   try {
-    const { snapshotId } = req.body;
+    const snapshotId = String(req.body?.snapshotId || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) return res.status(400).json({ success: false, message: "ID snapshot tidak valid." });
     if (!snapshotId) {
       return res.status(400).json({ success: false, message: "ID Snapshot tidak valid." });
     }
@@ -4853,9 +4903,10 @@ app.post("/api/backup/snapshot/restore", (req, res) => {
 });
 
 // 10. Delete Server Snapshot
-app.delete("/api/backup/snapshot/:id", (req, res) => {
+app.delete("/api/backup/snapshot/:id", requireAdmin, (req, res) => {
   try {
-    const snapshotId = req.params.id;
+    const snapshotId = String(req.params.id || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) return res.status(400).json({ success: false, message: "ID snapshot tidak valid." });
     const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
     if (fs.existsSync(snapshotFile)) {
       fs.unlinkSync(snapshotFile);

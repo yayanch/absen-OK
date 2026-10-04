@@ -1339,14 +1339,6 @@ export function loadAppData(): AppData {
 let syncTimeoutId: any = null;
 
 export async function commitAppDataToServer(data: AppData, timeoutMs = 20000): Promise<SyncResult> {
-  const host = typeof localStorage !== 'undefined' ? localStorage.getItem('mysql_host') : null;
-  const database = typeof localStorage !== 'undefined' ? localStorage.getItem('mysql_database') : null;
-  const user = typeof localStorage !== 'undefined' ? localStorage.getItem('mysql_user') : null;
-  const port = (typeof localStorage !== 'undefined' ? localStorage.getItem('mysql_port') : null) || '3306';
-  const password = (typeof localStorage !== 'undefined' ? localStorage.getItem('mysql_password') : null) || '';
-
-  const mysqlConfig = host && database && user ? { host, port, user, password, database } : null;
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -1354,63 +1346,31 @@ export async function commitAppDataToServer(data: AppData, timeoutMs = 20000): P
     const res = await fetch('/api/global-state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appData: data, mysqlConfig }),
+      credentials: 'include',
+      body: JSON.stringify({ appData: data }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
 
     if (!res.ok) {
-      if (res.status >= 400 && res.status < 500) {
-        return {
-          success: false,
-          reason: 'validation',
-          status: res.status,
-          message: `Data presensi tidak dapat divalidasi oleh server (HTTP ${res.status}).`,
-        };
-      }
       return {
         success: false,
-        reason: 'server',
+        reason: res.status === 401 || res.status === 403 ? 'validation' : 'server',
         status: res.status,
-        message: `Server mengalami kendala saat menyimpan data (HTTP ${res.status}).`,
+        message: res.status === 401 ? 'Sesi login telah berakhir. Silakan login kembali.' : `Server mengalami kendala saat menyimpan data (HTTP ${res.status}).`,
       };
     }
 
     const resJson = await res.json();
-    if (resJson && resJson.success === true) {
-      // Trigger background MySQL persist if config exists (non-blocking)
-      if (mysqlConfig) {
-        fetch('/api/mysql/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...mysqlConfig, appData: data }),
-        }).catch(() => {});
-      }
-      return {
-        success: true,
-        version: resJson.version,
-        message: resJson.message || 'Data berhasil tersimpan di server',
-      };
-    }
-
-    return {
-      success: false,
-      reason: 'unknown',
-      message: resJson?.message || 'Status penyimpanan belum dapat dipastikan dari respon server.',
-    };
+    return resJson?.success === true
+      ? { success: true, version: resJson.version, message: resJson.message || 'Data berhasil tersimpan di server' }
+      : { success: false, reason: 'unknown', message: resJson?.message || 'Status penyimpanan belum dapat dipastikan.' };
   } catch (err: any) {
     clearTimeout(timeoutId);
-    if (err.name === 'AbortError') {
-      return {
-        success: false,
-        reason: 'timeout',
-        message: 'Waktu tunggu koneksi habis (Timeout 20 detik). Status penyimpanan belum dapat dipastikan.',
-      };
-    }
     return {
       success: false,
-      reason: 'network',
-      message: 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
+      reason: err.name === 'AbortError' ? 'timeout' : 'network',
+      message: err.name === 'AbortError' ? 'Waktu tunggu koneksi habis.' : 'Tidak dapat terhubung ke server.',
     };
   }
 }

@@ -5,3 +5,8 @@ coverage/
 .env*
 !.env.example
 
+
+# Local/server runtime data and secrets
+mysql_config.json
+app_data_cache.json
+server_data/
