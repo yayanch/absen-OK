@@ -4859,7 +4859,8 @@ app.get("/api/backup/snapshots", requireAdmin, (req, res) => {
 // 8. Download a Server Snapshot File directly
 app.get("/api/backup/snapshot/:id/download", requireAdmin, (req, res) => {
   try {
-    const snapshotId = req.params.id;
+    const snapshotId = String(req.params.id || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) return res.status(400).json({ success: false, message: "ID snapshot tidak valid." });
     const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
     if (!fs.existsSync(snapshotFile)) {
       return res.status(404).json({ success: false, message: "Berkas snapshot tidak ditemukan." });
@@ -4876,7 +4877,8 @@ app.get("/api/backup/snapshot/:id/download", requireAdmin, (req, res) => {
 // 9. Restore from Server Snapshot
 app.post("/api/backup/snapshot/restore", requireAdmin, (req, res) => {
   try {
-    const { snapshotId } = req.body;
+    const snapshotId = String(req.body?.snapshotId || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) return res.status(400).json({ success: false, message: "ID snapshot tidak valid." });
     if (!snapshotId) {
       return res.status(400).json({ success: false, message: "ID Snapshot tidak valid." });
     }
@@ -4908,7 +4910,8 @@ app.post("/api/backup/snapshot/restore", requireAdmin, (req, res) => {
 // 10. Delete Server Snapshot
 app.delete("/api/backup/snapshot/:id", requireAdmin, (req, res) => {
   try {
-    const snapshotId = req.params.id;
+    const snapshotId = String(req.params.id || "");
+    if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) return res.status(400).json({ success: false, message: "ID snapshot tidak valid." });
     const snapshotFile = path.join(BACKUP_DIR, `${snapshotId}.json`);
     if (fs.existsSync(snapshotFile)) {
       fs.unlinkSync(snapshotFile);
