@@ -18,3 +18,11 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run lint
       - run: npm run build
+      - name: Package source archive
+        run: zip -r absen-OK-security-hardening-2026-10.zip . -x ".git/*"
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: absen-OK-security-hardening-2026-10
+          path: absen-OK-security-hardening-2026-10.zip
+          if-no-files-found: error
