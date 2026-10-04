@@ -3041,21 +3041,14 @@ app.post("/api/user-logins", requireAuth, (req, res) => {
 
 // POST: User Heartbeat to keep active session updated
 app.post("/api/user-sessions/heartbeat", requireAuth, (req, res) => {
-  const { sessionId, username } = req.body;
+  const user = (req as any).user;
   const now = new Date().toISOString();
-  if (sessionId) {
-    const s = serverActiveUserSessions.find(s => s.id === sessionId);
-    if (s) {
-      s.lastActiveAt = now;
-      return res.json({ success: true, lastActiveAt: now });
-    }
-  }
-  if (username) {
-    const s = serverActiveUserSessions.find(s => s.username.toLowerCase() === username.toLowerCase());
-    if (s) {
-      s.lastActiveAt = now;
-      return res.json({ success: true, lastActiveAt: now });
-    }
+  const s = serverActiveUserSessions.find(
+    session => session.id === user.id || session.username.toLowerCase() === user.username.toLowerCase()
+  );
+  if (s) {
+    s.lastActiveAt = now;
+    return res.json({ success: true, lastActiveAt: now });
   }
   res.json({ success: true, message: "Heartbeat received" });
 });
