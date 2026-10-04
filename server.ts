@@ -2981,30 +2981,27 @@ app.get("/api/user-logins", requireAdmin, (req, res) => {
   });
 });
 
-// POST: Record New Login Attempt
+// POST: Record authenticated Login
 app.post("/api/user-logins", requireAuth, (req, res) => {
   try {
-    const body = req.body;
-    if (!body || !body.username) {
-      return res.status(400).json({ success: false, message: "Parameter username wajib diisi" });
-    }
-
+    const body = req.body || {};
+    const authUser = (req as any).user;
+    const now = new Date().toISOString();
     const logEntry = {
       id: body.id || `log-${Date.now()}`,
-      timestamp: body.timestamp || new Date().toISOString(),
-      formattedTime: body.formattedTime || new Date().toLocaleString("id-ID"),
-      username: body.username,
-      nama: body.nama || body.username,
-      role: body.role || "unknown",
-      status: body.status || "success",
-      statusLabel: body.statusLabel || (body.status === "success" ? "Berhasil Masuk" : "Percobaan Gagal"),
-      ipAddress: body.ipAddress || req.ip || "127.0.0.1",
+      timestamp: now,
+      formattedTime: new Date().toLocaleString("id-ID"),
+      username: authUser.username,
+      nama: body.nama || authUser.username,
+      role: authUser.role,
+      status: "success",
+      statusLabel: "Berhasil Masuk",
+      ipAddress: req.ip || "127.0.0.1",
       location: body.location || "Jaringan Lokal Sekolah",
       device: body.device || "Desktop",
       browser: body.browser || "Browser",
-      userAgent: body.userAgent || req.headers["user-agent"] || "",
-      failureReason: body.failureReason,
-      sessionId: body.sessionId,
+      userAgent: req.headers["user-agent"] || "",
+      sessionId: authUser.id,
     };
 
     serverUserLoginLogs.unshift(logEntry);
@@ -3012,26 +3009,23 @@ app.post("/api/user-logins", requireAuth, (req, res) => {
       serverUserLoginLogs = serverUserLoginLogs.slice(0, 1000);
     }
 
-    // If successful login, register session
-    if (body.status === "success" && body.sessionId) {
-      serverActiveUserSessions = serverActiveUserSessions.filter(
-        s => !(s.username.toLowerCase() === body.username.toLowerCase() && s.ipAddress === logEntry.ipAddress)
-      );
-      serverActiveUserSessions.unshift({
-        id: body.sessionId,
-        username: body.username,
-        nama: body.nama || body.username,
-        role: body.role || "unknown",
-        loginAt: logEntry.timestamp,
-        lastActiveAt: new Date().toISOString(),
-        formattedLoginTime: logEntry.formattedTime,
-        ipAddress: logEntry.ipAddress,
-        location: logEntry.location,
-        device: logEntry.device,
-        browser: logEntry.browser,
-        userAgent: logEntry.userAgent,
-      });
-    }
+    serverActiveUserSessions = serverActiveUserSessions.filter(
+      s => !(s.username.toLowerCase() === authUser.username.toLowerCase() && s.ipAddress === logEntry.ipAddress)
+    );
+    serverActiveUserSessions.unshift({
+      id: authUser.id,
+      username: authUser.username,
+      nama: logEntry.nama,
+      role: authUser.role,
+      loginAt: logEntry.timestamp,
+      lastActiveAt: now,
+      formattedLoginTime: logEntry.formattedTime,
+      ipAddress: logEntry.ipAddress,
+      location: logEntry.location,
+      device: logEntry.device,
+      browser: logEntry.browser,
+      userAgent: logEntry.userAgent,
+    });
 
     res.json({ success: true, message: "Log login berhasil dicatat", log: logEntry });
   } catch (err: any) {
