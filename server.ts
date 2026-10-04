@@ -3230,9 +3230,9 @@ function getShiftTimingForStudent(appData: any, siswa: any, dateStr: string) {
 // 3. API: Process Attendance via QR Code on Server
 app.post("/api/qr/absen", async (req, res) => {
   try {
-    const { scannedCode, siswaId, nisn, dateStr, clientAppData, scanMode } = req.body;
+    const { scannedCode, siswaId, nisn, scanMode } = req.body;
     const { dateStr: todayWib, timeStr: timeWib } = getIndonesianDateTime();
-    const today = dateStr || todayWib;
+    const today = todayWib;
     const nowTimeStr = timeWib;
 
     if (!scannedCode && !siswaId && !nisn) {
@@ -3242,23 +3242,7 @@ app.post("/api/qr/absen", async (req, res) => {
       });
     }
 
-    // Sync clientAppData if provided
-    if (clientAppData && typeof clientAppData === 'object' && Array.isArray(clientAppData.siswa)) {
-      if (!inMemoryAppDataCache) {
-        inMemoryAppDataCache = clientAppData;
-      } else {
-        inMemoryAppDataCache.siswa = clientAppData.siswa;
-        if (Array.isArray(clientAppData.kelas)) inMemoryAppDataCache.kelas = clientAppData.kelas;
-        if (clientAppData.sekolah) inMemoryAppDataCache.sekolah = clientAppData.sekolah;
-        if (clientAppData.shiftConfig) inMemoryAppDataCache.shiftConfig = clientAppData.shiftConfig;
-        if (clientAppData.presensi) {
-          inMemoryAppDataCache.presensi = { ...inMemoryAppDataCache.presensi, ...clientAppData.presensi };
-        }
-      }
-      saveAppDataCache(inMemoryAppDataCache);
-    }
-
-    // Ensure cache is loaded
+    // Attendance data is authoritative on the server; never merge client-supplied app data here.\n\n    // Ensure cache is loaded
     if (!inMemoryAppDataCache) {
       inMemoryAppDataCache = loadSavedAppDataCache() || {};
     }
@@ -3709,7 +3693,7 @@ app.post("/api/chat/send", requireAuth, (req, res) => {
 
 // 3. Delete Message(s) Atomically (for everyone or for me only)
 app.post("/api/chat/delete", requireAuth, (req, res) => {
-  const { messageId, messageIds, deleteType, username, myIdVariants } = req.body;
+  const { messageId, messageIds, deleteType } = req.body;
   const targetIds: string[] = messageIds && Array.isArray(messageIds)
     ? messageIds
     : messageId ? [messageId] : [];
@@ -3726,9 +3710,8 @@ app.post("/api/chat/delete", requireAuth, (req, res) => {
   }
 
   const idSet = new Set(targetIds);
-  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
-    ? myIdVariants.map((v: string) => String(v).toLowerCase())
-    : [String(username || "").toLowerCase()].filter(Boolean);
+  const authenticatedUsername = String((req as any).user?.username || "").toLowerCase();
+  const userVariants = authenticatedUsername ? [authenticatedUsername] : [];
 
   if (deleteType === "for_everyone") {
     // Validate if any message being deleted is older than 2 minutes (120,000 ms)
@@ -3800,9 +3783,8 @@ app.post("/api/chat/clear-history", requireAuth, (req, res) => {
     });
   }
 
-  const userVariants = Array.isArray(myIdVariants) && myIdVariants.length > 0
-    ? myIdVariants.map((v: string) => String(v).toLowerCase())
-    : [String(currentUsername || "").toLowerCase()].filter(Boolean);
+  const authenticatedUsername = String((req as any).user?.username || "").toLowerCase();
+  const userVariants = authenticatedUsername ? [authenticatedUsername] : [];
 
   const isThreadMatch = (m: any) => {
     const s = String(m.senderUsername || "").toLowerCase();
@@ -3864,7 +3846,7 @@ app.post("/api/chat/clear-all", requireAdmin, (req, res) => {
 
 // 5. Mark Messages as Read
 app.post("/api/chat/mark-read", requireAuth, (req, res) => {
-  const { threadUser, currentUsername, myIdVariants } = req.body;
+  const { threadUser } = req.body;
 
   if (!inMemoryAppDataCache || !Array.isArray(inMemoryAppDataCache.chatMessages)) {
     return res.json({ success: true, chatMessages: [] });
