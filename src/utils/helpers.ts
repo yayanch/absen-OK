@@ -194,11 +194,11 @@ export function mergeSiswa(
         const existingId = nisnToIdMap.get(cleanNisn)!;
         const existing = map.get(existingId)!;
         map.set(existingId, {
-          ...localS,
           ...existing,
-          namaOrangTua: (existing.namaOrangTua && existing.namaOrangTua !== existing.nama) ? existing.namaOrangTua : (localS.namaOrangTua || existing.namaOrangTua || ''),
-          noWa: existing.noWa || localS.noWa || '',
-          noWaOrangTua: existing.noWaOrangTua || localS.noWaOrangTua || '',
+          ...localS,
+          namaOrangTua: typeof localS.namaOrangTua === 'string' ? localS.namaOrangTua : (existing.namaOrangTua || ''),
+          noWa: typeof localS.noWa === 'string' ? localS.noWa : (existing.noWa || ''),
+          noWaOrangTua: typeof localS.noWaOrangTua === 'string' ? localS.noWaOrangTua : (existing.noWaOrangTua || ''),
         });
       } else {
         map.set(sId, { ...localS });
@@ -224,9 +224,9 @@ export function mergeSiswa(
         gender: existing.gender || s.gender || 'L',
         kelasId: existing.kelasId || s.kelasId,
         status: existing.status || s.status || 'aktif',
-        noWa: existing.noWa || s.noWa || '',
-        namaOrangTua: (existing.namaOrangTua && existing.namaOrangTua !== existing.nama) ? existing.namaOrangTua : (s.namaOrangTua || existing.namaOrangTua || ''),
-        noWaOrangTua: existing.noWaOrangTua || s.noWaOrangTua || '',
+        noWa: typeof existing.noWa === 'string' ? existing.noWa : (s.noWa || ''),
+        namaOrangTua: typeof existing.namaOrangTua === 'string' ? existing.namaOrangTua : (s.namaOrangTua || ''),
+        noWaOrangTua: typeof existing.noWaOrangTua === 'string' ? existing.noWaOrangTua : (s.noWaOrangTua || ''),
         foto: existing.foto !== undefined ? existing.foto : (s.foto || ''),
         username: existing.username || s.username,
         password: existing.password || s.password,
@@ -250,9 +250,9 @@ export function mergeSiswa(
         gender: existing.gender || s.gender || 'L',
         kelasId: existing.kelasId || s.kelasId,
         status: existing.status || s.status || 'aktif',
-        noWa: existing.noWa !== undefined ? existing.noWa : '',
-        namaOrangTua: existing.namaOrangTua || s.namaOrangTua || '',
-        noWaOrangTua: existing.noWaOrangTua !== undefined ? existing.noWaOrangTua : '',
+        noWa: typeof existing.noWa === 'string' ? existing.noWa : (s.noWa || ''),
+        namaOrangTua: typeof existing.namaOrangTua === 'string' ? existing.namaOrangTua : (s.namaOrangTua || ''),
+        noWaOrangTua: typeof existing.noWaOrangTua === 'string' ? existing.noWaOrangTua : (s.noWaOrangTua || ''),
         foto: existing.foto !== undefined ? existing.foto : (s.foto || ''),
         username: existing.username || s.username,
         password: existing.password || s.password,

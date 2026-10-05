@@ -666,11 +666,11 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
         const targetId = nisnToIdMap.get(cleanNisn)!;
         const cur = map.get(targetId)!;
         map.set(targetId, {
-          ...inc,
           ...cur,
-          namaOrangTua: (cur.namaOrangTua && cur.namaOrangTua !== cur.nama) ? cur.namaOrangTua : (inc.namaOrangTua || cur.namaOrangTua || ''),
-          noWa: cur.noWa || inc.noWa || '',
-          noWaOrangTua: cur.noWaOrangTua || inc.noWaOrangTua || '',
+          ...inc,
+          namaOrangTua: typeof inc.namaOrangTua === 'string' ? inc.namaOrangTua : (cur.namaOrangTua || ''),
+          noWa: typeof inc.noWa === 'string' ? inc.noWa : (cur.noWa || ''),
+          noWaOrangTua: typeof inc.noWaOrangTua === 'string' ? inc.noWaOrangTua : (cur.noWaOrangTua || ''),
         });
       } else {
         map.set(sId, { ...inc });
@@ -696,10 +696,10 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
         gender: current.gender || ex.gender || 'L',
         kelasId: current.kelasId || ex.kelasId,
         status: current.status || ex.status || 'aktif',
-        noWa: current.noWa || ex.noWa || '',
-        namaOrangTua: (current.namaOrangTua && current.namaOrangTua !== current.nama) ? current.namaOrangTua : (ex.namaOrangTua || current.namaOrangTua || ''),
-        noWaOrangTua: current.noWaOrangTua || ex.noWaOrangTua || '',
-        foto: current.foto || ex.foto || '',
+        noWa: typeof current.noWa === 'string' ? current.noWa : (ex.noWa || ''),
+        namaOrangTua: typeof current.namaOrangTua === 'string' ? current.namaOrangTua : (ex.namaOrangTua || ''),
+        noWaOrangTua: typeof current.noWaOrangTua === 'string' ? current.noWaOrangTua : (ex.noWaOrangTua || ''),
+        foto: current.foto !== undefined ? current.foto : (ex.foto || ''),
         username: current.username || ex.username,
         password: current.password || ex.password,
         tempatLahir: current.tempatLahir || ex.tempatLahir,
@@ -2354,9 +2354,9 @@ async function performMySQLLoad(config: any) {
             gender: s.gender || prev.gender || 'L',
             kelasId: s.kelas_id || prev.kelasId || '',
             status: s.status || prev.status || 'aktif',
-            noWa: s.no_wa || prev.noWa || '',
-            namaOrangTua: s.nama_orang_tua || prev.namaOrangTua || '',
-            noWaOrangTua: s.no_wa_orang_tua || prev.noWaOrangTua || '',
+            noWa: s.no_wa !== null && s.no_wa !== undefined ? s.no_wa : (prev.noWa || ''),
+            namaOrangTua: s.nama_orang_tua !== null && s.nama_orang_tua !== undefined ? s.nama_orang_tua : (prev.namaOrangTua || ''),
+            noWaOrangTua: s.no_wa_orang_tua !== null && s.no_wa_orang_tua !== undefined ? s.no_wa_orang_tua : (prev.noWaOrangTua || ''),
             username: s.username || prev.username || s.nisn || '',
             password: s.password || prev.password || s.nisn || '',
             foto: s.foto !== null && s.foto !== undefined ? s.foto : (prev.foto || ''),

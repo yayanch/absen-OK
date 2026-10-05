@@ -1480,14 +1480,16 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         </div>
       )}
 
-      {!searchTerm.trim() && (
-        <PageHeader
-          icon={Users}
-          title="Master Data Siswa"
-          description={`Total ${countTotal} Siswa Terdata${currentKelas ? ` • Kelas ${currentKelas.nama}` : ''}`}
-          badge="Statistik Siswa"
-        />
-      )}
+      <PageHeader
+        icon={Users}
+        title="Master Data Siswa"
+        description={
+          searchTerm.trim()
+            ? `Menampilkan ${filteredSiswa.length} hasil pencarian untuk "${searchTerm}"`
+            : `Total ${countTotal} Siswa Terdata${currentKelas ? ` • Kelas ${currentKelas.nama}` : ''}`
+        }
+        badge={searchTerm.trim() ? `${filteredSiswa.length} Hasil Pencarian` : "Statistik Siswa"}
+      />
 
       {/* Card Rekap Siswa: Sembunyikan pada hasil pencarian agar tampilan bersih dan langsung ke data */}
       {!searchTerm.trim() && (
@@ -2276,8 +2278,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               {pagedSiswa.map((s, idx) => {
                 const k = appData.kelas.find((item) => item.id === s.kelasId);
                 const isStudentBinaan = binaanClassIds === null || (s.kelasId ? binaanClassIds.has(s.kelasId) : false);
-                const isSearchResult = Boolean(searchTerm.trim());
-                const showFullActions = isStudentBinaan && !isSearchResult;
+                const showFullActions = isStudentBinaan || isAdmin || isKesiswaan;
 
                 return (
                   <div
@@ -2444,8 +2445,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                 {pagedSiswa.map((s, idx) => {
                   const k = appData.kelas.find((item) => item.id === s.kelasId);
                   const isStudentBinaan = binaanClassIds === null || (s.kelasId ? binaanClassIds.has(s.kelasId) : false);
-                  const isSearchResult = Boolean(searchTerm.trim());
-                  const showFullActions = isStudentBinaan && !isSearchResult;
+                  const showFullActions = isStudentBinaan || isAdmin || isKesiswaan;
 
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
