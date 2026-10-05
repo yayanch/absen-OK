@@ -87,7 +87,105 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
   onOpenServerQrModal,
 }) => {
   const sortedKelas = sortKelasList(appData.kelas);
+  const isPiketKelas = useMemo(() => {
+    const role = String(currentUser.role || '').toLowerCase();
+    if (role === 'piket_kelas' || role === 'piketkelas') return true;
+    if (Array.isArray(currentUser.roles) && currentUser.roles.some((r) => {
+      const lr = String(r).toLowerCase();
+      return lr === 'piket_kelas' || lr === 'piketkelas';
+    })) return true;
+
+    const userData = currentUser.data as any;
+    if (userData) {
+      const uRole = String(userData.role || '').toLowerCase();
+      if (uRole === 'piket_kelas' || uRole === 'piketkelas') return true;
+      if (Array.isArray(userData.roles) && userData.roles.some((r: string) => {
+        const lr = String(r).toLowerCase();
+        return lr === 'piket_kelas' || lr === 'piketkelas';
+      })) return true;
+      if (Array.isArray(userData.additionalRoles) && userData.additionalRoles.some((r: string) => {
+        const lr = String(r).toLowerCase();
+        return lr === 'piket_kelas' || lr === 'piketkelas';
+      })) return true;
+
+      const uId = String(userData.id || '').toLowerCase();
+      if (uId.startsWith('piket-')) return true;
+
+      const uNama = String(userData.nama || '').toLowerCase();
+      if (uNama.startsWith('piket kelas') || uNama.includes('piket kelas') || uNama.startsWith('piket - kelas')) return true;
+
+      const uTugas = String(userData.tugasTambahan || '').toLowerCase();
+      if (uTugas.includes('piket kelas') || uTugas.includes('piket presensi kelas')) return true;
+
+      const uJabatan = String(userData.jabatan || '').toLowerCase();
+      if (uJabatan.includes('piket kelas')) return true;
+
+      const uUsername = String(userData.username || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      const uNip = String(userData.nip || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      const matchesClassName = sortedKelas.some((k) => {
+        const cName = String(k.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+        return cName && (uUsername === cName || uUsername === `piket${cName}` || uNip === cName);
+      });
+      if (matchesClassName && !['admin', 'superadmin', 'kesiswaan', 'kurikulum', 'hubin', 'staf_jadwal'].includes(role)) {
+        return true;
+      }
+    }
+    return false;
+  }, [currentUser, sortedKelas]);
+
+  const assignedPiketClass = useMemo(() => {
+    if (!isPiketKelas) return null;
+    const userData = currentUser.data as any;
+    const uId = String(userData?.id || '');
+    const uKelasId = String(userData?.kelasId || '');
+    const uKelasNama = String(userData?.kelasNama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const uUsername = String(userData?.username || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const uNama = String(userData?.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const uNip = String(userData?.nip || '').toLowerCase().replace(/[\s\-_]+/g, '');
+
+    // 1. Direct ID match
+    if (uKelasId) {
+      const found = sortedKelas.find((k) => String(k.id) === uKelasId);
+      if (found) return found;
+    }
+    // 2. piket-<id> or piket-<cleanName>
+    if (uId.startsWith('piket-')) {
+      const cleanId = uId.replace('piket-', '');
+      const found = sortedKelas.find(
+        (k) => String(k.id) === cleanId || String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === cleanId
+      );
+      if (found) return found;
+    }
+    // 3. Match by kelasNama or nip
+    if (uKelasNama) {
+      const found = sortedKelas.find((k) => String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === uKelasNama);
+      if (found) return found;
+    }
+    if (uNip) {
+      const found = sortedKelas.find((k) => String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === uNip);
+      if (found) return found;
+    }
+    // 4. Strip "piket" prefix from username (e.g. xakl1)
+    const strippedUsername = uUsername.replace(/^piket(kelas)?/, '');
+    if (strippedUsername) {
+      const found = sortedKelas.find((k) => String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === strippedUsername);
+      if (found) return found;
+    }
+    // 5. Look for any class name substring in uNama or uUsername
+    for (const k of sortedKelas) {
+      const cleanK = String(k.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      if (cleanK && (uNama.includes(cleanK) || uUsername.includes(cleanK))) {
+        return k;
+      }
+    }
+    return sortedKelas[0] || null;
+  }, [isPiketKelas, currentUser, sortedKelas]);
+
   const isPiketOrKesiswaanOrAdmin = useMemo(() => {
+    // Piket Kelas is strictly locked to their single class, NOT global piket!
+    if (isPiketKelas) {
+      return false;
+    }
     const role = String(currentUser.role || '').toLowerCase();
     if (['admin', 'superadmin', 'administrator', 'kesiswaan', 'wks_kesiswaan', 'piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan'].includes(role)) {
       return true;
@@ -98,39 +196,43 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       const jabatan = String(userData.jabatan || '').toLowerCase();
       const userUsername = String(userData.username || '').toLowerCase();
       if (
-        tugas.includes('piket') ||
+        tugas.includes('piket_guru') ||
+        tugas.includes('piket_kesiswaan') ||
+        (tugas.includes('piket') && !tugas.includes('piket kelas') && !tugas.includes('piket_kelas')) ||
         tugas.includes('kesiswaan') ||
-        jabatan.includes('piket') ||
+        jabatan.includes('piket_guru') ||
+        jabatan.includes('piket_kesiswaan') ||
         jabatan.includes('kesiswaan') ||
-        userUsername.includes('piket') ||
+        (userUsername.includes('piket') && !userUsername.includes('piket_kelas') && !userUsername.includes('piket-')) ||
         userUsername.includes('kesiswaan')
       ) {
         return true;
       }
       if (Array.isArray(userData.tugasTambahanList) && userData.tugasTambahanList.some((t: string) => {
         const l = String(t).toLowerCase();
-        return l.includes('piket') || l.includes('kesiswaan');
+        return (l.includes('piket') && !l.includes('piket_kelas') && !l.includes('piket kelas')) || l.includes('kesiswaan');
       })) return true;
       if (Array.isArray(userData.additionalRoles) && userData.additionalRoles.some((r: string) => {
         const l = String(r).toLowerCase();
-        return l === 'kesiswaan' || l.includes('piket');
+        return l === 'kesiswaan' || (l.includes('piket') && l !== 'piket_kelas');
       })) return true;
     }
     return false;
-  }, [currentUser]);
+  }, [currentUser, isPiketKelas]);
 
   const availableClasses = useMemo(() => {
-    const role = String(currentUser.role || '').toLowerCase();
+    if (isPiketKelas) {
+      return assignedPiketClass ? [assignedPiketClass] : (sortedKelas.length > 0 ? [sortedKelas[0]] : []);
+    }
+
     if (isPiketOrKesiswaanOrAdmin) {
       return sortedKelas;
     }
-    if (role === 'piket_kelas') {
-      const userData = currentUser.data as any;
-      const myClasses = sortedKelas.filter((k) => k.id === userData?.kelasId);
-      return myClasses.length > 0 ? myClasses : sortedKelas;
-    }
+
+    const role = String(currentUser.role || '').toLowerCase();
+    const userData = currentUser.data as any;
+
     if (role === 'wali' || role === 'walikelas') {
-      const userData = currentUser.data as any;
       const myClasses = sortedKelas.filter((k) => {
         const waliObj = appData.waliKelas?.find((w) => w.id === k.waliKelasId);
         return (
@@ -141,14 +243,26 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       return myClasses.length > 0 ? myClasses : sortedKelas;
     }
     return sortedKelas;
-  }, [appData.kelas, appData.waliKelas, currentUser, isPiketOrKesiswaanOrAdmin]);
+  }, [isPiketKelas, assignedPiketClass, isPiketOrKesiswaanOrAdmin, currentUser, appData.waliKelas, sortedKelas]);
 
   const [selectedKelasId, setSelectedKelasId] = useState<string>(() => {
+    if (isPiketKelas && assignedPiketClass) {
+      return assignedPiketClass.id;
+    }
     if (initialKelasId && availableClasses.some((k) => k.id === initialKelasId)) {
       return initialKelasId;
     }
     return availableClasses.length > 0 ? availableClasses[0].id : '';
   });
+
+  // Ensure selectedKelasId stays locked to piket_kelas's class
+  useEffect(() => {
+    if (isPiketKelas && assignedPiketClass) {
+      if (selectedKelasId !== assignedPiketClass.id) {
+        setSelectedKelasId(assignedPiketClass.id);
+      }
+    }
+  }, [isPiketKelas, assignedPiketClass, selectedKelasId]);
 
   const [selectedTanggal, setSelectedTanggal] = useState<string>(getTodayString());
   const [activeTab, setActiveTab] = useState<'presensi' | 'siswa' | 'guru'>('presensi');
@@ -1517,19 +1631,31 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       {activeTab !== 'guru' && (
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
-              Pilih Kelas
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                Pilih Kelas
+              </label>
+              {isPiketKelas && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Terkunci (Kelas Anda)
+                </span>
+              )}
+            </div>
             <div className="relative">
               <select
                 value={selectedKelasId}
+                disabled={isPiketKelas}
                 onChange={(e) => handleChangeKelas(e.target.value)}
-                className="w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary transition cursor-pointer"
+                className={`w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none transition ${
+                  isPiketKelas
+                    ? 'opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60 border-teal-300 dark:border-teal-800/60 shadow-inner'
+                    : 'cursor-pointer focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary'
+                }`}
               >
                 {availableClasses.length === 0 && <option value="">Belum Ada Kelas</option>}
                 {availableClasses.map((k) => (
                   <option key={k.id} value={k.id}>
-                    {k.nama}
+                    {k.nama} {isPiketKelas ? '(Terkunci - Kelas Anda)' : ''}
                   </option>
                 ))}
               </select>

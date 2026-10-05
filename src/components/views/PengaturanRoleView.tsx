@@ -42,9 +42,26 @@ import {
   MessageSquare,
   School,
   Palette,
-  Info
+  Info,
+  Radio,
+  Send,
+  MessageCircle,
+  Lock,
+  Unlock,
+  CheckSquare,
+  Square,
+  Grid,
+  ListFilter
 } from 'lucide-react';
-import { AppData, RoleMenuPermission, UserSession, ViewType } from '../../types';
+import {
+  AppData,
+  RoleMenuPermission,
+  UserSession,
+  ViewType,
+  ChatTargetPermission,
+  RoleChatContactRule,
+  ChatContactSettings,
+} from '../../types';
 import { PageHeader } from '../common/UIComponents';
 import {
   ALL_MENU_ITEMS,
@@ -55,8 +72,18 @@ import {
   updateRolePermissionInAppData,
   resetRolePermissionsToDefault,
   MenuCategoryKey,
-  MenuItemInfo
+  MenuItemInfo,
 } from '../../utils/rolePermissionEngine';
+import {
+  CHAT_TARGET_DEFINITIONS,
+  DEFAULT_CHAT_CONTACT_RULES,
+  getAllRoleChatRules,
+  getRoleChatRule,
+  updateRoleChatRuleInAppData,
+  resetChatContactRulesToDefault,
+  getPermittedChatContacts,
+  ChatTargetInfo,
+} from '../../utils/chatContactEngine';
 import { addAuditLog } from '../../utils/helpers';
 
 interface PengaturanRoleViewProps {
@@ -105,7 +132,10 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Sliders: <Sliders className="w-4 h-4" />,
 };
 
-const COLOR_CLASSES: Record<string, { bg: string; text: string; border: string; activeBorder: string; badge: string }> = {
+const COLOR_CLASSES: Record<
+  string,
+  { bg: string; text: string; border: string; activeBorder: string; badge: string }
+> = {
   blue: {
     bg: 'bg-blue-500/10 dark:bg-blue-500/20',
     text: 'text-blue-600 dark:text-blue-400',
@@ -173,15 +203,18 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
   onShowToast,
   onNavigateView,
 }) => {
-  // Get all registered roles
+  // Main Tab: 'menus' | 'chat_contacts' | 'chat_matrix'
+  const [activeMainTab, setActiveMainTab] = useState<'menus' | 'chat_contacts' | 'chat_matrix'>('chat_contacts');
+
+  // Get all registered roles for menus
   const roles = useMemo(() => getAllRolePermissions(appData), [appData]);
 
-  // Selected role
+  // Selected role for editing
   const [selectedRoleId, setSelectedRoleId] = useState<string>(() => {
     return roles.length > 0 ? roles[0].roleId : 'admin';
   });
 
-  // Local draft state of role permissions map (roleId -> allowedMenus)
+  // Local draft state of role menu permissions map (roleId -> allowedMenus)
   const [draftPermissions, setDraftPermissions] = useState<Record<string, ViewType[]>>(() => {
     const map: Record<string, ViewType[]> = {};
     roles.forEach((r) => {
@@ -190,8 +223,29 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     return map;
   });
 
-  // Track modified roles
+  // Local draft state of role chat contact rules map (roleKey -> allowedTargets)
+  const [draftChatRules, setDraftChatRules] = useState<Record<string, ChatTargetPermission[]>>(() => {
+    const map: Record<string, ChatTargetPermission[]> = {};
+    const allChatRules = getAllRoleChatRules(appData);
+    allChatRules.forEach((rule) => {
+      map[rule.roleKey] = [...rule.allowedTargets];
+    });
+    return map;
+  });
+
+  // Local draft state of allowBroadcast map (roleKey -> boolean)
+  const [draftBroadcastRules, setDraftBroadcastRules] = useState<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    const allChatRules = getAllRoleChatRules(appData);
+    allChatRules.forEach((rule) => {
+      map[rule.roleKey] = Boolean(rule.allowBroadcast);
+    });
+    return map;
+  });
+
+  // Track modified status
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasUnsavedChatChanges, setHasUnsavedChatChanges] = useState(false);
 
   // Search filter for menu items
   const [searchMenuQuery, setSearchMenuQuery] = useState('');
@@ -199,10 +253,13 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
   // Search role filter
   const [searchRoleQuery, setSearchRoleQuery] = useState('');
 
-  // Collapsed categories state (all open by default)
+  // Search chat target filter
+  const [searchChatTargetQuery, setSearchChatTargetQuery] = useState('');
+
+  // Collapsed categories state for menus
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
-  // Modals
+  // Modals for Role Management
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDesc, setNewRoleDesc] = useState('');
@@ -215,9 +272,13 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
   const [editRoleDesc, setEditRoleDesc] = useState('');
   const [editRoleColor, setEditRoleColor] = useState('indigo');
 
-  // Copy permission modal / popover
+  // Copy modal
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [sourceCopyRoleId, setSourceCopyRoleId] = useState('guru');
+
+  // Copy Chat Rules modal
+  const [showCopyChatModal, setShowCopyChatModal] = useState(false);
+  const [sourceCopyChatRoleId, setSourceCopyChatRoleId] = useState('guru');
 
   // Currently active role object
   const currentRole = useMemo(() => {
@@ -228,15 +289,27 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     return draftPermissions[selectedRoleId] || currentRole?.allowedMenus || [];
   }, [draftPermissions, selectedRoleId, currentRole]);
 
+  const currentAllowedChatTargets = useMemo(() => {
+    const normKey = normalizeRoleKey(selectedRoleId);
+    if (draftChatRules[normKey]) return draftChatRules[normKey];
+    const fallback = getRoleChatRule(appData, normKey);
+    return fallback.allowedTargets;
+  }, [draftChatRules, selectedRoleId, appData]);
+
+  const isCurrentRoleBroadcastAllowed = useMemo(() => {
+    const normKey = normalizeRoleKey(selectedRoleId);
+    if (draftBroadcastRules[normKey] !== undefined) return draftBroadcastRules[normKey];
+    const fallback = getRoleChatRule(appData, normKey);
+    return Boolean(fallback.allowBroadcast);
+  }, [draftBroadcastRules, selectedRoleId, appData]);
+
   // Calculate active users per role
   const userCountPerRole = useMemo(() => {
     const counts: Record<string, number> = {};
     const effectiveWali = appData.waliKelas || [];
-    
-    // Admin count
+
     counts['admin'] = 1;
 
-    // Kesiswaan, Wali, Guru, Kurikulum, Staf Jadwal, Hubin
     effectiveWali.forEach((w) => {
       const r = normalizeRoleKey(w.role || 'wali');
       counts[r] = (counts[r] || 0) + 1;
@@ -246,8 +319,9 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
       counts['staf_jadwal'] = (counts['staf_jadwal'] || 0) + 1;
     }
 
-    // Murid
     counts['murid'] = (appData.siswa || []).length;
+    counts['siswa'] = (appData.siswa || []).length;
+    counts['piket'] = (appData.petugasPiket || []).length;
 
     return counts;
   }, [appData]);
@@ -264,7 +338,7 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     );
   }, [roles, searchRoleQuery]);
 
-  // Filtered menu items
+  // Filtered menu categories
   const filteredCategories = useMemo(() => {
     const q = searchMenuQuery.trim().toLowerCase();
     if (!q) return MENU_CATEGORIES;
@@ -280,7 +354,62 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     })).filter((cat) => cat.items.length > 0);
   }, [searchMenuQuery]);
 
-  // Toggle single menu for current selected role
+  // Filtered chat target definitions
+  const filteredChatTargets = useMemo(() => {
+    const q = searchChatTargetQuery.trim().toLowerCase();
+    if (!q) return CHAT_TARGET_DEFINITIONS;
+    return CHAT_TARGET_DEFINITIONS.filter(
+      (t) =>
+        t.label.toLowerCase().includes(q) ||
+        t.shortDesc.toLowerCase().includes(q) ||
+        t.id.toLowerCase().includes(q)
+    );
+  }, [searchChatTargetQuery]);
+
+  // Grouped chat targets by category
+  const chatTargetGroups = useMemo(() => {
+    const groups: { key: string; title: string; desc: string; icon: any; items: ChatTargetInfo[] }[] = [
+      {
+        key: 'admin_mgmt',
+        title: '1. Pusat Bantuan & Manajemen Sekolah',
+        desc: 'Kontak pimpinan manajemen sekolah, helpdesk sistem, dan koordinator akademik/kesiswaan',
+        icon: ShieldCheck,
+        items: filteredChatTargets.filter((t) => ['admin', 'kurikulum', 'kesiswaan', 'staf_jadwal'].includes(t.id)),
+      },
+      {
+        key: 'guru_pendidik',
+        title: '2. Wali Kelas & Tenaga Pendidik (Guru)',
+        desc: 'Kontak seluruh wali kelas, wali kelas binaan khusus, atau seluruh dewan guru pengajar',
+        icon: UserCheck,
+        items: filteredChatTargets.filter((t) => ['wali_all', 'wali_binaan', 'guru_all'].includes(t.id)),
+      },
+      {
+        key: 'piket_lapangan',
+        title: '3. Petugas Piket Harian',
+        desc: 'Kontak guru piket harian, piket kesiswaan, atau pengurus piket absensi',
+        icon: ClipboardCheck,
+        items: filteredChatTargets.filter((t) => ['piket'].includes(t.id)),
+      },
+      {
+        key: 'siswa_peserta',
+        title: '4. Siswa / Peserta Didik',
+        desc: 'Izin akses menghubungi siswa binaan di kelasnya atau seluruh siswa sekolah',
+        icon: Users,
+        items: filteredChatTargets.filter((t) => ['siswa_binaan', 'siswa_all'].includes(t.id)),
+      },
+      {
+        key: 'fitur_khusus',
+        title: '5. Fitur Siaran Massal (Broadcast)',
+        desc: 'Hak akses pengiriman pesan siaran pengumuman ke seluruh pengguna sistem sekaligus',
+        icon: Radio,
+        items: filteredChatTargets.filter((t) => ['broadcast'].includes(t.id)),
+      },
+    ];
+
+    return groups.filter((g) => g.items.length > 0);
+  }, [filteredChatTargets]);
+
+  // ===================== MENU ACL HANDLERS =====================
   const handleToggleMenu = (menuId: ViewType) => {
     if (readOnly) {
       onShowToast('Akses terbatas! Hanya Administrator yang dapat mengubah hak akses role.', 'warning');
@@ -302,7 +431,6 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     });
   };
 
-  // Toggle all menus in a category
   const handleToggleCategory = (categoryItems: MenuItemInfo[]) => {
     if (readOnly) return;
 
@@ -314,12 +442,10 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
       let updatedList: ViewType[];
 
       if (allChecked) {
-        // Uncheck all in this category
         updatedList = currentList.filter((id) => !itemIds.includes(id));
       } else {
-        // Check all in this category
-        const set = new Set([...currentList, ...itemIds]);
-        updatedList = Array.from(set);
+        const toAdd = itemIds.filter((id) => !currentList.includes(id));
+        updatedList = [...currentList, ...toAdd];
       }
 
       setHasUnsavedChanges(true);
@@ -330,263 +456,365 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     });
   };
 
-  // Select all menus for current role
-  const handleSelectAll = () => {
+  const handleSelectAllMenus = () => {
     if (readOnly) return;
-    setDraftPermissions((prev) => {
-      setHasUnsavedChanges(true);
-      return {
-        ...prev,
-        [selectedRoleId]: ALL_MENU_ITEMS.map((m) => m.id),
-      };
-    });
-    onShowToast(`Semua menu telah dipilih untuk role "${currentRole.roleName}"`, 'info');
+    const allIds = ALL_MENU_ITEMS.map((i) => i.id);
+    setDraftPermissions((prev) => ({
+      ...prev,
+      [selectedRoleId]: allIds,
+    }));
+    setHasUnsavedChanges(true);
   };
 
-  // Deselect all menus for current role
-  const handleDeselectAll = () => {
+  const handleDeselectAllMenus = () => {
     if (readOnly) return;
-    setDraftPermissions((prev) => {
-      setHasUnsavedChanges(true);
-      return {
-        ...prev,
-        [selectedRoleId]: [],
-      };
-    });
-    onShowToast(`Seluruh menu dinonaktifkan untuk role "${currentRole.roleName}"`, 'warning');
+    setDraftPermissions((prev) => ({
+      ...prev,
+      [selectedRoleId]: ['dashboard'],
+    }));
+    setHasUnsavedChanges(true);
   };
 
-  // Copy permissions from another role
-  const handleApplyCopyPermissions = () => {
-    const sourcePermissions = draftPermissions[sourceCopyRoleId] || roles.find((r) => r.roleId === sourceCopyRoleId)?.allowedMenus || [];
-    setDraftPermissions((prev) => {
-      setHasUnsavedChanges(true);
-      return {
-        ...prev,
-        [selectedRoleId]: [...sourcePermissions],
-      };
+  const handleSaveMenuPermissions = () => {
+    if (readOnly) return;
+
+    let updated = { ...appData };
+    Object.entries(draftPermissions).forEach(([rId, allowed]) => {
+      updated = updateRolePermissionInAppData(updated, rId, allowed);
     });
-    setShowCopyModal(false);
-    onShowToast(`Hak akses berhasil disalin dari "${roles.find((r) => r.roleId === sourceCopyRoleId)?.roleName}"!`, 'success');
+
+    updated = addAuditLog(
+      updated,
+      'Ubah Hak Akses Menu Role',
+      `Memperbarui hak akses menu untuk ${Object.keys(draftPermissions).length} role.`
+    );
+
+    onUpdateAppData(updated);
+    setHasUnsavedChanges(false);
+    onShowToast(`Hak akses menu berhasil disimpan ke database sistem!`, 'success');
   };
 
-  // Save all permissions to AppData
-  const handleSaveAll = () => {
+  // ===================== CHAT CONTACT HANDLERS =====================
+  const handleToggleChatTarget = (targetId: ChatTargetPermission) => {
     if (readOnly) {
-      onShowToast('Akses dibatasi!', 'warning');
+      onShowToast('Akses terbatas! Hanya Administrator yang dapat mengubah izin kontak chat.', 'warning');
       return;
     }
 
-    const updatedPermissions: RoleMenuPermission[] = roles.map((r) => {
+    const normKey = normalizeRoleKey(selectedRoleId);
+    setDraftChatRules((prev) => {
+      const currentList = prev[normKey] || currentAllowedChatTargets;
+      const isAlreadyAllowed = currentList.includes(targetId);
+      const updatedList = isAlreadyAllowed
+        ? currentList.filter((id) => id !== targetId)
+        : [...currentList, targetId];
+
+      setHasUnsavedChatChanges(true);
       return {
-        ...r,
-        allowedMenus: draftPermissions[r.roleId] || r.allowedMenus,
+        ...prev,
+        [normKey]: updatedList,
       };
     });
 
-    const updatedAppData: AppData = {
-      ...appData,
-      rolePermissions: updatedPermissions,
-    };
-
-    const nextData = addAuditLog(
-      updatedAppData,
-      'PENGATURAN_ROLE',
-      `Memperbarui hak akses menu untuk ${roles.length} role pengguna.`
-    );
-    onUpdateAppData(nextData);
-
-    setHasUnsavedChanges(false);
-    onShowToast('Pengaturan hak akses menu untuk seluruh role berhasil disimpan!', 'success');
+    if (targetId === 'broadcast') {
+      setDraftBroadcastRules((prev) => ({
+        ...prev,
+        [normKey]: !prev[normKey],
+      }));
+    }
   };
 
-  // Reset to default
-  const handleResetToDefault = () => {
+  const handleSelectAllChatTargets = () => {
+    if (readOnly) return;
+    const normKey = normalizeRoleKey(selectedRoleId);
+    const allTargets = CHAT_TARGET_DEFINITIONS.map((t) => t.id);
+    setDraftChatRules((prev) => ({
+      ...prev,
+      [normKey]: allTargets,
+    }));
+    setDraftBroadcastRules((prev) => ({
+      ...prev,
+      [normKey]: true,
+    }));
+    setHasUnsavedChatChanges(true);
+  };
+
+  const handleSelectHelpdeskOnly = () => {
+    if (readOnly) return;
+    const normKey = normalizeRoleKey(selectedRoleId);
+    setDraftChatRules((prev) => ({
+      ...prev,
+      [normKey]: ['admin'],
+    }));
+    setDraftBroadcastRules((prev) => ({
+      ...prev,
+      [normKey]: false,
+    }));
+    setHasUnsavedChatChanges(true);
+  };
+
+  const handleResetChatRoleToPreset = () => {
+    if (readOnly) return;
+    const normKey = normalizeRoleKey(selectedRoleId);
+    const defaultRule = DEFAULT_CHAT_CONTACT_RULES[normKey] || {
+      roleKey: normKey,
+      roleLabel: currentRole.roleName,
+      allowedTargets: ['admin'],
+      allowBroadcast: false,
+    };
+
+    setDraftChatRules((prev) => ({
+      ...prev,
+      [normKey]: [...defaultRule.allowedTargets],
+    }));
+    setDraftBroadcastRules((prev) => ({
+      ...prev,
+      [normKey]: Boolean(defaultRule.allowBroadcast),
+    }));
+    setHasUnsavedChatChanges(true);
+    onShowToast(`Pengaturan kontak role "${currentRole.roleName}" dikembalikan ke preset standar.`, 'info');
+  };
+
+  const handleSaveChatRules = () => {
+    if (readOnly) return;
+
+    let updated = { ...appData };
+    const allCustomRules: Record<string, RoleChatContactRule> = {
+      ...(appData.chatContactSettings?.rules || DEFAULT_CHAT_CONTACT_RULES),
+    };
+
+    Object.entries(draftChatRules).forEach(([rKey, targets]) => {
+      const isBroadcast = draftBroadcastRules[rKey] ?? targets.includes('broadcast');
+      const rObj = roles.find((r) => normalizeRoleKey(r.roleId) === rKey);
+      allCustomRules[rKey] = {
+        roleKey: rKey,
+        roleLabel: rObj?.roleName || rKey.toUpperCase(),
+        allowedTargets: targets,
+        allowBroadcast: isBroadcast,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    const newChatSettings: ChatContactSettings = {
+      enabled: appData.chatContactSettings?.enabled ?? true,
+      rules: allCustomRules,
+      updatedAt: new Date().toISOString(),
+      updatedBy: (currentUser.data as any)?.nama || 'Administrator',
+    };
+
+    updated = {
+      ...updated,
+      chatContactSettings: newChatSettings,
+    };
+
+    updated = addAuditLog(
+      updated,
+      'Ubah Pengaturan Kontak Chat Role',
+      `Memperbarui hak akses kontak chat antar-role (siapa saja yang dapat dihubungi) untuk ${Object.keys(draftChatRules).length} role.`
+    );
+
+    onUpdateAppData(updated);
+    setHasUnsavedChatChanges(false);
+    onShowToast(`Pengaturan kontak chat antar-role berhasil disimpan & langsung aktif!`, 'success');
+  };
+
+  const handleResetAllChatRulesToDefault = () => {
     if (readOnly) return;
 
     const doReset = () => {
-      const resetData = resetRolePermissionsToDefault(appData);
-      const withAudit = addAuditLog(
-        resetData,
-        'RESET_ROLE',
-        'Mereset seluruh hak akses menu ke pengaturan standar sistem.'
-      );
-      onUpdateAppData(withAudit);
+      const resetAppData = resetChatContactRulesToDefault(appData);
+      onUpdateAppData(resetAppData);
 
-      const defaultMap: Record<string, ViewType[]> = {};
-      DEFAULT_ROLE_PERMISSIONS.forEach((d) => {
-        defaultMap[d.roleId] = [...d.allowedMenus];
+      const map: Record<string, ChatTargetPermission[]> = {};
+      const broadcastMap: Record<string, boolean> = {};
+      Object.entries(DEFAULT_CHAT_CONTACT_RULES).forEach(([k, v]) => {
+        map[k] = [...v.allowedTargets];
+        broadcastMap[k] = Boolean(v.allowBroadcast);
       });
-      setDraftPermissions(defaultMap);
-      setHasUnsavedChanges(false);
+      setDraftChatRules(map);
+      setDraftBroadcastRules(broadcastMap);
+      setHasUnsavedChatChanges(false);
 
-      onShowToast('Hak akses menu seluruh role telah dikembalikan ke standar awal!', 'success');
+      onShowToast('Seluruh aturan kontak chat role berhasil di-reset ke standar pabrik!', 'success');
     };
 
     if (onConfirmModal) {
       onConfirmModal(
-        'Reset Hak Akses ke Standar Pabrik',
-        'Apakah Anda yakin ingin mereset seluruh hak akses menu untuk semua role ke pengaturan bawaan awal? Penyesuaian khusus yang telah dibuat akan dihapus.',
+        'Reset Pengaturan Kontak Chat',
+        'Apakah Anda yakin ingin mengembalikan seluruh izin kontak chat semua role ke pengaturan rekomendasi sistem bawaan?',
         'warning',
         doReset
       );
-    } else if (window.confirm('Reset seluruh hak akses menu ke pengaturan awal sistem?')) {
+    } else if (window.confirm('Reset seluruh pengaturan kontak chat ke standar?')) {
       doReset();
     }
   };
 
-  // Create new custom role
+  // Copy chat rules
+  const handleApplyCopyChatRules = () => {
+    const sourceKey = normalizeRoleKey(sourceCopyChatRoleId);
+    const targetKey = normalizeRoleKey(selectedRoleId);
+    const sourceTargets = draftChatRules[sourceKey] || getRoleChatRule(appData, sourceKey).allowedTargets;
+    const sourceBroadcast = draftBroadcastRules[sourceKey] ?? getRoleChatRule(appData, sourceKey).allowBroadcast;
+
+    setDraftChatRules((prev) => ({
+      ...prev,
+      [targetKey]: [...sourceTargets],
+    }));
+    setDraftBroadcastRules((prev) => ({
+      ...prev,
+      [targetKey]: Boolean(sourceBroadcast),
+    }));
+    setHasUnsavedChatChanges(true);
+    setShowCopyChatModal(false);
+
+    const sourceObj = roles.find((r) => normalizeRoleKey(r.roleId) === sourceKey);
+    onShowToast(
+      `Berhasil menyalin aturan kontak chat dari "${sourceObj?.roleName || sourceKey}" ke "${currentRole.roleName}"!`,
+      'success'
+    );
+  };
+
+  // Preview simulation of contacts for selected role
+  const simulatedContactsForRole = useMemo(() => {
+    const normKey = normalizeRoleKey(selectedRoleId);
+    const simulatedSession: UserSession = {
+      role: normKey,
+      data: {
+        id: 'sim_user',
+        username: 'sim_user',
+        nama: `Pengguna Simulasi (${currentRole.roleName})`,
+        kelasId: appData.kelas?.[0]?.id || '1',
+      },
+    };
+
+    // Temporarily create a mock appData with current draft settings
+    const tempRules: Record<string, RoleChatContactRule> = {
+      ...(appData.chatContactSettings?.rules || DEFAULT_CHAT_CONTACT_RULES),
+      [normKey]: {
+        roleKey: normKey,
+        roleLabel: currentRole.roleName,
+        allowedTargets: currentAllowedChatTargets,
+        allowBroadcast: isCurrentRoleBroadcastAllowed,
+      },
+    };
+
+    const tempAppData: AppData = {
+      ...appData,
+      chatContactSettings: {
+        enabled: true,
+        rules: tempRules,
+      },
+    };
+
+    const contacts = getPermittedChatContacts(tempAppData, simulatedSession);
+    return Object.values(contacts);
+  }, [selectedRoleId, currentRole, currentAllowedChatTargets, isCurrentRoleBroadcastAllowed, appData]);
+
+  // Handle Create Role
   const handleCreateRole = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoleName.trim()) {
-      onShowToast('Nama role tidak boleh kosong!', 'error');
-      return;
-    }
+    if (!newRoleName.trim()) return;
 
-    const cleanId = newRoleName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-    if (roles.some((r) => r.roleId === cleanId || r.roleName.toLowerCase() === newRoleName.trim().toLowerCase())) {
-      onShowToast('Role dengan nama atau ID tersebut sudah ada!', 'warning');
-      return;
-    }
+    const baseId = newRoleName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const roleId = `custom_${baseId}_${Date.now().toString().slice(-4)}`;
 
-    const sourcePermissions = draftPermissions[copyPermissionFrom] || roles.find((r) => r.roleId === copyPermissionFrom)?.allowedMenus || ['dashboard'];
+    const templateAllowed = draftPermissions[copyPermissionFrom] || DEFAULT_ROLE_PERMISSIONS.find((r) => r.roleId === copyPermissionFrom)?.allowedMenus || ['dashboard'];
+    const templateChatTargets = draftChatRules[copyPermissionFrom] || getRoleChatRule(appData, copyPermissionFrom).allowedTargets;
 
-    const newRoleObj = {
-      id: cleanId,
-      name: cleanId,
+    const newCustomRole = {
+      id: roleId,
+      name: roleId,
       label: newRoleName.trim(),
-      description: newRoleDesc.trim() || `Peran khusus ${newRoleName.trim()}`,
       color: newRoleColor,
-      allowedMenus: [...sourcePermissions],
+      description: newRoleDesc.trim() || `Role kustom ${newRoleName.trim()}`,
+      allowedMenus: [...templateAllowed],
       isSystem: false,
     };
 
-    const newPermissionObj: RoleMenuPermission = {
-      roleId: cleanId,
+    const newPermission: RoleMenuPermission = {
+      roleId: roleId,
       roleName: newRoleName.trim(),
-      description: newRoleDesc.trim() || `Peran khusus ${newRoleName.trim()}`,
+      allowedMenus: [...templateAllowed],
+      description: newRoleDesc.trim() || `Role kustom ${newRoleName.trim()}`,
       badgeColor: newRoleColor,
       isSystem: false,
-      allowedMenus: [...sourcePermissions],
     };
 
-    const updatedCustomRoles = [...(appData.customRoles || []), newRoleObj];
-    const updatedPermissions = [...(appData.rolePermissions || roles), newPermissionObj];
+    const updatedPermissions = [...(appData.rolePermissions || roles), newPermission];
+    const updatedCustomRoles = [...(appData.customRoles || []), newCustomRole];
 
-    onUpdateAppData({
+    const updatedChatRules = {
+      ...(appData.chatContactSettings?.rules || DEFAULT_CHAT_CONTACT_RULES),
+      [roleId]: {
+        roleKey: roleId,
+        roleLabel: newRoleName.trim(),
+        allowedTargets: [...templateChatTargets],
+        allowBroadcast: false,
+        customDescription: newRoleDesc.trim(),
+      },
+    };
+
+    let updatedAppData: AppData = {
       ...appData,
       customRoles: updatedCustomRoles,
       rolePermissions: updatedPermissions,
-    });
+      chatContactSettings: {
+        enabled: appData.chatContactSettings?.enabled ?? true,
+        rules: updatedChatRules,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+
+    updatedAppData = addAuditLog(
+      updatedAppData,
+      'Buat Role Kustom Baru',
+      `Menambahkan role "${newRoleName.trim()}" (ID: ${roleId}).`
+    );
+
+    onUpdateAppData(updatedAppData);
 
     setDraftPermissions((prev) => ({
       ...prev,
-      [cleanId]: [...sourcePermissions],
+      [roleId]: [...templateAllowed],
     }));
 
-    setSelectedRoleId(cleanId);
+    setDraftChatRules((prev) => ({
+      ...prev,
+      [roleId]: [...templateChatTargets],
+    }));
+
+    setSelectedRoleId(roleId);
     setShowAddRoleModal(false);
     setNewRoleName('');
     setNewRoleDesc('');
-    setNewRoleColor('indigo');
-
-    onShowToast(`Role kustom "${newRoleName.trim()}" berhasil dibuat dengan ${sourcePermissions.length} menu aktif!`, 'success');
+    onShowToast(`Role baru "${newRoleName.trim()}" berhasil dibuat!`, 'success');
   };
 
-  // Edit custom role
-  const handleSaveEditRole = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editRoleName.trim()) return;
+  const handleResetToDefault = () => {
+    if (readOnly) return;
+    const doReset = () => {
+      const reset = resetRolePermissionsToDefault(appData);
+      onUpdateAppData(reset);
 
-    const updatedPermissions = roles.map((r) => {
-      if (r.roleId === editRoleId) {
-        return {
-          ...r,
-          roleName: editRoleName.trim(),
-          description: editRoleDesc.trim(),
-          badgeColor: editRoleColor,
-        };
-      }
-      return r;
-    });
-
-    const updatedCustomRoles = (appData.customRoles || []).map((cr) => {
-      if (cr.id === editRoleId || cr.name === editRoleId) {
-        return {
-          ...cr,
-          label: editRoleName.trim(),
-          color: editRoleColor,
-          description: editRoleDesc.trim(),
-        };
-      }
-      return cr;
-    });
-
-    onUpdateAppData({
-      ...appData,
-      rolePermissions: updatedPermissions,
-      customRoles: updatedCustomRoles,
-    });
-
-    setShowEditRoleModal(false);
-    onShowToast(`Informasi role "${editRoleName.trim()}" berhasil diperbarui!`, 'success');
-  };
-
-  // Delete custom role
-  const handleDeleteRole = (roleToDelete: RoleMenuPermission) => {
-    if (roleToDelete.isSystem) {
-      onShowToast('Role sistem bawaan tidak dapat dihapus!', 'error');
-      return;
-    }
-
-    const assignedCount = userCountPerRole[roleToDelete.roleId] || 0;
-
-    const doDelete = () => {
-      const updatedCustomRoles = (appData.customRoles || []).filter(
-        (r) => r.id !== roleToDelete.roleId && r.name !== roleToDelete.roleId
-      );
-      const updatedPermissions = (appData.rolePermissions || roles).filter(
-        (r) => r.roleId !== roleToDelete.roleId
-      );
-
-      // Reassign any users with this role to 'guru'
-      const updatedWaliKelas = (appData.waliKelas || []).map((w) => {
-        if (w.role === roleToDelete.roleId) {
-          return { ...w, role: 'guru' };
-        }
-        return w;
+      const map: Record<string, ViewType[]> = {};
+      DEFAULT_ROLE_PERMISSIONS.forEach((p) => {
+        map[p.roleId] = [...p.allowedMenus];
       });
-
-      onUpdateAppData({
-        ...appData,
-        customRoles: updatedCustomRoles,
-        rolePermissions: updatedPermissions,
-        waliKelas: updatedWaliKelas,
-      });
-
-      setDraftPermissions((prev) => {
-        const next = { ...prev };
-        delete next[roleToDelete.roleId];
-        return next;
-      });
-
-      setSelectedRoleId('admin');
-      onShowToast(`Role "${roleToDelete.roleName}" berhasil dihapus.`, 'info');
+      setDraftPermissions(map);
+      setHasUnsavedChanges(false);
+      onShowToast('Semua hak akses menu role berhasil di-reset ke standar!', 'success');
     };
 
     if (onConfirmModal) {
       onConfirmModal(
-        `Hapus Role "${roleToDelete.roleName}"`,
-        `Apakah Anda yakin ingin menghapus role "${roleToDelete.roleName}"? ${
-          assignedCount > 0
-            ? `${assignedCount} pengguna dengan role ini akan dialihkan menjadi Guru.`
-            : 'Tidak ada pengguna yang terikat pada role ini.'
-        }`,
-        'danger',
-        doDelete
+        'Reset Hak Akses Role',
+        'Apakah Anda yakin ingin mengembalikan seluruh hak akses menu semua role ke pengaturan bawaan pabrik?',
+        'warning',
+        doReset
       );
-    } else if (window.confirm(`Hapus role "${roleToDelete.roleName}"?`)) {
-      doDelete();
+    } else if (window.confirm('Reset seluruh pengaturan menu role ke standar?')) {
+      doReset();
     }
   };
 
@@ -597,9 +825,9 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
       {/* Page Header */}
       <PageHeader
         icon={ShieldCheck}
-        title="Pengaturan Role & Hak Akses Menu"
-        description="Atur daftar menu aplikasi apa saja yang dapat dilihat, diakses, dan dibuka oleh masing-masing peran/jabatan pengguna."
-        badge="Access Control List (ACL)"
+        title="Pengaturan Role, Hak Akses Menu & Kontak Chat"
+        description="Kelola hak akses menu navigasi dan konfigurasi direktori kontak chat untuk masing-masing peran/jabatan (siapa saja yang dapat dihubungi)."
+        badge="Role Access & Chat Directory ACL"
       >
         <div className="flex flex-wrap items-center gap-2">
           {onNavigateView && (
@@ -614,15 +842,29 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleResetToDefault}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs transition flex items-center gap-1.5"
-            title="Kembalikan semua hak akses menu ke pengaturan standar"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Reset Standar</span>
-          </button>
+          {activeMainTab === 'menus' && (
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs transition flex items-center gap-1.5"
+              title="Kembalikan semua hak akses menu ke pengaturan standar"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Reset Standar Menu</span>
+            </button>
+          )}
+
+          {activeMainTab !== 'menus' && (
+            <button
+              type="button"
+              onClick={handleResetAllChatRulesToDefault}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs transition flex items-center gap-1.5"
+              title="Kembalikan semua aturan kontak chat ke preset rekomendasi"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Reset Standar Kontak</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -634,6 +876,54 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
           </button>
         </div>
       </PageHeader>
+
+      {/* Main Mode Navigation Tabs */}
+      <div className="bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('chat_contacts')}
+          className={`flex-1 min-w-[200px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeMainTab === 'chat_contacts'
+              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Pengaturan Kontak Chat Role (Siapa yang Dihubungi)</span>
+          {hasUnsavedChatChanges && (
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('chat_matrix')}
+          className={`flex-1 min-w-[180px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeMainTab === 'chat_matrix'
+              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Grid className="w-4 h-4" />
+          <span>Tabel Matriks Kontak Antar-Role (Overview)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('menus')}
+          className={`flex-1 min-w-[180px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeMainTab === 'menus'
+              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Hak Akses Menu & Navigasi</span>
+          {hasUnsavedChanges && (
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          )}
+        </button>
+      </div>
 
       {/* Top Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -657,37 +947,37 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Total Menu
+              Target Kontak Chat
             </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <MessageCircle className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black text-slate-900 dark:text-white">
-            {ALL_MENU_ITEMS.length}
+            {CHAT_TARGET_DEFINITIONS.length}
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {MENU_CATEGORIES.length} Kategori Menu Sistem
+            Grup target & direktori percakapan
           </p>
         </div>
 
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Menu Aktif ({currentRole.roleName})
+              Kontak Aktif ({currentRole.roleName})
             </span>
             <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <Eye className="w-4 h-4" />
+              <UserCheck className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-            {currentAllowedMenus.length}{' '}
+            {currentAllowedChatTargets.length}{' '}
             <span className="text-xs font-bold text-slate-400 dark:text-slate-500">
-              / {ALL_MENU_ITEMS.length}
+              / {CHAT_TARGET_DEFINITIONS.length}
             </span>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {Math.round((currentAllowedMenus.length / ALL_MENU_ITEMS.length) * 100)}% menu dapat diakses
+            {simulatedContactsForRole.length} kontak terlihat di aplikasi
           </p>
         </div>
 
@@ -696,7 +986,7 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Pengguna Role Ini
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
               <Users className="w-4 h-4" />
             </div>
           </div>
@@ -709,673 +999,817 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
         </div>
       </div>
 
-      {/* Main Container: 2 Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Role Selector / List */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Daftar Role</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Pilih role untuk mengatur izin menu</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddRoleModal(true)}
-                className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 transition"
-                title="Tambah Role Baru"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Search Role */}
-            <div className="relative mb-3">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Cari role pengguna..."
-                value={searchRoleQuery}
-                onChange={(e) => setSearchRoleQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
-              />
-            </div>
-
-            {/* Role List Cards */}
-            <div className="space-y-2 max-h-[620px] overflow-y-auto no-scrollbar pr-0.5">
-              {filteredRoles.map((role) => {
-                const isSelected = role.roleId === selectedRoleId;
-                const allowedCount = (draftPermissions[role.roleId] || role.allowedMenus).length;
-                const userCount = userCountPerRole[role.roleId] || 0;
-                const colorMeta = COLOR_CLASSES[role.badgeColor || 'indigo'] || COLOR_CLASSES.indigo;
-
-                return (
-                  <div
-                    key={role.roleId}
-                    onClick={() => setSelectedRoleId(role.roleId)}
-                    className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative group ${
-                      isSelected
-                        ? `bg-blue-50/70 dark:bg-blue-950/40 border-blue-500 shadow-sm ring-1 ring-blue-500/30`
-                        : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                              role.roleId === 'admin'
-                                ? 'bg-blue-500'
-                                : role.roleId === 'kesiswaan'
-                                ? 'bg-purple-500'
-                                : role.roleId === 'kurikulum'
-                                ? 'bg-amber-500'
-                                : role.roleId === 'wali'
-                                ? 'bg-emerald-500'
-                                : role.roleId === 'guru'
-                                ? 'bg-indigo-500'
-                                : role.roleId === 'staf_jadwal'
-                                ? 'bg-cyan-500'
-                                : role.roleId === 'murid'
-                                ? 'bg-rose-500'
-                                : 'bg-teal-500'
-                            }`}
-                          />
-                          <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                            {role.roleName}
-                          </h4>
-                          {role.isSystem ? (
-                            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-200/80 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-md">
-                              Sistem
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 rounded-md">
-                              Kustom
-                            </span>
-                          )}
-                        </div>
-
-                        {role.description && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-1 pl-4.5">
-                            {role.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <div className="text-[11px] font-extrabold text-blue-600 dark:text-blue-400">
-                          {allowedCount} menu
-                        </div>
-                        <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                          {userCount} user
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions for custom role */}
-                    {!role.isSystem && (
-                      <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditRoleId(role.roleId);
-                            setEditRoleName(role.roleName);
-                            setEditRoleDesc(role.description || '');
-                            setEditRoleColor(role.badgeColor || 'indigo');
-                            setShowEditRoleModal(true);
-                          }}
-                          className="px-2 py-1 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition flex items-center gap-1"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          <span>Edit</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteRole(role);
-                          }}
-                          className="px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition flex items-center gap-1"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>Hapus</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {filteredRoles.length === 0 && (
-                <div className="text-center py-8 text-xs text-slate-400">
-                  Tidak ditemukan role dengan kata kunci tersebut.
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setShowAddRoleModal(true)}
-                className="w-full py-2.5 rounded-xl border border-dashed border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 text-xs font-bold transition flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tambah Peran Kustom Baru</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Menu Permission Matrix for Selected Role */}
-        <div className="lg:col-span-8 space-y-4">
-          {/* Role Header Banner */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center ${activeColorTheme.bg} ${activeColorTheme.text} font-black text-lg shadow-xs`}
-                >
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
+      {/* ===================== TAB 1: PENGATURAN KONTAK CHAT ROLE ===================== */}
+      {activeMainTab === 'chat_contacts' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Role Selector */}
+          <div className="lg:col-span-4 space-y-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-black text-slate-900 dark:text-white">
-                      {currentRole.roleName}
-                    </h2>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeColorTheme.badge}`}>
-                      ID: {currentRole.roleId}
-                    </span>
-                    {currentRole.isSystem && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                        Default Sistem
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {currentRole.description || 'Pengaturan hak akses tampilan menu dan halaman sistem'}
-                  </p>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Pilih Role Pengguna</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Atur siapa saja yang dapat dihubungi oleh role ini</p>
                 </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleSelectAll}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
+                  onClick={() => setShowAddRoleModal(true)}
+                  className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 transition"
+                  title="Tambah Role Baru"
                 >
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Pilih Semua</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDeselectAll}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
-                >
-                  <X className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Hapus Semua</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCopyModal(true)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition flex items-center gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Salin dari Role...</span>
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
-            </div>
 
-            {/* Menu Search Bar */}
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {/* Search Role */}
+              <div className="relative mb-3">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Cari nama menu atau fitur (misal: 'presensi', 'rekap', 'jadwal')..."
-                  value={searchMenuQuery}
-                  onChange={(e) => setSearchMenuQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                  placeholder="Cari role..."
+                  value={searchRoleQuery}
+                  onChange={(e) => setSearchRoleQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
                 />
               </div>
 
-              {searchMenuQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchMenuQuery('')}
-                  className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                >
-                  Reset Pencarian
-                </button>
-              )}
+              {/* Role List Cards */}
+              <div className="space-y-2 max-h-[620px] overflow-y-auto no-scrollbar pr-0.5">
+                {filteredRoles.map((role) => {
+                  const isSelected = role.roleId === selectedRoleId;
+                  const normKey = normalizeRoleKey(role.roleId);
+                  const allowedTargets = draftChatRules[normKey] || getRoleChatRule(appData, normKey).allowedTargets;
+                  const isBroadcast = draftBroadcastRules[normKey] ?? getRoleChatRule(appData, normKey).allowBroadcast;
+                  const userCount = userCountPerRole[role.roleId] || 0;
+                  const colorMeta = COLOR_CLASSES[role.badgeColor || 'indigo'] || COLOR_CLASSES.indigo;
+
+                  return (
+                    <div
+                      key={role.roleId}
+                      onClick={() => setSelectedRoleId(role.roleId)}
+                      className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative group ${
+                        isSelected
+                          ? `bg-blue-50/70 dark:bg-blue-950/40 border-blue-500 shadow-sm ring-1 ring-blue-500/30`
+                          : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              isSelected ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                          />
+                          <span className="font-bold text-xs text-slate-900 dark:text-white">
+                            {role.roleName}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${colorMeta.badge}`}
+                        >
+                          {allowedTargets.length} Kontak
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mb-2">
+                        {role.description || `Pengaturan kontak untuk role ${role.roleName}`}
+                      </p>
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 pt-1.5 border-t border-slate-200/60 dark:border-slate-800">
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {userCount} Pengguna
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {isBroadcast && (
+                            <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-0.5">
+                              <Radio className="w-3 h-3" /> Broadcast
+                            </span>
+                          )}
+                          <span className="font-mono text-[9px] uppercase tracking-wider">
+                            {role.roleId}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Information Card */}
+            <div className="p-4 rounded-3xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-800 dark:text-blue-300 space-y-2">
+              <div className="flex items-center gap-2 font-bold">
+                <Info className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Prinsip Keamanan Kontak Chat</span>
+              </div>
+              <p className="text-[11px] text-blue-700/90 dark:text-blue-300/80 leading-relaxed">
+                Pengaturan kontak membatasi penerima yang dapat dicari dan dihubungi oleh pengguna. Kontak di luar daftar izin tidak akan tampil pada laci percakapan (*chat drawer*).
+              </p>
             </div>
           </div>
 
-          {/* Categorized Menu Cards */}
-          <div className="space-y-4">
-            {filteredCategories.map((category) => {
-              const isCollapsed = Boolean(collapsedCategories[category.key]);
-              const categoryItems = category.items;
-              const enabledCount = categoryItems.filter((i) => currentAllowedMenus.includes(i.id)).length;
-              const isAllChecked = categoryItems.length > 0 && enabledCount === categoryItems.length;
-
-              return (
-                <div
-                  key={category.key}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xs"
-                >
-                  {/* Category Header */}
-                  <div className="p-4 sm:p-5 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCollapsedCategories((prev) => ({
-                          ...prev,
-                          [category.key]: !prev[category.key],
-                        }))
-                      }
-                      className="flex items-center gap-3 text-left flex-1 select-none"
-                    >
-                      <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                        {ICON_MAP[category.iconName] || <Layers className="w-4 h-4" />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                            {category.title}
-                          </h3>
-                          <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                            {enabledCount}/{categoryItems.length} Aktif
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {category.description}
-                        </p>
-                      </div>
-                    </button>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleCategory(categoryItems)}
-                        className={`px-3 py-1.5 text-[11px] font-bold rounded-xl transition ${
-                          isAllChecked
-                            ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300'
-                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300'
-                        }`}
-                      >
-                        {isAllChecked ? 'Matikan Semua' : 'Aktifkan Semua'}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCollapsedCategories((prev) => ({
-                            ...prev,
-                            [category.key]: !prev[category.key],
-                          }))
-                        }
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
-                      >
-                        <ChevronDown
-                          className={`w-4 h-4 transition-transform duration-200 ${
-                            isCollapsed ? '-rotate-90' : 'rotate-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
+          {/* Right Column: Chat Target Permissions Matrix & Live Preview */}
+          <div className="lg:col-span-8 space-y-4">
+            {/* Header for Selected Role */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-2xl ${activeColorTheme.bg} ${activeColorTheme.text} flex items-center justify-center font-black text-lg shadow-inner`}
+                  >
+                    <MessageSquare className="w-6 h-6" />
                   </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-black text-slate-900 dark:text-white">
+                        {currentRole.roleName}
+                      </h2>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${activeColorTheme.badge}`}>
+                        Role Key: {selectedRoleId}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Pilih grup kontak yang dapat dihubungi oleh pengguna dengan role <strong>{currentRole.roleName}</strong>
+                    </p>
+                  </div>
+                </div>
 
-                  {/* Menu Items Grid */}
-                  {!isCollapsed && (
-                    <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {categoryItems.map((item) => {
-                        const isChecked = currentAllowedMenus.includes(item.id);
+                {/* Quick Presets & Copy */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCopyChatModal(true)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5"
+                    title="Salin aturan dari role lain"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Salin Role</span>
+                  </button>
 
+                  <button
+                    type="button"
+                    onClick={handleResetChatRoleToPreset}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5"
+                    title="Kembalikan ke preset rekomendasi role ini"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Preset Standar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Actions Filter / Bulk Selector */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllChatTargets}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 hover:bg-blue-100 transition"
+                  >
+                    Centang Semua Kontak
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectHelpdeskOnly}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition"
+                  >
+                    Hanya Helpdesk
+                  </button>
+                </div>
+
+                {/* Search Target */}
+                <div className="relative min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter grup target..."
+                    value={searchChatTargetQuery}
+                    onChange={(e) => setSearchChatTargetQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* Target Groups & Checkboxes */}
+              <div className="space-y-4 pt-2">
+                {chatTargetGroups.map((group) => {
+                  const GroupIcon = group.icon;
+                  const allInGroupChecked = group.items.every((item) =>
+                    currentAllowedChatTargets.includes(item.id)
+                  );
+                  const someInGroupChecked = group.items.some((item) =>
+                    currentAllowedChatTargets.includes(item.id)
+                  );
+
+                  return (
+                    <div
+                      key={group.key}
+                      className="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-300">
+                            <GroupIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                              {group.title}
+                            </h4>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {group.desc}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                          {group.items.filter((i) => currentAllowedChatTargets.includes(i.id)).length} / {group.items.length} Aktif
+                        </span>
+                      </div>
+
+                      {/* Items Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                        {group.items.map((target) => {
+                          const isChecked = currentAllowedChatTargets.includes(target.id);
+                          const isSpecialBroadcast = target.id === 'broadcast';
+
+                          return (
+                            <div
+                              key={target.id}
+                              onClick={() => handleToggleChatTarget(target.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+                                isChecked
+                                  ? isSpecialBroadcast
+                                    ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-700 shadow-xs'
+                                    : 'bg-white dark:bg-slate-800 border-blue-500 dark:border-blue-500 shadow-xs'
+                                  : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800/80 opacity-70 hover:opacity-100 hover:border-slate-300 dark:hover:border-slate-700'
+                              }`}
+                            >
+                              <div className="pt-0.5">
+                                <div
+                                  className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                                    isChecked
+                                      ? 'bg-blue-600 border-blue-600 text-white'
+                                      : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+                                  }`}
+                                >
+                                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                </div>
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span
+                                    className={`text-xs font-bold leading-tight ${
+                                      isChecked
+                                        ? 'text-slate-900 dark:text-white'
+                                        : 'text-slate-600 dark:text-slate-400'
+                                    }`}
+                                  >
+                                    {target.label}
+                                  </span>
+                                  {isSpecialBroadcast && (
+                                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                      Siaran
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal">
+                                  {target.shortDesc}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Simulation Live Preview of Contact Drawer */}
+              <div className="mt-6 p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-200">
+                      Simulasi Tampilan Kontak Pengguna ({currentRole.roleName})
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {simulatedContactsForRole.length} Kontak Terlihat
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-slate-400">
+                  Berikut adalah daftar thread kontak percakapan yang akan muncul di laci pesan saat pengguna login dengan role ini:
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1 max-h-52 overflow-y-auto no-scrollbar">
+                  {simulatedContactsForRole.length === 0 ? (
+                    <div className="col-span-full p-4 rounded-xl bg-slate-800/60 text-center text-xs text-slate-400">
+                      Tidak ada kontak yang diizinkan untuk role ini.
+                    </div>
+                  ) : (
+                    simulatedContactsForRole.map((contact) => (
+                      <div
+                        key={contact.username}
+                        className="p-2.5 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2.5"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-blue-600/30 border border-blue-500/40 text-blue-300 font-black text-xs flex items-center justify-center shrink-0">
+                          {contact.username === 'all' ? (
+                            <Radio className="w-4 h-4" />
+                          ) : (
+                            contact.nama.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-white truncate">
+                            {contact.nama}
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                            <span className="truncate">{contact.badge || contact.role}</span>
+                            <span className="font-mono text-[9px] text-slate-500">
+                              @{contact.username}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Save Bar for Chat Rules */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  {hasUnsavedChatChanges ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" /> Ada perubahan kontak yang belum disimpan
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Pengaturan kontak role ini tersimpan & sinkron
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveChatRules}
+                    disabled={readOnly}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Pengaturan Kontak Chat</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== TAB 2: OVERVIEW TABEL MATRIKS KONTAK ===================== */}
+      {activeMainTab === 'chat_matrix' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Grid className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <span>Tabel Matriks Hak Akses Kontak Antar-Role (Overview)</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Peta relasi komunikasi: Baris mewakili <strong>Role Pengirim</strong>, kolom mewakili <strong>Target Kontak</strong> yang dapat dihubungi.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSaveChatRules}
+                disabled={readOnly}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Perubahan Matriks</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Matrix Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                  <th className="p-3.5 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 min-w-[180px]">
+                    Role Pengirim
+                  </th>
+                  {CHAT_TARGET_DEFINITIONS.map((target) => (
+                    <th
+                      key={target.id}
+                      className="p-3 text-center min-w-[110px] text-[11px] font-bold border-l border-slate-200 dark:border-slate-700"
+                      title={target.shortDesc}
+                    >
+                      <div className="truncate">{target.label}</div>
+                      <div className="text-[9px] font-mono font-normal text-slate-400 mt-0.5">
+                        {target.id}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {roles.map((role) => {
+                  const normKey = normalizeRoleKey(role.roleId);
+                  const allowed = draftChatRules[normKey] || getRoleChatRule(appData, normKey).allowedTargets;
+                  const colorMeta = COLOR_CLASSES[role.badgeColor || 'indigo'] || COLOR_CLASSES.indigo;
+
+                  return (
+                    <tr
+                      key={role.roleId}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
+                    >
+                      <td className="p-3.5 sticky left-0 z-10 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+                        <div className="font-bold text-slate-900 dark:text-white">
+                          {role.roleName}
+                        </div>
+                        <span className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded font-semibold ${colorMeta.badge}`}>
+                          {role.roleId}
+                        </span>
+                      </td>
+
+                      {CHAT_TARGET_DEFINITIONS.map((target) => {
+                        const isChecked = allowed.includes(target.id);
                         return (
-                          <div
-                            key={item.id}
-                            onClick={() => handleToggleMenu(item.id)}
-                            className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
-                              isChecked
-                                ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80 shadow-xs'
-                                : 'bg-slate-50/50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800 opacity-60 hover:opacity-90'
-                            }`}
+                          <td
+                            key={target.id}
+                            onClick={() => {
+                              setSelectedRoleId(role.roleId);
+                              handleToggleChatTarget(target.id);
+                            }}
+                            className="p-2 text-center border-l border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/30"
                           >
-                            {/* Toggle Checkbox Switch */}
-                            <div className="pt-0.5 shrink-0">
+                            <div className="flex items-center justify-center">
                               <div
                                 className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
                                   isChecked
-                                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
-                                    : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600'
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                                    : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 opacity-40 hover:opacity-100'
                                 }`}
                               >
-                                {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                {isChecked ? (
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                ) : (
+                                  <X className="w-3 h-3 text-slate-400 opacity-40" />
+                                )}
                               </div>
                             </div>
-
-                            {/* Menu Icon */}
-                            <div
-                              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                                isChecked
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300'
-                                  : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                              }`}
-                            >
-                              {ICON_MAP[item.iconName] || <FileText className="w-4 h-4" />}
-                            </div>
-
-                            {/* Menu Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
-                                <h4
-                                  className={`text-xs font-bold truncate ${
-                                    isChecked
-                                      ? 'text-slate-900 dark:text-white'
-                                      : 'text-slate-500 dark:text-slate-400'
-                                  }`}
-                                >
-                                  {item.label}
-                                </h4>
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase shrink-0 ${
-                                    isChecked
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                      : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                                  }`}
-                                >
-                                  {isChecked ? 'Terlihat' : 'Disembunyikan'}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
-                                {item.shortDesc}
-                              </p>
-                              <div className="text-[9px] font-mono text-slate-400 dark:text-slate-500 mt-1">
-                                view: #{item.id}
-                              </div>
-                            </div>
-                          </div>
+                          </td>
                         );
                       })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {filteredCategories.length === 0 && (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-10 text-center space-y-3">
-                <Search className="w-8 h-8 text-slate-400 mx-auto" />
-                <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  Tidak ditemukan menu dengan kata kunci "{searchMenuQuery}"
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Coba kata kunci lain atau bersihkan kotak pencarian.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setSearchMenuQuery('')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold"
-                >
-                  Bersihkan Filter
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Floating Save Bar when Changes Exist */}
-      {hasUnsavedChanges && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-2xl bg-slate-900/95 dark:bg-slate-800/95 text-white p-3.5 sm:p-4 rounded-3xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center justify-between gap-4 animate-bounce-in">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <div className="font-bold text-xs text-white">Ada Perubahan Izin Menu Belum Disimpan</div>
-              <div className="text-[11px] text-slate-400">
-                Klik simpan agar perubahan hak akses menu langsung diterapkan pada navigasi akun pengguna.
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                // Cancel draft changes
-                const resetDraft: Record<string, ViewType[]> = {};
-                roles.forEach((r) => {
-                  resetDraft[r.roleId] = [...r.allowedMenus];
-                });
-                setDraftPermissions(resetDraft);
-                setHasUnsavedChanges(false);
-                onShowToast('Perubahan dibatalkan.', 'info');
-              }}
-              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-700 transition"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveAll}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5"
-            >
-              <Save className="w-4 h-4" />
-              <span>Simpan Perubahan</span>
-            </button>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Modal: Tambah Role Baru */}
-      {showAddRoleModal && (
+      {/* ===================== TAB 3: HAK AKSES MENU (ACL LAMA) ===================== */}
+      {activeMainTab === 'menus' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Role Selector / List */}
+          <div className="lg:col-span-4 space-y-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Daftar Role</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Pilih role untuk mengatur izin menu</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddRoleModal(true)}
+                  className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 transition"
+                  title="Tambah Role Baru"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Search Role */}
+              <div className="relative mb-3">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari role pengguna..."
+                  value={searchRoleQuery}
+                  onChange={(e) => setSearchRoleQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Role List Cards */}
+              <div className="space-y-2 max-h-[620px] overflow-y-auto no-scrollbar pr-0.5">
+                {filteredRoles.map((role) => {
+                  const isSelected = role.roleId === selectedRoleId;
+                  const allowedCount = (draftPermissions[role.roleId] || role.allowedMenus).length;
+                  const userCount = userCountPerRole[role.roleId] || 0;
+                  const colorMeta = COLOR_CLASSES[role.badgeColor || 'indigo'] || COLOR_CLASSES.indigo;
+
+                  return (
+                    <div
+                      key={role.roleId}
+                      onClick={() => setSelectedRoleId(role.roleId)}
+                      className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative group ${
+                        isSelected
+                          ? `bg-blue-50/70 dark:bg-blue-950/40 border-blue-500 shadow-sm ring-1 ring-blue-500/30`
+                          : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              isSelected ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                          />
+                          <span className="font-bold text-xs text-slate-900 dark:text-white">
+                            {role.roleName}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${colorMeta.badge}`}
+                        >
+                          {allowedCount} Menu
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mb-2">
+                        {role.description || `Pengaturan izin menu untuk role ${role.roleName}`}
+                      </p>
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 pt-1.5 border-t border-slate-200/60 dark:border-slate-800">
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {userCount} Akun
+                        </span>
+                        <span className="font-mono text-[9px] uppercase tracking-wider">
+                          {role.roleId}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Menu Permission Checkboxes */}
+          <div className="lg:col-span-8 space-y-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-2xl ${activeColorTheme.bg} ${activeColorTheme.text} flex items-center justify-center font-black text-lg shadow-inner`}
+                  >
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-black text-slate-900 dark:text-white">
+                        {currentRole.roleName}
+                      </h2>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${activeColorTheme.badge}`}>
+                        Role ID: {selectedRoleId}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Daftar menu aplikasi yang diizinkan untuk dibuka oleh akun dengan role ini
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCopyModal(true)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Salin Menu</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Action bar for menus */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllMenus}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 hover:bg-blue-100 transition"
+                  >
+                    Pilih Semua Menu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAllMenus}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 transition"
+                  >
+                    Kosongkan Pilihan
+                  </button>
+                </div>
+
+                <div className="relative min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter menu..."
+                    value={searchMenuQuery}
+                    onChange={(e) => setSearchMenuQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* Categories & Menu Checkboxes */}
+              <div className="space-y-4 pt-2">
+                {filteredCategories.map((category) => {
+                  const allCatChecked = category.items.every((i) => currentAllowedMenus.includes(i.id));
+
+                  return (
+                    <div
+                      key={category.key}
+                      className="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                            {category.title}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {category.description}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCategory(category.items)}
+                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {allCatChecked ? 'Batal Semua' : 'Pilih Semua'}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                        {category.items.map((item) => {
+                          const isChecked = currentAllowedMenus.includes(item.id);
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => handleToggleMenu(item.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+                                isChecked
+                                  ? 'bg-white dark:bg-slate-800 border-blue-500 dark:border-blue-500 shadow-xs'
+                                  : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800/80 opacity-70 hover:opacity-100 hover:border-slate-300 dark:hover:border-slate-700'
+                              }`}
+                            >
+                              <div className="pt-0.5">
+                                <div
+                                  className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                                    isChecked
+                                      ? 'bg-blue-600 border-blue-600 text-white'
+                                      : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+                                  }`}
+                                >
+                                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-bold text-slate-900 dark:text-white">
+                                  {item.label}
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal">
+                                  {item.shortDesc}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bottom Save Bar for Menu Permissions */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {hasUnsavedChanges ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" /> Ada perubahan menu yang belum disimpan
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Seluruh hak akses menu sinkron
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveMenuPermissions}
+                  disabled={readOnly}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Hak Akses Menu</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Salin Kontak Chat Role */}
+      {showCopyChatModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-                  <ShieldCheck className="w-5 h-5" />
+                  <Copy className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">Buat Role Kustom Baru</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Tambahkan jabatan atau peran pengguna baru</p>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">Salin Aturan Kontak Chat</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Terapkan ke: {currentRole.roleName}</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAddRoleModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center transition"
+                onClick={() => setShowCopyChatModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 flex items-center justify-center transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateRole} className="space-y-3.5 pt-1">
+            <div className="space-y-3 pt-1">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                  Nama Role / Jabatan
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Pembina OSIS, Kepala Bengkel, Guru Piket..."
-                  value={newRoleName}
-                  onChange={(e) => setNewRoleName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                  Deskripsi / Keterangan Tugas
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Deskripsi singkat fungsi dan kewenangan peran ini..."
-                  value={newRoleDesc}
-                  onChange={(e) => setNewRoleDesc(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                    Warna Badge
-                  </label>
-                  <select
-                    value={newRoleColor}
-                    onChange={(e) => setNewRoleColor(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="indigo">Indigo (Ungu Biru)</option>
-                    <option value="purple">Purple (Ungu)</option>
-                    <option value="blue">Blue (Biru)</option>
-                    <option value="emerald">Emerald (Hijau)</option>
-                    <option value="amber">Amber (Kuning)</option>
-                    <option value="cyan">Cyan (Biru Muda)</option>
-                    <option value="teal">Teal (Toska)</option>
-                    <option value="rose">Rose (Merah Muda)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                    Salin Izin Awal Dari
-                  </label>
-                  <select
-                    value={copyPermissionFrom}
-                    onChange={(e) => setCopyPermissionFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {roles.map((r) => (
-                      <option key={r.roleId} value={r.roleId}>
-                        {r.roleName} ({(draftPermissions[r.roleId] || r.allowedMenus).length} menu)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddRoleModal(false)}
-                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Simpan Role Baru</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Edit Role Kustom */}
-      {showEditRoleModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-                  <Edit3 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">Edit Informasi Role</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">ID: {editRoleId}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEditRoleModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex items-center justify-center transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditRole} className="space-y-3.5 pt-1">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                  Nama Role / Jabatan
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editRoleName}
-                  onChange={(e) => setEditRoleName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                  Deskripsi / Keterangan Tugas
-                </label>
-                <textarea
-                  rows={2}
-                  value={editRoleDesc}
-                  onChange={(e) => setEditRoleDesc(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-                  Warna Badge
+                  Pilih Role Sumber
                 </label>
                 <select
-                  value={editRoleColor}
-                  onChange={(e) => setEditRoleColor(e.target.value)}
+                  value={sourceCopyChatRoleId}
+                  onChange={(e) => setSourceCopyChatRoleId(e.target.value)}
                   className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="indigo">Indigo (Ungu Biru)</option>
-                  <option value="purple">Purple (Ungu)</option>
-                  <option value="blue">Blue (Biru)</option>
-                  <option value="emerald">Emerald (Hijau)</option>
-                  <option value="amber">Amber (Kuning)</option>
-                  <option value="cyan">Cyan (Biru Muda)</option>
-                  <option value="teal">Teal (Toska)</option>
-                  <option value="rose">Rose (Merah Muda)</option>
+                  {roles
+                    .filter((r) => r.roleId !== selectedRoleId)
+                    .map((r) => {
+                      const norm = normalizeRoleKey(r.roleId);
+                      const targetCount = (draftChatRules[norm] || getRoleChatRule(appData, norm).allowedTargets).length;
+                      return (
+                        <option key={r.roleId} value={r.roleId}>
+                          {r.roleName} ({targetCount} target aktif)
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs flex items-start gap-2">
+                <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  Tindakan ini akan menduplikasi seluruh izin target kontak chat dari role sumber ke role{' '}
+                  <strong>{currentRole.roleName}</strong>.
+                </span>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowEditRoleModal(false)}
-                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
+                  onClick={() => setShowCopyChatModal(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
                 >
                   Batal
                 </button>
                 <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5"
+                  type="button"
+                  onClick={handleApplyCopyChatRules}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Save className="w-4 h-4" />
-                  <span>Simpan Perubahan</span>
+                  <Copy className="w-4 h-4" />
+                  <span>Terapkan Salinan</span>
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Modal: Salin Hak Akses dari Role Lain */}
+      {/* Modal: Salin Menu (ACL) */}
       {showCopyModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
@@ -1436,14 +1870,134 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleApplyCopyPermissions}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5"
+                  onClick={() => {
+                    const sourceAllowed = draftPermissions[sourceCopyRoleId] || roles.find((r) => r.roleId === sourceCopyRoleId)?.allowedMenus || [];
+                    setDraftPermissions((prev) => ({
+                      ...prev,
+                      [selectedRoleId]: [...sourceAllowed],
+                    }));
+                    setHasUnsavedChanges(true);
+                    setShowCopyModal(false);
+                    onShowToast(`Hak akses menu disalin dari role sumber ke "${currentRole.roleName}"!`, 'success');
+                  }}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Copy className="w-4 h-4" />
                   <span>Terapkan Salinan</span>
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Tambah Role Baru */}
+      {showAddRoleModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">Buat Role Baru</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Tambahkan kelompok wewenang kustom</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddRoleModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRole} className="space-y-3.5 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+                  Nama Role Baru <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Misal: Staf Keuangan, Tim Lab, Koordinator PKL"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+                  Deskripsi / Keterangan Wewenang
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Penjelasan singkat peran dan tanggung jawab role ini..."
+                  value={newRoleDesc}
+                  onChange={(e) => setNewRoleDesc(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+                    Salin Izin Dari
+                  </label>
+                  <select
+                    value={copyPermissionFrom}
+                    onChange={(e) => setCopyPermissionFrom(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {roles.map((r) => (
+                      <option key={r.roleId} value={r.roleId}>
+                        {r.roleName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
+                    Warna Label Badge
+                  </label>
+                  <select
+                    value={newRoleColor}
+                    onChange={(e) => setNewRoleColor(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="indigo">Indigo (Ungu Biru)</option>
+                    <option value="blue">Blue (Biru)</option>
+                    <option value="purple">Purple (Ungu)</option>
+                    <option value="emerald">Emerald (Hijau)</option>
+                    <option value="amber">Amber (Kuning)</option>
+                    <option value="cyan">Cyan (Biru Muda)</option>
+                    <option value="teal">Teal (Toska)</option>
+                    <option value="rose">Rose (Merah Muda)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRoleModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Role Baru</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

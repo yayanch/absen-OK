@@ -1747,6 +1747,7 @@ export default function App() {
                   onUpdateAppData={handleUpdateAppData}
                   onShowToast={showToast}
                   onConfirmModal={openConfirmModal}
+                  onNavigateView={setCurrentView}
                 />
               )
             )}

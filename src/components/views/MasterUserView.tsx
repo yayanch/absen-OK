@@ -47,6 +47,7 @@ export interface UserItem {
   originalType: 'admin' | 'kesiswaan' | 'wali' | 'user';
   noHp?: string;
   foto?: string;
+  kelasId?: string;
   kelasNama?: string;
   mataPelajaran?: string;
   hariMengajar?: string[];
@@ -1001,6 +1002,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         roles: ['piket_kelas'],
         originalType: 'user',
         noHp: '',
+        kelasId: k.id,
         kelasNama: k.nama,
       });
     });

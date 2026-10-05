@@ -347,6 +347,37 @@ export interface ChatMessage {
   isDeletedForEveryone?: boolean; // True if message was recalled/deleted for everyone
 }
 
+export type ChatTargetPermission =
+  | 'admin'          // Administrator Utama / Helpdesk
+  | 'wali_all'       // Semua Wali Kelas
+  | 'wali_binaan'    // Hanya Wali Kelas Siswa/Kelas Terkait
+  | 'guru_all'       // Semua Guru & Tenaga Pendidik
+  | 'kesiswaan'      // Tim Kesiswaan / BP-BK
+  | 'kurikulum'      // Tim Kurikulum & Akademik
+  | 'staf_jadwal'    // Staf Pengelola Jadwal
+  | 'piket'          // Petugas Piket (Guru/Kesiswaan/Kelas)
+  | 'siswa_all'      // Semua Siswa Sekolah
+  | 'siswa_binaan'   // Hanya Siswa Binaan / Siswa di Kelasnya Sendiri
+  | 'broadcast';     // Kirim Pesan Siaran Broadcast (Semua Kontak)
+
+export interface RoleChatContactRule {
+  roleKey: string;
+  roleLabel: string;
+  allowedTargets: ChatTargetPermission[];
+  allowBroadcast?: boolean;
+  customDescription?: string;
+  updatedAt?: string;
+}
+
+export interface ChatContactSettings {
+  enabled: boolean;
+  rules: Record<string, RoleChatContactRule>;
+  allowStudentChatWithTeachers?: boolean;
+  allowPiketChatWithAllTeachers?: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface CustomRole {
   id: string;
   name: string;
@@ -589,6 +620,7 @@ export interface AppData {
   violationTemplates?: ViolationTemplate[];
   chatMessages?: ChatMessage[];
   enableLiveChat?: boolean;
+  chatContactSettings?: ChatContactSettings;
   customRoles?: CustomRole[];
   rolePermissions?: RoleMenuPermission[];
   navigationLayout?: NavigationLayoutConfig;

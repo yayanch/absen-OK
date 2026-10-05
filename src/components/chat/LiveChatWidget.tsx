@@ -27,10 +27,13 @@ import {
   ChevronUp,
   ArrowLeft,
   Filter,
-  MessageCircle
+  MessageCircle,
+  Sliders,
+  Settings
 } from 'lucide-react';
 import { AppData, SekolahConfig, UserSession, ChatMessage, UserRole, Siswa } from '../../types';
 import { compressBase64Image } from '../../utils/helpers';
+import { getPermittedChatContacts, ChatContactThreadItem } from '../../utils/chatContactEngine';
 
 interface LiveChatWidgetProps {
   appData: AppData;
@@ -196,278 +199,12 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
     );
   };
 
-  // Group messages into user threads for Admin, Wali Kelas, and Siswa
+  // Group messages into user threads based on dynamic role permissions matrix
   const threads = useMemo(() => {
-    const threadMap: Record<string, { username: string; nama: string; role: UserRole; lastTime: string; unread: number; lastText: string; foto?: string }> = {};
+    // 1. Obtain permitted contacts from central Chat Contact Engine
+    const threadMap: Record<string, ChatContactThreadItem> = getPermittedChatContacts(appData, currentUser);
 
-    if (isAdmin) {
-      // 0. Add Broadcast option
-      threadMap['all'] = {
-        username: 'all',
-        nama: 'Broadcast (Semua)',
-        role: 'user',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Pengumuman / Pesan Umum',
-      };
-
-      // 1. Populate registered users
-      if (Array.isArray(appData.waliKelas)) {
-        appData.waliKelas.forEach((w) => {
-          const uKey = String(w.username || w.nip || w.id).toLowerCase();
-          if (uKey && uKey !== 'admin') {
-            threadMap[uKey] = {
-              username: String(w.username || w.nip || w.id),
-              nama: w.nama,
-              role: 'wali',
-              lastTime: '',
-              unread: 0,
-              lastText: 'Belum ada percakapan',
-              foto: w.foto,
-            };
-          }
-        });
-      }
-
-      if (appData.kesiswaan && appData.kesiswaan.username) {
-        const kKey = String(appData.kesiswaan.username).toLowerCase();
-        if (kKey && kKey !== 'admin') {
-          threadMap[kKey] = {
-            username: String(appData.kesiswaan.username),
-            nama: appData.kesiswaan.nama || 'Kesiswaan',
-            role: 'kesiswaan',
-            lastTime: '',
-            unread: 0,
-            lastText: 'Belum ada percakapan',
-            foto: appData.kesiswaan.foto,
-          };
-        }
-      }
-
-      if (appData.kurikulum && appData.kurikulum.username) {
-        const kurKey = String(appData.kurikulum.username).toLowerCase();
-        if (kurKey && kurKey !== 'admin') {
-          threadMap[kurKey] = {
-            username: String(appData.kurikulum.username),
-            nama: appData.kurikulum.nama || 'Kurikulum & Akademik',
-            role: 'kurikulum',
-            lastTime: '',
-            unread: 0,
-            lastText: 'Belum ada percakapan',
-            foto: appData.kurikulum.foto,
-          };
-        }
-      }
-
-      if (appData.userBiasa && appData.userBiasa.username) {
-        const uKey = String(appData.userBiasa.username).toLowerCase();
-        if (uKey && uKey !== 'admin') {
-          threadMap[uKey] = {
-            username: String(appData.userBiasa.username),
-            nama: appData.userBiasa.nama || 'User Biasa',
-            role: 'user',
-            lastTime: '',
-            unread: 0,
-            lastText: 'Belum ada percakapan',
-            foto: appData.userBiasa.foto,
-          };
-        }
-      }
-
-      if (Array.isArray(appData.siswa)) {
-        appData.siswa.forEach((s) => {
-          const sKey = String(s.nisn || s.id).toLowerCase();
-          if (sKey) {
-            threadMap[sKey] = {
-              username: String(s.nisn || s.id),
-              nama: s.nama,
-              role: 'siswa',
-              lastTime: '',
-              unread: 0,
-              lastText: 'Belum ada percakapan',
-              foto: s.foto,
-            };
-          }
-        });
-      }
-    } else if (isWali) {
-      // 1. Admin
-      threadMap['admin'] = {
-        username: 'admin',
-        nama: appData.admin?.nama ? `${appData.admin.nama} (Helpdesk)` : 'Administrator Utama',
-        role: 'admin',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Pusat Bantuan & Helpdesk',
-        foto: appData.admin?.foto,
-      };
-
-      // 2. Kurikulum
-      const kurikulumUser = appData.kurikulum?.username || 'kurikulum';
-      const kurKey = String(kurikulumUser).toLowerCase();
-      threadMap[kurKey] = {
-        username: kurikulumUser,
-        nama: appData.kurikulum?.nama ? `${appData.kurikulum.nama} (Kurikulum)` : 'Tim Kurikulum & Akademik',
-        role: 'kurikulum',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Koordinasi Kurikulum, Jadwal & KBM',
-        foto: appData.kurikulum?.foto,
-      };
-
-      // 3. Kesiswaan (BP/BK)
-      const kesiswaanUser = appData.kesiswaan?.username || 'kesiswaan';
-      const kKey = String(kesiswaanUser).toLowerCase();
-      threadMap[kKey] = {
-        username: kesiswaanUser,
-        nama: appData.kesiswaan?.nama ? `${appData.kesiswaan.nama} (BP/BK)` : 'Tim Kesiswaan (BP/BK)',
-        role: 'kesiswaan',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Koordinasi Kesiswaan & BP/BK',
-        foto: appData.kesiswaan?.foto,
-      };
-
-      // 4. Siswa Binaannya (Hanya siswa pada kelas yang diampu oleh Wali Kelas)
-      const waliObj = appData.waliKelas.find(w => 
-        String(w.username).toLowerCase() === currentUsername || 
-        String(w.nip).toLowerCase() === currentUsername ||
-        w.id === (currentUser.data as any)?.id
-      );
-      const assignedKelasIds = (appData.kelas || [])
-        .filter(k => waliObj && k.waliKelasId === waliObj.id)
-        .map(k => k.id);
-      
-      const siswaBinaan = (appData.siswa || []).filter(s => assignedKelasIds.includes(s.kelasId));
-      siswaBinaan.forEach((s) => {
-        const sKey = String(s.nisn || s.id).toLowerCase();
-        if (sKey) {
-          const kelasObj = appData.kelas.find(k => k.id === s.kelasId);
-          threadMap[sKey] = {
-            username: String(s.nisn || s.id),
-            nama: `${s.nama} (${kelasObj?.nama || 'Kelas'})`,
-            role: 'siswa',
-            lastTime: '',
-            unread: 0,
-            lastText: 'Chat dengan siswa binaan',
-            foto: s.foto,
-          };
-        }
-      });
-    } else if (isGuru) {
-      // 1. Admin
-      threadMap['admin'] = {
-        username: 'admin',
-        nama: appData.admin?.nama ? `${appData.admin.nama} (Helpdesk)` : 'Administrator Utama',
-        role: 'admin',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Pusat Bantuan & Helpdesk',
-        foto: appData.admin?.foto,
-      };
-
-      // 2. Kurikulum
-      const kurikulumUser = appData.kurikulum?.username || 'kurikulum';
-      const kurKey = String(kurikulumUser).toLowerCase();
-      threadMap[kurKey] = {
-        username: kurikulumUser,
-        nama: appData.kurikulum?.nama ? `${appData.kurikulum.nama} (Kurikulum)` : 'Tim Kurikulum & Akademik',
-        role: 'kurikulum',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Koordinasi Kurikulum, Jadwal & KBM',
-        foto: appData.kurikulum?.foto,
-      };
-
-      // 3. Kesiswaan (BP/BK)
-      const kesiswaanUser = appData.kesiswaan?.username || 'kesiswaan';
-      const kKey = String(kesiswaanUser).toLowerCase();
-      threadMap[kKey] = {
-        username: kesiswaanUser,
-        nama: appData.kesiswaan?.nama ? `${appData.kesiswaan.nama} (BP/BK)` : 'Tim Kesiswaan (BP/BK)',
-        role: 'kesiswaan',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Koordinasi Kesiswaan & BP/BK',
-        foto: appData.kesiswaan?.foto,
-      };
-    } else if (isPiket) {
-      // 1. Admin
-      threadMap['admin'] = {
-        username: 'admin',
-        nama: appData.admin?.nama ? `${appData.admin.nama} (Helpdesk)` : 'Administrator Utama',
-        role: 'admin',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Pusat Bantuan & Helpdesk',
-        foto: appData.admin?.foto,
-      };
-
-      // 2. Wali Kelas (Khusus kontak petugas piket hanya Admin & Wali Kelas)
-      if (Array.isArray(appData.waliKelas)) {
-        const piketKelasId = (currentUser.data as any)?.kelasId;
-        const myClassWaliId = piketKelasId
-          ? appData.kelas?.find((k) => k.id === piketKelasId)?.waliKelasId
-          : null;
-
-        appData.waliKelas.forEach((w) => {
-          const uKey = String(w.username || w.nip || w.id).toLowerCase();
-          if (uKey && uKey !== 'admin') {
-            const isMyClassWali = myClassWaliId && w.id === myClassWaliId;
-            const assignedKelas = appData.kelas?.find((k) => k.waliKelasId === w.id);
-            const kelasSuffix = assignedKelas ? ` (${assignedKelas.nama})` : ' (Wali Kelas)';
-            threadMap[uKey] = {
-              username: String(w.username || w.nip || w.id),
-              nama: `${w.nama}${kelasSuffix}`,
-              role: 'wali',
-              lastTime: '',
-              unread: 0,
-              lastText: isMyClassWali ? 'Wali Kelas Binaan Anda' : 'Koordinasi Presensi & Siswa',
-              foto: w.foto,
-            };
-          }
-        });
-      }
-    } else if (isSiswa) {
-      // 1. Admin
-      threadMap['admin'] = {
-        username: 'admin',
-        nama: 'Administrator Utama',
-        role: 'admin',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Pusat Bantuan',
-      };
-
-      // 2. Wali Kelas
-      const siswaObj = appData.siswa.find(s => s.id === (currentUser.data as any)?.id || s.nisn === (currentUser.data as any)?.nisn) || (currentUser.data as Siswa);
-      const myKelas = siswaObj ? appData.kelas.find(k => k.id === siswaObj.kelasId) : null;
-      const myWali = myKelas ? appData.waliKelas.find(w => w.id === myKelas.waliKelasId) : null;
-
-      if (myWali) {
-        const wKey = String(myWali.username || myWali.nip || myWali.id).toLowerCase();
-        threadMap[wKey] = {
-          username: String(myWali.username || myWali.nip || myWali.id),
-          nama: `${myWali.nama} (Wali Kelas)`,
-          role: 'wali',
-          lastTime: '',
-          unread: 0,
-          lastText: 'Chat dengan Wali Kelas',
-          foto: myWali.foto,
-        };
-      }
-    } else {
-      threadMap['admin'] = {
-        username: 'admin',
-        nama: 'Administrator Utama',
-        role: 'admin',
-        lastTime: '',
-        unread: 0,
-        lastText: 'Pusat Bantuan',
-      };
-    }
-
-    // 2. Process chat messages
+    // 2. Process chat messages against permitted contacts
     allMessages.forEach((m) => {
       const isSenderMe = isMessageMe(m);
       const isRecipientMe = isMessageRecipientMe(m);
@@ -477,18 +214,8 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
       const otherUserKey = String(otherUserRaw).toLowerCase();
       if (myIdVariants.includes(otherUserKey)) return;
 
-      // If user is Wali Kelas or Guru, strictly only allow permitted contacts in threadMap
-      if ((isWali || isGuru) && !threadMap[otherUserKey]) {
-        return;
-      }
-
-      // If user is Piket, strictly only allow Admin and Wali Kelas
-      if (isPiket && !threadMap[otherUserKey]) {
-        return;
-      }
-
-      // If user is Siswa, strictly only allow Admin and Wali Kelas
-      if (isSiswa && !threadMap[otherUserKey]) {
+      // If contact is not in threadMap and user is not admin, discard message
+      if (!isAdmin && !threadMap[otherUserKey]) {
         return;
       }
 
@@ -539,7 +266,7 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
       if (b.lastTime) return 1;
       return a.nama.localeCompare(b.nama);
     });
-  }, [allMessages, isAdmin, isWali, isGuru, isSiswa, appData, currentUsername, currentUser, myIdVariants]);
+  }, [allMessages, isAdmin, appData, currentUser, myIdVariants]);
 
   // Set default active thread
   useEffect(() => {
@@ -1021,22 +748,36 @@ export const LiveChatWidget: React.FC<LiveChatWidgetProps> = ({
 
                   {/* SLIDER ON/OFF FOR ADMIN IN WIDGET HEADER */}
                   {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={handleToggleLiveChatStatus}
-                      className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-white/20 transition-colors duration-300 ease-in-out ${
-                        isLiveChatEnabled ? 'bg-emerald-500' : 'bg-rose-600'
-                      }`}
-                      title={`Live Chat ${isLiveChatEnabled ? 'AKTIF (Klik untuk matikan)' : 'NONAKTIF (Klik untuk aktifkan)'}`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition duration-300 ease-in-out flex items-center justify-center font-black text-[8px] ${
-                          isLiveChatEnabled ? 'translate-x-5 text-emerald-600' : 'translate-x-0.5 text-rose-600'
-                        }`}
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(false);
+                          onNavigate('pengaturan_role');
+                        }}
+                        title="Pengaturan Kontak Chat Role (Siapa Saja yang Dapat Dihubungi)"
+                        className="p-1.5 text-slate-300 hover:text-blue-300 hover:bg-white/10 rounded-xl transition cursor-pointer"
                       >
-                        {isLiveChatEnabled ? 'ON' : 'OFF'}
-                      </span>
-                    </button>
+                        <Settings className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleToggleLiveChatStatus}
+                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-white/20 transition-colors duration-300 ease-in-out ${
+                          isLiveChatEnabled ? 'bg-emerald-500' : 'bg-rose-600'
+                        }`}
+                        title={`Live Chat ${isLiveChatEnabled ? 'AKTIF (Klik untuk matikan)' : 'NONAKTIF (Klik untuk aktifkan)'}`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition duration-300 ease-in-out flex items-center justify-center font-black text-[8px] ${
+                            isLiveChatEnabled ? 'translate-x-5 text-emerald-600' : 'translate-x-0.5 text-rose-600'
+                          }`}
+                        >
+                          {isLiveChatEnabled ? 'ON' : 'OFF'}
+                        </span>
+                      </button>
+                    </>
                   )}
 
                   {activeMessages.length > 0 && (

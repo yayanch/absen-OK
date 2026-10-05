@@ -294,7 +294,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           />
 
           <QuickActionBtn
-            onClick={() => onNavigateView('rekap_siswa')}
+            onClick={() => onNavigateView('rekap_harian')}
             iconBgClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
             icon={<Users className="w-4 h-4" />}
             title="Rekap Kehadiran Siswa"

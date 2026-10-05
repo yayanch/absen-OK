@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FileSpreadsheet, Send, Calendar, Search, Users, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { AppData, UserSession } from '../../types';
 import { sortKelasList } from '../../data/initialData';
@@ -25,15 +25,118 @@ interface RekapHarianViewProps {
 
 export const RekapHarianView: React.FC<RekapHarianViewProps> = ({ appData, currentUser }) => {
   const sortedKelas = sortKelasList(appData.kelas);
-  let availableClasses = sortedKelas;
-  const isWali = currentUser.role === 'wali';
-  if (isWali) {
-    availableClasses = sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any).id);
-  }
+  const isWali = String(currentUser.role || '').toLowerCase() === 'wali' || String(currentUser.role || '').toLowerCase() === 'walikelas';
+  
+  const isPiketKelas = useMemo(() => {
+    const role = String(currentUser.role || '').toLowerCase();
+    if (role === 'piket_kelas' || role === 'piketkelas') return true;
+    if (Array.isArray(currentUser.roles) && currentUser.roles.some((r) => {
+      const lr = String(r).toLowerCase();
+      return lr === 'piket_kelas' || lr === 'piketkelas';
+    })) return true;
 
-  const [selectedKelasId, setSelectedKelasId] = useState<string>(
-    isWali && availableClasses.length > 0 ? availableClasses[0].id : 'all'
-  );
+    const userData = currentUser.data as any;
+    if (userData) {
+      const uRole = String(userData.role || '').toLowerCase();
+      if (uRole === 'piket_kelas' || uRole === 'piketkelas') return true;
+      if (Array.isArray(userData.roles) && userData.roles.some((r: string) => {
+        const lr = String(r).toLowerCase();
+        return lr === 'piket_kelas' || lr === 'piketkelas';
+      })) return true;
+      if (Array.isArray(userData.additionalRoles) && userData.additionalRoles.some((r: string) => {
+        const lr = String(r).toLowerCase();
+        return lr === 'piket_kelas' || lr === 'piketkelas';
+      })) return true;
+
+      const uId = String(userData.id || '').toLowerCase();
+      if (uId.startsWith('piket-')) return true;
+
+      const uNama = String(userData.nama || '').toLowerCase();
+      if (uNama.startsWith('piket kelas') || uNama.includes('piket kelas') || uNama.startsWith('piket - kelas')) return true;
+
+      const uTugas = String(userData.tugasTambahan || '').toLowerCase();
+      if (uTugas.includes('piket kelas') || uTugas.includes('piket presensi kelas')) return true;
+
+      const uUsername = String(userData.username || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      const uNip = String(userData.nip || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      const matchesClassName = sortedKelas.some((k) => {
+        const cName = String(k.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+        return cName && (uUsername === cName || uUsername === `piket${cName}` || uNip === cName);
+      });
+      if (matchesClassName && !['admin', 'superadmin', 'kesiswaan', 'kurikulum', 'hubin', 'staf_jadwal'].includes(role)) {
+        return true;
+      }
+    }
+    return false;
+  }, [currentUser, sortedKelas]);
+
+  const assignedPiketClass = useMemo(() => {
+    if (!isPiketKelas) return null;
+    const userData = currentUser.data as any;
+    const uId = String(userData?.id || '');
+    const uKelasId = String(userData?.kelasId || '');
+    const uKelasNama = String(userData?.kelasNama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const uUsername = String(userData?.username || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const uNama = String(userData?.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const uNip = String(userData?.nip || '').toLowerCase().replace(/[\s\-_]+/g, '');
+
+    if (uKelasId) {
+      const found = sortedKelas.find((k) => String(k.id) === uKelasId);
+      if (found) return found;
+    }
+    if (uId.startsWith('piket-')) {
+      const cleanId = uId.replace('piket-', '');
+      const found = sortedKelas.find(
+        (k) => String(k.id) === cleanId || String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === cleanId
+      );
+      if (found) return found;
+    }
+    if (uKelasNama) {
+      const found = sortedKelas.find((k) => String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === uKelasNama);
+      if (found) return found;
+    }
+    if (uNip) {
+      const found = sortedKelas.find((k) => String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === uNip);
+      if (found) return found;
+    }
+    const strippedUsername = uUsername.replace(/^piket(kelas)?/, '');
+    if (strippedUsername) {
+      const found = sortedKelas.find((k) => String(k.nama).toLowerCase().replace(/[\s\-_]+/g, '') === strippedUsername);
+      if (found) return found;
+    }
+    for (const k of sortedKelas) {
+      const cleanK = String(k.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
+      if (cleanK && (uNama.includes(cleanK) || uUsername.includes(cleanK))) {
+        return k;
+      }
+    }
+    return sortedKelas[0] || null;
+  }, [isPiketKelas, currentUser, sortedKelas]);
+
+  const availableClasses = useMemo(() => {
+    if (isPiketKelas) {
+      return assignedPiketClass ? [assignedPiketClass] : (sortedKelas.length > 0 ? [sortedKelas[0]] : []);
+    }
+    if (isWali) {
+      return sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any).id);
+    }
+    return sortedKelas;
+  }, [isPiketKelas, assignedPiketClass, isWali, currentUser, sortedKelas]);
+
+  const [selectedKelasId, setSelectedKelasId] = useState<string>(() => {
+    if (isPiketKelas && assignedPiketClass) {
+      return assignedPiketClass.id;
+    }
+    return (isWali || isPiketKelas) && availableClasses.length > 0 ? availableClasses[0].id : 'all';
+  });
+
+  useEffect(() => {
+    if (isPiketKelas && assignedPiketClass) {
+      if (selectedKelasId !== assignedPiketClass.id) {
+        setSelectedKelasId(assignedPiketClass.id);
+      }
+    }
+  }, [isPiketKelas, assignedPiketClass, selectedKelasId]);
   const [selectedTanggal, setSelectedTanggal] = useState<string>(getTodayString());
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('absent_only');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -184,19 +287,31 @@ export const RekapHarianView: React.FC<RekapHarianViewProps> = ({ appData, curre
       {/* Selectors */}
       <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Pilih Kelas</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+              Pilih Kelas
+            </label>
+            {isPiketKelas && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300">
+                Terkunci (Kelas Anda)
+              </span>
+            )}
+          </div>
           <select
             value={selectedKelasId}
+            disabled={isPiketKelas}
             onChange={(e) => {
               setSelectedKelasId(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+            className={`w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none transition ${
+              isPiketKelas ? 'opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60 border-teal-300 dark:border-teal-800/60' : 'cursor-pointer'
+            }`}
           >
-            {!isWali && <option value="all">Seluruh Kelas ({appData.kelas.length} Rombel)</option>}
+            {!isWali && !isPiketKelas && <option value="all">Seluruh Kelas ({appData.kelas.length} Rombel)</option>}
             {availableClasses.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.nama}
+                {k.nama} {isPiketKelas ? '(Terkunci - Kelas Anda)' : ''}
               </option>
             ))}
           </select>

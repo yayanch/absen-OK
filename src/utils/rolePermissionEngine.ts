@@ -612,6 +612,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'rekap_harian',
       'rekap_siswa',
       'live_chat',
     ],
