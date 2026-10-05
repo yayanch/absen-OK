@@ -712,6 +712,35 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
   return Array.from(map.values()).filter((s) => !deletedSet.has(String(s.id)));
 }
 
+function mergeJadwalMengajarServer(existingList: any[] = [], incomingList: any[] = [], deletedIds: string[] = []): any[] {
+  if (!Array.isArray(existingList)) existingList = [];
+  if (!Array.isArray(incomingList)) incomingList = [];
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+
+  if (existingList.length === 0 && incomingList.length === 0) return [];
+
+  const filteredExisting = existingList.filter((j) => j && j.id && !deletedSet.has(String(j.id)));
+  const filteredIncoming = incomingList.filter((j) => j && j.id && !deletedSet.has(String(j.id)));
+
+  const map = new Map<string, any>();
+
+  // 1. Seed existing
+  for (const ex of filteredExisting) {
+    if (ex && ex.id && !deletedSet.has(String(ex.id))) {
+      map.set(String(ex.id), { ...ex });
+    }
+  }
+
+  // 2. Incoming takes precedence
+  for (const inc of filteredIncoming) {
+    if (inc && inc.id && !deletedSet.has(String(inc.id))) {
+      map.set(String(inc.id), { ...(map.get(String(inc.id)) || {}), ...inc });
+    }
+  }
+
+  return Array.from(map.values()).filter((j) => !deletedSet.has(String(j.id)));
+}
+
 function mergePresensiServer(existingMap: any = {}, incomingMap: any = {}): any {
   const merged: any = { ...existingMap };
 
@@ -732,7 +761,7 @@ function mergePresensiServer(existingMap: any = {}, incomingMap: any = {}): any 
 function saveAppDataCache(data: any) {
   if (!data || typeof data !== "object") return;
 
-  // Track deleted siswa
+  // Track deleted siswa & jadwal
   const deletedSiswaSet = new Set([
     ...(inMemoryAppDataCache?.deletedSiswaIds || []),
     ...(data.deletedSiswaIds || []),
@@ -740,12 +769,26 @@ function saveAppDataCache(data: any) {
   const allDeletedSiswa = Array.from(deletedSiswaSet);
   data.deletedSiswaIds = allDeletedSiswa;
 
+  const deletedJadwalSet = new Set([
+    ...(inMemoryAppDataCache?.deletedJadwalIds || []),
+    ...(data.deletedJadwalIds || []),
+  ]);
+  const allDeletedJadwal = Array.from(deletedJadwalSet);
+  data.deletedJadwalIds = allDeletedJadwal;
+
   if (inMemoryAppDataCache) {
     // Safely merge siswa so existing students never vanish
     if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
       data.siswa = mergeSiswaServer(inMemoryAppDataCache.siswa, data.siswa, allDeletedSiswa);
     } else if (Array.isArray(inMemoryAppDataCache.siswa) && (!Array.isArray(data.siswa) || data.siswa.length === 0)) {
       data.siswa = inMemoryAppDataCache.siswa.filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)));
+    }
+
+    // Safely merge jadwal so newly created or edited schedules never vanish
+    if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && Array.isArray(data.jadwalMengajar)) {
+      data.jadwalMengajar = mergeJadwalMengajarServer(inMemoryAppDataCache.jadwalMengajar, data.jadwalMengajar, allDeletedJadwal);
+    } else if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
+      data.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar.filter((j: any) => j && j.id && !deletedJadwalSet.has(String(j.id)));
     }
 
     // Safely merge presensi so existing dates/records never vanish
@@ -787,9 +830,6 @@ function saveAppDataCache(data: any) {
       data.jurusan = inMemoryAppDataCache.jurusan;
     } else if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
       data.jurusan = inMemoryAppDataCache.jurusan;
-    }
-    if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0 && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
-      data.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar;
     }
     if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
       data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
@@ -2413,30 +2453,34 @@ async function performMySQLLoad(config: any) {
     }
 
     if (Array.isArray(jadwalRows) && jadwalRows.length > 0) {
-      appData.jadwalMengajar = jadwalRows.map((j: any) => {
-        let jamKeList: number[] = [];
-        try {
-          jamKeList = typeof j.jam_ke_list === 'string' ? JSON.parse(j.jam_ke_list) : (Array.isArray(j.jam_ke_list) ? j.jam_ke_list : []);
-        } catch (e) {}
-        return {
-          id: j.id,
-          guruId: j.guru_id || '',
-          guruUsername: j.guru_username || '',
-          guruNama: j.guru_nama || '',
-          guruNip: j.guru_nip || '',
-          hari: j.hari || '',
-          kelasId: j.kelas_id || '',
-          kelasNama: j.kelas_nama || '',
-          mataPelajaran: j.mata_pelajaran || '',
-          kodeMapel: j.kode_mapel || '',
-          jamKeList,
-          jamKe: j.jam_ke || '',
-          shift: j.shift || 'Pagi',
-          catatan: j.catatan || ''
-        };
-      });
+      const deletedJadwalSet = new Set(appData.deletedJadwalIds || []);
+      appData.jadwalMengajar = jadwalRows
+        .filter((j: any) => j && j.id && !deletedJadwalSet.has(j.id))
+        .map((j: any) => {
+          let jamKeList: number[] = [];
+          try {
+            jamKeList = typeof j.jam_ke_list === 'string' ? JSON.parse(j.jam_ke_list) : (Array.isArray(j.jam_ke_list) ? j.jam_ke_list : []);
+          } catch (e) {}
+          return {
+            id: j.id,
+            guruId: j.guru_id || '',
+            guruUsername: j.guru_username || '',
+            guruNama: j.guru_nama || '',
+            guruNip: j.guru_nip || '',
+            hari: j.hari || '',
+            kelasId: j.kelas_id || '',
+            kelasNama: j.kelas_nama || '',
+            mataPelajaran: j.mata_pelajaran || '',
+            kodeMapel: j.kode_mapel || '',
+            jamKeList,
+            jamKe: j.jam_ke || '',
+            shift: j.shift || 'Pagi',
+            catatan: j.catatan || ''
+          };
+        });
     } else if (inMemoryAppDataCache?.jadwalMengajar && Array.isArray(inMemoryAppDataCache.jadwalMengajar) && inMemoryAppDataCache.jadwalMengajar.length > 0) {
-      appData.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar;
+      const deletedJadwalSet = new Set(appData.deletedJadwalIds || []);
+      appData.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar.filter((j: any) => j && j.id && !deletedJadwalSet.has(j.id));
     }
 
     if (Array.isArray(mapelRows) && mapelRows.length > 0) {

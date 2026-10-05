@@ -617,6 +617,7 @@ export interface AppData {
   deletedHomeVisitIds?: string[];
   deletedPelanggaranIds?: string[];
   deletedSiswaIds?: string[];
+  deletedJadwalIds?: string[];
   violationTemplates?: ViolationTemplate[];
   chatMessages?: ChatMessage[];
   enableLiveChat?: boolean;

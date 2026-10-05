@@ -949,8 +949,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       'danger',
       () => {
         const nextList = allJadwalList.filter((j) => j.id !== item.id);
+        const updatedDeletedIds = Array.from(new Set([...(appData.deletedJadwalIds || []), String(item.id)]));
         const updatedAppData = addAuditLog(
-          { ...appData, jadwalMengajar: nextList },
+          { ...appData, jadwalMengajar: nextList, deletedJadwalIds: updatedDeletedIds },
           'Hapus Jadwal Mengajar',
           `Menghapus jadwal ${item.mataPelajaran} (${item.kelasNama} - ${item.guruNama}) pada ${item.hari} Shift ${item.shift || 'Pagi'}`
         );
@@ -968,8 +969,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       `Apakah Anda yakin ingin menghapus seluruh (${allJadwalList.length}) jadwal pelajaran tiap kelas? Tindakan ini akan mengosongkan seluruh daftar jadwal.`,
       'danger',
       () => {
+        const allDeletedIds = Array.from(new Set([...(appData.deletedJadwalIds || []), ...allJadwalList.map((j) => String(j.id))]));
         const updatedAppData = addAuditLog(
-          { ...appData, jadwalMengajar: [] },
+          { ...appData, jadwalMengajar: [], deletedJadwalIds: allDeletedIds },
           'Kosongkan Jadwal Pelajaran',
           `Menghapus seluruh ${allJadwalList.length} jadwal pelajaran tiap kelas.`
         );
@@ -1094,11 +1096,32 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       nextList = [newSchedule, ...allJadwalList];
     }
 
+    const updatedDeleted = (appData.deletedJadwalIds || []).filter((id) => id !== newSchedule.id);
     const updatedAppData = addAuditLog(
-      { ...appData, jadwalMengajar: nextList },
+      { ...appData, jadwalMengajar: nextList, deletedJadwalIds: updatedDeleted },
       editingId ? 'Edit Jadwal Mengajar Guru' : 'Tambah Jadwal Mengajar Guru',
       `${editingId ? 'Memperbarui' : 'Menambahkan'} jadwal ${newSchedule.mataPelajaran} (${newSchedule.kelasNama} - ${newSchedule.guruNama}) pada hari ${newSchedule.hari} Shift ${newSchedule.shift} ${newSchedule.jamKe}`
     );
+
+    const targetKelompok = getKelasKelompok(newSchedule.kelasNama, newSchedule.kelasId);
+    const targetShift = newSchedule.shift === 'Siang' ? 'siang' : 'pagi';
+    const targetOptionId: MatrixShiftOptionId =
+      targetShift === 'siang'
+        ? targetKelompok === 2
+          ? 'siang_k2'
+          : 'siang_k1'
+        : targetKelompok === 2
+        ? 'pagi_k2'
+        : 'pagi_k1';
+
+    // Auto-focus matrix view to match the newly added/edited schedule so it's immediately visible
+    setMatrixShiftOption(targetOptionId);
+    if (matrixMode === 'kelas') {
+      setMatrixSelectedKelasId(newSchedule.kelasId);
+    } else if (matrixMode === 'guru') {
+      setMatrixSelectedGuruUsername(newSchedule.guruUsername);
+    }
+    setActiveTab('matriks');
 
     onUpdateAppData(updatedAppData);
     onShowToast(
@@ -1386,6 +1409,45 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     activeMatrixOption,
     isTeacher,
     kelasList,
+  ]);
+
+  // Realtime counts for all 4 Shift & Kelompok matrix tabs for the currently selected class / teacher
+  const matrixOptionCounts = useMemo(() => {
+    const counts: Record<MatrixShiftOptionId, number> = {
+      pagi_k1: 0,
+      siang_k1: 0,
+      pagi_k2: 0,
+      siang_k2: 0,
+    };
+
+    MATRIX_SHIFT_OPTIONS.forEach((opt) => {
+      const targetShift = opt.shift;
+      const targetKelompok = opt.kelompok;
+      const matchCount = jadwalList.filter((j) => {
+        const matchesTarget =
+          isTeacher
+            ? true
+            : matrixMode === 'kelas'
+            ? j.kelasId === matrixSelectedKelasId
+            : j.guruUsername === matrixSelectedGuruUsername;
+        if (!matchesTarget) return false;
+        const itemShift = (j.shift || 'Pagi').toLowerCase() === 'siang' ? 'Siang' : 'Pagi';
+        if (itemShift !== targetShift) return false;
+        const itemKelompok = getKelasKelompok(j.kelasNama, j.kelasId);
+        if (itemKelompok !== targetKelompok) return false;
+        return true;
+      }).length;
+      counts[opt.id] = matchCount;
+    });
+
+    return counts;
+  }, [
+    jadwalList,
+    isTeacher,
+    matrixMode,
+    matrixSelectedKelasId,
+    matrixSelectedGuruUsername,
+    getKelasKelompok,
   ]);
 
   return (
@@ -2514,6 +2576,17 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                     >
                       <Icon className="w-3.5 h-3.5 shrink-0" />
                       <span>{opt.label}</span>
+                      {matrixOptionCounts[opt.id] > 0 && (
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {matrixOptionCounts[opt.id]}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -2714,8 +2787,8 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                           const isUpacara = activeMatrixOption.shift === 'Pagi' && hari === 'Senin' && (jamNum === 1 || jamNum === 2);
                           const isPembiasaan = activeMatrixOption.shift === 'Pagi' && hari === 'Jumat' && (jamNum === 1 || jamNum === 2);
 
-                          // Find schedule on this day covering this jamNum and matching shift
-                          const matchedSchedule = matrixSchedules.find((item) => {
+                          // Find all schedules on this day covering this jamNum and matching shift
+                          const matchedSchedules = matrixSchedules.filter((item) => {
                             if (item.hari !== hari) return false;
                             const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
                             return itemJamList.includes(jamNum);
@@ -2725,59 +2798,78 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                             <td
                               key={jamNum}
                               className={`py-2 px-2.5 min-w-[135px] border-r border-slate-200 dark:border-slate-700 last:border-r-0 align-top ${
-                                !matchedSchedule && isUpacara
+                                matchedSchedules.length === 0 && isUpacara
                                   ? 'bg-rose-50/30 dark:bg-rose-950/15'
-                                  : !matchedSchedule && isPembiasaan
+                                  : matchedSchedules.length === 0 && isPembiasaan
                                   ? 'bg-emerald-50/30 dark:bg-emerald-950/15'
                                   : ''
                               }`}
                             >
-                              {matchedSchedule ? (
-                                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1">
-                                  {isUpacara && (
-                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 mb-0.5">
-                                      <Flag className="w-2.5 h-2.5 text-rose-600 shrink-0" />
-                                      <span>Upacara</span>
-                                    </div>
-                                  )}
-                                  {isPembiasaan && (
-                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 mb-0.5">
-                                      <Sparkles className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                                      <span>Pembiasaan</span>
-                                    </div>
-                                  )}
-                                  <div className="font-extrabold text-blue-700 dark:text-blue-300 text-xs line-clamp-2">
-                                    {cleanMapelName(matchedSchedule.mataPelajaran)}
-                                  </div>
-                                  <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">
-                                    {matrixMode === 'kelas'
-                                      ? matchedSchedule.guruNama
-                                      : matchedSchedule.kelasNama}
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 font-mono flex items-center justify-end pt-0.5">
-                                    {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
-                                      <div className="flex items-center gap-0.5 shrink-0">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleStartEdit(matchedSchedule)}
-                                          className="p-1 rounded-md text-blue-600 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
-                                          title="Edit Jadwal"
-                                          aria-label="Edit Jadwal"
-                                        >
-                                          <Edit className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDelete(matchedSchedule)}
-                                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                                          title="Hapus Jadwal"
-                                          aria-label="Hapus Jadwal"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                              {matchedSchedules.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  {matchedSchedules.map((matchedSchedule, sIdx) => (
+                                    <div
+                                      key={matchedSchedule.id || sIdx}
+                                      className={`p-2 rounded-xl border space-y-1 ${
+                                        matchedSchedules.length > 1
+                                          ? 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 shadow-2xs'
+                                          : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/60'
+                                      }`}
+                                    >
+                                      {matchedSchedules.length > 1 && sIdx === 0 && (
+                                        <div className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200 mb-0.5">
+                                          <span>Tumpang Tindih ({matchedSchedules.length} Jadwal)</span>
+                                        </div>
+                                      )}
+                                      {isUpacara && (
+                                        <div className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 mb-0.5">
+                                          <Flag className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                          <span>Upacara</span>
+                                        </div>
+                                      )}
+                                      {isPembiasaan && (
+                                        <div className="inline-flex items-center gap-1 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 mb-0.5">
+                                          <Sparkles className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                          <span>Pembiasaan</span>
+                                        </div>
+                                      )}
+                                      <div className="font-extrabold text-blue-700 dark:text-blue-300 text-xs line-clamp-2">
+                                        {cleanMapelName(matchedSchedule.mataPelajaran)}
                                       </div>
-                                    )}
-                                  </div>
+                                      <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">
+                                        {matrixMode === 'kelas'
+                                          ? matchedSchedule.guruNama
+                                          : matchedSchedule.kelasNama}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between pt-0.5">
+                                        <span className="text-[9px] px-1 py-0.2 rounded bg-blue-100/60 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-bold">
+                                          {matchedSchedule.shift || 'Pagi'}
+                                        </span>
+                                        {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
+                                          <div className="flex items-center gap-0.5 shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleStartEdit(matchedSchedule)}
+                                              className="p-1 rounded-md text-blue-600 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
+                                              title="Edit Jadwal"
+                                              aria-label="Edit Jadwal"
+                                            >
+                                              <Edit className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDelete(matchedSchedule)}
+                                              className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
+                                              title="Hapus Jadwal"
+                                              aria-label="Hapus Jadwal"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
                               ) : isUpacara ? (
                                 <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/70 space-y-1 shadow-2xs">

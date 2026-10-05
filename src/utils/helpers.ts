@@ -1,4 +1,4 @@
-import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit } from '../types';
+import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit, JadwalMengajarGuru } from '../types';
 import { DEMO_DATASET, DEFAULT_TOGA_LOGO, getTodayString, randomizeWaForStudents } from '../data/initialData';
 import {
   DEFAULT_SECURITY_CONFIG,
@@ -7,6 +7,39 @@ import {
 } from './securityEngine';
 
 export { getTodayString };
+
+export function mergeJadwalMengajar(
+  localList: JadwalMengajarGuru[] = [],
+  serverList: JadwalMengajarGuru[] = [],
+  deletedIds: string[] = []
+): JadwalMengajarGuru[] {
+  if (!Array.isArray(localList)) localList = [];
+  if (!Array.isArray(serverList)) serverList = [];
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+
+  if (localList.length === 0 && serverList.length === 0) return [];
+
+  const filteredLocal = localList.filter((j) => j && j.id && !deletedSet.has(String(j.id)));
+  const filteredServer = serverList.filter((j) => j && j.id && !deletedSet.has(String(j.id)));
+
+  const map = new Map<string, JadwalMengajarGuru>();
+
+  // 1. Insert server list first
+  for (const s of filteredServer) {
+    if (s && s.id && !deletedSet.has(String(s.id))) {
+      map.set(String(s.id), { ...s });
+    }
+  }
+
+  // 2. Local list merges / overwrites server list (preserving recent client additions/edits)
+  for (const l of filteredLocal) {
+    if (l && l.id && !deletedSet.has(String(l.id))) {
+      map.set(String(l.id), { ...(map.get(String(l.id)) || {}), ...l });
+    }
+  }
+
+  return Array.from(map.values()).filter((j) => !deletedSet.has(String(j.id)));
+}
 
 export function mergeChatMessages(
   localMsgs: ChatMessage[] = [],
@@ -1255,20 +1288,7 @@ export function loadAppData(): AppData {
         merged.lockedAccounts = [];
       }
       if (merged.jadwalMengajar && Array.isArray(merged.jadwalMengajar)) {
-        // Filter out legacy demo schedules (JADWAL_1 - JADWAL_10, JADWAL_S1 - JADWAL_S8, FALLBACK_*)
-        const DEMO_JADWAL_IDS = new Set([
-          'JADWAL_1', 'JADWAL_2', 'JADWAL_3', 'JADWAL_4', 'JADWAL_5',
-          'JADWAL_6', 'JADWAL_7', 'JADWAL_8', 'JADWAL_9', 'JADWAL_10',
-          'JADWAL_S1', 'JADWAL_S2', 'JADWAL_S3', 'JADWAL_S4', 'JADWAL_S5',
-          'JADWAL_S6', 'JADWAL_S7', 'JADWAL_S8'
-        ]);
-        merged.jadwalMengajar = merged.jadwalMengajar.filter((j: any) => {
-          if (!j || !j.id) return false;
-          const idStr = String(j.id);
-          if (DEMO_JADWAL_IDS.has(idStr)) return false;
-          if (idStr.startsWith('FALLBACK_')) return false;
-          return true;
-        });
+        merged.jadwalMengajar = merged.jadwalMengajar.filter((j: any) => j && j.id);
       } else {
         merged.jadwalMengajar = [];
       }
@@ -1309,8 +1329,8 @@ export function loadAppData(): AppData {
       if (merged.siswa && Array.isArray(merged.siswa)) {
         merged.siswa = merged.siswa.map((s: any) => ({
           ...s,
-          noWa: '',
-          noWaOrangTua: '',
+          noWa: s.noWa || '',
+          noWaOrangTua: s.noWaOrangTua || '',
         }));
       }
 

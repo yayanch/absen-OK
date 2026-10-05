@@ -267,33 +267,52 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
   const [selectedTanggal, setSelectedTanggal] = useState<string>(getTodayString());
   const [activeTab, setActiveTab] = useState<'presensi' | 'siswa' | 'guru'>('presensi');
 
-  // Access control for Absensi Manual Guru: Admin, Kurikulum, and Guru Piket
+  // Access control for Absensi Manual Guru: Admin and Kurikulum ONLY (Piket accounts are strictly excluded)
   const canAccessTeacherAttendance = useMemo(() => {
     const role = String(currentUser.role || '').toLowerCase();
-    if (['admin', 'superadmin', 'administrator', 'kurikulum', 'piket', 'guru_piket', 'piket_guru'].includes(role)) {
+    
+    // Explicitly exclude any piket role or account (piket, piket_guru, piket_kesiswaan, piket_kelas, guru_piket, etc.)
+    if (
+      role.includes('piket') ||
+      ['piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan', 'piket_kelas', 'piketkelas'].includes(role)
+    ) {
+      return false;
+    }
+
+    if (['admin', 'superadmin', 'administrator', 'kurikulum', 'wks_kurikulum'].includes(role)) {
       return true;
     }
 
     const userData = currentUser.data as any;
     if (userData) {
+      const uRole = String(userData.role || '').toLowerCase();
+      if (uRole.includes('piket')) return false;
+
       const tugas = String(userData.tugasTambahan || '').toLowerCase();
       const jabatan = String(userData.jabatan || '').toLowerCase();
-      if (tugas.includes('piket') || tugas.includes('kurikulum') || jabatan.includes('piket') || jabatan.includes('kurikulum')) {
+      if (tugas.includes('piket') || jabatan.includes('piket')) {
+        return false;
+      }
+
+      if (tugas.includes('kurikulum') || jabatan.includes('kurikulum')) {
         return true;
       }
 
       if (Array.isArray(userData.tugasTambahanList)) {
         const hasMatch = userData.tugasTambahanList.some((t: string) => {
           const l = String(t).toLowerCase();
-          return l.includes('piket') || l.includes('kurikulum');
+          return l.includes('kurikulum');
         });
         if (hasMatch) return true;
       }
 
       if (Array.isArray(userData.additionalRoles)) {
+        const hasPiket = userData.additionalRoles.some((r: string) => String(r).toLowerCase().includes('piket'));
+        if (hasPiket) return false;
+
         const hasMatch = userData.additionalRoles.some((r: string) => {
           const l = String(r).toLowerCase();
-          return l === 'kurikulum' || l.includes('piket');
+          return l === 'kurikulum' || l === 'wks_kurikulum';
         });
         if (hasMatch) return true;
       }
@@ -1495,7 +1514,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     setFormNisn('');
     setFormNama('');
     setFormGender('L');
-    setFormNoWa('08' + Math.floor(100000000 + Math.random() * 900000000));
+    setFormNoWa('');
     setFormStatus('aktif');
     setIsStudentModalOpen(true);
   };
@@ -2649,23 +2668,13 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
                     Nomor WhatsApp Siswa / Orang Tua
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={formNoWa}
-                      onChange={(e) => setFormNoWa(e.target.value)}
-                      placeholder="Contoh: 081234567890"
-                      className="flex-1 py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFormNoWa('08' + Math.floor(100000000 + Math.random() * 900000000))}
-                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
-                      title="Acak Nomor WA"
-                    >
-                      Acak WA
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={formNoWa}
+                    onChange={(e) => setFormNoWa(e.target.value)}
+                    placeholder="Contoh: 081234567890 (Opsional)"
+                    className="w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary"
+                  />
                 </div>
 
                 <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-100 dark:border-slate-800">

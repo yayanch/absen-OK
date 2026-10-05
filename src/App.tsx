@@ -22,6 +22,7 @@ import {
   mergeHomeVisits,
   mergeSiswa,
   mergePresensi,
+  mergeJadwalMengajar,
   getTodayString
 } from './utils/helpers';
 import { DEMO_DATASET } from './data/initialData';
@@ -347,6 +348,7 @@ export default function App() {
               const allDeletedPelanggaran = Array.from(new Set([...(prev.deletedPelanggaranIds || []), ...(data.appData.deletedPelanggaranIds || [])]));
               const allDeletedHomeVisits = Array.from(new Set([...(prev.deletedHomeVisitIds || []), ...(data.appData.deletedHomeVisitIds || [])]));
               const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
+              const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
               const mergedPelanggaran = mergePelanggaran(prev.pelanggaran, data.appData.pelanggaran, allDeletedPelanggaran);
               const mergedHomeVisits = mergeHomeVisits(prev.homeVisits, data.appData.homeVisits, allDeletedHomeVisits);
               const mergedSiswa = mergeSiswa(prev.siswa, data.appData.siswa, allDeletedSiswa);
@@ -358,9 +360,7 @@ export default function App() {
               const mergedKelas = (Array.isArray(data.appData.kelas) && data.appData.kelas.length > 0) ? data.appData.kelas : prev.kelas;
               const mergedWaliKelas = (Array.isArray(data.appData.waliKelas) && data.appData.waliKelas.length > 0) ? data.appData.waliKelas : prev.waliKelas;
               const mergedJurusan = (Array.isArray(data.appData.jurusan) && data.appData.jurusan.length > 0) ? data.appData.jurusan : prev.jurusan;
-              const mergedJadwal = (Array.isArray(data.appData.jadwalMengajar) && data.appData.jadwalMengajar.length > 0)
-                ? data.appData.jadwalMengajar
-                : (prev.jadwalMengajar || []);
+              const mergedJadwal = mergeJadwalMengajar(prev.jadwalMengajar, data.appData.jadwalMengajar, allDeletedJadwal);
               const mergedMapel = (Array.isArray(data.appData.mataPelajaran) && data.appData.mataPelajaran.length > 0)
                 ? data.appData.mataPelajaran
                 : (prev.mataPelajaran || []);
@@ -444,6 +444,7 @@ export default function App() {
                 deletedPelanggaranIds: allDeletedPelanggaran,
                 deletedHomeVisitIds: allDeletedHomeVisits,
                 deletedSiswaIds: allDeletedSiswa,
+                deletedJadwalIds: allDeletedJadwal,
               };
               const newStr = JSON.stringify(targetAppData);
               if (!prev || newStr.length !== JSON.stringify(prev).length || newStr !== JSON.stringify(prev)) {
@@ -486,13 +487,12 @@ export default function App() {
         setAppData((prev) => {
           const mergedMessages = mergeChatMessages(prev.chatMessages, customEvent.detail.chatMessages);
           const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(customEvent.detail.deletedSiswaIds || [])]));
+          const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(customEvent.detail.deletedJadwalIds || [])]));
           const mergedSiswa = mergeSiswa(prev.siswa, customEvent.detail.siswa, allDeletedSiswa);
           const customPresensi = customEvent.detail.presensi || {};
           const isCustomPresensiReset = Object.keys(customPresensi).length === 0;
           const mergedPresensi = isCustomPresensiReset ? {} : mergePresensi(prev.presensi, customPresensi);
-          const customJadwal = (Array.isArray(customEvent.detail.jadwalMengajar) && customEvent.detail.jadwalMengajar.length > 0)
-            ? customEvent.detail.jadwalMengajar
-            : prev.jadwalMengajar;
+          const customJadwal = mergeJadwalMengajar(prev.jadwalMengajar, customEvent.detail.jadwalMengajar, allDeletedJadwal);
           const customMapel = (Array.isArray(customEvent.detail.mataPelajaran) && customEvent.detail.mataPelajaran.length > 0)
             ? customEvent.detail.mataPelajaran
             : prev.mataPelajaran;
@@ -540,6 +540,7 @@ export default function App() {
             blockedIps: customBlockedIps,
             chatMessages: mergedMessages,
             deletedSiswaIds: allDeletedSiswa,
+            deletedJadwalIds: allDeletedJadwal,
           };
         });
       }
