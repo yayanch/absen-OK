@@ -251,7 +251,7 @@ export function generate36StudentsForAllClasses(kelasList: Kelas[]): Siswa[] {
         kelasId: k.id,
         status: 'aktif',
         noWa: '',
-        namaOrangTua: `Bpk. ${lName} / Ibu`,
+        namaOrangTua: '',
         noWaOrangTua: '',
       });
     }

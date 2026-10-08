@@ -5,7 +5,7 @@ import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, Al
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppData, Siswa, Kelas, UserSession } from '../../types';
 import { sortKelasList } from '../../data/initialData';
-import { compressBase64Image, addAuditLog, formatTTL, extractKelasTingkat, deduplicateSiswa } from '../../utils/helpers';
+import { compressBase64Image, addAuditLog, formatTTL, extractKelasTingkat, deduplicateSiswa, syncSiswaProfileToServer, saveSessionUser } from '../../utils/helpers';
 import { Pagination } from '../Pagination';
 import { ImportSiswaModal } from './ImportSiswaModal';
 import { PageHeader } from '../common/UIComponents';
@@ -24,6 +24,7 @@ interface MasterSiswaViewProps {
     onConfirm: () => void
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onUpdateCurrentUser?: (session: UserSession) => void;
   initialSearchQuery?: string;
   initialKelasId?: string;
 }
@@ -237,6 +238,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   onCloseModal,
   onConfirmModal,
   onShowToast,
+  onUpdateCurrentUser,
   initialSearchQuery,
   initialKelasId,
 }) => {
@@ -411,30 +413,35 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     foto: string = ''
   ) => {
     let newSiswa = [...appData.siswa];
+    let savedSiswaObj: Siswa | null = null;
+    const cleanNamaOrtu = (namaOrangTua || '').trim();
+
     if (id) {
-      newSiswa = newSiswa.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              nisn,
-              nama,
-              gender,
-              kelasId,
-              status,
-              noWa,
-              namaOrangTua,
-              noWaOrangTua,
-              alamat,
-              tempatLahir,
-              tanggalLahir,
-              password: password.trim() ? password.trim() : (s.password || s.nisn || ''),
-              foto,
-            }
-          : s
-      );
+      newSiswa = newSiswa.map((s) => {
+        if (s.id === id) {
+          savedSiswaObj = {
+            ...s,
+            nisn,
+            nama,
+            gender,
+            kelasId,
+            status,
+            noWa,
+            namaOrangTua: cleanNamaOrtu,
+            noWaOrangTua,
+            alamat,
+            tempatLahir,
+            tanggalLahir,
+            password: password.trim() ? password.trim() : (s.password || s.nisn || ''),
+            foto,
+          };
+          return savedSiswaObj;
+        }
+        return s;
+      });
       onShowToast('Data Siswa & Profil berhasil diperbarui!', 'success');
     } else {
-      newSiswa.push({
+      savedSiswaObj = {
         id: 'SIS_' + Date.now(),
         nisn,
         nama,
@@ -442,15 +449,31 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         kelasId,
         status,
         noWa: noWa || '',
-        namaOrangTua: namaOrangTua || 'Bapak / Ibu',
+        namaOrangTua: cleanNamaOrtu,
         noWaOrangTua: noWaOrangTua || '',
         alamat,
         tempatLahir,
         tanggalLahir,
         password: password.trim() || nisn || '',
         foto,
-      });
+      };
+      newSiswa.push(savedSiswaObj);
       onShowToast('Siswa baru berhasil ditambahkan!', 'success');
+    }
+
+    if (savedSiswaObj && currentUser && (currentUser.role === 'siswa' || currentUser.role === 'murid')) {
+      const currentSId = (currentUser.data as any)?.id;
+      const currentSNisn = (currentUser.data as any)?.nisn;
+      if (currentSId === id || (currentSNisn && (currentSNisn === nisn || currentSNisn === (savedSiswaObj as any).nisn))) {
+        const updatedSession: UserSession = {
+          ...currentUser,
+          data: savedSiswaObj,
+        };
+        saveSessionUser(updatedSession);
+        if (onUpdateCurrentUser) {
+          onUpdateCurrentUser(updatedSession);
+        }
+      }
     }
 
     const addedOrEditedId = id || ('SIS_' + Date.now());
@@ -462,6 +485,13 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       nextAppData = addAuditLog(nextAppData, 'Menambah siswa baru', `Menambah siswa baru: ${nama} (NISN: ${nisn})`);
     }
     onUpdateAppData(nextAppData);
+
+    // Fast-track immediate synchronization to server and MySQL database
+    if (savedSiswaObj) {
+      syncSiswaProfileToServer(savedSiswaObj).catch((err) => {
+        console.warn('Sync siswa error:', err);
+      });
+    }
 
     onCloseModal();
   };
@@ -1354,7 +1384,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               kelasId: targetKelasId,
               status: 'aktif',
               noWa: noWa || '',
-              namaOrangTua: namaOrangTua || 'Bapak / Ibu',
+              namaOrangTua: (namaOrangTua || '').trim(),
               noWaOrangTua: noWaOrangTua || '',
             });
             addedCount++;

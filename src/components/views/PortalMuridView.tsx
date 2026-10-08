@@ -55,7 +55,7 @@ import {
 import { AppData, SekolahConfig, Siswa, UserSession, SiswaPresensiItem, ViewType, PresensiStatus, PengumumanSekolah, JadwalMengajarGuru } from '../../types';
 import { INITIAL_PENGUMUMAN } from '../../data/initialData';
 import { CurrentWeeklyShiftCard } from '../dashboard/CurrentWeeklyShiftCard';
-import { getTodayString, compressBase64Image, saveSessionUser, normalizePresensiStatus, determinePresensiStatusByTime, getShiftTimingForStudent, formatDateIndo, getEffectiveSchoolDays } from '../../utils/helpers';
+import { getTodayString, compressBase64Image, saveSessionUser, normalizePresensiStatus, determinePresensiStatusByTime, getShiftTimingForStudent, formatDateIndo, getEffectiveSchoolDays, syncSiswaProfileToServer } from '../../utils/helpers';
 
 interface PortalMuridViewProps {
   appData: AppData;
@@ -79,7 +79,7 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
   onLogout,
 }) => {
   const sessionSiswa = currentUser.data as Siswa;
-  const siswaFromApp = (appData.siswa || []).find((s) => s.id === sessionSiswa?.id);
+  const siswaFromApp = (appData.siswa || []).find((s) => (sessionSiswa?.id && s.id === sessionSiswa.id) || (sessionSiswa?.nisn && s.nisn === sessionSiswa.nisn));
   const siswa = siswaFromApp || sessionSiswa;
   const today = getTodayString();
   const currentStudentTiming = React.useMemo(() => {
@@ -345,7 +345,12 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
 
     onUpdateAppData(updatedAppData);
 
-    // 2. Update session user
+    // 2. Fast-track immediate server & MySQL database sync
+    syncSiswaProfileToServer(updatedSiswaObj).catch((err) => {
+      console.warn('Sync student profile error:', err);
+    });
+
+    // 3. Update session user
     const newSession: UserSession = {
       ...currentUser,
       data: updatedSiswaObj,
@@ -356,7 +361,7 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
       onUpdateCurrentUser(newSession);
     }
 
-    onShowToast('Biodata & profil Anda berhasil diperbarui!', 'success');
+    onShowToast('Biodata & profil Anda berhasil diperbarui dan disinkronkan!', 'success');
     setShowEditBiodataModal(false);
   };
 

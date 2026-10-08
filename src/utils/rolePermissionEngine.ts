@@ -52,6 +52,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     iconName: 'ClipboardCheck',
   },
   {
+    id: 'absen_harian_guru',
+    label: 'Absen Harian Guru',
+    shortDesc: 'Presensi kehadiran harian guru mengajar terintegrasi jadwal KBM dan switcher Shift & Kelompok',
+    category: 'presensi',
+    iconName: 'UserCheck',
+  },
+  {
     id: 'broadcast_wa',
     label: 'Tulis Broadcast WA',
     shortDesc: 'Tulis dan kirim pesan broadcast WhatsApp untuk Guru dan Wali Kelas kepada siswa / orang tua',
@@ -455,6 +462,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'absen_harian_guru',
       'master_guru',
       'master_mapel',
       'mapel_kelas_guru',
@@ -593,12 +601,11 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'dashboard',
       'petugas_piket',
       'presensi_input',
+      'absen_harian_guru',
       'broadcast_wa',
-      'rekap_pengisian_kelas',
       'catatan_pelanggaran',
       'ekstrakurikuler',
       'absen_qr',
-      'rekap_harian',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -649,22 +656,58 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
     const norm = normalizeRoleKey(stored.roleId);
     const existing = roleMap.get(norm);
     if (existing) {
+      let allowed = Array.isArray(stored.allowedMenus) ? [...stored.allowedMenus] : existing.allowedMenus;
+      
+      // Enforce: absen_harian_guru is ONLY for kurikulum, piket_guru, piket, and admin
+      const isAllowedAbsenGuru =
+        norm === 'kurikulum' ||
+        norm === 'admin_kurikulum' ||
+        norm === 'piket_guru' ||
+        norm === 'piket' ||
+        norm === 'admin' ||
+        norm === 'superadmin';
+
+      if (!isAllowedAbsenGuru) {
+        allowed = allowed.filter((m) => m !== 'absen_harian_guru');
+      } else if (!allowed.includes('absen_harian_guru')) {
+        const pIdx = allowed.indexOf('presensi_input');
+        if (pIdx !== -1) allowed.splice(pIdx + 1, 0, 'absen_harian_guru');
+        else allowed.push('absen_harian_guru');
+      }
+
+      // Remove rekap_pengisian_kelas and rekap_harian from piket_guru
+      if (norm === 'piket_guru' || norm === 'piket') {
+        allowed = allowed.filter((m) => m !== 'rekap_pengisian_kelas' && m !== 'rekap_harian');
+      }
       roleMap.set(norm, {
         ...existing,
         roleName: stored.roleName || existing.roleName,
         description: stored.description || existing.description,
         badgeColor: stored.badgeColor || existing.badgeColor,
-        allowedMenus: Array.isArray(stored.allowedMenus) ? [...stored.allowedMenus] : existing.allowedMenus,
+        allowedMenus: allowed,
       });
     } else {
       // It's a custom role stored in rolePermissions
+      let customAllowed: ViewType[] = Array.isArray(stored.allowedMenus) ? ([...stored.allowedMenus] as ViewType[]) : ['dashboard', 'live_chat'];
+      // Hide absen_harian_guru from custom roles unless explicitly kurikulum/piket_guru
+      const isAllowedAbsenGuru =
+        norm === 'kurikulum' ||
+        norm === 'admin_kurikulum' ||
+        norm === 'piket_guru' ||
+        norm === 'piket' ||
+        norm === 'admin' ||
+        norm === 'superadmin';
+      if (!isAllowedAbsenGuru) {
+        customAllowed = customAllowed.filter((m) => m !== 'absen_harian_guru');
+      }
+
       roleMap.set(norm, {
         roleId: stored.roleId,
         roleName: stored.roleName,
         description: stored.description || 'Role kustom pengguna',
         badgeColor: stored.badgeColor || 'indigo',
         isSystem: false,
-        allowedMenus: Array.isArray(stored.allowedMenus) ? [...stored.allowedMenus] : ['dashboard', 'live_chat'],
+        allowedMenus: customAllowed,
       });
     }
   });
@@ -672,14 +715,27 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
   // Ensure any customRoles in appData.customRoles are registered
   customRoles.forEach((cr) => {
     const norm = normalizeRoleKey(cr.id || cr.name);
+    const isAllowedAbsenGuru =
+      norm === 'kurikulum' ||
+      norm === 'admin_kurikulum' ||
+      norm === 'piket_guru' ||
+      norm === 'piket' ||
+      norm === 'admin' ||
+      norm === 'superadmin';
+
     if (!roleMap.has(norm)) {
+      let customAllowed: ViewType[] = cr.allowedMenus ? ([...cr.allowedMenus] as ViewType[]) : ['dashboard', 'live_chat'];
+      if (!isAllowedAbsenGuru) {
+        customAllowed = customAllowed.filter((m) => m !== 'absen_harian_guru');
+      }
+
       roleMap.set(norm, {
         roleId: cr.id || cr.name,
         roleName: cr.label || cr.name,
         description: cr.description || 'Role kustom sekolah',
         badgeColor: cr.color || 'indigo',
         isSystem: false,
-        allowedMenus: cr.allowedMenus || ['dashboard', 'live_chat'],
+        allowedMenus: customAllowed,
       });
     } else {
       const current = roleMap.get(norm)!;
@@ -691,7 +747,11 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
         current.badgeColor = cr.color;
       }
       if (cr.allowedMenus && !storedPermissions.some((p) => normalizeRoleKey(p.roleId) === norm)) {
-        current.allowedMenus = [...cr.allowedMenus];
+        let customAllowed: ViewType[] = [...cr.allowedMenus] as ViewType[];
+        if (!isAllowedAbsenGuru) {
+          customAllowed = customAllowed.filter((m) => m !== 'absen_harian_guru');
+        }
+        current.allowedMenus = customAllowed;
       }
     }
   });
@@ -777,6 +837,9 @@ export function hasMenuAccess(
   // If any assigned role has access to this view, grant access
   return rolesToCheck.some((singleRole) => checkSingleRoleMenuAccess(singleRole, view, appData));
 }
+
+// Alias export for convenience
+export const isMenuAllowed = hasMenuAccess;
 
 /**
  * Returns role display name, color badge class, and description for any standard or custom role.

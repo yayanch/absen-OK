@@ -4,7 +4,6 @@ import {
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo } from '../../utils/helpers';
-import { RoleQuickActions } from './RoleQuickActions';
 import { TeacherScheduleWidget } from './TeacherScheduleWidget';
 import { PageHeader } from '../common/UIComponents';
 
@@ -44,13 +43,6 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
             className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
           />
         }
-      />
-
-      {/* Quick Actions Guru */}
-      <RoleQuickActions
-        role="guru"
-        onNavigateView={onNavigateView}
-        onNavigateToInput={() => onNavigateToInput()}
       />
 
       {/* Widget Utama Guru: Jadwal Mengajar Hari Ini */}

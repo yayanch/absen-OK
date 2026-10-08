@@ -1,5 +1,5 @@
 import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit, JadwalMengajarGuru } from '../types';
-import { DEMO_DATASET, DEFAULT_TOGA_LOGO, getTodayString, randomizeWaForStudents } from '../data/initialData';
+import { DEMO_DATASET, DEFAULT_TOGA_LOGO, getTodayString, randomizeWaForStudents, INITIAL_HOME_VISITS, INITIAL_PELANGGARAN } from '../data/initialData';
 import {
   DEFAULT_SECURITY_CONFIG,
   INITIAL_BLOCKED_IPS,
@@ -89,31 +89,21 @@ export function mergePelanggaran(
   if (!Array.isArray(serverList)) serverList = [];
   const deletedSet = new Set(deletedIds || []);
 
-  const filteredServer = serverList.filter(item => item && item.id && !deletedSet.has(item.id));
-  const filteredLocal = localList.filter(item => item && item.id && !deletedSet.has(item.id));
+  const map = new Map<string, Pelanggaran>();
 
-  const serverMap = new Map<string, Pelanggaran>();
-  for (const item of filteredServer) {
-    if (item && item.id) {
-      serverMap.set(item.id, item);
+  for (const item of localList) {
+    if (item && item.id && !deletedSet.has(item.id)) {
+      map.set(item.id, item);
     }
   }
 
-  const result: Pelanggaran[] = [...filteredServer];
-  const now = Date.now();
-
-  for (const localItem of filteredLocal) {
-    if (!localItem || !localItem.id) continue;
-    if (!serverMap.has(localItem.id)) {
-      const tsMatch = localItem.id.match(/^PLG_(\d+)/);
-      const itemTime = tsMatch ? parseInt(tsMatch[1], 10) : 0;
-      const isRecent = !itemTime || (now - itemTime < 45000);
-
-      if (isRecent) {
-        result.push(localItem);
-      }
+  for (const item of serverList) {
+    if (item && item.id && !deletedSet.has(item.id)) {
+      map.set(item.id, { ...(map.get(item.id) || {}), ...item });
     }
   }
+
+  const result = Array.from(map.values());
 
   return result.sort((a, b) => {
     const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -132,31 +122,21 @@ export function mergeHomeVisits(
   if (!Array.isArray(serverList)) serverList = [];
   const deletedSet = new Set(deletedIds || []);
 
-  const filteredServer = serverList.filter(item => item && item.id && !deletedSet.has(item.id));
-  const filteredLocal = localList.filter(item => item && item.id && !deletedSet.has(item.id));
+  const map = new Map<string, HomeVisit>();
 
-  const serverMap = new Map<string, HomeVisit>();
-  for (const item of filteredServer) {
-    if (item && item.id) {
-      serverMap.set(item.id, item);
+  for (const item of localList) {
+    if (item && item.id && !deletedSet.has(item.id)) {
+      map.set(item.id, item);
     }
   }
 
-  const result: HomeVisit[] = [...filteredServer];
-  const now = Date.now();
-
-  for (const localItem of filteredLocal) {
-    if (!localItem || !localItem.id) continue;
-    if (!serverMap.has(localItem.id)) {
-      const tsMatch = localItem.id.match(/^HV_(\d+)/);
-      const itemTime = tsMatch ? parseInt(tsMatch[1], 10) : 0;
-      const isRecent = !itemTime || (now - itemTime < 45000);
-
-      if (isRecent) {
-        result.push(localItem);
-      }
+  for (const item of serverList) {
+    if (item && item.id && !deletedSet.has(item.id)) {
+      map.set(item.id, { ...(map.get(item.id) || {}), ...item });
     }
   }
+
+  const result = Array.from(map.values());
 
   return result.sort((a, b) => {
     const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -228,11 +208,11 @@ export function mergeSiswa(
         namaOrangTua: typeof existing.namaOrangTua === 'string' ? existing.namaOrangTua : (s.namaOrangTua || ''),
         noWaOrangTua: typeof existing.noWaOrangTua === 'string' ? existing.noWaOrangTua : (s.noWaOrangTua || ''),
         foto: existing.foto !== undefined ? existing.foto : (s.foto || ''),
-        username: existing.username || s.username,
-        password: existing.password || s.password,
-        tempatLahir: existing.tempatLahir || s.tempatLahir,
-        tanggalLahir: existing.tanggalLahir || s.tanggalLahir,
-        alamat: existing.alamat || s.alamat,
+        username: typeof existing.username === 'string' ? existing.username : (s.username || ''),
+        password: typeof existing.password === 'string' ? existing.password : (s.password || ''),
+        tempatLahir: typeof existing.tempatLahir === 'string' ? existing.tempatLahir : (s.tempatLahir || ''),
+        tanggalLahir: typeof existing.tanggalLahir === 'string' ? existing.tanggalLahir : (s.tanggalLahir || ''),
+        alamat: typeof existing.alamat === 'string' ? existing.alamat : (s.alamat || ''),
       });
       continue;
     }
@@ -254,11 +234,11 @@ export function mergeSiswa(
         namaOrangTua: typeof existing.namaOrangTua === 'string' ? existing.namaOrangTua : (s.namaOrangTua || ''),
         noWaOrangTua: typeof existing.noWaOrangTua === 'string' ? existing.noWaOrangTua : (s.noWaOrangTua || ''),
         foto: existing.foto !== undefined ? existing.foto : (s.foto || ''),
-        username: existing.username || s.username,
-        password: existing.password || s.password,
-        tempatLahir: existing.tempatLahir || s.tempatLahir,
-        tanggalLahir: existing.tanggalLahir || s.tanggalLahir,
-        alamat: existing.alamat || s.alamat,
+        username: typeof existing.username === 'string' ? existing.username : (s.username || ''),
+        password: typeof existing.password === 'string' ? existing.password : (s.password || ''),
+        tempatLahir: typeof existing.tempatLahir === 'string' ? existing.tempatLahir : (s.tempatLahir || ''),
+        tanggalLahir: typeof existing.tanggalLahir === 'string' ? existing.tanggalLahir : (s.tanggalLahir || ''),
+        alamat: typeof existing.alamat === 'string' ? existing.alamat : (s.alamat || ''),
       });
       if (cleanNisn) nisnToIdMap.set(cleanNisn, sId);
     }
@@ -1334,6 +1314,13 @@ export function loadAppData(): AppData {
         }));
       }
 
+      if (!Array.isArray(merged.homeVisits) || (merged.homeVisits.length === 0 && (!merged.deletedHomeVisitIds || merged.deletedHomeVisitIds.length === 0))) {
+        merged.homeVisits = INITIAL_HOME_VISITS;
+      }
+      if (!Array.isArray(merged.pelanggaran) || (merged.pelanggaran.length === 0 && (!merged.deletedPelanggaranIds || merged.deletedPelanggaranIds.length === 0))) {
+        merged.pelanggaran = INITIAL_PELANGGARAN;
+      }
+
       return merged;
     }
   } catch (e) {
@@ -1464,6 +1451,23 @@ export function saveAppData(data: AppData): void {
     }
   } catch (e) {
     console.error('Failed to save data to local storage', e);
+  }
+}
+
+export async function syncSiswaProfileToServer(siswa: Siswa): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch('/api/siswa/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siswa }),
+    });
+    if (!res.ok) {
+      return { success: false, message: `Server error: HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    return { success: !!data.success, message: data.message };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Gagal terhubung ke server' };
   }
 }
 
@@ -1812,6 +1816,164 @@ export function formatHariMengajar(hariMengajar?: string[]): string {
     return 'Setiap Hari Kerja (Senin - Jumat)';
   }
   return hariMengajar.join(', ');
+}
+
+export interface TeacherShiftScheduleInfo {
+  isTeachingDay: boolean;
+  teachingDays: string[];
+  scheduledItems: Array<{
+    kelasId: string;
+    kelasNama: string;
+    mataPelajaran: string;
+    jamKe?: string;
+    jamKeList?: number[];
+    jamMulai?: string;
+    jamSelesai?: string;
+    shift: 'Pagi' | 'Siang';
+  }>;
+  shiftType: 'pagi' | 'siang' | 'kombinasi' | 'non_kbm';
+  shiftLabel: string;
+  recommendedJamMasuk: string;
+  recommendedJamPulang: string;
+  totalJp: number;
+  classesSummary: string;
+}
+
+export function getTeacherShiftScheduleInfo(
+  teacher: { id?: string; username?: string; nama?: string; nip?: string; hariMengajar?: string[] },
+  targetDateOrStr: Date | string,
+  appData: AppData
+): TeacherShiftScheduleInfo {
+  const targetDayName = getIndonesianDayName(targetDateOrStr).trim().toLowerCase();
+  const targetDateStr = typeof targetDateOrStr === 'string'
+    ? targetDateOrStr.slice(0, 10)
+    : targetDateOrStr.toISOString().slice(0, 10);
+
+  const shiftConfig = appData.shiftConfig;
+  const pagiMulai = shiftConfig?.pagiJamMasukMulai || appData.sekolah?.jamMasukMulai || '06:30';
+  const pagiSelesai = shiftConfig?.pagiJamMasukSelesai || appData.sekolah?.jamMasukSelesai || '06:45';
+  const pagiPulang = shiftConfig?.pagiJamPulang || '12:00';
+
+  const siangMulai = shiftConfig?.siangJamMasukMulai || '12:45';
+  const siangSelesai = shiftConfig?.siangJamMasukSelesai || '13:00';
+  const siangPulang = shiftConfig?.siangJamPulang || '16:50';
+
+  // Active shift period for the target date
+  const periods = (shiftConfig?.periods && shiftConfig.periods.length > 0)
+    ? shiftConfig.periods
+    : generateWeeklyShiftSchedules();
+
+  const activePeriod = periods.find(p => {
+    const sStr = p.startDate.slice(0, 10);
+    const eStr = p.endDate.slice(0, 10);
+    return targetDateStr >= sStr && targetDateStr <= eStr;
+  });
+
+  const teachingDays = Array.isArray(teacher.hariMengajar) && teacher.hariMengajar.length > 0
+    ? teacher.hariMengajar
+    : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+
+  const isConfiguredDay = teachingDays.some(h => String(h).trim().toLowerCase() === targetDayName);
+
+  // Match items from jadwalMengajar
+  const jadwalList = appData.jadwalMengajar || [];
+  const teacherItems = jadwalList.filter((item) => {
+    const dayMatches = String(item.hari || '').trim().toLowerCase() === targetDayName;
+    if (!dayMatches) return false;
+
+    const usernameMatches = Boolean(teacher.username && item.guruUsername && String(item.guruUsername).trim().toLowerCase() === String(teacher.username).trim().toLowerCase());
+    const idMatches = Boolean(teacher.id && item.guruId && String(item.guruId).trim().toLowerCase() === String(teacher.id).trim().toLowerCase());
+    const nameMatches = Boolean(teacher.nama && item.guruNama && String(item.guruNama).trim().toLowerCase() === String(teacher.nama).trim().toLowerCase());
+    const nipMatches = Boolean(teacher.nip && item.guruNip && String(item.guruNip).trim().toLowerCase() === String(teacher.nip).trim().toLowerCase());
+
+    return usernameMatches || idMatches || nameMatches || nipMatches;
+  });
+
+  let totalJp = 0;
+  const scheduledItems = teacherItems.map((item) => {
+    let itemShift: 'Pagi' | 'Siang' = 'Pagi';
+
+    // 1. Direct explicit shift on schedule item
+    const explicitShift = String(item.shift || '').toLowerCase();
+    if (explicitShift === 'siang') {
+      itemShift = 'Siang';
+    } else if (explicitShift === 'pagi') {
+      itemShift = 'Pagi';
+    } else {
+      // 2. Class-based shift from shiftConfig
+      const kNama = (item.kelasNama || '').toUpperCase();
+      const isKelompok2 = kNama.startsWith('XII') || kNama.includes('12') || kNama.includes('XII');
+      if (activePeriod) {
+        const pType = isKelompok2 ? activePeriod.kelompok2Type : activePeriod.kelompok1Type;
+        itemShift = pType === 'siang' ? 'Siang' : 'Pagi';
+      } else {
+        // Fallback: check jam ke / jam mulai
+        const firstJam = item.jamKeList?.[0] || parseInt(String(item.jamKe || '1'), 10) || 1;
+        itemShift = (firstJam >= 6 || (item.jamMulai && item.jamMulai >= '12:30')) ? 'Siang' : 'Pagi';
+      }
+    }
+
+    const jpCount = item.jumlahJp || (item.jamKeList ? item.jamKeList.length : 2);
+    totalJp += jpCount;
+
+    return {
+      kelasId: item.kelasId,
+      kelasNama: item.kelasNama,
+      mataPelajaran: item.mataPelajaran,
+      jamKe: item.jamKe,
+      jamKeList: item.jamKeList,
+      jamMulai: item.jamMulai,
+      jamSelesai: item.jamSelesai,
+      shift: itemShift
+    };
+  });
+
+  const hasPagi = scheduledItems.some(i => i.shift === 'Pagi');
+  const hasSiang = scheduledItems.some(i => i.shift === 'Siang');
+
+  let shiftType: 'pagi' | 'siang' | 'kombinasi' | 'non_kbm' = 'non_kbm';
+  let shiftLabel = 'Bebas KBM / Bukan Hari Mengajar';
+  let recommendedJamMasuk = pagiSelesai;
+  let recommendedJamPulang = pagiPulang;
+  const isTeachingDay = scheduledItems.length > 0 || isConfiguredDay;
+
+  if (hasPagi && hasSiang) {
+    shiftType = 'kombinasi';
+    shiftLabel = 'Shift Kombinasi (Pagi & Siang)';
+    recommendedJamMasuk = pagiSelesai;
+    recommendedJamPulang = siangPulang;
+  } else if (hasSiang) {
+    shiftType = 'siang';
+    shiftLabel = 'Shift Siang';
+    recommendedJamMasuk = siangSelesai;
+    recommendedJamPulang = siangPulang;
+  } else if (hasPagi) {
+    shiftType = 'pagi';
+    shiftLabel = 'Shift Pagi';
+    recommendedJamMasuk = pagiSelesai;
+    recommendedJamPulang = pagiPulang;
+  } else if (isConfiguredDay) {
+    shiftType = 'pagi';
+    shiftLabel = 'Jadwal Pokok (Pagi)';
+    recommendedJamMasuk = pagiSelesai;
+    recommendedJamPulang = pagiPulang;
+  }
+
+  const classesSummary = scheduledItems.length > 0
+    ? scheduledItems.map(i => `${i.kelasNama} (${i.mataPelajaran}${i.jamKe ? ` Jam ${i.jamKe}` : ''}) [${i.shift}]`).join(', ')
+    : (isConfiguredDay ? 'Terjadwal Hari Kerja' : 'Tidak Ada Jam Mengajar');
+
+  return {
+    isTeachingDay,
+    teachingDays,
+    scheduledItems,
+    shiftType,
+    shiftLabel,
+    recommendedJamMasuk,
+    recommendedJamPulang,
+    totalJp,
+    classesSummary
+  };
 }
 
 export const NAMA_BULAN_INDONESIA = [

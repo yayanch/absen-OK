@@ -87,10 +87,13 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     sekolah.loginBgPattern || LOGIN_PATTERN_PRESETS[0].id
   );
   const [bgColor, setBgColor] = useState<string>(sekolah.loginBgColor || '#1e3a8a');
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(
-    sekolah.loginBgOverlayOpacity ?? (sekolah.loginBgOpacity ? Math.round((1 - sekolah.loginBgOpacity) * 100) : 35)
+  const [bgOpacity, setBgOpacity] = useState<number>(
+    sekolah.bgImageOpacity ?? (typeof sekolah.loginBgOpacity === 'number' ? Math.round(sekolah.loginBgOpacity * 100) : 100)
   );
-  const [blurLevel, setBlurLevel] = useState<'none' | 'sm' | 'md' | 'lg'>(
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(
+    sekolah.loginBgOverlayOpacity ?? 35
+  );
+  const [blurLevel, setBlurLevel] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl'>(
     sekolah.loginBgBlur || 'none'
   );
   const [bgFit, setBgFit] = useState<'cover' | 'contain' | 'tile'>(
@@ -423,7 +426,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginBgPattern: bgType === 'pattern' ? bgPattern : undefined,
       loginBgColor: bgType === 'color' ? bgColor : undefined,
       loginBgOverlayOpacity: overlayOpacity,
-      loginBgOpacity: Number(((100 - overlayOpacity) / 100).toFixed(2)),
+      loginBgOpacity: Number((bgOpacity / 100).toFixed(2)),
+      bgImageOpacity: bgOpacity,
       loginBgBlur: blurLevel,
       loginBgFit: bgFit,
       loginBgOverlayColor: overlayColor,
@@ -466,6 +470,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setBgGradient(LOGIN_GRADIENT_PRESETS[0].gradient);
       setBgPattern(LOGIN_PATTERN_PRESETS[0].id);
       setBgColor('#1e3a8a');
+      setBgOpacity(100);
       setOverlayOpacity(35);
       setBlurLevel('none');
       setBgFit('cover');
@@ -541,34 +546,38 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
   // Helper to get preview style
   const getPreviewBackgroundStyle = (): React.CSSProperties => {
+    let base: React.CSSProperties = {};
     if (bgType === 'image' && bgImage) {
-      return {
+      base = {
         backgroundImage: `url(${bgImage})`,
         backgroundSize: bgFit === 'tile' ? 'auto' : bgFit,
         backgroundRepeat: bgFit === 'tile' ? 'repeat' : 'no-repeat',
         backgroundPosition: 'center center',
       };
-    }
-    if (bgType === 'gradient') {
-      return {
+    } else if (bgType === 'gradient') {
+      base = {
         background: bgGradient,
       };
-    }
-    if (bgType === 'pattern') {
+    } else if (bgType === 'pattern') {
       const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
-      return {
+      base = {
         backgroundColor: pat.bgBase,
         backgroundImage: pat.svgPattern,
         backgroundSize: '24px 24px',
       };
-    }
-    if (bgType === 'color') {
-      return {
+    } else if (bgType === 'color') {
+      base = {
         backgroundColor: bgColor,
       };
+    } else {
+      base = {
+        background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)',
+      };
     }
+
     return {
-      background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)',
+      ...base,
+      opacity: bgOpacity / 100,
     };
   };
 
@@ -577,6 +586,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       case 'sm': return 'blur(4px)';
       case 'md': return 'blur(8px)';
       case 'lg': return 'blur(16px)';
+      case 'xl': return 'blur(24px)';
       default: return 'none';
     }
   };
@@ -1209,41 +1219,237 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
               )}
 
               {/* OVERLAY & CARD GLASSMORPHISM */}
-              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                  <SlidersHorizontal className="w-4 h-4 text-blue-500" />
-                  <span>Pengaturan Lapisan Tint & Transparansi Kartu</span>
-                </h4>
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+                    <span>Pengaturan Transparansi, Blur & Efek Kaca</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-slate-400">Live Adjustment</span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <span>Kegelapan Overlay Background</span>
-                      <span className="text-blue-600">{overlayOpacity}%</span>
+                <div className="space-y-4">
+                  {/* 1. Transparansi / Opasitas Latar Background */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2.5">
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <span className="flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Transparansi / Opasitas Background Latar</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold">
+                        {bgOpacity}%
+                      </span>
                     </div>
                     <input
                       type="range"
                       min="0"
-                      max="90"
-                      value={overlayOpacity}
-                      onChange={(e) => setOverlayOpacity(parseInt(e.target.value, 10))}
+                      max="100"
+                      value={bgOpacity}
+                      onChange={(e) => setBgOpacity(parseInt(e.target.value, 10))}
                       className="w-full accent-blue-600 cursor-pointer"
                     />
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>0% (Transparan Penuh)</span>
+                      <div className="flex items-center gap-1.5">
+                        {[25, 50, 75, 100].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setBgOpacity(pct)}
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition cursor-pointer ${
+                              bgOpacity === pct
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300'
+                            }`}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                      <span>100% (Pekat Solid)</span>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <span>Opasitas Kaca Form Login</span>
-                      <span className="text-blue-600">{cardOpacity}%</span>
+                  {/* 2. Tingkat Blur Background Login (PENGATURAN BLUR BACKGROUND) */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-3">
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <span>Tingkat Blur Background Latar (Login)</span>
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold">
+                        {blurLevel === 'none' && '0px (Tanpa Blur / Jernih)'}
+                        {blurLevel === 'sm' && '4px (Blur Ringan)'}
+                        {blurLevel === 'md' && '8px (Blur Sedang)'}
+                        {blurLevel === 'lg' && '16px (Blur Kuat)'}
+                        {blurLevel === 'xl' && '24px (Blur Ekstra Kuat)'}
+                      </span>
                     </div>
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      value={cardOpacity}
-                      onChange={(e) => setCardOpacity(parseInt(e.target.value, 10))}
-                      className="w-full accent-blue-600 cursor-pointer"
-                    />
+
+                    {/* Presets Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {[
+                        { id: 'none', label: 'Tanpa Blur', px: '0px', desc: 'Tajam & Jernih' },
+                        { id: 'sm', label: 'Ringan', px: '4px', desc: 'Sentuhan Halus' },
+                        { id: 'md', label: 'Sedang', px: '8px', desc: 'Seimbang' },
+                        { id: 'lg', label: 'Kuat', px: '16px', desc: 'Fokus Form' },
+                        { id: 'xl', label: 'Ekstra', px: '24px', desc: 'Frosted Glass' },
+                      ].map((item) => {
+                        const isSelected = blurLevel === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setBlurLevel(item.id as 'none' | 'sm' | 'md' | 'lg' | 'xl')}
+                            className={`p-2.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[11px] font-bold">{item.label}</span>
+                              <span
+                                className={`text-[9px] font-mono font-semibold px-1 py-0.5 rounded ${
+                                  isSelected
+                                    ? 'bg-blue-700 text-blue-100'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                }`}
+                              >
+                                {item.px}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-[9px] mt-1 ${
+                                isSelected ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'
+                              }`}
+                            >
+                              {item.desc}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Interactive Slider */}
+                    <div className="space-y-1 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold shrink-0">
+                          Geser Slider:
+                        </span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="4"
+                          step="1"
+                          value={
+                            blurLevel === 'none' ? 0 :
+                            blurLevel === 'sm' ? 1 :
+                            blurLevel === 'md' ? 2 :
+                            blurLevel === 'lg' ? 3 : 4
+                          }
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            const map: ('none' | 'sm' | 'md' | 'lg' | 'xl')[] = ['none', 'sm', 'md', 'lg', 'xl'];
+                            setBlurLevel(map[val]);
+                          }}
+                          className="w-full accent-blue-600 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex justify-between text-[9px] text-slate-400 px-0.5 font-mono">
+                        <span>0px (Jernih)</span>
+                        <span>4px</span>
+                        <span>8px (Standar)</span>
+                        <span>16px</span>
+                        <span>24px (Maksimal)</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                      * Memberikan efek bokeh pada foto latar atau gradasi agar kartu form login lebih kontras dan mudah dibaca.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* 3. Kegelapan Overlay Tint */}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                      <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Kegelapan Tint Overlay</span>
+                        <span className="text-blue-600 font-mono font-bold">{overlayOpacity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="90"
+                        value={overlayOpacity}
+                        onChange={(e) => setOverlayOpacity(parseInt(e.target.value, 10))}
+                        className="w-full accent-blue-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>0% (Terang Asli)</span>
+                        <span>90% (Sangat Gelap)</span>
+                      </div>
+                    </div>
+
+                    {/* 4. Opasitas Kaca Form Login */}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                      <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Opasitas Kaca Kartu Login</span>
+                        <span className="text-blue-600 font-mono font-bold">{cardOpacity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        value={cardOpacity}
+                        onChange={(e) => setCardOpacity(parseInt(e.target.value, 10))}
+                        className="w-full accent-blue-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>10% (Kaca Tipis)</span>
+                        <span>100% (Solid Putih/Gelap)</span>
+                      </div>
+                    </div>
+
+                    {/* 5. Blur Kaca Kartu Form Login */}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2 sm:col-span-2">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span className="flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          <span>Efek Blur Kaca Kartu Login (Glassmorphism Blur)</span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold">
+                          {cardBlur === 'none' && 'Tanpa Blur'}
+                          {cardBlur === 'sm' && 'Ringan (sm)'}
+                          {cardBlur === 'md' && 'Sedang (md)'}
+                          {cardBlur === 'lg' && 'Kuat (lg)'}
+                          {cardBlur === 'xl' && 'Ekstra (xl)'}
+                          {cardBlur === '2xl' && 'Maksimal (2xl)'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                        {[
+                          { id: 'none', label: 'Tanpa' },
+                          { id: 'sm', label: 'Halus' },
+                          { id: 'md', label: 'Sedang' },
+                          { id: 'lg', label: 'Kuat' },
+                          { id: 'xl', label: 'Ekstra' },
+                          { id: '2xl', label: 'Maksimal' },
+                        ].map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setCardBlur(item.id as 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl')}
+                            className={`py-1.5 px-2 rounded-xl text-center text-xs font-bold transition cursor-pointer border ${
+                              cardBlur === item.id
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

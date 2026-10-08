@@ -315,6 +315,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <aside
+        style={{ opacity: 'var(--sidebar-opacity, 1)' }}
         className={`fixed md:sticky md:top-0 inset-y-0 left-0 z-50 md:z-30 ${styles.aside} overflow-hidden transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] flex flex-col shrink-0 h-screen h-[100dvh] min-h-screen ${
           isOpen
             ? 'w-[250px] translate-x-0 opacity-100'

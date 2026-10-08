@@ -28,7 +28,6 @@ import {
   Check,
   ChevronDown,
   Clock,
-  UserCheck,
   Wifi,
   WifiOff,
   FileText,
@@ -57,7 +56,6 @@ import {
 import { DatePickerWithStatus } from '../DatePickerWithStatus';
 import { StudentAttendanceRow } from './StudentAttendanceRow';
 import { StudentQrScannerModal } from '../modals/StudentQrScannerModal';
-import { TeacherManualAttendanceTab } from './TeacherManualAttendanceTab';
 import { Camera } from 'lucide-react';
 
 interface InputPresensiViewProps {
@@ -265,67 +263,8 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
   }, [isPiketKelas, assignedPiketClass, selectedKelasId]);
 
   const [selectedTanggal, setSelectedTanggal] = useState<string>(getTodayString());
-  const [activeTab, setActiveTab] = useState<'presensi' | 'siswa' | 'guru'>('presensi');
+  const [activeTab, setActiveTab] = useState<'presensi' | 'siswa'>('presensi');
 
-  // Access control for Absensi Manual Guru: Admin and Kurikulum ONLY (Piket accounts are strictly excluded)
-  const canAccessTeacherAttendance = useMemo(() => {
-    const role = String(currentUser.role || '').toLowerCase();
-    
-    // Explicitly exclude any piket role or account (piket, piket_guru, piket_kesiswaan, piket_kelas, guru_piket, etc.)
-    if (
-      role.includes('piket') ||
-      ['piket', 'guru_piket', 'piket_guru', 'piket_kesiswaan', 'piket_kelas', 'piketkelas'].includes(role)
-    ) {
-      return false;
-    }
-
-    if (['admin', 'superadmin', 'administrator', 'kurikulum', 'wks_kurikulum'].includes(role)) {
-      return true;
-    }
-
-    const userData = currentUser.data as any;
-    if (userData) {
-      const uRole = String(userData.role || '').toLowerCase();
-      if (uRole.includes('piket')) return false;
-
-      const tugas = String(userData.tugasTambahan || '').toLowerCase();
-      const jabatan = String(userData.jabatan || '').toLowerCase();
-      if (tugas.includes('piket') || jabatan.includes('piket')) {
-        return false;
-      }
-
-      if (tugas.includes('kurikulum') || jabatan.includes('kurikulum')) {
-        return true;
-      }
-
-      if (Array.isArray(userData.tugasTambahanList)) {
-        const hasMatch = userData.tugasTambahanList.some((t: string) => {
-          const l = String(t).toLowerCase();
-          return l.includes('kurikulum');
-        });
-        if (hasMatch) return true;
-      }
-
-      if (Array.isArray(userData.additionalRoles)) {
-        const hasPiket = userData.additionalRoles.some((r: string) => String(r).toLowerCase().includes('piket'));
-        if (hasPiket) return false;
-
-        const hasMatch = userData.additionalRoles.some((r: string) => {
-          const l = String(r).toLowerCase();
-          return l === 'kurikulum' || l === 'wks_kurikulum';
-        });
-        if (hasMatch) return true;
-      }
-    }
-
-    return false;
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (activeTab === 'guru' && !canAccessTeacherAttendance) {
-      setActiveTab('presensi');
-    }
-  }, [activeTab, canAccessTeacherAttendance]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSavedTimestamp, setLastSavedTimestamp] = useState<string | null>(null);
@@ -1018,7 +957,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
     setSelectedTanggal(newDate);
   };
 
-  const handleTabChange = (newTab: 'presensi' | 'siswa' | 'guru') => {
+  const handleTabChange = (newTab: 'presensi' | 'siswa') => {
     if (newTab === activeTab) return;
     if (activeTab === "presensi" && isDirty) {
       const confirmMsg = `Terdapat ${dirtyChangesCount} perubahan presensi yang belum disimpan. Lanjutkan berpindah tab?`;
@@ -1605,20 +1544,6 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                 <ClipboardCheck className="w-3.5 h-3.5" />
                 <span>Input Presensi Siswa</span>
               </button>
-              {canAccessTeacherAttendance && (
-                <button
-                  type="button"
-                  onClick={() => handleTabChange('guru')}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1.5 cursor-pointer ${
-                    activeTab === 'guru'
-                      ? 'bg-white text-blue-950 shadow-xs'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Absensi Manual Guru</span>
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => handleTabChange('siswa')}
@@ -1637,7 +1562,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       />
 
       {/* 2. READ ONLY & HOLIDAY BANNERS */}
-      {!canEditPresensi && activeTab !== 'guru' && (
+      {!canEditPresensi && (
         <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-center gap-3 text-amber-800 dark:text-amber-200 text-xs shadow-2xs">
           <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div>
@@ -1647,59 +1572,57 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       )}
 
       {/* 3. CONTEXT BAR FOR SISWA (KELAS + TANGGAL) */}
-      {activeTab !== 'guru' && (
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                Pilih Kelas
-              </label>
-              {isPiketKelas && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Terkunci (Kelas Anda)
-                </span>
-              )}
-            </div>
-            <div className="relative">
-              <select
-                value={selectedKelasId}
-                disabled={isPiketKelas}
-                onChange={(e) => handleChangeKelas(e.target.value)}
-                className={`w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none transition ${
-                  isPiketKelas
-                    ? 'opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60 border-teal-300 dark:border-teal-800/60 shadow-inner'
-                    : 'cursor-pointer focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary'
-                }`}
-              >
-                {availableClasses.length === 0 && <option value="">Belum Ada Kelas</option>}
-                {availableClasses.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.nama} {isPiketKelas ? '(Terkunci - Kelas Anda)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {waliKelasObj && (
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 font-medium">
-                Wali Kelas: <span className="text-slate-700 dark:text-slate-300 font-semibold">{waliKelasObj.nama}</span>
-              </p>
+      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+              Pilih Kelas
+            </label>
+            {isPiketKelas && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Terkunci (Kelas Anda)
+              </span>
             )}
           </div>
-
-          {activeTab === 'presensi' && (
-            <div>
-              <DatePickerWithStatus
-                label="Pilih Tanggal Presensi"
-                selectedDate={selectedTanggal}
-                onChangeDate={handleChangeTanggal}
-                appData={appData}
-                currentUser={currentUser}
-                kelasId={selectedKelasId}
-              />
-            </div>
+          <div className="relative">
+            <select
+              value={selectedKelasId}
+              disabled={isPiketKelas}
+              onChange={(e) => handleChangeKelas(e.target.value)}
+              className={`w-full py-2.5 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:outline-none transition ${
+                isPiketKelas
+                  ? 'opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60 border-teal-300 dark:border-teal-800/60 shadow-inner'
+                  : 'cursor-pointer focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary'
+              }`}
+            >
+              {availableClasses.length === 0 && <option value="">Belum Ada Kelas</option>}
+              {availableClasses.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.nama} {isPiketKelas ? '(Terkunci - Kelas Anda)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {waliKelasObj && (
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 font-medium">
+              Wali Kelas: <span className="text-slate-700 dark:text-slate-300 font-semibold">{waliKelasObj.nama}</span>
+            </p>
           )}
         </div>
-      )}
+
+        {activeTab === 'presensi' && (
+          <div>
+            <DatePickerWithStatus
+              label="Pilih Tanggal Presensi"
+              selectedDate={selectedTanggal}
+              onChangeDate={handleChangeTanggal}
+              appData={appData}
+              currentUser={currentUser}
+              kelasId={selectedKelasId}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Hari Libur Notification */}
       {activeTab === 'presensi' && hariLiburObj && (
@@ -2573,18 +2496,6 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
             </div>
           )}
         </div>
-      )}
-
-      {/* TAB 3: ABSENSI MANUAL GURU */}
-      {activeTab === 'guru' && canAccessTeacherAttendance && (
-        <TeacherManualAttendanceTab
-          appData={appData}
-          currentUser={currentUser}
-          selectedTanggal={selectedTanggal}
-          setSelectedTanggal={setSelectedTanggal}
-          onSavePresensi={onSavePresensi}
-          onShowToast={onShowToast}
-        />
       )}
 
       {/* STUDENT EDIT/ADD MODAL */}

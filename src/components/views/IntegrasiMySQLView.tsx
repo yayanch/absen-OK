@@ -242,6 +242,57 @@ CREATE TABLE IF NOT EXISTS violation_templates (
   tindakan TEXT,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+-- 12. Tabel Log Sesi & Riwayat Login Pengguna
+CREATE TABLE IF NOT EXISTS user_login_logs (
+  id VARCHAR(100) PRIMARY KEY,
+  timestamp VARCHAR(50) NOT NULL,
+  formatted_time VARCHAR(100),
+  username VARCHAR(100) NOT NULL,
+  nama VARCHAR(255) NOT NULL,
+  role VARCHAR(50) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  status_label VARCHAR(100),
+  ip_address VARCHAR(50),
+  location VARCHAR(100),
+  device VARCHAR(100),
+  browser VARCHAR(100),
+  user_agent TEXT,
+  failure_reason TEXT,
+  session_id VARCHAR(100),
+  session_duration_seconds INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_username (username),
+  INDEX idx_timestamp (timestamp),
+  INDEX idx_status (status)
+);
+
+-- 13. Tabel Presensi Harian Guru Berdasarkan Shift & Hari Mengajar
+CREATE TABLE IF NOT EXISTS presensi_guru (
+  id VARCHAR(100) PRIMARY KEY,
+  tanggal DATE NOT NULL,
+  guru_id VARCHAR(100) NOT NULL,
+  guru_username VARCHAR(100),
+  guru_nama VARCHAR(255) NOT NULL,
+  guru_nip VARCHAR(100),
+  hari VARCHAR(50) NOT NULL,
+  shift VARCHAR(50),             -- 'Pagi', 'Siang', 'Kombinasi', 'Non-KBM'
+  status VARCHAR(20) NOT NULL,    -- 'H', 'T', 'I', 'S', 'D', 'A', ''
+  jam_masuk VARCHAR(20),
+  jam_pulang VARCHAR(20),
+  catatan TEXT,
+  jadwal_hari_ini TEXT,
+  sumber_presensi VARCHAR(50) DEFAULT 'Manual',
+  is_overridden BOOLEAN DEFAULT FALSE,
+  overridden_by VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_tanggal_guru (tanggal, guru_id),
+  INDEX idx_tanggal (tanggal),
+  INDEX idx_guru_id (guru_id),
+  INDEX idx_status (status),
+  INDEX idx_shift (shift)
+);
 `;
 
   const handleTestConnection = async (e: React.FormEvent) => {

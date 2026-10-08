@@ -798,7 +798,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const bgColor = sekolah.loginBgColor;
   const blurLevel = sekolah.loginBgBlur || 'none';
   const bgFit = sekolah.loginBgFit || 'cover';
-  const overlayOpacity = sekolah.loginBgOverlayOpacity ?? (sekolah.loginBgOpacity ? Math.round((1 - sekolah.loginBgOpacity) * 100) : 35);
+  const bgOpacity = typeof sekolah.bgImageOpacity === 'number'
+    ? sekolah.bgImageOpacity / 100
+    : (typeof sekolah.loginBgOpacity === 'number' && sekolah.loginBgOpacity <= 1 ? sekolah.loginBgOpacity : 1);
+  const overlayOpacity = sekolah.loginBgOverlayOpacity ?? 35;
   const overlayColor = sekolah.loginBgOverlayColor || (isDarkMode ? '#020617' : '#0f172a');
   const cardOpacity = sekolah.loginCardOpacity ?? 60;
   const cardBlur = sekolah.loginCardBlur || '2xl';
@@ -874,6 +877,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       case 'sm': return 'blur(4px)';
       case 'md': return 'blur(8px)';
       case 'lg': return 'blur(16px)';
+      case 'xl': return 'blur(24px)';
       default: return 'none';
     }
   };
@@ -923,6 +927,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             className="absolute inset-0 transition-all duration-300 pointer-events-none bg-no-repeat bg-center"
             style={{
               ...getCustomBackgroundStyle(),
+              opacity: bgOpacity,
               filter: getBlurFilter(),
               transform: blurLevel !== 'none' ? 'scale(1.05)' : 'none',
               imageRendering: 'auto',

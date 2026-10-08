@@ -700,11 +700,11 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
         namaOrangTua: typeof current.namaOrangTua === 'string' ? current.namaOrangTua : (ex.namaOrangTua || ''),
         noWaOrangTua: typeof current.noWaOrangTua === 'string' ? current.noWaOrangTua : (ex.noWaOrangTua || ''),
         foto: current.foto !== undefined ? current.foto : (ex.foto || ''),
-        username: current.username || ex.username,
-        password: current.password || ex.password,
-        tempatLahir: current.tempatLahir || ex.tempatLahir,
-        tanggalLahir: current.tanggalLahir || ex.tanggalLahir,
-        alamat: current.alamat || ex.alamat,
+        username: typeof current.username === 'string' ? current.username : (ex.username || ''),
+        password: typeof current.password === 'string' ? current.password : (ex.password || ''),
+        tempatLahir: typeof current.tempatLahir === 'string' ? current.tempatLahir : (ex.tempatLahir || ''),
+        tanggalLahir: typeof current.tanggalLahir === 'string' ? current.tanggalLahir : (ex.tanggalLahir || ''),
+        alamat: typeof current.alamat === 'string' ? current.alamat : (ex.alamat || ''),
       });
     }
   }
@@ -878,6 +878,18 @@ function saveAppDataCache(data: any) {
     }
     if (Array.isArray(inMemoryAppDataCache.blockedIps) && inMemoryAppDataCache.blockedIps.length > 0 && (!Array.isArray(data.blockedIps) || data.blockedIps.length === 0)) {
       data.blockedIps = inMemoryAppDataCache.blockedIps;
+    }
+    if (Array.isArray(inMemoryAppDataCache.userLoginLogs) && inMemoryAppDataCache.userLoginLogs.length > 0 && (!Array.isArray(data.userLoginLogs) || data.userLoginLogs.length === 0)) {
+      data.userLoginLogs = inMemoryAppDataCache.userLoginLogs;
+    }
+    if (Array.isArray(inMemoryAppDataCache.presensiGuru) && Object.keys(inMemoryAppDataCache.presensiGuru).length > 0 && (!data.presensiGuru || Object.keys(data.presensiGuru).length === 0)) {
+      data.presensiGuru = inMemoryAppDataCache.presensiGuru;
+    }
+    if (Array.isArray(inMemoryAppDataCache.homeVisits) && inMemoryAppDataCache.homeVisits.length > 0 && (!Array.isArray(data.homeVisits) || data.homeVisits.length === 0)) {
+      data.homeVisits = inMemoryAppDataCache.homeVisits;
+    }
+    if (Array.isArray(inMemoryAppDataCache.pelanggaran) && inMemoryAppDataCache.pelanggaran.length > 0 && (!Array.isArray(data.pelanggaran) || data.pelanggaran.length === 0)) {
+      data.pelanggaran = inMemoryAppDataCache.pelanggaran;
     }
   }
 
@@ -2183,6 +2195,76 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       ).catch(() => {});
     }
 
+    // Table & Save user_login_logs
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS user_login_logs (
+        id VARCHAR(100) PRIMARY KEY,
+        timestamp VARCHAR(50) NOT NULL,
+        formatted_time VARCHAR(100),
+        username VARCHAR(100) NOT NULL,
+        nama VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        status_label VARCHAR(100),
+        ip_address VARCHAR(50),
+        location VARCHAR(100),
+        device VARCHAR(100),
+        browser VARCHAR(100),
+        user_agent TEXT,
+        failure_reason TEXT,
+        session_id VARCHAR(100),
+        session_duration_seconds INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_timestamp (timestamp),
+        INDEX idx_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `).catch(() => {});
+
+    const userLogsToSave = (Array.isArray(appData.userLoginLogs) && appData.userLoginLogs.length > 0)
+      ? appData.userLoginLogs
+      : (Array.isArray(serverUserLoginLogs) && serverUserLoginLogs.length > 0 ? serverUserLoginLogs : []);
+
+    if (userLogsToSave.length > 0) {
+      const CHUNK_SIZE = 50;
+      const recentLogs = userLogsToSave.slice(0, 300);
+      for (let i = 0; i < recentLogs.length; i += CHUNK_SIZE) {
+        const chunk = recentLogs.slice(i, i + CHUNK_SIZE);
+        const ph = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const l of chunk) {
+          vals.push(
+            l.id,
+            l.timestamp || '',
+            l.formattedTime || '',
+            l.username || '',
+            l.nama || '',
+            l.role || '',
+            l.status || '',
+            l.statusLabel || '',
+            l.ipAddress || '',
+            l.location || '',
+            l.device || '',
+            l.browser || '',
+            l.userAgent || '',
+            l.failureReason || '',
+            l.sessionId || '',
+            l.sessionDurationSeconds || 0
+          );
+        }
+        await db.execute(
+          `INSERT INTO user_login_logs (id, timestamp, formatted_time, username, nama, role, status, status_label, ip_address, location, device, browser, user_agent, failure_reason, session_id, session_duration_seconds)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             timestamp=VALUES(timestamp), formatted_time=VALUES(formatted_time), username=VALUES(username), nama=VALUES(nama),
+             role=VALUES(role), status=VALUES(status), status_label=VALUES(status_label), ip_address=VALUES(ip_address),
+             location=VALUES(location), device=VALUES(device), browser=VALUES(browser), user_agent=VALUES(user_agent),
+             failure_reason=VALUES(failure_reason), session_id=VALUES(session_id), session_duration_seconds=VALUES(session_duration_seconds);`,
+          vals
+        ).catch(() => {});
+      }
+    }
+
     await db.execute(`SET FOREIGN_KEY_CHECKS = 1;`);
   } catch (err: any) {
     if (isMySQLRateLimitError(err)) {
@@ -2245,6 +2327,7 @@ async function performMySQLLoad(config: any) {
     const [wgRows]: any = await db.execute(`SELECT * FROM whatsapp_gateway_config WHERE id = 1;`).catch(() => [[]]);
     const [siRows]: any = await db.execute(`SELECT * FROM security_incidents ORDER BY timestamp DESC;`).catch(() => [[]]);
     const [blRows]: any = await db.execute(`SELECT * FROM blocked_ips;`).catch(() => [[]]);
+    const [userLoginRows]: any = await db.execute(`SELECT * FROM user_login_logs ORDER BY timestamp DESC LIMIT 500;`).catch(() => [[]]);
 
     if (!appData) {
       appData = {};
@@ -2809,6 +2892,32 @@ async function performMySQLLoad(config: any) {
       appData.blockedIps = inMemoryAppDataCache.blockedIps;
     }
 
+    // User Login Logs
+    if (Array.isArray(userLoginRows) && userLoginRows.length > 0) {
+      appData.userLoginLogs = userLoginRows.map((r: any) => ({
+        id: r.id,
+        timestamp: r.timestamp || '',
+        formattedTime: r.formatted_time || '',
+        username: r.username || '',
+        nama: r.nama || '',
+        role: r.role || '',
+        status: r.status || 'success',
+        statusLabel: r.status_label || '',
+        ipAddress: r.ip_address || '',
+        location: r.location || '',
+        device: r.device || '',
+        browser: r.browser || '',
+        userAgent: r.user_agent || '',
+        failureReason: r.failure_reason || '',
+        sessionId: r.session_id || '',
+        sessionDurationSeconds: r.session_duration_seconds || 0
+      }));
+      serverUserLoginLogs = appData.userLoginLogs;
+    } else if (inMemoryAppDataCache?.userLoginLogs && inMemoryAppDataCache.userLoginLogs.length > 0) {
+      appData.userLoginLogs = inMemoryAppDataCache.userLoginLogs;
+      serverUserLoginLogs = appData.userLoginLogs;
+    }
+
     return appData;
   } catch (err: any) {
     if (isMySQLRateLimitError(err)) {
@@ -2955,6 +3064,7 @@ app.post("/api/user-logins", (req, res) => {
       userAgent: body.userAgent || req.headers["user-agent"] || "",
       failureReason: body.failureReason,
       sessionId: body.sessionId,
+      sessionDurationSeconds: Number(body.sessionDurationSeconds) || 0,
     };
 
     serverUserLoginLogs.unshift(logEntry);
@@ -2982,6 +3092,39 @@ app.post("/api/user-logins", (req, res) => {
         userAgent: logEntry.userAgent,
       });
     }
+
+    // Persist to MySQL table user_login_logs asynchronously
+    try {
+      const cfg = loadSavedServerConfig();
+      if (cfg && cfg.host) {
+        const pool = getMySQLPool(cfg);
+        if (pool) {
+          pool.execute(
+            `INSERT INTO user_login_logs (id, timestamp, formatted_time, username, nama, role, status, status_label, ip_address, location, device, browser, user_agent, failure_reason, session_id, session_duration_seconds)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE status=VALUES(status), failure_reason=VALUES(failure_reason);`,
+            [
+              logEntry.id,
+              logEntry.timestamp,
+              logEntry.formattedTime,
+              logEntry.username,
+              logEntry.nama,
+              logEntry.role,
+              logEntry.status,
+              logEntry.statusLabel,
+              logEntry.ipAddress,
+              logEntry.location,
+              logEntry.device,
+              logEntry.browser,
+              logEntry.userAgent,
+              logEntry.failureReason || '',
+              logEntry.sessionId || '',
+              logEntry.sessionDurationSeconds || 0
+            ]
+          ).catch(() => {});
+        }
+      }
+    } catch (e) {}
 
     res.json({ success: true, message: "Log login berhasil dicatat", log: logEntry });
   } catch (err: any) {
@@ -3086,6 +3229,17 @@ app.post("/api/user-sessions/terminate-all", (req, res) => {
 // POST: Clear User Login Logs
 app.post("/api/user-logins/clear", (req, res) => {
   serverUserLoginLogs = [];
+  try {
+    const cfg = loadSavedServerConfig();
+    if (cfg && cfg.host) {
+      const pool = getMySQLPool(cfg);
+      if (pool) {
+        pool.execute(`TRUNCATE TABLE user_login_logs;`).catch(() => {
+          pool.execute(`DELETE FROM user_login_logs;`).catch(() => {});
+        });
+      }
+    }
+  } catch (e) {}
   res.json({ success: true, message: "Seluruh riwayat log login berhasil dibersihkan." });
 });
 
@@ -3647,6 +3801,111 @@ app.post("/api/global-state", async (req, res) => {
   res.json({ success: true, message: "Global state updated", version: appDataVersion });
 });
 
+// Dedicated Real-time Student & Profile Synchronization Endpoint
+app.post("/api/siswa/update", async (req, res) => {
+  try {
+    const incomingSiswa = req.body?.siswa;
+    if (!incomingSiswa || (!incomingSiswa.id && !incomingSiswa.nisn)) {
+      return res.status(400).json({ success: false, message: "Data siswa tidak valid atau ID/NISN kosong." });
+    }
+
+    if (!inMemoryAppDataCache) {
+      inMemoryAppDataCache = loadSavedAppDataCache() || { siswa: [] };
+    }
+    if (!Array.isArray(inMemoryAppDataCache.siswa)) {
+      inMemoryAppDataCache.siswa = [];
+    }
+
+    const sId = String(incomingSiswa.id || '');
+    const cleanNisn = incomingSiswa.nisn && incomingSiswa.nisn !== '-' ? String(incomingSiswa.nisn).trim().toLowerCase() : '';
+
+    let matched = false;
+    let savedSiswaObj: any = null;
+    inMemoryAppDataCache.siswa = inMemoryAppDataCache.siswa.map((existing: any) => {
+      const matchId = sId && String(existing.id) === sId;
+      const matchNisn = cleanNisn && existing.nisn && String(existing.nisn).trim().toLowerCase() === cleanNisn;
+      if (matchId || matchNisn) {
+        matched = true;
+        savedSiswaObj = {
+          ...existing,
+          ...incomingSiswa,
+          id: existing.id || incomingSiswa.id,
+          nisn: incomingSiswa.nisn !== undefined ? incomingSiswa.nisn : existing.nisn,
+          nama: incomingSiswa.nama !== undefined ? incomingSiswa.nama : existing.nama,
+          gender: incomingSiswa.gender !== undefined ? incomingSiswa.gender : (existing.gender || 'L'),
+          kelasId: incomingSiswa.kelasId !== undefined ? incomingSiswa.kelasId : existing.kelasId,
+          status: incomingSiswa.status !== undefined ? incomingSiswa.status : (existing.status || 'aktif'),
+          noWa: incomingSiswa.noWa !== undefined ? incomingSiswa.noWa : (existing.noWa || ''),
+          namaOrangTua: incomingSiswa.namaOrangTua !== undefined ? incomingSiswa.namaOrangTua : (existing.namaOrangTua || ''),
+          noWaOrangTua: incomingSiswa.noWaOrangTua !== undefined ? incomingSiswa.noWaOrangTua : (existing.noWaOrangTua || ''),
+          alamat: incomingSiswa.alamat !== undefined ? incomingSiswa.alamat : (existing.alamat || ''),
+          tempatLahir: incomingSiswa.tempatLahir !== undefined ? incomingSiswa.tempatLahir : (existing.tempatLahir || ''),
+          tanggalLahir: incomingSiswa.tanggalLahir !== undefined ? incomingSiswa.tanggalLahir : (existing.tanggalLahir || ''),
+          password: incomingSiswa.password !== undefined ? incomingSiswa.password : (existing.password || ''),
+          foto: incomingSiswa.foto !== undefined ? incomingSiswa.foto : (existing.foto || ''),
+        };
+        return savedSiswaObj;
+      }
+      return existing;
+    });
+
+    if (!matched) {
+      savedSiswaObj = { ...incomingSiswa };
+      inMemoryAppDataCache.siswa.push(savedSiswaObj);
+    }
+
+    appDataVersion = Date.now();
+    saveAppDataCache(inMemoryAppDataCache);
+
+    // Persist directly to MySQL database if configured
+    const config = loadSavedServerConfig();
+    if (config) {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        try {
+          await pool.execute(
+            `INSERT INTO siswa (id, nisn, nama, gender, kelas_id, status, no_wa, nama_orang_tua, no_wa_orang_tua, username, password, foto, tempat_lahir, tanggal_lahir, alamat)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE 
+               nisn=VALUES(nisn), nama=VALUES(nama), gender=VALUES(gender), kelas_id=VALUES(kelas_id), 
+               status=VALUES(status), no_wa=VALUES(no_wa), nama_orang_tua=VALUES(nama_orang_tua), no_wa_orang_tua=VALUES(no_wa_orang_tua),
+               username=VALUES(username), password=VALUES(password), foto=VALUES(foto), tempat_lahir=VALUES(tempat_lahir),
+               tanggal_lahir=VALUES(tanggal_lahir), alamat=VALUES(alamat);`,
+            [
+              savedSiswaObj.id || ('SIS_' + Date.now()),
+              savedSiswaObj.nisn || '',
+              savedSiswaObj.nama || '',
+              savedSiswaObj.gender || 'L',
+              savedSiswaObj.kelasId || '',
+              savedSiswaObj.status || 'aktif',
+              savedSiswaObj.noWa || '',
+              savedSiswaObj.namaOrangTua || '',
+              savedSiswaObj.noWaOrangTua || '',
+              savedSiswaObj.username || savedSiswaObj.nisn || '',
+              savedSiswaObj.password || savedSiswaObj.nisn || '',
+              savedSiswaObj.foto || '',
+              savedSiswaObj.tempatLahir || '',
+              savedSiswaObj.tanggalLahir || '',
+              savedSiswaObj.alamat || '',
+            ]
+          );
+        } catch (dbErr: any) {
+          console.warn('MySQL direct siswa update warning:', dbErr?.message || dbErr);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Data siswa dan profil berhasil disinkronkan ke server dan database!",
+      siswa: savedSiswaObj,
+      version: appDataVersion
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || "Gagal sinkronisasi data siswa" });
+  }
+});
+
 // ==========================================
 // DEDICATED REAL-TIME CHAT API ENDPOINTS
 // ==========================================
@@ -4099,6 +4358,31 @@ app.post("/api/mysql/test", async (req, res) => {
           tindakan TEXT,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS user_login_logs (
+          id VARCHAR(100) PRIMARY KEY,
+          timestamp VARCHAR(50) NOT NULL,
+          formatted_time VARCHAR(100),
+          username VARCHAR(100) NOT NULL,
+          nama VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          status VARCHAR(50) NOT NULL,
+          status_label VARCHAR(100),
+          ip_address VARCHAR(50),
+          location VARCHAR(100),
+          device VARCHAR(100),
+          browser VARCHAR(100),
+          user_agent TEXT,
+          failure_reason TEXT,
+          session_id VARCHAR(100),
+          session_duration_seconds INT DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_username (username),
+          INDEX idx_timestamp (timestamp),
+          INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 
       await db.execute(`SET FOREIGN_KEY_CHECKS = 1;`);

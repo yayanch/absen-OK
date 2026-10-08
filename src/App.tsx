@@ -26,6 +26,7 @@ import {
   getTodayString
 } from './utils/helpers';
 import { DEMO_DATASET } from './data/initialData';
+import { isMenuAllowed } from './utils/rolePermissionEngine';
 
 import { LoginView } from './components/LoginView';
 import { Header } from './components/Header';
@@ -70,6 +71,7 @@ const PortalMuridView = React.lazy(() => import('./components/views/PortalMuridV
 const JadwalShiftView = React.lazy(() => import('./components/views/JadwalShiftView').then(m => ({ default: m.JadwalShiftView })));
 const JadwalMengajarView = React.lazy(() => import('./components/views/JadwalMengajarView').then(m => ({ default: m.JadwalMengajarView })));
 const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
+const AbsenHarianGuruTab = React.lazy(() => import('./components/views/AbsenHarianGuruTab').then(m => ({ default: m.AbsenHarianGuruTab })));
 const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
 const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
 const IntrusionDetectionView = React.lazy(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
@@ -780,7 +782,12 @@ export default function App() {
     };
 
     const headerConfig = pageHeaderBgMap[currentPageHeaderBg] || pageHeaderBgMap.gradient_royal;
+    const headerOpacity = (appData.sekolah?.headerBgOpacity ?? 100) / 100;
+    const sidebarOpacity = (appData.sekolah?.sidebarBgOpacity ?? 100) / 100;
+
     document.documentElement.style.setProperty('--page-header-bg', headerConfig.bg);
+    document.documentElement.style.setProperty('--page-header-opacity', String(headerOpacity));
+    document.documentElement.style.setProperty('--sidebar-opacity', String(sidebarOpacity));
     document.documentElement.style.setProperty('--page-header-title', headerConfig.title);
     document.documentElement.style.setProperty('--page-header-subtitle', headerConfig.subtitle);
     document.documentElement.style.setProperty('--page-header-badge-bg', headerConfig.badgeBg);
@@ -794,12 +801,14 @@ export default function App() {
     appData.sekolah?.themePreset,
     appData.sekolah?.theme,
     appData.sekolah?.sidebarTheme,
+    appData.sekolah?.sidebarBgOpacity,
     appData.sekolah?.fontTheme,
     appData.sekolah?.density,
     appData.sekolah?.componentRadius,
     appData.sekolah?.shadowStyle,
     appData.sekolah?.primaryColor,
     appData.sekolah?.pageHeaderBackground,
+    appData.sekolah?.headerBgOpacity,
   ]);
 
   useEffect(() => {
@@ -1355,6 +1364,24 @@ export default function App() {
               />
             )}
 
+            {currentView === 'absen_harian_guru' &&
+              (currentUser.role === 'kurikulum' ||
+                currentUser.role === 'admin_kurikulum' ||
+                currentUser.role === 'piket_guru' ||
+                currentUser.role === 'piket' ||
+                currentUser.role === 'admin' ||
+                currentUser.role === 'superadmin' ||
+                isMenuAllowed(currentUser.role, 'absen_harian_guru', appData)) && (
+              <AbsenHarianGuruTab
+                appData={appData}
+                currentUser={currentUser}
+                readOnly={false}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onBackToTable={() => handleNavigate('jadwal_mengajar')}
+              />
+            )}
+
             {currentView === 'home_visit' && currentUser.role !== 'kurikulum' && (
               <HomeVisitView
                 appData={appData}
@@ -1591,6 +1618,7 @@ export default function App() {
                 onCloseModal={closeGeneralModal}
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
+                onUpdateCurrentUser={setCurrentUser}
               />
             )}
 

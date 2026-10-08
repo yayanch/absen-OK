@@ -33,7 +33,9 @@ export interface SekolahConfig {
   themeMode?: 'light' | 'dark' | 'system';
   themePreset?: ThemeOption;
   sidebarTheme?: SidebarThemeOption;
+  sidebarBgOpacity?: number;
   pageHeaderBackground?: PageHeaderBackgroundOption;
+  headerBgOpacity?: number;
   pageTitleColor?: any;
   primaryColor?: string;
   density?: 'compact' | 'comfortable' | 'spacious';
@@ -54,7 +56,7 @@ export interface SekolahConfig {
   loginBgImage?: string;
   loginBgOpacity?: number;
   loginBgType?: 'default' | 'image' | 'gradient' | 'pattern' | 'color';
-  loginBgBlur?: 'none' | 'sm' | 'md' | 'lg';
+  loginBgBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   loginBgGradient?: string;
   loginBgPattern?: string;
   loginBgColor?: string;
@@ -740,12 +742,18 @@ export interface GuruPresensiItem {
   guruNip?: string;
   tanggal: string; // YYYY-MM-DD
   hari: string; // e.g. 'Senin', 'Selasa'
+  shift?: 'Pagi' | 'Siang' | 'Kombinasi' | 'Non-KBM' | string;
+  shiftType?: 'pagi' | 'siang' | 'kombinasi' | 'non_kbm';
+  isTeachingDay?: boolean;
   status: 'H' | 'S' | 'I' | 'A' | 'D' | 'T' | ''; // Hadir, Sakit, Izin, Alpha, Dinas Luar, Terlambat
   jamMasuk?: string;
   jamPulang?: string;
   catatan?: string;
   jadwalHariIni?: string;
-  sumberPresensi?: 'Online' | 'Manual' | 'QR Scan' | 'Sistem';
+  kelompok?: 1 | 2;
+  kelompokLabel?: string;
+  totalJp?: number;
+  sumberPresensi?: 'Online' | 'Manual' | 'QR Scan' | 'Sistem' | 'Jadwal Mengajar';
   isOverridden?: boolean;
   overriddenBy?: string;
   updatedAt?: string;
@@ -855,6 +863,7 @@ export type ViewType =
   | 'kartu_pelajar'
   | 'rekap_siswa'
   | 'presensi_input'
+  | 'absen_harian_guru'
   | 'home_visit'
   | 'catatan_pelanggaran'
   | 'ekstrakurikuler'

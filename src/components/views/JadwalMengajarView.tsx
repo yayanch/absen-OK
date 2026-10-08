@@ -33,13 +33,19 @@ import {
   ArrowUp,
   ArrowDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Layers,
+  Table2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
 import { Pagination } from '../Pagination';
 import { addAuditLog, cleanMapelName, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
 import { DEFAULT_MATA_PELAJARAN } from '../../data/initialData';
+import { AbsenHarianGuruTab } from './AbsenHarianGuruTab';
+import { isMenuAllowed } from '../../utils/rolePermissionEngine';
 
 export { determineKelasKelompok, extractKelasTingkat };
 
@@ -159,6 +165,77 @@ export const MATRIX_SHIFT_OPTIONS: MatrixShiftOption[] = [
   },
 ];
 
+export interface TableShiftGroup {
+  id: MatrixShiftOptionId;
+  kelompok: 1 | 2;
+  shift: 'Pagi' | 'Siang';
+  kelompokTitle: string;
+  kelompokTingkat: string;
+  shiftTitle: string;
+  shiftWaktu: string;
+  icon: typeof Sun;
+  headerColor: string;
+  badgeColor: string;
+  accentBorder: string;
+}
+
+export const TABLE_SHIFT_GROUPS: TableShiftGroup[] = [
+  {
+    id: 'pagi_k1',
+    kelompok: 1,
+    shift: 'Pagi',
+    kelompokTitle: 'Kelompok 1 (Kelas X & XI)',
+    kelompokTingkat: 'Kelas X & XI',
+    shiftTitle: 'Shift Pagi',
+    shiftWaktu: 'Jam Ke 1 s.d. 10 • 06.30 - 12.00 WIB (30 mnt/JP • Istirahat 08.30-09.00)',
+    icon: Sun,
+    headerColor: 'from-amber-500/15 via-amber-500/5 to-transparent border-amber-300 dark:border-amber-700/80',
+    badgeColor: 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700',
+    accentBorder: 'border-l-4 border-l-amber-500',
+  },
+  {
+    id: 'siang_k1',
+    kelompok: 1,
+    shift: 'Siang',
+    kelompokTitle: 'Kelompok 1 (Kelas X & XI)',
+    kelompokTingkat: 'Kelas X & XI',
+    shiftTitle: 'Shift Siang',
+    shiftWaktu: 'Jam Ke 1 s.d. 10 • 13.00 - 17.20 WIB (20 mnt/JP • Istirahat 15.00-15.30)',
+    icon: Sunset,
+    headerColor: 'from-indigo-500/15 via-indigo-500/5 to-transparent border-indigo-300 dark:border-indigo-700/80',
+    badgeColor: 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700',
+    accentBorder: 'border-l-4 border-l-indigo-600',
+  },
+  {
+    id: 'pagi_k2',
+    kelompok: 2,
+    shift: 'Pagi',
+    kelompokTitle: 'Kelompok 2 (Kelas XII)',
+    kelompokTingkat: 'Kelas XII',
+    shiftTitle: 'Shift Pagi',
+    shiftWaktu: 'Jam Ke 1 s.d. 10 • 06.30 - 12.00 WIB (30 mnt/JP • Istirahat 08.30-09.00)',
+    icon: Sun,
+    headerColor: 'from-emerald-500/15 via-emerald-500/5 to-transparent border-emerald-300 dark:border-emerald-700/80',
+    badgeColor: 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700',
+    accentBorder: 'border-l-4 border-l-emerald-600',
+  },
+  {
+    id: 'siang_k2',
+    kelompok: 2,
+    shift: 'Siang',
+    kelompokTitle: 'Kelompok 2 (Kelas XII)',
+    kelompokTingkat: 'Kelas XII',
+    shiftTitle: 'Shift Siang',
+    shiftWaktu: 'Jam Ke 1 s.d. 10 • 13.00 - 17.20 WIB (20 mnt/JP • Istirahat 15.00-15.30)',
+    icon: Sunset,
+    headerColor: 'from-sky-500/15 via-sky-500/5 to-transparent border-sky-300 dark:border-sky-700/80',
+    badgeColor: 'bg-sky-100 dark:bg-sky-950/80 text-sky-900 dark:text-sky-200 border-sky-300 dark:border-sky-700',
+    accentBorder: 'border-l-4 border-l-sky-500',
+  },
+];
+
+export type ScheduleSortField = 'kelompok_shift' | 'hari' | 'mapel' | 'guru' | 'kelas' | 'jam';
+
 // Helper to parse jamKe string (e.g. "1 - 3" or "1,2,3") to numbers array
 export function parseJamKeList(jamKeStr?: string, existingList?: number[]): number[] {
   if (existingList && existingList.length > 0) {
@@ -212,12 +289,25 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active Main Tab: 'matriks' (Grid Jadwal Mingguan) vs 'tabel' (Daftar & Kelola)
-  const [activeTab, setActiveTab] = useState<'matriks' | 'tabel'>('matriks');
+  // Active Main Tab: 'matriks' (Grid Jadwal Mingguan) vs 'tabel' (Daftar & Kelola) vs 'absen_guru' (Absen Harian Guru)
+  const [activeTab, setActiveTab] = useState<'matriks' | 'tabel' | 'absen_guru'>('matriks');
   // Modal state untuk formulir input/edit jadwal (hanya muncul saat klik "+ Isi" pada matriks atau edit)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   // Master Data collections (excludes piket petugas from teaching schedules)
+  const canAccessAbsenGuru = useMemo(() => {
+    const r = currentUser.role;
+    return (
+      r === 'kurikulum' ||
+      r === 'admin_kurikulum' ||
+      r === 'piket_guru' ||
+      r === 'piket' ||
+      r === 'admin' ||
+      r === 'superadmin' ||
+      isMenuAllowed(r, 'absen_harian_guru', appData)
+    );
+  }, [currentUser.role, appData]);
+
   const guruList: WaliKelas[] = useMemo(() => {
     return (appData.waliKelas || [])
       .filter((g) => {
@@ -365,21 +455,110 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   const [formKodeMapel, setFormKodeMapel] = useState<string>(mapelList[0]?.kode || '');
   const [formCatatan, setFormCatatan] = useState<string>('');
 
+  // Helper to resolve kelompok for a class (with fallback to lookup by id)
+  const getKelasKelompok = (kelasNama?: string, kelasId?: string): 1 | 2 => {
+    if (kelasNama) return determineKelasKelompok(kelasNama);
+    if (kelasId) {
+      const found = kelasList.find((k) => k.id === kelasId);
+      if (found) return determineKelasKelompok(found.nama);
+    }
+    return 1;
+  };
+
   /* =========================================================================
      FILTER & SEARCH STATES FOR TABLE & MATRIX
      ========================================================================= */
   const [searchTerm, setSearchTerm] = useState('');
   const [filterShift, setFilterShift] = useState<string>('semua');
+  const [filterKelompok, setFilterKelompok] = useState<'semua' | 1 | 2>('semua');
+  const [tableShiftOption, setTableShiftOption] = useState<'semua' | MatrixShiftOptionId>('semua');
+  const [tableLayoutMode, setTableLayoutMode] = useState<'grouped' | 'flat'>('grouped');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroupCollapse = (groupId: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  };
+
+  const handleSelectTableShiftOption = (option: 'semua' | MatrixShiftOptionId) => {
+    setTableShiftOption(option);
+    setCurrentPage(1);
+    if (option === 'semua') {
+      setFilterShift('semua');
+      setFilterKelompok('semua');
+    } else if (option === 'pagi_k1') {
+      setFilterShift('Pagi');
+      setFilterKelompok(1);
+    } else if (option === 'siang_k1') {
+      setFilterShift('Siang');
+      setFilterKelompok(1);
+    } else if (option === 'pagi_k2') {
+      setFilterShift('Pagi');
+      setFilterKelompok(2);
+    } else if (option === 'siang_k2') {
+      setFilterShift('Siang');
+      setFilterKelompok(2);
+    }
+  };
+
+  const handleFilterShiftChange = (newShift: string) => {
+    setFilterShift(newShift);
+    setCurrentPage(1);
+    if (newShift === 'semua' && filterKelompok === 'semua') {
+      setTableShiftOption('semua');
+    } else if (newShift === 'Pagi' && filterKelompok === 1) {
+      setTableShiftOption('pagi_k1');
+    } else if (newShift === 'Siang' && filterKelompok === 1) {
+      setTableShiftOption('siang_k1');
+    } else if (newShift === 'Pagi' && filterKelompok === 2) {
+      setTableShiftOption('pagi_k2');
+    } else if (newShift === 'Siang' && filterKelompok === 2) {
+      setTableShiftOption('siang_k2');
+    } else {
+      setTableShiftOption('semua');
+    }
+  };
+
+  const handleFilterKelompokChange = (newKel: 'semua' | 1 | 2) => {
+    setFilterKelompok(newKel);
+    setCurrentPage(1);
+    if (newKel === 'semua' && filterShift === 'semua') {
+      setTableShiftOption('semua');
+    } else if (newKel === 1 && filterShift === 'Pagi') {
+      setTableShiftOption('pagi_k1');
+    } else if (newKel === 1 && filterShift === 'Siang') {
+      setTableShiftOption('siang_k1');
+    } else if (newKel === 2 && filterShift === 'Pagi') {
+      setTableShiftOption('pagi_k2');
+    } else if (newKel === 2 && filterShift === 'Siang') {
+      setTableShiftOption('siang_k2');
+    } else {
+      setTableShiftOption('semua');
+    }
+  };
+
+  const handleOpenAddWithShiftAndKelompok = (shift: 'Pagi' | 'Siang', kelompok: 1 | 2) => {
+    resetForm();
+    setFormShift(shift);
+    const matchingClass = kelasList.find((k) => determineKelasKelompok(k.nama) === kelompok);
+    if (matchingClass) {
+      setFormKelasId(matchingClass.id);
+    }
+    setIsFormModalOpen(true);
+  };
+
   const [filterHari, setFilterHari] = useState<string>('semua');
   const [filterKelas, setFilterKelas] = useState<string>('semua');
   const [filterGuru, setFilterGuru] = useState<string>('semua');
   const [filterAcuan, setFilterAcuan] = useState<'semua' | 'sesuai' | 'di_luar'>('semua');
-  const [sortField, setSortField] = useState<'hari' | 'mapel' | 'guru' | 'kelas' | 'jam'>('hari');
+  const [sortField, setSortField] = useState<ScheduleSortField>('kelompok_shift');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const handleHeaderSort = (field: 'hari' | 'mapel' | 'guru' | 'kelas' | 'jam') => {
+  const handleHeaderSort = (field: ScheduleSortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -392,16 +571,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   // Matrix Filter State (per Kelas atau per Guru) & 4 Shift/Kelompok Matrix
   const [matrixMode, setMatrixMode] = useState<'kelas' | 'guru'>('guru');
   const [matrixShiftOption, setMatrixShiftOption] = useState<MatrixShiftOptionId>('pagi_k1');
-
-  // Helper to resolve kelompok for a class (with fallback to lookup by id)
-  const getKelasKelompok = (kelasNama?: string, kelasId?: string): 1 | 2 => {
-    if (kelasNama) return determineKelasKelompok(kelasNama);
-    if (kelasId) {
-      const found = kelasList.find((k) => k.id === kelasId);
-      if (found) return determineKelasKelompok(found.nama);
-    }
-    return 1;
-  };
 
   const activeMatrixOption = useMemo(() => {
     return MATRIX_SHIFT_OPTIONS.find((o) => o.id === matrixShiftOption) || MATRIX_SHIFT_OPTIONS[0];
@@ -1136,8 +1305,62 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   };
 
   /* =========================================================================
-     FILTERED & SORTED JADWAL FOR TABLE
+     TABLE REALTIME GROUP COUNTS & FILTERED/SORTED JADWAL
      ========================================================================= */
+  const tableGroupCounts = useMemo(() => {
+    const base = jadwalList.filter((item) => {
+      const matchSearch =
+        searchTerm === '' ||
+        item.mataPelajaran.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.guruNama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.kelasNama.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchHari = filterHari === 'semua' || item.hari === filterHari;
+      const matchKelas = filterKelas === 'semua' || item.kelasId === filterKelas;
+      const matchGuru = filterGuru === 'semua' || item.guruUsername === filterGuru;
+      const matchAcuan =
+        filterAcuan === 'semua' ||
+        (filterAcuan === 'sesuai' ? isJadwalMatchingAcuan(item) : !isJadwalMatchingAcuan(item));
+      return matchSearch && matchHari && matchKelas && matchGuru && matchAcuan;
+    });
+
+    const counts = {
+      all: base.length,
+      pagi_k1: 0,
+      siang_k1: 0,
+      pagi_k2: 0,
+      siang_k2: 0,
+      jp_pagi_k1: 0,
+      jp_siang_k1: 0,
+      jp_pagi_k2: 0,
+      jp_siang_k2: 0,
+    };
+
+    base.forEach((item) => {
+      const kel = getKelasKelompok(item.kelasNama, item.kelasId);
+      const isSiang = (item.shift || 'Pagi') === 'Siang';
+      const jp = parseJamKeList(item.jamKe, item.jamKeList).length;
+      if (kel === 1) {
+        if (isSiang) {
+          counts.siang_k1++;
+          counts.jp_siang_k1 += jp;
+        } else {
+          counts.pagi_k1++;
+          counts.jp_pagi_k1 += jp;
+        }
+      } else {
+        if (isSiang) {
+          counts.siang_k2++;
+          counts.jp_siang_k2 += jp;
+        } else {
+          counts.pagi_k2++;
+          counts.jp_pagi_k2 += jp;
+        }
+      }
+    });
+
+    return counts;
+  }, [jadwalList, searchTerm, filterHari, filterKelas, filterGuru, filterAcuan, isJadwalMatchingAcuan, getKelasKelompok]);
+
   const filteredJadwal = useMemo(() => {
     const list = jadwalList.filter((item) => {
       const matchSearch =
@@ -1148,6 +1371,10 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
       const itemShift = item.shift === 'Siang' ? 'Siang' : 'Pagi';
       const matchShift = filterShift === 'semua' || itemShift === filterShift;
+
+      const itemKelompok = getKelasKelompok(item.kelasNama, item.kelasId);
+      const matchKelompok = filterKelompok === 'semua' || itemKelompok === filterKelompok;
+
       const matchHari = filterHari === 'semua' || item.hari === filterHari;
       const matchKelas = filterKelas === 'semua' || item.kelasId === filterKelas;
       const matchGuru = filterGuru === 'semua' || item.guruUsername === filterGuru;
@@ -1155,7 +1382,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
         filterAcuan === 'semua' ||
         (filterAcuan === 'sesuai' ? isJadwalMatchingAcuan(item) : !isJadwalMatchingAcuan(item));
 
-      return matchSearch && matchShift && matchHari && matchKelas && matchGuru && matchAcuan;
+      return matchSearch && matchShift && matchKelompok && matchHari && matchKelas && matchGuru && matchAcuan;
     });
 
     const dayOrderMap: Record<string, number> = {
@@ -1170,20 +1397,52 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
     return [...list].sort((a, b) => {
       let comp = 0;
-      if (sortField === 'hari') {
-        const orderA = dayOrderMap[a.hari] || 99;
-        const orderB = dayOrderMap[b.hari] || 99;
-        if (orderA !== orderB) {
-          comp = orderA - orderB;
+      if (sortField === 'kelompok_shift') {
+        const kelA = getKelasKelompok(a.kelasNama, a.kelasId);
+        const kelB = getKelasKelompok(b.kelasNama, b.kelasId);
+        if (kelA !== kelB) {
+          comp = kelA - kelB;
         } else {
           const shiftA = (a.shift || 'Pagi') === 'Siang' ? 2 : 1;
           const shiftB = (b.shift || 'Pagi') === 'Siang' ? 2 : 1;
           if (shiftA !== shiftB) {
             comp = shiftA - shiftB;
           } else {
-            const jamA = parseJamKeList(a.jamKe, a.jamKeList)[0] || 1;
-            const jamB = parseJamKeList(b.jamKe, b.jamKeList)[0] || 1;
-            comp = jamA - jamB;
+            const orderA = dayOrderMap[a.hari] || 99;
+            const orderB = dayOrderMap[b.hari] || 99;
+            if (orderA !== orderB) {
+              comp = orderA - orderB;
+            } else {
+              const jamA = parseJamKeList(a.jamKe, a.jamKeList)[0] || 1;
+              const jamB = parseJamKeList(b.jamKe, b.jamKeList)[0] || 1;
+              if (jamA !== jamB) {
+                comp = jamA - jamB;
+              } else {
+                comp = (a.kelasNama || '').localeCompare(b.kelasNama || '', 'id', { numeric: true });
+              }
+            }
+          }
+        }
+      } else if (sortField === 'hari') {
+        const orderA = dayOrderMap[a.hari] || 99;
+        const orderB = dayOrderMap[b.hari] || 99;
+        if (orderA !== orderB) {
+          comp = orderA - orderB;
+        } else {
+          const kelA = getKelasKelompok(a.kelasNama, a.kelasId);
+          const kelB = getKelasKelompok(b.kelasNama, b.kelasId);
+          if (kelA !== kelB) {
+            comp = kelA - kelB;
+          } else {
+            const shiftA = (a.shift || 'Pagi') === 'Siang' ? 2 : 1;
+            const shiftB = (b.shift || 'Pagi') === 'Siang' ? 2 : 1;
+            if (shiftA !== shiftB) {
+              comp = shiftA - shiftB;
+            } else {
+              const jamA = parseJamKeList(a.jamKe, a.jamKeList)[0] || 1;
+              const jamB = parseJamKeList(b.jamKe, b.jamKeList)[0] || 1;
+              comp = jamA - jamB;
+            }
           }
         }
       } else if (sortField === 'mapel') {
@@ -1200,7 +1459,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
       return sortOrder === 'asc' ? comp : -comp;
     });
-  }, [jadwalList, searchTerm, filterShift, filterHari, filterKelas, filterGuru, filterAcuan, isJadwalMatchingAcuan, sortField, sortOrder]);
+  }, [jadwalList, searchTerm, filterShift, filterKelompok, filterHari, filterKelas, filterGuru, filterAcuan, isJadwalMatchingAcuan, sortField, sortOrder, getKelasKelompok]);
 
   const totalPages = Math.ceil(filteredJadwal.length / itemsPerPage) || 1;
   const paginatedJadwal = useMemo(() => {
@@ -1219,10 +1478,12 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
     const exportRows = jadwalList.map((j, idx) => {
       const jamList = parseJamKeList(j.jamKe, j.jamKeList);
+      const kel = getKelasKelompok(j.kelasNama, j.kelasId);
       return {
         No: idx + 1,
-        'Hari Mengajar': j.hari,
+        'Kelompok Tingkat': kel === 1 ? 'Kelompok 1 (Kelas X & XI)' : 'Kelompok 2 (Kelas XII)',
         Shift: j.shift === 'Siang' ? 'Shift Siang' : 'Shift Pagi',
+        'Hari Mengajar': j.hari,
         'Nama Guru': j.guruNama,
         'NIP Guru': j.guruNip || '-',
         'Kelas Ajar': j.kelasNama,
@@ -1570,6 +1831,29 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             <List className="w-4 h-4" />
             <span>{isTeacher ? `Jadwal Saya (${jadwalList.length})` : `Daftar Tabel (${jadwalList.length})`}</span>
           </button>
+
+          {canAccessAbsenGuru && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onNavigateView) onNavigateView('absen_harian_guru');
+                else setActiveTab('absen_guru');
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                activeTab === 'absen_guru'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <UserCheck className="w-4 h-4 text-emerald-500 group-hover:text-emerald-600 dark:text-emerald-400" />
+              <span>Absen Harian Guru</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === 'absen_guru' ? 'bg-white/20 text-white' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+              }`}>
+                Hari Ini
+              </span>
+            </button>
+          )}
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -2101,11 +2385,158 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             </div>
           )}
 
+          {/* Shift & Kelompok Switcher & Layout Toggle Bar */}
+          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 p-3 sm:p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            {/* Quick Shift & Kelompok Filters */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectTableShiftOption('semua')}
+                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  tableShiftOption === 'semua'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>Semua Shift & Kelompok</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  tableShiftOption === 'semua' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {tableGroupCounts.all}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectTableShiftOption('pagi_k1')}
+                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  tableShiftOption === 'pagi_k1'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-amber-50/80 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                }`}
+                title="Shift Pagi: Kelas X & XI (06.30 - 12.00 WIB)"
+              >
+                <Sun className="w-3.5 h-3.5 shrink-0" />
+                <span>Shift Pagi • Kelas X & XI</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  tableShiftOption === 'pagi_k1' ? 'bg-white/20 text-white' : 'bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
+                }`}>
+                  {tableGroupCounts.pagi_k1}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectTableShiftOption('siang_k1')}
+                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  tableShiftOption === 'siang_k1'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+                }`}
+                title="Shift Siang: Kelas X & XI (13.00 - 17.20 WIB)"
+              >
+                <Sunset className="w-3.5 h-3.5 shrink-0" />
+                <span>Shift Siang • Kelas X & XI</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  tableShiftOption === 'siang_k1' ? 'bg-white/20 text-white' : 'bg-indigo-200/80 dark:bg-indigo-900 text-indigo-900 dark:text-indigo-100'
+                }`}>
+                  {tableGroupCounts.siang_k1}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectTableShiftOption('pagi_k2')}
+                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  tableShiftOption === 'pagi_k2'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                }`}
+                title="Shift Pagi: Kelas XII (06.30 - 12.00 WIB)"
+              >
+                <Sun className="w-3.5 h-3.5 shrink-0" />
+                <span>Shift Pagi • Kelas XII</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  tableShiftOption === 'pagi_k2' ? 'bg-white/20 text-white' : 'bg-emerald-200/80 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100'
+                }`}>
+                  {tableGroupCounts.pagi_k2}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectTableShiftOption('siang_k2')}
+                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  tableShiftOption === 'siang_k2'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'bg-sky-50/80 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-800/60 hover:bg-sky-100 dark:hover:bg-sky-900/60'
+                }`}
+                title="Shift Siang: Kelas XII (13.00 - 17.20 WIB)"
+              >
+                <Sunset className="w-3.5 h-3.5 shrink-0" />
+                <span>Shift Siang • Kelas XII</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  tableShiftOption === 'siang_k2' ? 'bg-white/20 text-white' : 'bg-sky-200/80 dark:bg-sky-900 text-sky-900 dark:text-sky-100'
+                }`}>
+                  {tableGroupCounts.siang_k2}
+                </span>
+              </button>
+            </div>
+
+            {/* Layout Toggle (Grouped vs Flat) */}
+            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl shrink-0">
+              <button
+                type="button"
+                onClick={() => setTableLayoutMode('grouped')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  tableLayoutMode === 'grouped'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Tampilkan jadwal dalam kelompok kartu per Shift dan Tingkat Kelas"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tampilan Berkelompok</span>
+                <span className="sm:hidden">Grup</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTableLayoutMode('flat')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  tableLayoutMode === 'flat'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Tampilkan semua jadwal dalam satu tabel tunggal"
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Tabel Tunggal</span>
+                <span className="sm:hidden">Tabel</span>
+              </button>
+            </div>
+
+            {/* Quick Action: Buka Absen Harian Guru */}
+            {canAccessAbsenGuru && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onNavigateView) onNavigateView('absen_harian_guru');
+                  else setActiveTab('absen_guru');
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs hover:shadow-emerald-500/20 transition cursor-pointer shrink-0"
+                title="Buka Menu Absen Harian Guru Mengajar"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Absen Harian Guru</span>
+              </button>
+            )}
+          </div>
+
           {/* Filter Bar */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               {/* Search Bar */}
-              <div className="relative lg:col-span-1">
+              <div className="relative md:col-span-2 lg:col-span-2">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -2115,13 +2546,13 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                     setCurrentPage(1);
                   }}
                   placeholder="Cari mapel, guru, kelas..."
-                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
                 />
                 {searchTerm && (
                   <button
                     type="button"
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -2132,15 +2563,30 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               <div>
                 <select
                   value={filterShift}
-                  onChange={(e) => {
-                    setFilterShift(e.target.value);
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterShiftChange(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                  title="Filter Shift Mengajar"
                 >
                   <option value="semua">Semua Shift</option>
-                  <option value="Pagi">☀️ Shift Pagi (Jam 1-10)</option>
-                  <option value="Siang">🌤️ Shift Siang (Jam 1-10)</option>
+                  <option value="Pagi">☀️ Shift Pagi (06.30 - 12.00)</option>
+                  <option value="Siang">🌤️ Shift Siang (13.00 - 17.20)</option>
+                </select>
+              </div>
+
+              {/* Filter Kelompok */}
+              <div>
+                <select
+                  value={filterKelompok}
+                  onChange={(e) => {
+                    const val = e.target.value === 'semua' ? 'semua' : (Number(e.target.value) as 1 | 2);
+                    handleFilterKelompokChange(val);
+                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                  title="Filter Kelompok Kelas"
+                >
+                  <option value="semua">Semua Kelompok</option>
+                  <option value="1">Kelompok 1 (Kelas X & XI)</option>
+                  <option value="2">Kelompok 2 (Kelas XII)</option>
                 </select>
               </div>
 
@@ -2154,7 +2600,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                 >
-                  <option value="semua">Semua Hari (Senin - Jumat)</option>
+                  <option value="semua">Semua Hari</option>
                   {HARI_SENIN_JUMAT.map((h) => (
                     <option key={h} value={h}>
                       Hari {h}
@@ -2182,7 +2628,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 </select>
               </div>
 
-              {/* Filter Guru (Admin / Kurikulum) vs Profile Badge (Teacher) */}
+              {/* Filter Guru */}
               <div>
                 {canManageAll ? (
                   <select
@@ -2193,7 +2639,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                     }}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                   >
-                    <option value="semua">Semua Guru Pengampu</option>
+                    <option value="semua">Semua Guru</option>
                     {guruList.map((g) => (
                       <option key={g.id} value={g.username}>
                         {g.nama}
@@ -2208,22 +2654,6 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                 )}
               </div>
 
-              {/* Filter Status Acuan Mapel & Kelas */}
-              <div>
-                <select
-                  value={filterAcuan}
-                  onChange={(e) => {
-                    setFilterAcuan(e.target.value as any);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
-                >
-                  <option value="semua">Semua Status Acuan</option>
-                  <option value="sesuai">✓ Sesuai Acuan Guru</option>
-                  <option value="di_luar">⚠️ Di Luar Acuan Guru</option>
-                </select>
-              </div>
-
               {/* Urutan / Filter Sorting (ASC vs DESC) */}
               <div className="flex items-center gap-1.5">
                 <select
@@ -2235,6 +2665,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   className="w-full px-3 py-2 text-xs rounded-xl border border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                   title="Pilih Kolom Urutan"
                 >
+                  <option value="kelompok_shift">👥 Urut Shift & Kelompok</option>
                   <option value="hari">📅 Urut Hari & Shift</option>
                   <option value="mapel">📚 Urut Mata Pelajaran</option>
                   <option value="guru">👨‍🏫 Urut Guru Pengampu</option>
@@ -2264,288 +2695,613 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             </div>
           </div>
 
-          {/* Table Container */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                    <th className="py-3 px-4 font-bold text-center w-12">No</th>
-                    
-                    <th
-                      onClick={() => handleHeaderSort('hari')}
-                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
-                      title="Klik untuk mengurutkan berdasarkan Hari & Shift"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span>Hari & Shift</span>
-                        {sortField === 'hari' ? (
-                          sortOrder === 'asc' ? (
-                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
-                        )}
-                      </div>
-                    </th>
+          {/* ===============================================================
+              VIEW 1: TAMPILAN BERKELOMPOK (SHIFT PAGI & SIANG PER KELOMPOK)
+              =============================================================== */}
+          {tableLayoutMode === 'grouped' ? (
+            <div className="space-y-5">
+              {TABLE_SHIFT_GROUPS.filter((grp) => {
+                if (tableShiftOption !== 'semua' && grp.id !== tableShiftOption) return false;
+                if (filterKelompok !== 'semua' && grp.kelompok !== filterKelompok) return false;
+                if (filterShift !== 'semua' && grp.shift !== filterShift) return false;
+                return true;
+              }).map((grp) => {
+                const groupSchedules = filteredJadwal.filter(
+                  (j) => getKelasKelompok(j.kelasNama, j.kelasId) === grp.kelompok && (j.shift || 'Pagi') === grp.shift
+                );
+                const groupTotalJp = groupSchedules.reduce((acc, j) => acc + parseJamKeList(j.jamKe, j.jamKeList).length, 0);
+                const isCollapsed = !!collapsedGroups[grp.id];
+                const Icon = grp.icon;
 
-                    <th
-                      onClick={() => handleHeaderSort('mapel')}
-                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
-                      title="Klik untuk mengurutkan berdasarkan Mata Pelajaran"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span>Mata Pelajaran</span>
-                        {sortField === 'mapel' ? (
-                          sortOrder === 'asc' ? (
-                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
-                        )}
-                      </div>
-                    </th>
-
-                    <th
-                      onClick={() => handleHeaderSort('guru')}
-                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
-                      title="Klik untuk mengurutkan berdasarkan Guru Pengampu"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span>Guru Pengampu</span>
-                        {sortField === 'guru' ? (
-                          sortOrder === 'asc' ? (
-                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
-                        )}
-                      </div>
-                    </th>
-
-                    <th
-                      onClick={() => handleHeaderSort('kelas')}
-                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
-                      title="Klik untuk mengurutkan berdasarkan Kelas"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span>Kelas</span>
-                        {sortField === 'kelas' ? (
-                          sortOrder === 'asc' ? (
-                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
-                        )}
-                      </div>
-                    </th>
-
-                    <th
-                      onClick={() => handleHeaderSort('jam')}
-                      className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
-                      title="Klik untuk mengurutkan berdasarkan Jam Ke"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span>Jam Ke (1 - 10)</span>
-                        {sortField === 'jam' ? (
-                          sortOrder === 'asc' ? (
-                            <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
-                          )
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
-                        )}
-                      </div>
-                    </th>
-
-                    <th className="py-3 px-4 font-bold text-center w-28">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {paginatedJadwal.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400 dark:text-slate-500">
-                        <div className="flex flex-col items-center justify-center space-y-2">
-                          <Calendar className="w-8 h-8 text-slate-300 dark:text-slate-600" />
-                          <p className="font-semibold">
-                            {isTeacher
-                              ? 'Belum ada jadwal mengajar yang terdaftar untuk akun Anda.'
-                              : 'Belum ada jadwal mengajar yang sesuai filter.'}
-                          </p>
-                          {isTeacher ? (
-                            <p className="text-xs text-slate-400 max-w-md">
-                              Jadwal mengajar resmi ditentukan oleh bagian Kurikulum. Hubungi staf kurikulum jika jadwal Anda belum muncul.
-                            </p>
-                          ) : !readOnly ? (
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab('matriks')}
-                              className="text-xs text-blue-600 hover:underline font-bold mt-1"
-                            >
-                              Buka Matriks Mingguan untuk Mengisi Jadwal (+)
-                            </button>
-                          ) : null}
+                return (
+                  <div
+                    key={grp.id}
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all ${grp.accentBorder}`}
+                  >
+                    {/* Group Header Banner */}
+                    <div className={`p-4 sm:p-5 bg-gradient-to-r ${grp.headerColor} border-b border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 shadow-xs border ${grp.badgeColor}`}>
+                          <Icon className="w-5 h-5" />
                         </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedJadwal.map((item, idx) => {
-                      const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
-                      const isSiang = item.shift === 'Siang';
-                      return (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-blue-50/30 dark:hover:bg-slate-800/40 transition"
-                        >
-                          <td className="py-3 px-4 text-center text-slate-400 font-mono">
-                            {(currentPage - 1) * itemsPerPage + idx + 1}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>{item.hari}</span>
-                            </div>
-                            <div className="mt-1">
-                              {isSiang ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
-                                  <Sunset className="w-3 h-3" /> Shift Siang
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                                  <Sun className="w-3 h-3" /> Shift Pagi
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-extrabold text-blue-600 dark:text-blue-400">
-                                {cleanMapelName(item.mataPelajaran)}
-                              </span>
-                              {isJadwalMatchingAcuan(item) ? (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                                  title="Sesuai penugasan resmi guru di menu Mapel & Kelas Ajar"
-                                >
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                                  <span>Acuan ✓</span>
-                                </span>
-                              ) : (
-                                <span
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                                  title="Di luar penugasan resmi guru di menu Mapel & Kelas Ajar"
-                                >
-                                  <span>Di Luar Acuan</span>
-                                </span>
-                              )}
-                            </div>
-                            {item.catatan && (
-                              <div className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">
-                                {item.catatan}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800 dark:text-slate-200">
-                              {item.guruNama}
-                            </div>
-                            {item.guruNip && (
-                              <div className="text-[11px] text-slate-400 font-mono">
-                                NIP: {item.guruNip}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-                              {item.kelasNama}
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                              {grp.kelompokTitle} • {grp.shiftTitle}
+                            </h3>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${grp.badgeColor}`}>
+                              {grp.kelompokTingkat}
                             </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            {itemJamList.length > 0 ? (
-                              <div className="flex flex-wrap items-center gap-1">
-                                {itemJamList.map((j) => (
-                                  <span
-                                    key={j}
-                                    className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shadow-xs"
-                                    title={`Jam ke-${j}`}
-                                  >
-                                    {j}
-                                  </span>
-                                ))}
-                                <span className="text-[11px] font-semibold text-slate-500 ml-1">
-                                  ({itemJamList.length} JP)
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="font-mono text-slate-600 dark:text-slate-400">
-                                {item.jamKe || '-'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              {!readOnly && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEdit(item)}
-                                    className="p-1.5 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition cursor-pointer"
-                                    title="Edit Jadwal"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDuplicate(item)}
-                                    className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition cursor-pointer"
-                                    title="Duplikat Jadwal"
-                                  >
-                                    <Copy className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDelete(item)}
-                                    className="p-1.5 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition cursor-pointer"
-                                    title="Hapus Jadwal"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                              {grp.shift === 'Pagi' ? '☀️ Shift Pagi' : '🌤️ Shift Siang'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{grp.shiftWaktu}</span>
+                          </p>
+                        </div>
+                      </div>
 
-            {/* Pagination Controls */}
-            {filteredJadwal.length > itemsPerPage && (
-              <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  pageSize={itemsPerPage}
-                  totalItems={filteredJadwal.length}
-                  onPageChange={setCurrentPage}
-                  onPageSizeChange={setItemsPerPage}
-                />
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shadow-2xs">
+                          {groupSchedules.length} Sesi ({groupTotalJp} JP)
+                        </span>
+                        {canAccessAbsenGuru && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onNavigateView) {
+                                onNavigateView('absen_harian_guru');
+                              } else {
+                                setTableShiftOption(grp.id);
+                                setActiveTab('absen_guru');
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition flex items-center gap-1 cursor-pointer"
+                            title={`Buka Absen Harian Guru untuk ${grp.shiftTitle} (${grp.kelompokTingkat})`}
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Absen Guru</span>
+                          </button>
+                        )}
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAddWithShiftAndKelompok(grp.shift, grp.kelompok)}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition flex items-center gap-1 cursor-pointer"
+                            title={`Tambah Jadwal Baru di ${grp.shiftTitle} (${grp.kelompokTingkat})`}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Tambah Jadwal</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggleGroupCollapse(grp.id)}
+                          className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                          title={isCollapsed ? 'Buka Tabel' : 'Ciutkan Tabel'}
+                        >
+                          {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Subtable Content */}
+                    {!isCollapsed && (
+                      <div className="overflow-x-auto">
+                        {groupSchedules.length === 0 ? (
+                          <div className="py-10 px-4 text-center text-slate-400 dark:text-slate-500">
+                            <Calendar className="w-7 h-7 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                            <p className="font-semibold text-xs text-slate-600 dark:text-slate-300">
+                              Belum ada jadwal pada {grp.shiftTitle} {grp.kelompokTitle}
+                              {searchTerm || filterHari !== 'semua' || filterKelas !== 'semua' || filterGuru !== 'semua' ? ' yang sesuai dengan filter.' : '.'}
+                            </p>
+                            {!readOnly && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddWithShiftAndKelompok(grp.shift, grp.kelompok)}
+                                className="mt-2 text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" /> Tambah Jadwal untuk Shift & Kelompok ini
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 select-none">
+                                <th className="py-2.5 px-4 font-bold text-center w-12">No</th>
+                                <th className="py-2.5 px-4 font-bold">Hari</th>
+                                <th className="py-2.5 px-4 font-bold">Mata Pelajaran</th>
+                                <th className="py-2.5 px-4 font-bold">Guru Pengampu</th>
+                                <th className="py-2.5 px-4 font-bold">Kelas</th>
+                                <th className="py-2.5 px-4 font-bold">Jam Ke (1 - 10) & Waktu</th>
+                                <th className="py-2.5 px-4 font-bold text-center w-28">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {groupSchedules.map((item, idx) => {
+                                const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
+                                const isSiang = (item.shift || 'Pagi') === 'Siang';
+                                const timeStr = itemJamList.length > 0
+                                  ? `${getJamPelajaranTime(Math.min(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[0]} - ${getJamPelajaranTime(Math.max(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[1]}`
+                                  : '';
+                                return (
+                                  <tr
+                                    key={item.id}
+                                    className="hover:bg-blue-50/30 dark:hover:bg-slate-800/40 transition"
+                                  >
+                                    <td className="py-3 px-4 text-center text-slate-400 font-mono">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                        <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                        <span>{item.hari}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-extrabold text-blue-600 dark:text-blue-400">
+                                          {cleanMapelName(item.mataPelajaran)}
+                                        </span>
+                                        {isJadwalMatchingAcuan(item) ? (
+                                          <span
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                            title="Sesuai penugasan resmi guru di menu Mapel & Kelas Ajar"
+                                          >
+                                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                            <span>Acuan ✓</span>
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                                            title="Di luar penugasan resmi guru di menu Mapel & Kelas Ajar"
+                                          >
+                                            <span>Di Luar Acuan</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      {item.catatan && (
+                                        <div className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">
+                                          {item.catatan}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                                        {item.guruNama}
+                                      </div>
+                                      {item.guruNip && (
+                                        <div className="text-[11px] text-slate-400 font-mono">
+                                          NIP: {item.guruNip}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                                        {item.kelasNama}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      {itemJamList.length > 0 ? (
+                                        <div className="space-y-1">
+                                          <div className="flex flex-wrap items-center gap-1">
+                                            {itemJamList.map((j) => (
+                                              <span
+                                                key={j}
+                                                className={`w-6 h-6 rounded-full font-bold text-[11px] flex items-center justify-center shadow-2xs ${
+                                                  isSiang ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white'
+                                                }`}
+                                                title={`Jam ke-${j} (${item.shift || 'Pagi'}: ${getJamPelajaranTime(j, isSiang ? 'Siang' : 'Pagi')})`}
+                                              >
+                                                {j}
+                                              </span>
+                                            ))}
+                                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 ml-1">
+                                              ({itemJamList.length} JP)
+                                            </span>
+                                          </div>
+                                          {timeStr && (
+                                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                              {timeStr} WIB
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <span className="font-mono text-slate-600 dark:text-slate-400">
+                                          {item.jamKe || '-'}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        {!readOnly && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleStartEdit(item)}
+                                              className="p-1.5 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                                              title="Edit Jadwal"
+                                            >
+                                              <Edit className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDuplicate(item)}
+                                              className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                                              title="Duplikat Jadwal"
+                                            >
+                                              <Copy className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleDelete(item)}
+                                              className="p-1.5 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                                              title="Hapus Jadwal"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* ===============================================================
+               VIEW 2: TAMPILAN TABEL TUNGGAL (FLAT LIST WITH SHIFT & KELOMPOK)
+               =============================================================== */
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                      <th className="py-3 px-4 font-bold text-center w-12">No</th>
+
+                      <th
+                        onClick={() => handleHeaderSort('kelompok_shift')}
+                        className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                        title="Klik untuk mengurutkan berdasarkan Kelompok & Shift"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Kelompok & Shift</span>
+                          {sortField === 'kelompok_shift' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleHeaderSort('hari')}
+                        className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                        title="Klik untuk mengurutkan berdasarkan Hari"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Hari</span>
+                          {sortField === 'hari' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleHeaderSort('mapel')}
+                        className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                        title="Klik untuk mengurutkan berdasarkan Mata Pelajaran"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Mata Pelajaran</span>
+                          {sortField === 'mapel' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleHeaderSort('guru')}
+                        className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                        title="Klik untuk mengurutkan berdasarkan Guru Pengampu"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Guru Pengampu</span>
+                          {sortField === 'guru' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleHeaderSort('kelas')}
+                        className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                        title="Klik untuk mengurutkan berdasarkan Kelas"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Kelas</span>
+                          {sortField === 'kelas' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => handleHeaderSort('jam')}
+                        className="py-3 px-4 font-bold cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60 select-none transition"
+                        title="Klik untuk mengurutkan berdasarkan Jam Ke"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Jam Ke (1 - 10)</span>
+                          {sortField === 'jam' ? (
+                            sortOrder === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 font-black" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th className="py-3 px-4 font-bold text-center w-28">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedJadwal.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400 dark:text-slate-500">
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <Calendar className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                            <p className="font-semibold">
+                              {isTeacher
+                                ? 'Belum ada jadwal mengajar yang terdaftar untuk akun Anda.'
+                                : 'Belum ada jadwal mengajar yang sesuai filter.'}
+                            </p>
+                            {isTeacher ? (
+                              <p className="text-xs text-slate-400 max-w-md">
+                                Jadwal mengajar resmi ditentukan oleh bagian Kurikulum. Hubungi staf kurikulum jika jadwal Anda belum muncul.
+                              </p>
+                            ) : !readOnly ? (
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('matriks')}
+                                className="text-xs text-blue-600 hover:underline font-bold mt-1 cursor-pointer"
+                              >
+                                Buka Matriks Mingguan untuk Mengisi Jadwal (+)
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedJadwal.map((item, idx) => {
+                        const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
+                        const isSiang = (item.shift || 'Pagi') === 'Siang';
+                        const kel = getKelasKelompok(item.kelasNama, item.kelasId);
+                        const timeStr = itemJamList.length > 0
+                          ? `${getJamPelajaranTime(Math.min(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[0]} - ${getJamPelajaranTime(Math.max(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[1]}`
+                          : '';
+
+                        return (
+                          <tr
+                            key={item.id}
+                            className="hover:bg-blue-50/30 dark:hover:bg-slate-800/40 transition"
+                          >
+                            <td className="py-3 px-4 text-center text-slate-400 font-mono">
+                              {(currentPage - 1) * itemsPerPage + idx + 1}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                                  kel === 1
+                                    ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                }`}>
+                                  {kel === 1 ? 'Kelas X & XI' : 'Kelas XII'}
+                                </span>
+                                {isSiang ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                                    <Sunset className="w-3 h-3" /> Shift Siang
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                    <Sun className="w-3 h-3" /> Shift Pagi
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span>{item.hari}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-extrabold text-blue-600 dark:text-blue-400">
+                                  {cleanMapelName(item.mataPelajaran)}
+                                </span>
+                                {isJadwalMatchingAcuan(item) ? (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                    title="Sesuai penugasan resmi guru di menu Mapel & Kelas Ajar"
+                                  >
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                    <span>Acuan ✓</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                                    title="Di luar penugasan resmi guru di menu Mapel & Kelas Ajar"
+                                  >
+                                    <span>Di Luar Acuan</span>
+                                  </span>
+                                )}
+                              </div>
+                              {item.catatan && (
+                                <div className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">
+                                  {item.catatan}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-slate-800 dark:text-slate-200">
+                                {item.guruNama}
+                              </div>
+                              {item.guruNip && (
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  NIP: {item.guruNip}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                                {item.kelasNama}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              {itemJamList.length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    {itemJamList.map((j) => (
+                                      <span
+                                        key={j}
+                                        className={`w-6 h-6 rounded-full font-bold text-[11px] flex items-center justify-center shadow-2xs ${
+                                          isSiang ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white'
+                                        }`}
+                                        title={`Jam ke-${j} (${item.shift || 'Pagi'}: ${getJamPelajaranTime(j, isSiang ? 'Siang' : 'Pagi')})`}
+                                      >
+                                        {j}
+                                      </span>
+                                    ))}
+                                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 ml-1">
+                                      ({itemJamList.length} JP)
+                                    </span>
+                                  </div>
+                                  {timeStr && (
+                                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                      {timeStr} WIB
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="font-mono text-slate-600 dark:text-slate-400">
+                                  {item.jamKe || '-'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {!readOnly && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEdit(item)}
+                                      className="p-1.5 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                                      title="Edit Jadwal"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicate(item)}
+                                      className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                                      title="Duplikat Jadwal"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelete(item)}
+                                      className="p-1.5 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                                      title="Hapus Jadwal"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
+
+              {/* Pagination Controls */}
+              {filteredJadwal.length > itemsPerPage && (
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    pageSize={itemsPerPage}
+                    totalItems={filteredJadwal.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setItemsPerPage}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* =====================================================================
+          TAB: ABSEN HARIAN GURU (Terintegrasi dari Jadwal Mengajar & Bilah Switcher Cepat Shift/Kelompok)
+          ===================================================================== */}
+      {activeTab === 'absen_guru' && canAccessAbsenGuru && (
+        <AbsenHarianGuruTab
+          appData={appData}
+          currentUser={currentUser}
+          readOnly={readOnly}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+          onBackToTable={() => setActiveTab('tabel')}
+          initialShiftOption={tableShiftOption}
+        />
       )}
 
       {/* =====================================================================

@@ -49,7 +49,10 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   return (
     <div
       className="rounded-2xl md:rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors relative z-20"
-      style={{ background: 'var(--page-header-bg)' }}
+      style={{
+        background: 'var(--page-header-bg)',
+        opacity: 'var(--page-header-opacity, 1)',
+      }}
     >
       <div className="flex items-start md:items-center gap-3.5">
         {Icon && (

@@ -1083,7 +1083,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         NAMA: `${names[idx].nama} ${i}`,
         USERNAME: `wali_kelas_${i}`,
         PASSWORD: '123',
-        NOHP: `0812345${String(10000 + i)}`,
+        NOHP: '',
       });
     }
 

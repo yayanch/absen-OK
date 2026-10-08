@@ -313,8 +313,14 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
   const [sidebarTheme, setSidebarTheme] = useState<SidebarThemeOption>(
     sekolah.sidebarTheme || 'royal'
   );
+  const [sidebarBgOpacity, setSidebarBgOpacity] = useState<number>(
+    sekolah.sidebarBgOpacity ?? 100
+  );
   const [pageHeaderBackground, setPageHeaderBackground] = useState<PageHeaderBackgroundOption>(
     sekolah.pageHeaderBackground || 'gradient_royal'
+  );
+  const [headerBgOpacity, setHeaderBgOpacity] = useState<number>(
+    sekolah.headerBgOpacity ?? 100
   );
   const [primaryColor, setPrimaryColor] = useState<string>(
     sekolah.primaryColor || '#1646E3'
@@ -353,7 +359,9 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
     setThemeMode(sekolah.themeMode || 'system');
     setActivePreset(sekolah.themePreset || sekolah.theme || 'school_blue');
     setSidebarTheme(sekolah.sidebarTheme || 'royal');
+    setSidebarBgOpacity(sekolah.sidebarBgOpacity ?? 100);
     setPageHeaderBackground(sekolah.pageHeaderBackground || 'gradient_royal');
+    setHeaderBgOpacity(sekolah.headerBgOpacity ?? 100);
     setPrimaryColor(sekolah.primaryColor || '#1646E3');
     setFontTheme(sekolah.fontTheme || 'inter');
     setDensity(sekolah.density || 'comfortable');
@@ -380,6 +388,8 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
 
     const matchedPreset = PAGE_HEADER_BG_PRESETS.find((p) => p.id === pageHeaderBackground) || PAGE_HEADER_BG_PRESETS[0];
     document.documentElement.style.setProperty('--page-header-bg', matchedPreset.bg);
+    document.documentElement.style.setProperty('--page-header-opacity', String((headerBgOpacity ?? 100) / 100));
+    document.documentElement.style.setProperty('--sidebar-opacity', String((sidebarBgOpacity ?? 100) / 100));
     document.documentElement.style.setProperty('--page-header-title', matchedPreset.titleColor);
     document.documentElement.style.setProperty('--page-header-subtitle', matchedPreset.subtitleColor);
     document.documentElement.style.setProperty('--page-header-badge-bg', matchedPreset.badgeBg);
@@ -389,7 +399,7 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
     // Backward compatibility tokens
     document.documentElement.style.setProperty('--page-title-color', matchedPreset.titleColor);
     document.documentElement.style.setProperty('--page-subtitle-color', matchedPreset.subtitleColor);
-  }, [activePreset, sidebarTheme, fontTheme, density, componentRadius, shadowStyle, primaryColor, pageHeaderBackground]);
+  }, [activePreset, sidebarTheme, sidebarBgOpacity, fontTheme, density, componentRadius, shadowStyle, primaryColor, pageHeaderBackground, headerBgOpacity]);
 
   // Handle Select Theme Preset
   const handleSelectPreset = (preset: PresetThemeConfig) => {
@@ -414,7 +424,9 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
       themePreset: activePreset as any,
       theme: activePreset as any,
       sidebarTheme,
+      sidebarBgOpacity,
       pageHeaderBackground,
+      headerBgOpacity,
       primaryColor,
       fontTheme,
       density,
@@ -444,7 +456,9 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
     setThemeMode('system');
     setActivePreset('school_blue');
     setSidebarTheme('royal');
+    setSidebarBgOpacity(100);
     setPageHeaderBackground('gradient_royal');
+    setHeaderBgOpacity(100);
     setPrimaryColor('#1646E3');
     setFontTheme('inter');
     setDensity('comfortable');
@@ -1008,7 +1022,65 @@ export const PengaturanTemaView: React.FC<PengaturanTemaViewProps> = ({
                   </div>
                 </div>
 
-                {/* 3. PERILAKU SIDEBAR DESKTOP */}
+                {/* 3. TRANSPARANSI BACKGROUND NAVIGASI & HEADER */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <SlidersHorizontal className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Transparansi Background (Sidebar &amp; Header)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Sesuaikan tingkat opasitas dan efek transparansi latar belakang menu sidebar dan banner header.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Sidebar Opacity */}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Opasitas Latar Sidebar</span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs">
+                          {sidebarBgOpacity}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="50"
+                        max="100"
+                        value={sidebarBgOpacity}
+                        onChange={(e) => setSidebarBgOpacity(parseInt(e.target.value, 10))}
+                        className="w-full accent-blue-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>50% (Transparan Halus)</span>
+                        <span>100% (Solid Pekat)</span>
+                      </div>
+                    </div>
+
+                    {/* Header Opacity */}
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Opasitas Background Header</span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs">
+                          {headerBgOpacity}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="50"
+                        max="100"
+                        value={headerBgOpacity}
+                        onChange={(e) => setHeaderBgOpacity(parseInt(e.target.value, 10))}
+                        className="w-full accent-blue-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>50% (Transparan Halus)</span>
+                        <span>100% (Solid Pekat)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. PERILAKU SIDEBAR DESKTOP */}
                 <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">

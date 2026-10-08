@@ -33,7 +33,7 @@ import {
   RefreshCw,
   Lock
 } from 'lucide-react';
-import { getTodayString, sortKelasList } from '../../data/initialData';
+import { getTodayString, sortKelasList, INITIAL_HOME_VISITS } from '../../data/initialData';
 import { compressBase64Image } from '../../utils/helpers';
 import { PageHeader } from '../common/UIComponents';
 
@@ -580,14 +580,31 @@ export const HomeVisitView: React.FC<HomeVisitViewProps> = ({
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-4">
               Belum ada pencatatan kunjungan rumah sesuai filter atau pencarian saat ini.
             </p>
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Buat Laporan Pertama</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleOpenAdd}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Buat Laporan Pertama</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateAppData({
+                    ...appData,
+                    homeVisits: INITIAL_HOME_VISITS,
+                    deletedHomeVisitIds: [],
+                  });
+                  onShowToast('Data awal Home Visit berhasil dimuat!', 'success');
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer border border-slate-200 dark:border-slate-700"
+              >
+                <RefreshCw className="w-4 h-4 text-blue-600" />
+                <span>Muat Data Contoh / Default</span>
+              </button>
+            </div>
           </div>
         ) : (
           <>

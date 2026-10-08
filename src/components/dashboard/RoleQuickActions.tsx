@@ -160,18 +160,24 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           Aksi Cepat Petugas Piket {isKesiswaanPiket ? 'Kesiswaan' : 'Harian Guru'}
         </div>
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+          className={
+            isKesiswaanPiket
+              ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+              : "grid grid-cols-1 sm:grid-cols-3 gap-3"
+          }
           variants={cardContainerVariants}
           initial="hidden"
           animate="show"
         >
-          <QuickActionBtn
-            onClick={handleOpenClassSubmission}
-            iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-            icon={<CheckCircle2 className="w-4 h-4 stroke-[2.5]" />}
-            title="Rekap Pengisian Kelas"
-            subtitle="Status sudah & belum isi"
-          />
+          {isKesiswaanPiket && (
+            <QuickActionBtn
+              onClick={handleOpenClassSubmission}
+              iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              icon={<CheckCircle2 className="w-4 h-4 stroke-[2.5]" />}
+              title="Rekap Pengisian Kelas"
+              subtitle="Status sudah & belum isi"
+            />
+          )}
 
           <QuickActionBtn
             onClick={() => {
@@ -200,13 +206,15 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             subtitle="Poin disiplin & tindakan"
           />
 
-          <QuickActionBtn
-            onClick={() => onNavigateView('rekap_harian')}
-            iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
-            icon={<FileText className="w-4 h-4" />}
-            title="Rekap Kehadiran Rombel"
-            subtitle="Laporan harian terpadu"
-          />
+          {isKesiswaanPiket && (
+            <QuickActionBtn
+              onClick={() => onNavigateView('rekap_harian')}
+              iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              icon={<FileText className="w-4 h-4" />}
+              title="Rekap Kehadiran Rombel"
+              subtitle="Laporan harian terpadu"
+            />
+          )}
         </motion.div>
       </div>
     );
@@ -404,11 +412,19 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
           Aksi Cepat Tim Kurikulum & Akademik
         </div>
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
           variants={cardContainerVariants}
           initial="hidden"
           animate="show"
         >
+          <QuickActionBtn
+            onClick={() => onNavigateView('absen_harian_guru')}
+            iconBgClass="theme-action-icon"
+            icon={<UserCheck className="w-4 h-4 text-emerald-500" />}
+            title="Absen Harian Guru"
+            subtitle="Presensi guru KBM"
+          />
+
           <QuickActionBtn
             onClick={() => onNavigateView('jadwal_mengajar')}
             iconBgClass="theme-action-icon"
@@ -472,51 +488,6 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
     );
   }
 
-  // Guru Role
-  return (
-    <div className="space-y-2">
-      <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
-        Aksi Cepat Guru Pengajar
-      </div>
-      <motion.div
-        className="grid grid-cols-1 sm:grid-cols-3 gap-3"
-        variants={cardContainerVariants}
-        initial="hidden"
-        animate="show"
-      >
-        <QuickActionBtn
-          onClick={() => onNavigateView('mapel_kelas_guru')}
-          iconBgClass="bg-emerald-600 text-white"
-          icon={<Layers className="w-4 h-4" />}
-          title="Mapel & Kelas Ajar"
-          subtitle="Kelola mapel & kelas"
-          bgCardClass="bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-slate-800 dark:text-slate-100 border-emerald-200/80 dark:border-emerald-800/60"
-          textColorClass="text-emerald-950 dark:text-emerald-100"
-          subtextColorClass="text-emerald-600 dark:text-emerald-400 font-semibold"
-        />
-
-        <QuickActionBtn
-          onClick={() => onNavigateView('jadwal_mengajar')}
-          iconBgClass="bg-blue-600 text-white"
-          icon={<BookOpen className="w-4 h-4" />}
-          title="Jadwal Mengajar"
-          subtitle="Matriks & tabel jadwal"
-          bgCardClass="bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 border-blue-200/80 dark:border-blue-800/60"
-          textColorClass="text-blue-950 dark:text-blue-100"
-          subtextColorClass="text-blue-600 dark:text-blue-400 font-semibold"
-        />
-
-        <QuickActionBtn
-          onClick={() => onNavigateView('jadwal_minggu_ini')}
-          iconBgClass="bg-blue-600 text-white"
-          icon={<Calendar className="w-4 h-4" />}
-          title="Jadwal Minggu Ini"
-          subtitle="Ringkasan KBM sepekan"
-          bgCardClass="bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 border-blue-200/80 dark:border-blue-800/60"
-          textColorClass="text-blue-950 dark:text-blue-100"
-          subtextColorClass="text-blue-600 dark:text-blue-400 font-semibold"
-        />
-      </motion.div>
-    </div>
-  );
+  // Guru Role (Tidak menampilkan aksi cepat di dashboard guru sesuai permintaan)
+  return null;
 };
