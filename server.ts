@@ -2995,16 +2995,38 @@ app.post("/api/server/ping", (req, res) => {
   });
 });
 
-// API: Clean Server Temporary Telemetry & In-Memory Cache
-app.post("/api/server/cache-clean", (req, res) => {
+// API: Clean Server Temporary Telemetry, In-Memory Cache & Refresh MySQL Data
+app.post("/api/server/cache-clean", async (req, res) => {
   try {
     if ((global as any).gc) {
       (global as any).gc();
     }
     recentLatencySamples = [];
+
+    const config = loadSavedServerConfig();
+    let reloadedFromMySQL = false;
+    if (config) {
+      try {
+        const freshData = await performMySQLLoad(config);
+        if (freshData && (freshData.sekolah || (freshData.jurusan && freshData.jurusan.length > 0))) {
+          inMemoryAppDataCache = freshData;
+          saveAppDataCache(freshData);
+          lastMySQLSyncTime = Date.now();
+          appDataVersion = Date.now();
+          reloadedFromMySQL = true;
+        }
+      } catch (dbErr: any) {
+        console.warn("Cache clean MySQL reload warning:", dbErr?.message || dbErr);
+      }
+    }
+
     res.json({
       success: true,
-      message: "Cache telemetri dan memori sementara server berhasil disegarkan.",
+      message: reloadedFromMySQL
+        ? "Cache memori server berhasil dibersihkan dan disinkronkan ulang dengan database MySQL."
+        : "Cache telemetri dan memori sementara server berhasil dibersihkan.",
+      reloadedFromMySQL,
+      version: appDataVersion,
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {

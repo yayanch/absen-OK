@@ -170,6 +170,33 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
   const [offlineNoticeMessage, setOfflineNoticeMessage] = useState<string>(sekolah.offlineNoticeMessage || '');
   const [isTestingPing, setIsTestingPing] = useState<boolean>(false);
   const [pingResult, setPingResult] = useState<{ status: 'idle' | 'success' | 'failed'; message: string; ms?: number }>({ status: 'idle', message: '' });
+  const [isCleaningCache, setIsCleaningCache] = useState<boolean>(false);
+
+  const handleCleanCache = async () => {
+    setIsCleaningCache(true);
+    try {
+      const res = await fetch('/api/server/cache-clean', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        onShowToast(json.message || 'Cache sistem dan memori server berhasil dibersihkan!', 'success');
+        try {
+          const syncRes = await fetch('/api/global-state?force=true');
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (syncData.appData) {
+              onUpdateAppData(syncData.appData);
+            }
+          }
+        } catch (e) {}
+      } else {
+        onShowToast('Gagal membersihkan cache server: ' + (json.message || ''), 'error');
+      }
+    } catch (err: any) {
+      onShowToast('Gagal menghubungi server untuk membersihkan cache', 'error');
+    } finally {
+      setIsCleaningCache(false);
+    }
+  };
 
   useEffect(() => {
     const s: Partial<SekolahConfig> = appData.sekolah || {};
@@ -2135,9 +2162,9 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
                 </div>
               </div>
 
-              {/* Opsi 4: Local Storage Persistence Health */}
+              {/* Opsi 4: Local Storage Persistence Health & Cache Clean */}
               <div className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5 text-xs font-black text-slate-800 dark:text-slate-100">
                       <ShieldCheck className="w-4 h-4 text-emerald-500" />
@@ -2147,6 +2174,15 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
                       Data master siswa, kelas, guru, dan presensi otomatis di-cache ke LocalStorage terenkripsi browser untuk pencegahan kehilangan data saat koneksi drop mendadak.
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    disabled={isCleaningCache}
+                    onClick={handleCleanCache}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isCleaningCache ? 'animate-spin' : ''}`} />
+                    <span>{isCleaningCache ? 'Membersihkan...' : 'Bersihkan Cache'}</span>
+                  </button>
                 </div>
               </div>
             </div>
