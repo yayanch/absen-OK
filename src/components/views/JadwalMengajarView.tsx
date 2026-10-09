@@ -42,6 +42,7 @@ import {
 import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
 import { Pagination } from '../Pagination';
+import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
 import { addAuditLog, cleanMapelName, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
 import { DEFAULT_MATA_PELAJARAN } from '../../data/initialData';
 import { AbsenHarianGuruTab } from './AbsenHarianGuruTab';
@@ -952,6 +953,49 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       }
     }
   };
+
+  // Searchable Options for Pilihan Guru: Cukup nama guru saja
+  const guruSearchableOptions: SearchableOption[] = useMemo(() => {
+    return guruList.map((g) => ({
+      value: g.username,
+      label: g.nama,
+      keywords: [g.nama, g.username],
+    }));
+  }, [guruList]);
+
+  // Searchable Options for Pilihan Mata Pelajaran: Cukup nama mapel saja
+  const mapelSearchableOptions: SearchableOption[] = useMemo(() => {
+    const list: SearchableOption[] = [];
+    const addedNames = new Set<string>();
+
+    // 1. Mapel acuan guru jika ada
+    assignedMapelForFormGuru.forEach((item) => {
+      const cleanName = cleanMapelName(item.namaMapel);
+      if (cleanName && !addedNames.has(cleanName.toLowerCase())) {
+        addedNames.add(cleanName.toLowerCase());
+        list.push({
+          value: cleanName,
+          label: item.namaMapel,
+          keywords: [item.namaMapel, cleanName],
+        });
+      }
+    });
+
+    // 2. Mapel master lainnya
+    mapelList.forEach((m) => {
+      const cleanName = cleanMapelName(m.nama);
+      if (cleanName && !addedNames.has(cleanName.toLowerCase())) {
+        addedNames.add(cleanName.toLowerCase());
+        list.push({
+          value: cleanName,
+          label: m.nama,
+          keywords: [m.nama, cleanName],
+        });
+      }
+    });
+
+    return list;
+  }, [assignedMapelForFormGuru, mapelList]);
 
   // Reset form to clean state, prioritizing teacher's official Acuan
   const resetForm = () => {
@@ -1979,21 +2023,16 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                     <span className="truncate">{currentTeacherProfile?.nama || (currentUser as any)?.username || (currentUser?.data as any)?.nama || 'Guru'}</span>
                   </div>
                 ) : (
-                  <select
+                  <SearchableSelect
                     value={formGuruUsername}
-                    onChange={(e) => handleGuruChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
+                    onChange={handleGuruChange}
+                    options={guruSearchableOptions}
+                    placeholder="-- Pilih Guru --"
+                    searchPlaceholder="Ketik nama guru..."
+                    emptyMessage="Tidak ada guru yang sesuai pencarian"
                     required
-                  >
-                    <option value="">-- Pilih Guru Pengampu --</option>
-                    {guruList.map((g) => (
-                      <option key={g.id} value={g.username}>
-                        {g.nama}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
-                <p className="text-[11px] text-slate-400">Pendidik yang mengampu sesi ini</p>
               </div>
 
               {/* 2. HARI (Dropdown Senin - Jumat) */}
@@ -2023,54 +2062,23 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 3. MATA PELAJARAN */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>3. Mata Pelajaran</span> <span className="text-rose-500">*</span>
-                  </span>
-                  {assignedMapelForFormGuru.length > 0 && (
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                      {assignedMapelForFormGuru.length} Mapel Ajar
-                    </span>
-                  )}
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>3. Mata Pelajaran</span>
+                  <span className="text-rose-500">*</span>
                 </label>
 
-                {assignedMapelForFormGuru.length > 0 ? (
-                  <select
-                    value={formMataPelajaran}
-                    onChange={(e) => handleMapelChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
-                    required
-                  >
-                    <option value="">-- Pilih Mata Pelajaran --</option>
-                    {assignedMapelForFormGuru.map((item) => (
-                      <option key={item.id} value={item.namaMapel}>
-                        {item.namaMapel} ({item.alokasiJp || 4} JP • {item.kelasIds?.length || 0} Kelas)
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="space-y-1.5">
-                    <select
-                      value={formMataPelajaran}
-                      onChange={(e) => handleMapelChange(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
-                      required
-                    >
-                      <option value="">-- Pilih Mata Pelajaran --</option>
-                      {mapelList.map((m) => (
-                        <option key={m.id} value={m.nama}>
-                          {m.nama}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <p className="text-[11px] text-slate-400">
-                  {assignedMapelForFormGuru.length > 0
-                    ? 'Mata pelajaran yang ditugaskan kepada guru ini'
-                    : 'Pilih mata pelajaran dari katalog master'}
-                </p>
+                <SearchableSelect
+                  value={formMataPelajaran}
+                  onChange={handleMapelChange}
+                  options={mapelSearchableOptions}
+                  placeholder="-- Pilih Mata Pelajaran --"
+                  searchPlaceholder="Ketik nama mata pelajaran..."
+                  emptyMessage="Tidak ada mapel yang cocok dengan pencarian"
+                  allowCustomInput={true}
+                  customInputLabel="Gunakan mapel"
+                  required
+                />
               </div>
 
               {/* 4. KELAS AJAR */}

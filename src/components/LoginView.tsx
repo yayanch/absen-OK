@@ -259,28 +259,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
     return { text: 'Selamat Malam', icon: '🌙' };
   }, [currentTime]);
 
-  const formattedTimeStr = useMemo(() => {
-    return currentTime.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }) + ' WIB';
-  }, [currentTime]);
-
-  const formattedDateStr = useMemo(() => {
-    return currentTime.toLocaleDateString('id-ID', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  }, [currentTime]);
-
-  // Real-time school statistics
-  const totalSiswaCount = appData.siswa?.length || 0;
-  const totalKelasCount = appData.kelas?.length || 0;
-  const totalGuruCount = appData.waliKelas?.length || 0;
-
   // Role tab info
   const roleInfo = useMemo(() => {
     switch (activeRoleTab) {
@@ -1114,20 +1092,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </span>
             </button>
           )}
-
-          {/* Real-time Clock & Date Widget */}
-          <div
-            className={`hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-2xl border text-xs font-medium backdrop-blur-md shadow-xs transition-colors ${
-              isBackgroundDark
-                ? 'bg-zinc-900/80 border-zinc-700/70 text-zinc-200 shadow-black/20'
-                : 'bg-white/85 border-slate-300 text-slate-800 shadow-slate-900/5'
-            }`}
-          >
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-slate-600 dark:text-zinc-300">{formattedDateStr}</span>
-            <span className="opacity-30">·</span>
-            <span className="font-mono font-bold tracking-tight text-blue-600 dark:text-blue-400">{formattedTimeStr}</span>
-          </div>
         </div>
 
         {/* Right: Fullscreen Kiosk Mode & Theme Toggle */}
@@ -1215,36 +1179,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {sekolah.loginLeftDescription ||
                   'Platform presensi sekolah cerdas dengan verifikasi NISN, validasi kehadiran real-time, proteksi Kunci 1 HP 1 Siswa (Device Binding), dan integrasi notifikasi otomatis ke WhatsApp orang tua.'}
               </p>
-            </div>
-
-            {/* Real-time Statistics Strip (Clean unboxed metadata) */}
-            <div className={`grid grid-cols-3 gap-4 max-w-lg py-3.5 border-y ${
-              isBackgroundDark ? 'border-zinc-800/80' : 'border-slate-200/80'
-            }`}>
-              <div>
-                <div className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-                  {totalSiswaCount > 0 ? totalSiswaCount.toLocaleString('id-ID') : '1.947'}
-                </div>
-                <div className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider mt-0.5">
-                  Siswa Terdaftar
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-                  {totalKelasCount > 0 ? totalKelasCount : '54'}
-                </div>
-                <div className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider mt-0.5">
-                  Kelas / Rombel
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-                  {totalGuruCount > 0 ? totalGuruCount : '120+'}
-                </div>
-                <div className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider mt-0.5">
-                  Guru &amp; Pendidik
-                </div>
-              </div>
             </div>
 
             {/* Feature Spotlight Cards */}
@@ -1397,58 +1331,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* ROLE QUICK SELECTOR (Interactive Segmented Control) */}
-              <div className="w-full space-y-2 pt-1">
-                <div className="p-1 rounded-2xl bg-slate-100/90 dark:bg-zinc-900/90 border border-slate-200/80 dark:border-zinc-800 flex items-center gap-1 shadow-inner">
-                  {[
-                    { id: 'semua', label: 'Semua Akun', icon: Users },
-                    { id: 'siswa', label: 'Siswa', icon: GraduationCap },
-                    { id: 'guru', label: 'Guru', icon: Briefcase },
-                    { id: 'admin', label: 'Admin', icon: ShieldCheck },
-                  ].map((tab) => {
-                    const TabIcon = tab.icon;
-                    const isActive = activeRoleTab === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveRoleTab(tab.id as any);
-                          if (usernameInputRef.current) {
-                            usernameInputRef.current.focus();
-                          }
-                        }}
-                        className={`flex-1 py-1.5 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
-                          isActive
-                            ? isDarkMode
-                              ? 'bg-blue-600 text-white shadow-md shadow-blue-900/40'
-                              : 'bg-white text-slate-900 shadow-sm border border-slate-200/60'
-                            : isDarkMode
-                            ? 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                        }`}
-                      >
-                        <TabIcon className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{tab.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Dynamic Role Guidance & Bantuan Button */}
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-1">
-                  <span className="truncate max-w-[240px] sm:max-w-[280px]">{roleInfo.hint}</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsHelpModalOpen(true)}
-                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline shrink-0 ml-1 cursor-pointer flex items-center gap-1"
-                  >
-                    <HelpCircle className="w-3 h-3" />
-                    <span>Bantuan</span>
-                  </button>
-                </div>
-              </div>
 
               {/* UNIFIED SINGLE LOGIN FORM */}
               <form onSubmit={handleSubmit} className="space-y-4 pt-1 w-full">

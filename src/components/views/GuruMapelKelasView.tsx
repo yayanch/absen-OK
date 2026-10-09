@@ -208,20 +208,16 @@ export const GuruMapelKelasView: React.FC<GuruMapelKelasViewProps> = ({
   const [studentRosterKelas, setStudentRosterKelas] = useState<Kelas | null>(null);
   const [rosterSearch, setRosterSearch] = useState('');
 
-  // Helper to resolve JP strictly referencing master Mata Pelajaran catalog
+  // Helper to resolve JP strictly from each teacher's configured alokasiJp
   const getMapelJp = useCallback(
     (item: { kodeMapel?: string; namaMapel?: string; alokasiJp?: number }) => {
-      const master = masterMapelList.find(
-        (m) =>
-          (m.kode && item.kodeMapel && m.kode.trim().toLowerCase() === item.kodeMapel.trim().toLowerCase()) ||
-          (cleanMapelName(m.nama).toLowerCase() === cleanMapelName(item.namaMapel || '').toLowerCase())
-      );
-      if (master && typeof master.alokasiJp === 'number' && master.alokasiJp > 0) {
-        return master.alokasiJp;
+      // Prioritaskan beban jam (alokasiJp) yang diatur di pengaturan mapel guru masing-masing
+      if (typeof item.alokasiJp === 'number' && item.alokasiJp > 0) {
+        return item.alokasiJp;
       }
-      return item.alokasiJp && item.alokasiJp > 0 ? item.alokasiJp : 4;
+      return 4;
     },
-    [masterMapelList]
+    []
   );
 
   // Computed summary metrics

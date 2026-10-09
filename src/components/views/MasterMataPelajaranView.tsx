@@ -21,6 +21,8 @@ import {
   Hash,
   BookmarkPlus,
   Clock,
+  Info,
+  Users,
 } from 'lucide-react';
 import { AppData, MataPelajaran, UserSession } from '../../types';
 import { Pagination } from '../Pagination';
@@ -78,7 +80,6 @@ export const MapelFormModalContent: React.FC<MapelFormModalContentProps> = ({
   const [kategori, setKategori] = useState<MataPelajaran['kategori']>(itemToEdit?.kategori || 'Kelompok A (Nasional)');
   const [tingkat, setTingkat] = useState<MataPelajaran['tingkat']>(itemToEdit?.tingkat || 'Semua Tingkat');
   const [jurusanNama, setJurusanNama] = useState(itemToEdit?.jurusanNama || '');
-  const [alokasiJp, setAlokasiJp] = useState(itemToEdit?.alokasiJp || 4);
   const [kkm, setKkm] = useState(itemToEdit?.kkm || 75);
   const [deskripsi, setDeskripsi] = useState(itemToEdit?.deskripsi || '');
   const [err, setErr] = useState('');
@@ -115,7 +116,6 @@ export const MapelFormModalContent: React.FC<MapelFormModalContentProps> = ({
       kategori: kategori,
       tingkat: tingkat,
       jurusanNama: jurusanNama.trim() || undefined,
-      alokasiJp: Number(alokasiJp) || 0,
       kkm: Number(kkm) || 75,
       deskripsi: deskripsi.trim() || undefined,
     };
@@ -219,22 +219,7 @@ export const MapelFormModalContent: React.FC<MapelFormModalContentProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-blue-600" />
-            <span>Alokasi (JP/Minggu)</span>
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="24"
-            value={alokasiJp}
-            onChange={(e) => setAlokasiJp(Number(e.target.value))}
-            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold"
-          />
-        </div>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
             <Award className="w-3.5 h-3.5 text-amber-500" />
@@ -262,6 +247,14 @@ export const MapelFormModalContent: React.FC<MapelFormModalContentProps> = ({
             className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
         </div>
+      </div>
+
+      {/* Info notice: Beban jam diatur di pengaturan mapel guru masing-masing */}
+      <div className="p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/40 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+        <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <span className="leading-relaxed text-[11px]">
+          <strong>Pengaturan Beban Jam (JP):</strong> Beban jam pelajaran (JP/Rombel) tidak diatur di master mapel, melainkan diatur langsung pada menu <strong>Pengaturan Mapel Guru</strong> sesuai penugasan beban jam masing-masing pengajar.
+        </span>
       </div>
 
       <div>
@@ -323,7 +316,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
   const [mapelSearch, setMapelSearch] = useState('');
   const [mapelFilterKategori, setMapelFilterKategori] = useState<string>('semua');
   const [mapelFilterTingkat, setMapelFilterTingkat] = useState<string>('semua');
-  const [mapelSortField, setMapelSortField] = useState<'kode' | 'nama' | 'kategori' | 'alokasiJp'>('nama');
+  const [mapelSortField, setMapelSortField] = useState<'kode' | 'nama' | 'kategori'>('nama');
   const [mapelSortDirection, setMapelSortDirection] = useState<'asc' | 'desc'>('asc');
   const [mapelPage, setMapelPage] = useState(1);
   const [mapelPageSize, setMapelPageSize] = useState(10);
@@ -359,8 +352,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
         cmp = a.nama.localeCompare(b.nama, undefined, { numeric: true });
       } else if (mapelSortField === 'kategori') {
         cmp = (a.kategori || '').localeCompare(b.kategori || '');
-      } else if (mapelSortField === 'alokasiJp') {
-        cmp = (a.alokasiJp || 0) - (b.alokasiJp || 0);
       }
       return mapelSortDirection === 'asc' ? cmp : -cmp;
     });
@@ -370,7 +361,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
   const mapelStartIdx = (mapelPage - 1) * mapelPageSize;
   const pagedMapel = sortedMapel.slice(mapelStartIdx, mapelStartIdx + mapelPageSize);
 
-  const handleMapelSort = (field: 'kode' | 'nama' | 'kategori' | 'alokasiJp') => {
+  const handleMapelSort = (field: 'kode' | 'nama' | 'kategori') => {
     if (mapelSortField === field) {
       setMapelSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -447,7 +438,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
       KELOMPOK_KATEGORI: m.kategori || 'Umum',
       TINGKAT_KELAS: m.tingkat || 'Semua Tingkat',
       JURUSAN: m.jurusanNama || 'Semua Jurusan',
-      ALOKASI_JP: m.alokasiJp || 4,
       KKM: m.kkm || 75,
       DESKRIPSI_SILABUS: m.deskripsi || '-',
     }));
@@ -460,7 +450,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
       { wch: 28 }, // KELOMPOK_KATEGORI
       { wch: 16 }, // TINGKAT_KELAS
       { wch: 22 }, // JURUSAN
-      { wch: 12 }, // ALOKASI_JP
       { wch: 8 },  // KKM
       { wch: 45 }, // DESKRIPSI_SILABUS
     ];
@@ -480,7 +469,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
         KELOMPOK_KATEGORI: 'Kelompok C (Kejuruan/Peminatan)',
         TINGKAT_KELAS: 'XI',
         JURUSAN: 'Rekayasa Perangkat Lunak (RPL)',
-        ALOKASI_JP: 6,
         KKM: 78,
         DESKRIPSI_SILABUS: 'Materi HTML5, CSS3, JavaScript, React, REST API, dan Mobile Apps.',
       },
@@ -490,7 +478,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
         KELOMPOK_KATEGORI: 'Kelompok A (Nasional)',
         TINGKAT_KELAS: 'Semua Tingkat',
         JURUSAN: 'Semua Jurusan',
-        ALOKASI_JP: 4,
         KKM: 75,
         DESKRIPSI_SILABUS: 'Aljabar, Trigonometri, Matriks, Barisan & Deret, Kalkulus.',
       },
@@ -500,7 +487,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
         KELOMPOK_KATEGORI: 'Kelompok C (Kejuruan/Peminatan)',
         TINGKAT_KELAS: 'XI',
         JURUSAN: 'Teknik Komputer dan Jaringan (TKJ)',
-        ALOKASI_JP: 4,
         KKM: 75,
         DESKRIPSI_SILABUS: 'Instalasi Server Linux, DHCP, DNS, Web Server, dan FTP Server.',
       },
@@ -513,7 +499,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
       { wch: 28 },
       { wch: 16 },
       { wch: 25 },
-      { wch: 12 },
       { wch: 8 },
       { wch: 45 },
     ];
@@ -627,7 +612,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
       {/* Header */}
       <PageHeader
         title="Master Mata Pelajaran"
-        description="Pusat kelola katalog kurikulum mata pelajaran baku sekolah, kategori kelompok, beban jam (JP), dan standar KKM."
+        description="Pusat kelola katalog kurikulum mata pelajaran baku sekolah, kategori kelompok, dan standar KKM. Beban jam (JP per rombel) diatur pada menu Pengaturan Mapel Guru."
         icon={BookOpen}
         actions={
           !readOnly ? (
@@ -684,13 +669,13 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
 
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Clock className="w-5 h-5" />
+              <Users className="w-5 h-5" />
             </div>
             <div>
               <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
-                {mapelList.reduce((acc, m) => acc + (m.alokasiJp || 0), 0)} JP
+                {appData.guruMapelKelas?.length || 0}
               </div>
-              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Total Beban Jam (JP)</div>
+              <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Plotting Guru Mapel</div>
             </div>
           </div>
         </div>
@@ -875,14 +860,15 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
 
                     <div className="pt-3 mt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-3 font-semibold text-slate-600 dark:text-slate-300">
-                        <span title="Alokasi Beban Jam Pelajaran (JP)">
-                          <Clock className="w-3.5 h-3.5 inline mr-1 text-blue-500" />
-                          {item.alokasiJp || 0} JP
-                        </span>
                         <span title="Kriteria Ketuntasan Minimal">
                           <Award className="w-3.5 h-3.5 inline mr-1 text-amber-500" />
                           KKM {item.kkm || 75}
                         </span>
+                        {item.tingkat && (
+                          <span className="text-[11px] text-slate-400">
+                            Kelas {item.tingkat}
+                          </span>
+                        )}
                       </div>
 
                       {!readOnly && (
@@ -945,15 +931,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
                       </div>
                     </th>
                     <th className="py-3 px-3 text-center">Tingkat</th>
-                    <th
-                      className="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition w-24"
-                      onClick={() => handleMapelSort('alokasiJp')}
-                    >
-                      <div className="flex items-center justify-center gap-1.5">
-                        <span>Beban (JP)</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                      </div>
-                    </th>
                     <th className="py-3 px-3 text-center w-20">KKM</th>
                     <th className="py-3 px-3">Deskripsi / Silabus</th>
                     {!readOnly && <th className="py-3 px-4 text-center w-24">Aksi</th>}
@@ -962,7 +939,7 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-200">
                   {pagedMapel.length === 0 ? (
                     <tr>
-                      <td colSpan={readOnly ? 8 : 9} className="py-12 text-center text-slate-400">
+                      <td colSpan={readOnly ? 7 : 8} className="py-12 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <BookOpen className="w-8 h-8 opacity-40" />
                           <p className="font-bold">Tidak ada mata pelajaran ditemukan dalam katalog master.</p>
@@ -1011,12 +988,6 @@ export const MasterMataPelajaranView: React.FC<MasterMataPelajaranViewProps> = (
                           <td className="py-3 px-3 text-center">
                             <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                               {item.tingkat || 'Semua Tingkat'}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-center">
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {item.alokasiJp || 0} JP
                             </span>
                           </td>
 
