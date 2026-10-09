@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Lock, ShieldAlert } from 'lucide-react';
+import { MessageSquare, Lock, ShieldAlert, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AppData,
@@ -110,6 +110,14 @@ export default function App() {
     }, 450);
     return () => clearTimeout(timer);
   }, []);
+
+  // Maintenance Mode Guard: If maintenance mode is active, automatically kick non-admin users to login
+  useEffect(() => {
+    if (appData.sekolah?.maintenanceMode && currentUser && currentUser.role !== 'admin') {
+      showToast('Sistem beralih ke Mode Pemeliharaan. Sesi Anda diakhiri untuk pemeliharaan sistem.', 'warning');
+      handleLogout();
+    }
+  }, [appData.sekolah?.maintenanceMode, currentUser]);
 
   const handleNavigate = (view: ViewType, replace = false) => {
     if (view === currentView) return;
@@ -1215,6 +1223,38 @@ export default function App() {
 
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Persistent Admin Maintenance Notification Bar */}
+        {appData.sekolah?.maintenanceMode && (
+          <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white px-4 py-2.5 text-xs font-bold flex flex-wrap items-center justify-between gap-3 shadow-md z-40 sticky top-0">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1 rounded-md bg-white/20 text-white animate-pulse">
+                <Wrench className="w-4 h-4" />
+              </span>
+              <span>
+                <strong className="tracking-wide uppercase">MODE PEMELIHARAAN AKTIF:</strong> Pengguna non-admin (Siswa, Guru, Wali Kelas, dll) tidak dapat masuk ke sistem.
+              </span>
+            </div>
+            {currentUser?.role === 'admin' && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleUpdateAppData((prev) => ({
+                    ...prev,
+                    sekolah: {
+                      ...prev.sekolah,
+                      maintenanceMode: false,
+                    },
+                  }));
+                  showToast('Mode Pemeliharaan berhasil dinonaktifkan! Semua pengguna kini dapat login kembali.', 'success');
+                }}
+                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold rounded-xl text-xs transition cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5"
+              >
+                <span>Nonaktifkan Mode Maintenance</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Header - Hidden for student accounts, Sticky on all other accounts */}
         <div className={isStudentPortal ? 'hidden' : 'sticky top-0 z-30 w-full'}>
           <Header

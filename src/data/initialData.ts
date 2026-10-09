@@ -1,4 +1,4 @@
-import { AppData, Siswa, Kelas, WaliKelas, HomeVisit, ChatMessage, Pelanggaran, PresensiStatus, PresensiMap, ViolationTemplate, HariLibur, JadwalMengajarGuru, AbsensiMengajarGuruItem, PengumumanSekolah, MataPelajaran, GuruMapelKelasItem, PetugasPiket, CatatanPiketHarian } from '../types';
+import { AppData, Siswa, Kelas, WaliKelas, HomeVisit, ChatMessage, Pelanggaran, PresensiStatus, PresensiMap, ViolationTemplate, HariLibur, JadwalMengajarGuru, AbsensiMengajarGuruItem, PengumumanSekolah, MataPelajaran, GuruMapelKelasItem, PetugasPiket, CatatanPiketHarian, AuditLog } from '../types';
 
 export const INITIAL_PENGUMUMAN: PengumumanSekolah[] = [
   {
@@ -823,6 +823,89 @@ export const DEFAULT_GURU_MAPEL_KELAS: GuruMapelKelasItem[] = [
 
 export const DEFAULT_TOGA_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563EB' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M22 10v6M2 10l10-5 10 5-10 5z'/><path d='M6 12v5c3 3 9 3 12 0v-5'/></svg>";
 
+export const DEFAULT_AUDIT_LOGS: AuditLog[] = [
+  {
+    id: "LOG_01",
+    timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(), // 18 menit lalu
+    role: "admin",
+    username: "admin",
+    nama: "Administrator Utama",
+    aksi: "SINKRONISASI_DATABASE_SERVER",
+    detail: "Verifikasi skema tabel relasional MySQL server & penyesuaian index tabel presensi, siswa, dan sekolah_config.",
+    ipAddress: "192.168.1.10"
+  },
+  {
+    id: "LOG_02",
+    timestamp: new Date(Date.now() - 1000 * 60 * 75).toISOString(), // 1 jam 15 menit lalu
+    role: "kesiswaan",
+    username: "kesiswaan",
+    nama: "Tim WKS Kesiswaan & BP BK",
+    aksi: "VERIFIKASI_PRESENSI_HARIAN",
+    detail: "Penguncian data presensi harian siswa shift pagi: 142 Hadir, 3 Sakit, 2 Izin, 0 Alpa dengan status valid.",
+    ipAddress: "192.168.1.24"
+  },
+  {
+    id: "LOG_03",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3.5).toISOString(), // 3.5 jam lalu
+    role: "kurikulum",
+    username: "kurikulum",
+    nama: "Tim WKS Kurikulum & Akademik",
+    aksi: "UPDATE_JADWAL_MENGAJAR",
+    detail: "Penyesuaian jadwal mengajar guru mapel Pemrograman Web & Perangkat Bergerak di ruang Lab Komputer RPL 1.",
+    ipAddress: "192.168.1.33"
+  },
+  {
+    id: "LOG_04",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 22).toISOString(), // Kemarin
+    role: "admin",
+    username: "admin",
+    nama: "Administrator Utama",
+    aksi: "UPDATE_PENGATURAN_SEKOLAH",
+    detail: "Pembaruan profil sekolah, logo instansi, dan konfigurasi tahun ajaran baru 2026/2027.",
+    ipAddress: "192.168.1.10"
+  },
+  {
+    id: "LOG_05",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), // Kemarin
+    role: "kesiswaan",
+    username: "kesiswaan",
+    nama: "Tim WKS Kesiswaan & BP BK",
+    aksi: "PENCATATAN_PELANGGARAN",
+    detail: "Pencatatan sanksi disiplin siswa terlambat masuk gerbang utama sekolah (+5 poin).",
+    ipAddress: "192.168.1.24"
+  },
+  {
+    id: "LOG_06",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2.5).toISOString(), // 2 hari lalu
+    role: "admin",
+    username: "admin",
+    nama: "Administrator Utama",
+    aksi: "IMPORT_DATA_SISWA",
+    detail: "Impor massal 36 berkas siswa baru kelas X RPL 1 melalui integrasi dokumen Excel XLSX.",
+    ipAddress: "192.168.1.10"
+  },
+  {
+    id: "LOG_07",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3.2).toISOString(), // 3 hari lalu
+    role: "admin",
+    username: "admin",
+    nama: "Administrator Utama",
+    aksi: "KONFIGURASI_DATABASE_ENV",
+    detail: "Pembaruan koneksi database server menggunakan variabel lingkungan .env (Host: localhost, DB: sistem_presensi_sekolah).",
+    ipAddress: "127.0.0.1"
+  },
+  {
+    id: "LOG_08",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4.8).toISOString(), // 4 hari lalu
+    role: "admin",
+    username: "admin",
+    nama: "Administrator Utama",
+    aksi: "AUTO_BACKUP_SISTEM",
+    detail: "Penyimpanan snapshot cadangan data lokal dan sinkronisasi berkas json cache server.",
+    ipAddress: "127.0.0.1"
+  }
+];
+
 export const DEMO_DATASET: AppData = {
   sekolah: {
     nama: "SMKN 6 Garut",
@@ -852,6 +935,8 @@ export const DEMO_DATASET: AppData = {
     runningTextAnnouncement: "Selamat datang di Sistem Presensi Digital SMKN 6 Garut Tahun Ajaran 2026/2027. Budayakan disiplin hadir tepat waktu setiap hari!",
     runningTextSpeed: "normal",
     loginAnnouncementModal: false,
+    maintenanceMode: false,
+    maintenanceMessage: "Sistem saat ini sedang dalam pemeliharaan berkala (Maintenance Mode). Akses dibatasi hanya untuk Administrator.",
     loginCustomLinksDisplayMode: "dropdown",
     loginCustomLinksTitle: "Tautan Cepat & Bantuan",
     loginCustomLinks: [
@@ -990,5 +1075,6 @@ export const DEMO_DATASET: AppData = {
     siangJamMasukSelesai: "13:00",
     siangJamPulang: "16:50",
     periods: []
-  }
+  },
+  auditLogs: DEFAULT_AUDIT_LOGS
 };

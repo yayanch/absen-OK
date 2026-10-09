@@ -29,37 +29,77 @@ export const IntegrasiMySQLView: React.FC<IntegrasiMySQLViewProps> = ({
   const [showVpsModal, setShowVpsModal] = useState<boolean>(false);
   const [vpsWebServer, setVpsWebServer] = useState<'nginx' | 'apache'>('nginx');
   const [copiedCmd, setCopiedCmd] = useState<string>('');
+  const [isEnvMode, setIsEnvMode] = useState<boolean>(false);
+  const [envDetails, setEnvDetails] = useState<{ host: string; port: string; user: string; database: string; hasPassword: boolean } | null>(null);
+  const [isLoadingEnv, setIsLoadingEnv] = useState<boolean>(false);
+
+  const fetchServerConfig = async (silent = false) => {
+    try {
+      const res = await fetch('/api/mysql/config');
+      const data = await res.json();
+      if (data.isEnv) {
+        setIsEnvMode(true);
+        if (data.envKeys) setEnvDetails(data.envKeys);
+      } else {
+        setIsEnvMode(false);
+      }
+      if (data.success && data.config) {
+        if (data.config.host) {
+          setHost(data.config.host);
+          localStorage.setItem('mysql_host', data.config.host);
+        }
+        if (data.config.port) {
+          setPort(data.config.port);
+          localStorage.setItem('mysql_port', data.config.port);
+        }
+        if (data.config.database) {
+          setDatabase(data.config.database);
+          localStorage.setItem('mysql_database', data.config.database);
+        }
+        if (data.config.user) {
+          setUser(data.config.user);
+          localStorage.setItem('mysql_user', data.config.user);
+        }
+        if (data.config.password !== undefined) {
+          setPassword(data.config.password);
+          localStorage.setItem('mysql_password', data.config.password);
+        }
+      }
+      if (!silent && data.isEnv) {
+        onShowToast(`Konfigurasi database aktif dari file .env (${data.config?.host})`, 'info');
+      }
+    } catch (e) {}
+  };
 
   // Auto-fetch server MySQL config on mount so new devices get settings immediately
   useEffect(() => {
-    fetch('/api/mysql/config')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.config) {
-          if (data.config.host) {
-            setHost(data.config.host);
-            localStorage.setItem('mysql_host', data.config.host);
-          }
-          if (data.config.port) {
-            setPort(data.config.port);
-            localStorage.setItem('mysql_port', data.config.port);
-          }
-          if (data.config.database) {
-            setDatabase(data.config.database);
-            localStorage.setItem('mysql_database', data.config.database);
-          }
-          if (data.config.user) {
-            setUser(data.config.user);
-            localStorage.setItem('mysql_user', data.config.user);
-          }
-          if (data.config.password !== undefined) {
-            setPassword(data.config.password);
-            localStorage.setItem('mysql_password', data.config.password);
-          }
-        }
-      })
-      .catch(() => {});
+    fetchServerConfig(true);
   }, []);
+
+  const handleReloadEnv = async () => {
+    setIsLoadingEnv(true);
+    try {
+      const res = await fetch('/api/mysql/reload-env', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setIsEnvMode(true);
+        if (data.config) {
+          setHost(data.config.host);
+          setPort(data.config.port);
+          setDatabase(data.config.database);
+          setUser(data.config.user);
+          if (data.config.password) setPassword(data.config.password);
+        }
+        onShowToast(data.message, data.connectionOk ? 'success' : 'warning');
+      } else {
+        onShowToast(data.message || 'Gagal memuat konfigurasi dari .env', 'error');
+      }
+    } catch (err: any) {
+      onShowToast('Gagal menghubungi server untuk memuat .env', 'error');
+    } finally {
+      setIsLoadingEnv(false);
+    }
+  };
 
   const handlePreviewDatabase = async () => {
     setIsPreviewing(true);
@@ -427,9 +467,68 @@ CREATE TABLE IF NOT EXISTS presensi_guru (
                 <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
                   Konfigurasi Koneksi MySQL
                 </h2>
-                <p className="text-xs text-slate-400">Masukkan detail server MySQL Anda di bawah ini</p>
+                <p className="text-xs text-slate-400">Masukkan detail server MySQL Anda di bawah ini atau gunakan file .env</p>
               </div>
             </div>
+
+            {/* .env Environment Status Banner */}
+            {isEnvMode ? (
+              <div className="mb-5 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-start justify-between gap-3 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-black text-emerald-800 dark:text-emerald-300">
+                        Koneksi Otomatis via File .env Aktif
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white tracking-wide">
+                        PRIORITAS UTAMA
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 leading-relaxed">
+                      Server secara otomatis membaca variabel lingkungan dari file <code className="font-mono bg-emerald-200/50 dark:bg-emerald-950 px-1 py-0.5 rounded text-[10px]">.env</code> (DB_HOST, DB_USER, DB_NAME).
+                    </p>
+                    {envDetails && (
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-mono text-emerald-800 dark:text-emerald-300">
+                        <span className="bg-emerald-500/15 px-2 py-0.5 rounded-md">HOST: {envDetails.host}</span>
+                        <span className="bg-emerald-500/15 px-2 py-0.5 rounded-md">PORT: {envDetails.port}</span>
+                        <span className="bg-emerald-500/15 px-2 py-0.5 rounded-md">DB: {envDetails.database}</span>
+                        <span className="bg-emerald-500/15 px-2 py-0.5 rounded-md">USER: {envDetails.user}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleReloadEnv}
+                  disabled={isLoadingEnv}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-[11px] font-bold shrink-0 transition flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
+                  title="Muat ulang konfigurasi dari .env tanpa restart server"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingEnv ? 'animate-spin' : ''}`} />
+                  <span>{isLoadingEnv ? 'Memuat...' : 'Muat .env'}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="mb-5 p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
+                  <Terminal className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                  <span>Koneksi dapat diatur permanen di file <strong className="font-mono text-slate-800 dark:text-slate-100">.env</strong> (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME).</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleReloadEnv}
+                  disabled={isLoadingEnv}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold shrink-0 transition flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
+                  title="Periksa apakah file .env telah diisi di server"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isLoadingEnv ? 'animate-spin' : ''}`} />
+                  <span>{isLoadingEnv ? 'Memeriksa...' : 'Cek .env'}</span>
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleTestConnection} className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
@@ -866,8 +965,9 @@ npm run build`}
                 </h4>
                 <div className="relative">
                   <pre className="p-4 bg-slate-950 text-slate-100 rounded-2xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed">
-{`# Jalankan server aplikasi di port 3000
+{`# Jalankan server aplikasi di port 3000 (Pilih salah satu):
 NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah"
+# Atau: NODE_ENV=production PORT=3000 pm2 start "npx tsx server.ts" --name "presensi-sekolah"
 
 # Simpan dan aktifkan auto-start saat VPS reboot
 pm2 save

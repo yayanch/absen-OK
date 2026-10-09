@@ -118,6 +118,33 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
   const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
   const [snapshotNote, setSnapshotNote] = useState('');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
+  const [isCleaningCache, setIsCleaningCache] = useState(false);
+
+  const handleCleanServerCache = async () => {
+    setIsCleaningCache(true);
+    try {
+      const res = await fetch('/api/server/cache-clean', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        onShowToast(json.message || 'Cache sistem dan memori server berhasil dibersihkan!', 'success');
+        try {
+          const syncRes = await fetch('/api/global-state?force=true');
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (syncData.appData) {
+              onUpdateAppData(syncData.appData);
+            }
+          }
+        } catch (e) {}
+      } else {
+        onShowToast('Gagal membersihkan cache server: ' + (json.message || ''), 'error');
+      }
+    } catch (err: any) {
+      onShowToast('Gagal menghubungi server untuk membersihkan cache', 'error');
+    } finally {
+      setIsCleaningCache(false);
+    }
+  };
 
   // Google Drive Integration State
   const [googleUser, setGoogleUser] = useState<User | null>(getCurrentGoogleUser());
@@ -1380,6 +1407,28 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
           </div>
 
           <div className="space-y-3">
+            {/* Bersihkan Cache & Sinkronkan Server */}
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-extrabold text-slate-800 dark:text-white flex items-center gap-1.5">
+                  <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${isCleaningCache ? 'animate-spin' : ''}`} />
+                  <span>Bersihkan Cache Memori & Sinkronkan Server</span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Mengosongkan cache memori sementara, telemetri, dan memuat ulang data terbaru langsung dari database MySQL.
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isCleaningCache}
+                onClick={handleCleanServerCache}
+                className="px-3.5 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${isCleaningCache ? 'animate-spin' : ''}`} />
+                <span>{isCleaningCache ? 'Membersihkan...' : 'Bersihkan Cache'}</span>
+              </button>
+            </div>
+
             {/* Muat Ulang Demo */}
             <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3">
               <div>

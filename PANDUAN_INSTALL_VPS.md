@@ -124,7 +124,18 @@ Instal dependensi dan lakukan build produksi:
 # 1. Instal semua paket
 npm install
 
-# 2. Kompilasi frontend dan server backend
+# 2. Buat file konfigurasi .env (opsional jika menggunakan environment MySQL lokal)
+cp .env.example .env
+nano .env
+
+# Isi variabel di dalam .env sesuai konfigurasi MySQL VPS Anda:
+# DB_HOST=localhost
+# DB_PORT=3306
+# DB_USER=adminpresensi
+# DB_PASSWORD=PasswordKuatSekolah2026!
+# DB_NAME=sistem_presensi_sekolah
+
+# 3. Kompilasi frontend dan server backend
 npm run build
 ```
 Hasil build akan berada di folder `dist/` (`dist/index.html` dan `dist/server.cjs`).
@@ -133,18 +144,50 @@ Hasil build akan berada di folder `dist/` (`dist/index.html` dan `dist/server.cj
 
 ## 6. Langkah 5: Menjalankan Aplikasi dengan PM2
 
-Jalankan server aplikasi di background menggunakan PM2:
-```bash
-# Menjalankan server pada port 3000
-NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah"
+Jalankan server aplikasi di background menggunakan PM2. Anda dapat memilih salah satu dari dua cara berikut:
 
+### Opsi A: Menjalankan Hasil Bundle Produksi (Rekomendasi)
+```bash
+NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah"
+```
+
+### Opsi B: Menjalankan Langsung via TSX
+```bash
+NODE_ENV=production PORT=3000 pm2 start "npx tsx server.ts" --name "presensi-sekolah"
+```
+
+### Opsi C: Menggunakan File `ecosystem.config.cjs`
+Buat file `ecosystem.config.cjs`:
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: 'presensi-sekolah',
+      script: './dist/server.cjs',
+      instances: 'max',
+      exec_mode: 'cluster',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000
+      }
+    }
+  ]
+};
+```
+Lalu jalankan:
+```bash
+pm2 start ecosystem.config.cjs
+```
+
+Setelah aplikasi berjalan, simpan dan aktifkan auto-start saat VPS reboot:
+```bash
 # Simpan daftar proses PM2
 pm2 save
 
 # Aktifkan startup script agar otomatis jalan setelah server reboot
 pm2 startup
 ```
-*(Jalankan baris perintah `sudo env PATH=...` yang ditampilkan di layar oleh perintah `pm2 startup` jika diminta).*
+*(Jalankan baris perintah `sudo env PATH=...` yang ditampilkan di terminal oleh perintah `pm2 startup` jika diminta).*
 
 Cek status aplikasi:
 ```bash

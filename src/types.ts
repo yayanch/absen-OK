@@ -100,6 +100,12 @@ export interface SekolahConfig {
   autoSyncOnReconnect?: boolean; // Otomatis trigger sinkronisasi data saat online kembali
   offlineNoticeMessage?: string; // Pesan informasi kustom pada tampilan offline
 
+  // Mode Pemeliharaan (Maintenance Mode)
+  maintenanceMode?: boolean; // Hanya akun Administrator yang dapat login saat aktif
+  maintenanceMessage?: string; // Pesan pemberitahuan pemeliharaan kustom
+  maintenanceStartTime?: string; // Waktu mulai pemeliharaan
+  maintenanceEstimatedEnd?: string; // Estimasi waktu selesai pemeliharaan
+
   // Tautan Kustom Halaman Login
   loginCustomLinks?: LoginCustomLink[];
   loginCustomLinksDisplayMode?: 'dropdown' | 'inline';

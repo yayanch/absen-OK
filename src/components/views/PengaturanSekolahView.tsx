@@ -41,6 +41,7 @@ import {
   Sliders,
   ShieldCheck,
   Zap,
+  Wrench,
 } from 'lucide-react';
 import {
   AppData,
@@ -73,7 +74,7 @@ interface PengaturanSekolahViewProps {
   ) => void;
 }
 
-type TabType = 'identitas' | 'pengumuman' | 'tampilan_header' | 'offline';
+type TabType = 'identitas' | 'pengumuman' | 'tampilan_header' | 'offline' | 'maintenance';
 
 export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
   appData,
@@ -168,6 +169,14 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
   const [showOfflineToastWarning, setShowOfflineToastWarning] = useState<boolean>(sekolah.showOfflineToastWarning !== false);
   const [autoSyncOnReconnect, setAutoSyncOnReconnect] = useState<boolean>(sekolah.autoSyncOnReconnect !== false);
   const [offlineNoticeMessage, setOfflineNoticeMessage] = useState<string>(sekolah.offlineNoticeMessage || '');
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(sekolah.maintenanceMode ?? false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string>(
+    sekolah.maintenanceMessage ||
+      'Sistem saat ini sedang dalam pemeliharaan berkala (Maintenance Mode). Akses dibatasi hanya untuk Administrator.'
+  );
+  const [maintenanceEstimatedEnd, setMaintenanceEstimatedEnd] = useState<string>(
+    sekolah.maintenanceEstimatedEnd || ''
+  );
   const [isTestingPing, setIsTestingPing] = useState<boolean>(false);
   const [pingResult, setPingResult] = useState<{ status: 'idle' | 'success' | 'failed'; message: string; ms?: number }>({ status: 'idle', message: '' });
   const [isCleaningCache, setIsCleaningCache] = useState<boolean>(false);
@@ -247,6 +256,12 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
     setShowOfflineToastWarning(s.showOfflineToastWarning !== false);
     setAutoSyncOnReconnect(s.autoSyncOnReconnect !== false);
     setOfflineNoticeMessage(s.offlineNoticeMessage || '');
+    setMaintenanceMode(s.maintenanceMode ?? false);
+    setMaintenanceMessage(
+      s.maintenanceMessage ||
+        'Sistem saat ini sedang dalam pemeliharaan berkala (Maintenance Mode). Akses dibatasi hanya untuk Administrator.'
+    );
+    setMaintenanceEstimatedEnd(s.maintenanceEstimatedEnd || '');
 
     if (appData.pengumuman) {
       setPengumumanList(appData.pengumuman);
@@ -351,6 +366,9 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
       showOfflineToastWarning,
       autoSyncOnReconnect,
       offlineNoticeMessage: offlineNoticeMessage.trim(),
+      maintenanceMode,
+      maintenanceMessage: maintenanceMessage.trim(),
+      maintenanceEstimatedEnd: maintenanceEstimatedEnd.trim(),
       ...overrides,
     };
 
@@ -778,6 +796,30 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
             }`}
           >
             {enableOfflineMode ? 'Aktif' : 'Nonaktif'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('maintenance')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer select-none ${
+            activeTab === 'maintenance'
+              ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Wrench className="w-4 h-4" />
+          <span>Mode Pemeliharaan</span>
+          <span
+            className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+              activeTab === 'maintenance'
+                ? 'bg-white/20 text-white'
+                : maintenanceMode
+                ? 'bg-amber-500 text-slate-950 font-black animate-pulse'
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+            }`}
+          >
+            {maintenanceMode ? 'AKTIF' : 'Nonaktif'}
           </span>
         </button>
       </div>
@@ -2337,6 +2379,172 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
               </button>
             </div>
           )}
+        </form>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 5: MODE PEMELIHARAAN (MAINTENANCE MODE) */}
+      {/* ========================================================================= */}
+      {activeTab === 'maintenance' && (
+        <form
+          onSubmit={(e) => handleSaveSettings(e, 'Pengaturan Mode Pemeliharaan berhasil disimpan!')}
+          className="space-y-6"
+        >
+          {/* Master Switch Status Banner */}
+          <div
+            className={`p-6 sm:p-8 rounded-3xl border transition-all ${
+              maintenanceMode
+                ? 'bg-gradient-to-br from-amber-500/15 via-orange-50/40 to-white dark:from-amber-950/40 dark:via-slate-900 dark:to-slate-900 border-amber-300 dark:border-amber-800/80 shadow-md'
+                : 'bg-gradient-to-br from-slate-100/60 via-slate-50 to-white dark:from-slate-800/40 dark:via-slate-900 dark:to-slate-900 border-slate-200 dark:border-slate-800 shadow-xs'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                    maintenanceMode
+                      ? 'bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-amber-500/30 animate-pulse'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <Wrench className="w-7 h-7" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                      Mode Pemeliharaan Sistem (Maintenance Mode)
+                    </h3>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        maintenanceMode
+                          ? 'bg-amber-500 text-slate-950'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      {maintenanceMode ? 'SEDANG AKTIF' : 'NONAKTIF'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl leading-relaxed">
+                    {maintenanceMode
+                      ? 'Mode Pemeliharaan sedang AKTIF. Saat ini HANYA AKUN ADMINISTRATOR yang diizinkan login. Pengguna lain (Siswa, Guru, Wali Kelas, Kesiswaan, Kurikulum, Hubin, Operator) otomatis diblokir dari sistem.'
+                      : 'Mode Pemeliharaan saat ini NONAKTIF. Seluruh pengguna dapat masuk ke sistem secara normal sesuai hak akses masing-masing.'}
+                  </p>
+                </div>
+              </div>
+
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !maintenanceMode;
+                    if (nextVal && onConfirmModal) {
+                      onConfirmModal(
+                        'Aktifkan Mode Pemeliharaan?',
+                        'Saat Mode Pemeliharaan aktif, HANYA AKUN ADMINISTRATOR yang dapat login. Seluruh pengguna non-admin (Siswa, Guru, Wali Kelas, dll) akan otomatis diblokir dari sistem dan sesi yang sedang aktif akan diakhiri. Lanjutkan?',
+                        'warning',
+                        () => {
+                          setMaintenanceMode(true);
+                          handleSaveSettings(undefined, 'Mode Pemeliharaan BERHASIL DIAKTIFKAN!', {
+                            maintenanceMode: true,
+                          });
+                        }
+                      );
+                    } else {
+                      setMaintenanceMode(nextVal);
+                      handleSaveSettings(
+                        undefined,
+                        nextVal ? 'Mode Pemeliharaan DIAKTIFKAN' : 'Mode Pemeliharaan DINONAKTIFKAN',
+                        { maintenanceMode: nextVal }
+                      );
+                    }
+                  }}
+                  className={`w-full sm:w-auto px-6 py-3.5 rounded-2xl font-black text-xs transition cursor-pointer shadow-md flex items-center justify-center gap-2 ${
+                    maintenanceMode
+                      ? 'bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/25'
+                  }`}
+                >
+                  <Wrench className="w-4 h-4" />
+                  <span>{maintenanceMode ? 'Matikan Mode Pemeliharaan' : 'Aktifkan Mode Pemeliharaan'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Konfigurasi Pesan & Waktu */}
+          <div className="bg-white dark:bg-slate-900 p-6 sm:p-7 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
+              <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Info className="w-4 h-4 text-amber-500" />
+                <span>Pesan Informasi &amp; Estimasi Waktu untuk Pengguna</span>
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Pesan ini akan ditampilkan kepada Guru, Siswa, dan Wali Kelas saat membuka layar login selama mode pemeliharaan aktif.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Pesan Pemberitahuan Pemeliharaan
+                </label>
+                <textarea
+                  rows={3}
+                  disabled={readOnly}
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed"
+                  placeholder="Contoh: Sistem saat ini sedang dalam pemeliharaan berkala untuk peningkatan infrastruktur dan database. Mohon coba beberapa saat lagi."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Estimasi Selesai (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={maintenanceEstimatedEnd}
+                    onChange={(e) => setMaintenanceEstimatedEnd(e.target.value)}
+                    className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Contoh: Pukul 14:00 WIB / 8 Oktober 2026 15:30 WIB"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Akan ditampilkan pada banner dan modal blokir pengguna non-admin.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Hak Akses Selama Pemeliharaan
+                  </label>
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Hanya Akun Administrator</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed">
+                      Akun dengan username admin (dan password admin yang sah) tetap dapat login untuk melakukan konfigurasi, perbaikan data, atau backup.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {!readOnly && (
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold rounded-2xl text-xs shadow-md shadow-amber-600/20 transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Pengaturan Pemeliharaan</span>
+                </button>
+              </div>
+            )}
+          </div>
         </form>
       )}
 

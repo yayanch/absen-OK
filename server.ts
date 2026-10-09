@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import path from "path";
 import os from "os";
@@ -492,30 +495,67 @@ function setMySQLCooldown(reason?: string) {
 
 function loadSavedServerConfig() {
   try {
-    // 1. Check workspace persistent file
+    // 1. TOP PRIORITY: Check process environment variables (.env / VPS environment)
+    const envHost = process.env.DB_HOST || process.env.MYSQL_HOST;
+    if (envHost && String(envHost).trim() !== "") {
+      return {
+        host: String(envHost).trim(),
+        port: String(process.env.DB_PORT || process.env.MYSQL_PORT || "3306").trim(),
+        user: String(process.env.DB_USER || process.env.MYSQL_USER || "root").trim(),
+        password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : (process.env.MYSQL_PASSWORD || ""),
+        database: String(process.env.DB_NAME || process.env.MYSQL_DATABASE || "sistem_presensi_sekolah").trim(),
+        isEnv: true,
+        source: "env"
+      };
+    }
+
+    // 2. Check workspace persistent file
     if (fs.existsSync(MYSQL_CONFIG_FILE)) {
       const content = fs.readFileSync(MYSQL_CONFIG_FILE, "utf-8");
       const parsed = JSON.parse(content);
-      if (parsed && parsed.host) return parsed;
+      if (parsed && parsed.host) return { ...parsed, isEnv: false, source: "file" };
     }
-    // 2. Check /tmp file
+
+    // 3. Check /tmp file
     if (fs.existsSync(MYSQL_CONFIG_FILE_TMP)) {
       const content = fs.readFileSync(MYSQL_CONFIG_FILE_TMP, "utf-8");
       const parsed = JSON.parse(content);
-      if (parsed && parsed.host) return parsed;
-    }
-    // 3. Check process environment variables
-    if (process.env.DB_HOST || process.env.MYSQL_HOST) {
-      return {
-        host: process.env.DB_HOST || process.env.MYSQL_HOST,
-        port: process.env.DB_PORT || process.env.MYSQL_PORT || "3306",
-        user: process.env.DB_USER || process.env.MYSQL_USER || "root",
-        password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || "",
-        database: process.env.DB_NAME || process.env.MYSQL_DATABASE || "sistem_presensi_sekolah"
-      };
+      if (parsed && parsed.host) return { ...parsed, isEnv: false, source: "file" };
     }
   } catch (e) {}
   return null;
+}
+
+function resolveMySQLConfig(incoming?: any) {
+  const envHost = process.env.DB_HOST || process.env.MYSQL_HOST;
+  const envConfig = (envHost && String(envHost).trim() !== "") ? {
+    host: String(envHost).trim(),
+    port: String(process.env.DB_PORT || process.env.MYSQL_PORT || "3306").trim(),
+    user: String(process.env.DB_USER || process.env.MYSQL_USER || "root").trim(),
+    password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : (process.env.MYSQL_PASSWORD || ""),
+    database: String(process.env.DB_NAME || process.env.MYSQL_DATABASE || "sistem_presensi_sekolah").trim(),
+    isEnv: true,
+    source: "env"
+  } : null;
+
+  // If incoming explicitly has host, user, database
+  if (incoming && incoming.host && incoming.user && incoming.database) {
+    return {
+      host: String(incoming.host).trim(),
+      port: String(incoming.port || "3306").trim(),
+      user: String(incoming.user).trim(),
+      password: incoming.password !== undefined ? incoming.password : (envConfig?.password || ""),
+      database: String(incoming.database).trim(),
+      isEnv: false,
+      source: "client"
+    };
+  }
+
+  // Prioritize environment configuration
+  if (envConfig) return envConfig;
+
+  // Fallback to loaded config
+  return loadSavedServerConfig();
 }
 
 function saveServerConfig(config: any) {
@@ -3731,11 +3771,79 @@ app.delete("/api/qr/logs", (req, res) => {
 
 // API: Get Current Server MySQL Config
 app.get("/api/mysql/config", (req, res) => {
+  if (req.query.reload === "true") {
+    try { dotenv.config({ override: true }); } catch (e) {}
+  }
   const config = loadSavedServerConfig();
+  const envHost = process.env.DB_HOST || process.env.MYSQL_HOST;
+  const isEnv = !!(envHost && String(envHost).trim() !== "");
+
   res.json({
     success: !!config,
-    config: config || null
+    config: config ? {
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      database: config.database,
+      isEnv: Boolean(config.isEnv)
+    } : null,
+    isEnv,
+    source: isEnv ? "env" : (config ? "file" : "none"),
+    envKeys: {
+      host: envHost ? String(envHost).trim() : "",
+      port: String(process.env.DB_PORT || process.env.MYSQL_PORT || "3306").trim(),
+      user: String(process.env.DB_USER || process.env.MYSQL_USER || "").trim(),
+      hasPassword: !!(process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD),
+      database: String(process.env.DB_NAME || process.env.MYSQL_DATABASE || "").trim()
+    }
   });
+});
+
+// API: Reload .env & Test Connection
+app.post("/api/mysql/reload-env", async (req, res) => {
+  try {
+    try {
+      dotenv.config({ override: true });
+    } catch (e) {}
+
+    const config = loadSavedServerConfig();
+    const envHost = process.env.DB_HOST || process.env.MYSQL_HOST;
+
+    if (!envHost || String(envHost).trim() === "" || !config) {
+      return res.status(400).json({
+        success: false,
+        message: "Tidak ditemukan konfigurasi database di environment atau file .env. Pastikan DB_HOST atau MYSQL_HOST telah diisi.",
+        isEnv: false
+      });
+    }
+
+    let connectionOk = false;
+    let errorDetail = "";
+    try {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        const conn = await pool.getConnection();
+        await conn.ping();
+        conn.release();
+        connectionOk = true;
+      }
+    } catch (dbErr: any) {
+      errorDetail = dbErr?.message || String(dbErr);
+    }
+
+    res.json({
+      success: true,
+      message: connectionOk
+        ? `Konfigurasi .env berhasil dimuat dan terhubung ke MySQL (${config.host}:${config.port}/${config.database})!`
+        : `Konfigurasi .env berhasil dimuat (${config.host}:${config.port}/${config.database}), namun koneksi belum aktif: ${errorDetail}`,
+      config,
+      isEnv: true,
+      connectionOk
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e?.message || "Gagal memuat ulang environment .env" });
+  }
 });
 
 // API: Global Sync Endpoint for Dev & Shared Run Preview Links (with ETag conditional 304 caching)
@@ -4177,13 +4285,13 @@ app.post("/api/chat/mark-read", (req, res) => {
 
 // API: Test MySQL Connection & Auto-Setup Tables
 app.post("/api/mysql/test", async (req, res) => {
-  const { host, port, user, password, database } = req.body;
-  if (!host || !user || !database) {
-    return res.status(400).json({ success: false, message: "Host, user, dan nama database wajib diisi." });
+  const config = resolveMySQLConfig(req.body);
+  if (!config || !config.host || !config.user || !config.database) {
+    return res.status(400).json({ success: false, message: "Host, user, dan nama database wajib diisi atau diset via .env." });
   }
+  const { host, port, user, password, database } = config;
 
   try {
-    const config = { host, port, user, password, database };
     const pool = getMySQLPool(config, true); // force ignore cooldown to test user click
     if (!pool) {
       throw new Error("Gagal membuat koneksi pool MySQL.");
@@ -4434,13 +4542,13 @@ app.post("/api/mysql/test", async (req, res) => {
 
 // API: Save App Data to Relational MySQL Tables
 app.post("/api/mysql/save", async (req, res) => {
-  const { host, port, user, password, database, appData } = req.body;
-  if (!host || !user || !database || !appData) {
-    return res.status(400).json({ success: false, message: "Parameter koneksi dan data aplikasi wajib diisi." });
+  const { appData } = req.body;
+  const config = resolveMySQLConfig(req.body);
+  if (!config || !config.host || !config.user || !config.database || !appData) {
+    return res.status(400).json({ success: false, message: "Parameter koneksi dan data aplikasi wajib diisi atau diset via .env." });
   }
 
   try {
-    const config = { host, port, user, password, database };
     saveServerConfig(config);
     saveAppDataCache(appData);
     lastMySQLSyncTime = Date.now();
@@ -4470,13 +4578,12 @@ app.post("/api/mysql/save", async (req, res) => {
 
 // API: Load App Data from MySQL
 app.post("/api/mysql/load", async (req, res) => {
-  const { host, port, user, password, database } = req.body;
-  if (!host || !user || !database) {
-    return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
+  const config = resolveMySQLConfig(req.body);
+  if (!config || !config.host || !config.user || !config.database) {
+    return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi atau diset via .env." });
   }
 
   try {
-    const config = { host, port, user, password, database };
     saveServerConfig(config);
 
     let appData: any = null;
@@ -4509,13 +4616,13 @@ app.post("/api/mysql/load", async (req, res) => {
 
 // API: Preview Database Statistics & Sample Rows
 app.post("/api/mysql/preview", async (req, res) => {
-  const { host, port, user, password, database } = req.body;
-  if (!host || !user || !database) {
-    return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi." });
+  const config = resolveMySQLConfig(req.body);
+  if (!config || !config.host || !config.user || !config.database) {
+    return res.status(400).json({ success: false, message: "Parameter koneksi wajib diisi atau diset via .env." });
   }
+  const { host, port, user, password, database } = config;
 
   try {
-    const config = { host, port, user, password, database };
     const pool = getMySQLPool(config, true);
     if (!pool) throw new Error("Gagal membuat koneksi MySQL.");
 
@@ -5258,6 +5365,17 @@ async function startServer() {
           res.status(404).send("Application build in progress, please refresh in a few seconds.");
         }
       });
+    }
+
+    const dbConfig = loadSavedServerConfig();
+    if (dbConfig) {
+      if (dbConfig.isEnv) {
+        console.log(`[Database] Memuat konfigurasi dari .env: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database} (user: ${dbConfig.user})`);
+      } else {
+        console.log(`[Database] Memuat konfigurasi dari file cache: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
+      }
+    } else {
+      console.log(`[Database] Berjalan dalam mode Local In-Memory Cache (Konfigurasi .env DB_HOST kosong)`);
     }
 
     app.listen(PORT, "0.0.0.0", () => {
