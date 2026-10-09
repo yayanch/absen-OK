@@ -142,6 +142,26 @@ export const getRoleLabel = (role?: string, customRoles?: CustomRole[]) => {
   }
 };
 
+export const isStudentUser = (u: { roles?: string[]; role?: string }) => {
+  return (
+    (Array.isArray(u.roles) && (u.roles.includes('murid') || u.roles.includes('siswa'))) ||
+    u.role === 'murid' ||
+    u.role === 'siswa'
+  );
+};
+
+export const getKelasLabelForUser = (u: { kelasNama?: string; roles?: string[]; role?: string }) => {
+  if (!u.kelasNama) return '';
+  if (isStudentUser(u)) return `Kelas: ${u.kelasNama}`;
+  if (
+    (Array.isArray(u.roles) && u.roles.includes('piket_kelas')) ||
+    u.role === 'piket_kelas'
+  ) {
+    return `Piket Kelas: ${u.kelasNama}`;
+  }
+  return `Wali Kelas: ${u.kelasNama}`;
+};
+
 export const getAvailableRoleOptionsList = (appData: AppData): AvailableRoleOption[] => {
   const baseRoles: AvailableRoleOption[] = [
     { id: 'admin', label: 'Administrator', badgeColor: 'blue', description: 'Akses penuh ke seluruh menu & konfigurasi sistem', isSystem: true },
@@ -651,14 +671,14 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">
-            NIP / Identitas
+            {selectedRoles.includes('murid') || selectedRoles.includes('siswa') ? 'NISN / No Induk Siswa' : 'NIP / Identitas'}
           </label>
           <input
             type="text"
             value={nip}
             onChange={(e) => setNip(e.target.value)}
             className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="NIP / No Identitas"
+            placeholder={selectedRoles.includes('murid') || selectedRoles.includes('siswa') ? 'Contoh: 106063814' : 'NIP / No Identitas'}
           />
         </div>
       </div>
@@ -1944,7 +1964,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                             {user.nama}
                           </h4>
                           <p className="text-[11px] font-mono text-slate-400 dark:text-slate-400">
-                            @{user.username} {user.nip ? `• ${user.nip}` : ''}
+                            @{user.username} {user.nip ? `• ${isStudentUser(user) ? 'NISN' : 'NIP'}: ${user.nip}` : ''}
                           </p>
                         </div>
                       </div>
@@ -1954,7 +1974,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                     <div className="space-y-1.5 mb-3 text-xs">
                       {user.kelasNama && (
                         <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-xl border border-emerald-100 dark:border-emerald-800">
-                          Wali Kelas: {user.kelasNama}
+                          {getKelasLabelForUser(user)}
                         </div>
                       )}
                       {user.mataPelajaran && (
@@ -2116,7 +2136,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                           </p>
                           {user.kelasNama && (
                             <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-                              Wali Kelas: {user.kelasNama}
+                              {getKelasLabelForUser(user)}
                             </p>
                           )}
                           {user.mataPelajaran && (
@@ -2136,7 +2156,11 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
 
                     <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300">
                       <p className="font-bold text-slate-800 dark:text-slate-100">{user.username}</p>
-                      {user.nip && <p className="text-[10px] text-slate-400">NIP: {user.nip}</p>}
+                      {user.nip && (
+                        <p className="text-[10px] text-slate-400">
+                          {isStudentUser(user) ? 'NISN' : 'NIP'}: {user.nip}
+                        </p>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4">
