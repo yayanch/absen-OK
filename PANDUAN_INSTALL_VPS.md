@@ -137,8 +137,14 @@ nano .env
 
 # 3. Kompilasi frontend dan server backend
 npm run build
+
+# Catatan: Jika hanya ingin mengompilasi backend server secara cepat:
+# npm run build:server
 ```
-Hasil build akan berada di folder `dist/` (`dist/index.html` dan `dist/server.cjs`).
+Hasil build akan berada di folder `dist/`:
+- `dist/index.html` dan `dist/assets/*` (Frontend React)
+- `dist/server.cjs` (Backend Server Node.js / PM2)
+- `dist/server.js`  (File server alternatif kompatibel)
 
 ---
 
