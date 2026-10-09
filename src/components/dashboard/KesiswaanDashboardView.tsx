@@ -316,25 +316,11 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
                 <FileText className="w-5 h-5 text-amber-500" />
                 <span>Buku Log Catatan Piket Harian</span>
               </h3>
-              <button
-                type="button"
-                onClick={() => onNavigateView('petugas_piket')}
-                className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                Buka Buku Piket <ChevronRight className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             {(!appData.catatanPiketHarian || appData.catatanPiketHarian.length === 0) ? (
               <div className="p-6 text-center text-slate-400 text-xs bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700/60 space-y-2">
                 <p>Belum ada catatan kejadian atau izin tamu di Buku Piket hari ini.</p>
-                <button
-                  type="button"
-                  onClick={() => onNavigateView('petugas_piket')}
-                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition cursor-pointer"
-                >
-                  + Tulis Catatan Piket
-                </button>
               </div>
             ) : (
               <div className="space-y-2.5">

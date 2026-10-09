@@ -133,13 +133,6 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     iconName: 'UserCheck',
   },
   {
-    id: 'petugas_piket',
-    label: 'Data Petugas Piket',
-    shortDesc: 'Master data penugasan guru piket harian, jadwal shift piket, dan buku logbook',
-    category: 'master',
-    iconName: 'ClipboardList',
-  },
-  {
     id: 'master_mapel',
     label: 'Mata Pelajaran',
     shortDesc: 'Daftar kurikulum mata pelajaran, alokasi jam, dan kategori',
@@ -445,7 +438,6 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'catatan_pelanggaran',
       'home_visit',
       'ekstrakurikuler',
-      'petugas_piket',
       'absen_qr',
       'cetak_kartu_qr',
       'audit_logs',
@@ -579,7 +571,6 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     isSystem: true,
     allowedMenus: [
       'dashboard',
-      'petugas_piket',
       'presensi_input',
       'broadcast_wa',
       'rekap_pengisian_kelas',
@@ -599,7 +590,6 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     isSystem: true,
     allowedMenus: [
       'dashboard',
-      'petugas_piket',
       'presensi_input',
       'absen_harian_guru',
       'broadcast_wa',

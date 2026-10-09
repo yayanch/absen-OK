@@ -129,11 +129,10 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
     order: 4,
     visible: true,
     isAccordion: true,
-    description: 'Database induk siswa, guru, petugas piket, mapel, kelas, jurusan, jadwal, dan shift',
+    description: 'Database induk siswa, guru, mapel, kelas, jurusan, jadwal, dan shift',
     menuIds: [
       'master_siswa',
       'master_guru',
-      'petugas_piket',
       'master_mapel',
       'mapel_kelas_guru',
       'jadwal_mengajar',
@@ -249,16 +248,10 @@ export function getNavigationLayout(appData?: AppData): NavigationLayoutConfig {
     }
   }
 
-  // Ensure petugas_piket is in the 'master' section
-  const masterSec = clonedSections.find((s) => s.id === 'master');
-  if (masterSec && !masterSec.menuIds.includes('petugas_piket')) {
-    const guruIdx = masterSec.menuIds.indexOf('master_guru');
-    if (guruIdx !== -1) {
-      masterSec.menuIds.splice(guruIdx + 1, 0, 'petugas_piket');
-    } else {
-      masterSec.menuIds.push('petugas_piket');
-    }
-  }
+  // Filter out removed menus like petugas_piket from all sections
+  clonedSections.forEach((sec) => {
+    sec.menuIds = sec.menuIds.filter((id: any) => id !== 'petugas_piket');
+  });
 
   // Ensure rekap_pengisian_kelas is in the 'laporan' section
   const laporanSec = clonedSections.find((s) => s.id === 'laporan');

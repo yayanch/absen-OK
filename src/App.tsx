@@ -63,7 +63,6 @@ const DataDemoView = React.lazy(() => import('./components/views/DataDemoView').
 const IntegrasiMySQLView = React.lazy(() => import('./components/views/IntegrasiMySQLView').then(m => ({ default: m.IntegrasiMySQLView })));
 const DatabaseTrafficView = React.lazy(() => import('./components/views/DatabaseTrafficView').then(m => ({ default: m.DatabaseTrafficView })));
 const CetakKartuQrView = React.lazy(() => import('./components/views/CetakKartuQrView').then(m => ({ default: m.CetakKartuQrView })));
-const PetugasPiketView = React.lazy(() => import('./components/views/PetugasPiketView').then(m => ({ default: m.PetugasPiketView })));
 const LiveChatView = React.lazy(() => import('./components/views/LiveChatView').then(m => ({ default: m.LiveChatView })));
 import { LiveChatWidget } from './components/chat/LiveChatWidget';
 import { OfflineView } from './components/views/OfflineView';
@@ -1451,18 +1450,6 @@ export default function App() {
                 onConfirmModal={openConfirmModal}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
-              />
-            )}
-
-            {currentView === 'petugas_piket' && (
-              <PetugasPiketView
-                appData={appData}
-                currentUser={currentUser}
-                onUpdateAppData={handleUpdateAppData}
-                onShowToast={showToast}
-                onNavigateView={handleNavigate}
-                onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
-                readOnly={currentUser.role !== 'admin' && currentUser.role !== 'kesiswaan'}
               />
             )}
 

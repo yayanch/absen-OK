@@ -38,7 +38,6 @@ import {
   Sliders,
   Award,
   Clock,
-  ClipboardList,
   ChevronRight
 } from 'lucide-react';
 import { AppData, WaliKelas, UserSession, ViewType } from '../../types';
@@ -2592,33 +2591,6 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
           ) : undefined
         }
       />
-
-      {/* Info Callout: Petugas Piket Dipisahkan */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <ClipboardList className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-xs">
-              Pemberitahuan Pemisahan Petugas Piket:
-            </span>
-            <p className="text-[11px] text-amber-800/85 dark:text-amber-300/85 mt-0.5">
-              Petugas Piket Guru dan Piket Kesiswaan tidak dimasukkan sebagai Guru Pengajar, melainkan dikelola pada menu tersendiri: <strong>Petugas Piket Sekolah</strong>.
-            </p>
-          </div>
-        </div>
-        {onNavigateView && (
-          <button
-            type="button"
-            onClick={() => onNavigateView('petugas_piket')}
-            className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-center"
-          >
-            <span>Buka Bagian Petugas Piket</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

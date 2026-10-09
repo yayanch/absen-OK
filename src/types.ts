@@ -873,7 +873,6 @@ export type ViewType =
   | 'home_visit'
   | 'catatan_pelanggaran'
   | 'ekstrakurikuler'
-  | 'petugas_piket'
   | 'live_chat'
   | 'rekap_harian'
   | 'rekap_mingguan'
