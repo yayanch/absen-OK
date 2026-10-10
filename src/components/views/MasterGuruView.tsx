@@ -2561,26 +2561,6 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  onOpenModal(
-                    'Pengaturan Hari Mengajar Guru (Semua Shift & Kelompok)',
-                    <PengaturanHariMengajarModalContent
-                      appData={appData}
-                      onUpdateAppData={onUpdateAppData}
-                      onCloseModal={onCloseModal}
-                      onShowToast={onShowToast}
-                    />
-                  );
-                }}
-                className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
-                title="Atur Hari Mengajar Seluruh Shift & Kelompok Guru"
-              >
-                <Calendar className="w-4 h-4" />
-                <span>Pengaturan Hari Mengajar</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => handleOpenGuruModal()}
                 className="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
               >
@@ -2738,26 +2718,6 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
             {/* Excel & Schedule Actions */}
             {!readOnly && (
               <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenModal(
-                      'Pengaturan Hari Mengajar Guru (Semua Shift & Kelompok)',
-                      <PengaturanHariMengajarModalContent
-                        appData={appData}
-                        onUpdateAppData={onUpdateAppData}
-                        onCloseModal={onCloseModal}
-                        onShowToast={onShowToast}
-                      />
-                    );
-                  }}
-                  className="px-3 py-2 text-xs font-bold rounded-xl bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="Pengaturan Hari Mengajar Massal Semua Shift & Kelompok"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="hidden sm:inline">Hari Mengajar</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => setIsImportModalOpen(true)}

@@ -1,11 +1,32 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'mirror-build-artifacts',
+        closeBundle() {
+          try {
+            const distPath = path.resolve(__dirname, 'dist');
+            const buildPath = path.resolve(__dirname, 'build');
+            if (fs.existsSync(distPath)) {
+              if (fs.existsSync(buildPath)) {
+                fs.rmSync(buildPath, { recursive: true, force: true });
+              }
+              fs.cpSync(distPath, buildPath, { recursive: true });
+            }
+          } catch (e) {
+            console.warn('[Vite] Warning mirroring dist to build:', e);
+          }
+        },
+      },
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -15,6 +36,7 @@ export default defineConfig(() => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
+      reportCompressedSize: false,
       chunkSizeWarningLimit: 3000,
       rollupOptions: {
         output: {

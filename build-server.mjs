@@ -25,9 +25,18 @@ async function buildServer() {
     // 2. Juga buat dist/server.js (untuk kompatibilitas bila mencari server.js)
     fs.copyFileSync('dist/server.cjs', 'dist/server.js');
 
-    console.log('✅ Server backend berhasil dibuat di folder dist/:');
-    console.log('   - dist/server.cjs (PM2 / Node.js standard)');
-    console.log('   - dist/server.js  (File alternatif)');
+    // 3. Re-sync dist to build directory to ensure deployment systems checking either path get full artifacts
+    const buildDir = path.resolve(process.cwd(), 'build');
+    if (fs.existsSync(distDir)) {
+      if (fs.existsSync(buildDir)) {
+        fs.rmSync(buildDir, { recursive: true, force: true });
+      }
+      fs.cpSync(distDir, buildDir, { recursive: true });
+    }
+
+    console.log('✅ Server backend berhasil dibuat di folder dist/ dan build/:');
+    console.log('   - dist/server.cjs & build/server.cjs');
+    console.log('   - dist/server.js & build/server.js');
   } catch (error) {
     console.error('❌ Gagal mengompilasi server:', error);
     process.exit(1);
