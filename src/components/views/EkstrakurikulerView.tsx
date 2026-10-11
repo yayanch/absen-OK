@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Sparkles,
   Plus,
@@ -24,6 +24,7 @@ import {
   UserPlus,
   UserMinus,
   CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 import { AppData, Ekstrakurikuler, AnggotaEkskul, PresensiEkskulItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
@@ -45,6 +46,141 @@ interface EkstrakurikulerViewProps {
   ) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
+
+interface SearchablePembinaSelectProps {
+  teachers: any[];
+  defaultValue?: string;
+}
+
+const SearchablePembinaSelect: React.FC<SearchablePembinaSelectProps> = ({
+  teachers,
+  defaultValue = '',
+}) => {
+  // Sort teachers alphabetically by name
+  const sortedTeachers = useMemo(() => {
+    return [...teachers].sort((a, b) =>
+      (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' })
+    );
+  }, [teachers]);
+
+  const [selectedId, setSelectedId] = useState<string>(() => {
+    if (defaultValue && sortedTeachers.some((t) => t.id === defaultValue)) {
+      return defaultValue;
+    }
+    return sortedTeachers[0]?.id || '';
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedTeacher = sortedTeachers.find((t) => t.id === selectedId);
+
+  const filteredTeachers = useMemo(() => {
+    if (!searchQuery.trim()) return sortedTeachers;
+    const q = searchQuery.toLowerCase();
+    return sortedTeachers.filter(
+      (t) =>
+        (t.nama || '').toLowerCase().includes(q) ||
+        (t.nip || '').toLowerCase().includes(q) ||
+        (t.mapel || '').toLowerCase().includes(q)
+    );
+  }, [sortedTeachers, searchQuery]);
+
+  const handleSelect = (teacherId: string) => {
+    setSelectedId(teacherId);
+    setIsOpen(false);
+    setSearchQuery('');
+  };
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      {/* Hidden input element so document.getElementById('club-pembina-input') works seamlessly */}
+      <input id="club-pembina-input" type="hidden" value={selectedId} />
+
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between gap-2 transition cursor-pointer text-left"
+      >
+        <span className="truncate">
+          {selectedTeacher ? selectedTeacher.nama : 'Pilih Guru Pembina...'}
+        </span>
+        <div className="flex items-center gap-1 shrink-0 text-slate-400">
+          <Search className="w-3.5 h-3.5" />
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2 space-y-2 text-left">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Ketik untuk mencari guru pembina..."
+              className="w-full py-1.5 pl-8 pr-7 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">
+            {filteredTeachers.length === 0 ? (
+              <div className="p-3 text-center text-xs font-bold text-slate-400">
+                Guru tidak ditemukan
+              </div>
+            ) : (
+              filteredTeachers.map((t) => {
+                const isSelected = t.id === selectedId;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleSelect(t.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-between transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-extrabold'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
+                    <div className="truncate min-w-0 pr-2">
+                      <div className="truncate">{t.nama}</div>
+                      {t.nip && (
+                        <div className="text-[10px] text-slate-400 font-normal">NIP: {t.nip}</div>
+                      )}
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const EkstrakurikulerView: React.FC<EkstrakurikulerViewProps> = ({
   appData,
@@ -158,17 +294,10 @@ export const EkstrakurikulerView: React.FC<EkstrakurikulerViewProps> = ({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Guru Pembina</label>
-            <select
-              id="club-pembina-input"
+            <SearchablePembinaSelect
+              teachers={teachers}
               defaultValue={selectedPembinaId}
-              className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nama}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1.5">Hari Pelaksanaan</label>

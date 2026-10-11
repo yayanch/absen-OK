@@ -13,6 +13,8 @@ import {
   Trash2,
   Edit,
   Copy,
+  Clipboard,
+  ClipboardCheck,
   Download,
   Upload,
   Printer,
@@ -295,6 +297,61 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   // Modal state untuk formulir input/edit jadwal (hanya muncul saat klik "+ Isi" pada matriks atau edit)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
+  // Copy-Paste Clipboard State untuk Matriks Mengajar
+  const [copiedSchedule, setCopiedSchedule] = useState<{
+    id?: string;
+    mataPelajaran: string;
+    kodeMapel?: string;
+    guruUsername: string;
+    guruNama: string;
+    guruNip?: string;
+    guruId?: string;
+    kelasId: string;
+    kelasNama: string;
+    shift: 'Pagi' | 'Siang';
+    jamKeList?: number[];
+    jamKe?: string;
+    hari?: string;
+    catatan?: string;
+  } | null>(null);
+
+  // Synchronize copiedSchedule across browser tabs & persist in localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('simak_copied_schedule_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.mataPelajaran) {
+          setCopiedSchedule(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal membaca clipboard dari storage', e);
+    }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'simak_copied_schedule_v1') {
+        if (e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (parsed && typeof parsed === 'object' && parsed.mataPelajaran) {
+              setCopiedSchedule(parsed);
+            }
+          } catch (err) {
+            console.warn('Gagal memproses sync storage clipboard', err);
+          }
+        } else {
+          setCopiedSchedule(null);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   // Master Data collections (excludes piket petugas from teaching schedules)
   const canAccessAbsenGuru = useMemo(() => {
     const r = currentUser.role;
@@ -525,6 +582,12 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   const handleFilterKelompokChange = (newKel: 'semua' | 1 | 2) => {
     setFilterKelompok(newKel);
     setCurrentPage(1);
+    if (filterKelas !== 'semua' && newKel !== 'semua') {
+      const selectedK = kelasList.find((k) => k.id === filterKelas);
+      if (selectedK && determineKelasKelompok(selectedK.nama) !== newKel) {
+        setFilterKelas('semua');
+      }
+    }
     if (newKel === 'semua' && filterShift === 'semua') {
       setTableShiftOption('semua');
     } else if (newKel === 1 && filterShift === 'Pagi') {
@@ -598,6 +661,18 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       }
     }
   };
+
+  useEffect(() => {
+    if (matrixMode === 'kelas') {
+      const selectedK = kelasList.find((k) => k.id === matrixSelectedKelasId);
+      if (!selectedK || determineKelasKelompok(selectedK.nama) !== activeMatrixOption.kelompok) {
+        const match = kelasList.find((k) => determineKelasKelompok(k.nama) === activeMatrixOption.kelompok);
+        if (match) {
+          setMatrixSelectedKelasId(match.id);
+        }
+      }
+    }
+  }, [matrixMode, activeMatrixOption, matrixSelectedKelasId, kelasList]);
 
   // Horizontal Matrix Table Scroll Controls
   const matrixScrollContainerRef = useRef<HTMLDivElement>(null);
@@ -819,14 +894,49 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     return kelasList.filter((k) => !assignedIds.has(k.id));
   }, [kelasList, formAssignedKelasList]);
 
-  // Ensure formKelasId is valid whenever formAssignedKelasList changes
-  useEffect(() => {
-    if (isFormModalOpen && formAssignedKelasList.length > 0) {
-      if (!formAssignedKelasList.some((k) => k.id === formKelasId)) {
-        setFormKelasId(formAssignedKelasList[0].id);
+  // Active target kelompok for the modal form (1: Kelas X & XI, 2: Kelas XII)
+  const formTargetKelompok = useMemo(() => {
+    if (editingId) {
+      const editingObj = allJadwalList.find((j) => j.id === editingId);
+      if (editingObj) {
+        return getKelasKelompok(editingObj.kelasNama, editingObj.kelasId);
       }
     }
-  }, [isFormModalOpen, formAssignedKelasList, formKelasId]);
+    return activeMatrixOption.kelompok;
+  }, [editingId, allJadwalList, activeMatrixOption, getKelasKelompok]);
+
+  // Filter formAssignedKelasList to only include classes matching formTargetKelompok
+  const filteredFormAssignedKelasList = useMemo(() => {
+    return formAssignedKelasList.filter((k) => determineKelasKelompok(k.nama) === formTargetKelompok);
+  }, [formAssignedKelasList, formTargetKelompok]);
+
+  // Filter all kelasList to only include classes matching formTargetKelompok
+  const filteredFormAllKelasList = useMemo(() => {
+    return kelasList.filter((k) => determineKelasKelompok(k.nama) === formTargetKelompok);
+  }, [kelasList, formTargetKelompok]);
+
+  // Ensure formKelasId belongs to formTargetKelompok whenever modal opens or formTargetKelompok changes
+  useEffect(() => {
+    if (isFormModalOpen) {
+      const candidates = filteredFormAssignedKelasList.length > 0
+        ? filteredFormAssignedKelasList
+        : filteredFormAllKelasList;
+      if (candidates.length > 0) {
+        if (!candidates.some((k) => k.id === formKelasId)) {
+          setFormKelasId(candidates[0].id);
+        }
+      }
+    }
+  }, [isFormModalOpen, filteredFormAssignedKelasList, filteredFormAllKelasList, formKelasId]);
+
+  // Ensure formKelasId is valid whenever formAssignedKelasList changes
+  useEffect(() => {
+    if (isFormModalOpen && filteredFormAssignedKelasList.length > 0) {
+      if (!filteredFormAssignedKelasList.some((k) => k.id === formKelasId)) {
+        setFormKelasId(filteredFormAssignedKelasList[0].id);
+      }
+    }
+  }, [isFormModalOpen, filteredFormAssignedKelasList, formKelasId]);
 
   // Ensure formMataPelajaran is valid when modal opens with assigned items
   useEffect(() => {
@@ -1056,8 +1166,156 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     setIsFormModalOpen(true);
   };
 
+  // Copy schedule handler for matrix & table clipboard (Admin Only)
+  const handleCopySchedule = useCallback(
+    (schedule: JadwalMengajarGuru) => {
+      if (readOnly || !isAdmin) return;
+      const dataToCopy = {
+        id: schedule.id,
+        mataPelajaran: cleanMapelName(schedule.mataPelajaran),
+        kodeMapel: schedule.kodeMapel || '',
+        guruUsername: schedule.guruUsername,
+        guruNama: schedule.guruNama,
+        guruNip: schedule.guruNip || '',
+        guruId: schedule.guruId,
+        kelasId: schedule.kelasId,
+        kelasNama: schedule.kelasNama,
+        shift: (schedule.shift === 'Siang' ? 'Siang' : 'Pagi') as 'Pagi' | 'Siang',
+        jamKeList: parseJamKeList(schedule.jamKe, schedule.jamKeList),
+        jamKe: schedule.jamKe,
+        hari: schedule.hari,
+        catatan: schedule.catatan || '',
+      };
+      setCopiedSchedule(dataToCopy);
+
+      try {
+        localStorage.setItem('simak_copied_schedule_v1', JSON.stringify(dataToCopy));
+      } catch (e) {
+        console.warn('Gagal menyimpan clipboard ke storage', e);
+      }
+
+      try {
+        if (navigator?.clipboard?.writeText) {
+          navigator.clipboard.writeText(JSON.stringify(dataToCopy));
+        }
+      } catch (e) {
+        // clipboard permission fallback
+      }
+
+      const detailInfo =
+        matrixMode === 'kelas'
+          ? `${cleanMapelName(schedule.mataPelajaran)} (${schedule.guruNama})`
+          : `${cleanMapelName(schedule.mataPelajaran)} (${schedule.kelasNama})`;
+
+      onShowToast(
+        `📋 Jadwal ${detailInfo} disalin ke clipboard! Tersedia di semua tab browser.`,
+        'info'
+      );
+    },
+    [readOnly, isAdmin, matrixMode, onShowToast]
+  );
+
+  // Direct 1-click Paste copied schedule into specific cell (Hari, JamNum) (Admin Only)
+  const handlePasteToCell = useCallback(
+    (hari: HariKerja, jamNum: number) => {
+      if (readOnly || !isAdmin) return;
+      if (!copiedSchedule) {
+        onShowToast('Belum ada jadwal yang disalin ke clipboard!', 'warning');
+        return;
+      }
+
+      // Upacara Bendera guard
+      if (activeMatrixOption.shift === 'Pagi' && hari === 'Senin' && (jamNum === 1 || jamNum === 2)) {
+        onShowToast('Tidak dapat menempel pada Jam ke-1 & 2 Senin Pagi (Upacara Bendera)!', 'error');
+        return;
+      }
+
+      let targetGuruUsername = copiedSchedule.guruUsername;
+      let targetGuruNama = copiedSchedule.guruNama;
+      let targetGuruNip = copiedSchedule.guruNip || '';
+      let targetGuruId = copiedSchedule.guruId;
+
+      let targetKelasId = copiedSchedule.kelasId;
+      let targetKelasNama = copiedSchedule.kelasNama;
+
+      const currentShift = activeMatrixOption.shift;
+
+      if (canManageAll) {
+        if (matrixMode === 'kelas') {
+          targetKelasId = matrixSelectedKelasId;
+          const matchedK = kelasList.find((k) => k.id === matrixSelectedKelasId);
+          if (matchedK) targetKelasNama = matchedK.nama;
+        } else if (matrixMode === 'guru') {
+          targetGuruUsername = matrixSelectedGuruUsername;
+          const matchedG = guruList.find((g) => g.username === matrixSelectedGuruUsername);
+          if (matchedG) {
+            targetGuruNama = matchedG.nama;
+            targetGuruNip = matchedG.nip || '';
+            targetGuruId = matchedG.id;
+          }
+        }
+      } else if (currentTeacherProfile) {
+        targetGuruUsername = currentTeacherProfile.username;
+        targetGuruNama = currentTeacherProfile.nama;
+        targetGuruNip = currentTeacherProfile.nip || '';
+        targetGuruId = currentTeacherProfile.id;
+      }
+
+      const sortedJam = [jamNum];
+      const newSchedule: JadwalMengajarGuru = {
+        id: `JADWAL_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        guruId: targetGuruId,
+        guruUsername: targetGuruUsername,
+        guruNama: targetGuruNama,
+        guruNip: targetGuruNip,
+        hari: hari,
+        kelasId: targetKelasId,
+        kelasNama: targetKelasNama,
+        mataPelajaran: cleanMapelName(copiedSchedule.mataPelajaran),
+        kodeMapel: copiedSchedule.kodeMapel || undefined,
+        jamKeList: sortedJam,
+        jamKe: formatJamKeDisplay(sortedJam),
+        shift: currentShift,
+        catatan: copiedSchedule.catatan ? `[Hasil Copas] ${copiedSchedule.catatan}` : '',
+      };
+
+      const nextList = [newSchedule, ...allJadwalList];
+      const updatedAppData = addAuditLog(
+        { ...appData, jadwalMengajar: nextList },
+        'Copy Paste Jadwal Mengajar',
+        `Menempelkan jadwal ${newSchedule.mataPelajaran} (${newSchedule.kelasNama} - ${newSchedule.guruNama}) ke ${hari} Shift ${currentShift} Jam ke-${jamNum}`
+      );
+
+      onUpdateAppData(updatedAppData);
+      onShowToast(
+        `✅ Jadwal ${newSchedule.mataPelajaran} (${matrixMode === 'kelas' ? newSchedule.guruNama : newSchedule.kelasNama}) berhasil ditempel ke ${hari} Jam ke-${jamNum}!`,
+        'success'
+      );
+    },
+    [
+      readOnly,
+      isAdmin,
+      copiedSchedule,
+      activeMatrixOption,
+      canManageAll,
+      matrixMode,
+      matrixSelectedKelasId,
+      matrixSelectedGuruUsername,
+      currentTeacherProfile,
+      kelasList,
+      guruList,
+      allJadwalList,
+      appData,
+      onUpdateAppData,
+      onShowToast,
+    ]
+  );
+
   // Duplicate schedule handler
   const handleDuplicate = (item: JadwalMengajarGuru) => {
+    if (isAdmin) {
+      handleCopySchedule(item);
+    }
     setEditingId(null);
     setFormGuruUsername(
       isTeacher && currentTeacherProfile ? currentTeacherProfile.username : item.guruUsername
@@ -2101,19 +2359,19 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                   required
                 >
-                  <option value="">-- Pilih Kelas --</option>
-                  {formAssignedKelasList.length > 0 ? (
-                    formAssignedKelasList.map((k) => (
+                  <option value="">-- Pilih Kelas ({formTargetKelompok === 1 ? 'Kelas X & XI' : 'Kelas XII'}) --</option>
+                  {filteredFormAssignedKelasList.length > 0 ? (
+                    filteredFormAssignedKelasList.map((k) => (
                       <option key={k.id} value={k.id}>
                         {k.nama}
                       </option>
                     ))
                   ) : assignedMapelForFormGuru.length > 0 ? (
                     <option value="" disabled>
-                      (Belum ada kelas yang ditentukan untuk mapel ini)
+                      (Belum ada kelas {formTargetKelompok === 1 ? 'X & XI' : 'XII'} yang ditentukan untuk mapel ini)
                     </option>
                   ) : (
-                    kelasList.map((k) => (
+                    filteredFormAllKelasList.map((k) => (
                       <option key={k.id} value={k.id}>
                         {k.nama}
                       </option>
@@ -2627,12 +2885,24 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                 >
-                  <option value="semua">Semua Kelas</option>
-                  {kelasList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.nama}
-                    </option>
-                  ))}
+                  <option value="semua">
+                    {filterKelompok === 1
+                      ? 'Semua Kelas X & XI'
+                      : filterKelompok === 2
+                      ? 'Semua Kelas XII'
+                      : 'Semua Kelas'}
+                  </option>
+                  {kelasList
+                    .filter((k) => {
+                      if (filterKelompok === 1) return determineKelasKelompok(k.nama) === 1;
+                      if (filterKelompok === 2) return determineKelasKelompok(k.nama) === 2;
+                      return true;
+                    })
+                    .map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.nama}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -3319,6 +3589,51 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           ===================================================================== */}
       {activeTab === 'matriks' && (
         <div className="space-y-4">
+          {/* Floating Clipboard Status Banner (Admin Only) */}
+          {copiedSchedule && !readOnly && isAdmin && (
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white rounded-2xl p-3.5 shadow-md flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200 border border-blue-400/40">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <ClipboardCheck className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-[10px] uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full text-white">
+                      📋 Jadwal Tersalin (Siap Ditempel)
+                    </span>
+                    <span className="font-extrabold text-sm text-white">
+                      {copiedSchedule.mataPelajaran}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-100 mt-0.5">
+                    Guru: <span className="font-bold text-white">{copiedSchedule.guruNama}</span> • Kelas:{' '}
+                    <span className="font-bold text-white">{copiedSchedule.kelasNama}</span> (Shift {copiedSchedule.shift})
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-blue-100 font-medium hidden sm:inline">
+                  Klik tombol <strong className="text-white bg-white/20 px-1.5 py-0.5 rounded">📋 Tempel</strong> pada sel matriks mana saja
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCopiedSchedule(null);
+                    try {
+                      localStorage.removeItem('simak_copied_schedule_v1');
+                    } catch (e) {}
+                    onShowToast('Clipboard jadwal dibersihkan.', 'info');
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1 cursor-pointer shrink-0"
+                  title="Batalkan / Bersihkan Clipboard"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Batal</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Controls Bar: Mode Per Kelas / Per Guru & 4-Bagian Shift Tab Selector - Sticky Container */}
           <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-wrap items-center justify-between gap-4 sticky top-14 sm:top-16 z-20 transition-all">
             <div className="flex flex-wrap items-center gap-3">
@@ -3394,18 +3709,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                     onChange={(e) => setMatrixSelectedKelasId(e.target.value)}
                     className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer"
                   >
-                    <optgroup label={`${activeMatrixOption.label} (${activeMatrixOption.tingkatLabel})`}>
+                    <optgroup label={`Pilihan ${activeMatrixOption.kelompokLabel} (${activeMatrixOption.shift})`}>
                       {kelasList
                         .filter((k) => determineKelasKelompok(k.nama) === activeMatrixOption.kelompok)
-                        .map((k) => (
-                          <option key={k.id} value={k.id}>
-                            Jadwal Kelas: {k.nama}
-                          </option>
-                        ))}
-                    </optgroup>
-                    <optgroup label={activeMatrixOption.kelompok === 1 ? 'Kelas XII' : 'Kelas X & XI'}>
-                      {kelasList
-                        .filter((k) => determineKelasKelompok(k.nama) !== activeMatrixOption.kelompok)
                         .map((k) => (
                           <option key={k.id} value={k.id}>
                             Jadwal Kelas: {k.nama}
@@ -3611,6 +3917,30 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                         </span>
                                         {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
                                           <div className="flex items-center gap-0.5 shrink-0">
+                                            {isAdmin && (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleCopySchedule(matchedSchedule)}
+                                                  className="p-1 rounded-md text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
+                                                  title="Salin Jadwal ini (Copy)"
+                                                  aria-label="Salin Jadwal"
+                                                >
+                                                  <Copy className="w-3.5 h-3.5" />
+                                                </button>
+                                                {copiedSchedule && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handlePasteToCell(hari, jamNum)}
+                                                    className="p-1 rounded-md text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition cursor-pointer"
+                                                    title={`Tempel "${copiedSchedule.mataPelajaran}" ke sel ini`}
+                                                    aria-label="Tempel Jadwal"
+                                                  >
+                                                    <ClipboardCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                  </button>
+                                                )}
+                                              </>
+                                            )}
                                             <button
                                               type="button"
                                               onClick={() => handleStartEdit(matchedSchedule)}
@@ -3667,17 +3997,31 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                   </div>
                                 </div>
                               ) : (
-                                <div className="h-full min-h-[44px] flex items-center justify-center text-slate-300 dark:text-slate-700 text-[11px]">
+                                <div className="h-full min-h-[44px] flex items-center justify-center gap-1 text-slate-300 dark:text-slate-700 text-[11px]">
                                   {!readOnly ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenFormForCell(hari, jamNum)}
-                                      className="w-6 h-6 rounded-md inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition cursor-pointer"
-                                      title={`Isi jadwal hari ${hari}, Jam ke-${jamNum} (${activeMatrixOption.label})`}
-                                      aria-label={`Isi jadwal hari ${hari}, Jam ke-${jamNum}`}
-                                    >
-                                      <Plus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" strokeWidth={3} />
-                                    </button>
+                                    <>
+                                      {isAdmin && copiedSchedule && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePasteToCell(hari, jamNum)}
+                                          className="px-2 py-1 rounded-lg inline-flex items-center gap-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs transition cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+                                          title={`Tempel "${copiedSchedule.mataPelajaran}" ke Hari ${hari}, Jam ke-${jamNum}`}
+                                          aria-label={`Tempel "${copiedSchedule.mataPelajaran}" ke Hari ${hari}, Jam ke-${jamNum}`}
+                                        >
+                                          <ClipboardCheck className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+                                          <span>Tempel</span>
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenFormForCell(hari, jamNum)}
+                                        className="w-6 h-6 rounded-md inline-flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition cursor-pointer shrink-0"
+                                        title={`Isi jadwal hari ${hari}, Jam ke-${jamNum} (${activeMatrixOption.label})`}
+                                        aria-label={`Isi jadwal hari ${hari}, Jam ke-${jamNum}`}
+                                      >
+                                        <Plus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" strokeWidth={3} />
+                                      </button>
+                                    </>
                                   ) : (
                                     <span>-</span>
                                   )}

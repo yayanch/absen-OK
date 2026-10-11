@@ -1314,11 +1314,11 @@ export function loadAppData(): AppData {
         }));
       }
 
-      if (!Array.isArray(merged.homeVisits) || (merged.homeVisits.length === 0 && (!merged.deletedHomeVisitIds || merged.deletedHomeVisitIds.length === 0))) {
-        merged.homeVisits = INITIAL_HOME_VISITS;
+      if (!Array.isArray(merged.homeVisits)) {
+        merged.homeVisits = [];
       }
-      if (!Array.isArray(merged.pelanggaran) || (merged.pelanggaran.length === 0 && (!merged.deletedPelanggaranIds || merged.deletedPelanggaranIds.length === 0))) {
-        merged.pelanggaran = INITIAL_PELANGGARAN;
+      if (!Array.isArray(merged.pelanggaran)) {
+        merged.pelanggaran = [];
       }
 
       return merged;

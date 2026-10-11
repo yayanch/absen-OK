@@ -816,6 +816,13 @@ function saveAppDataCache(data: any) {
   const allDeletedJadwal = Array.from(deletedJadwalSet);
   data.deletedJadwalIds = allDeletedJadwal;
 
+  const deletedGmkSet = new Set([
+    ...(inMemoryAppDataCache?.deletedGmkIds || []),
+    ...(data.deletedGmkIds || []),
+  ]);
+  const allDeletedGmk = Array.from(deletedGmkSet);
+  data.deletedGmkIds = allDeletedGmk;
+
   if (inMemoryAppDataCache) {
     // Safely merge siswa so existing students never vanish
     if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
@@ -852,10 +859,10 @@ function saveAppDataCache(data: any) {
 
     const isIncomingDemoWali = (
       Array.isArray(data.waliKelas) &&
-      data.waliKelas.length <= 4 &&
+      data.waliKelas.length <= 10 &&
       data.waliKelas.some((w: any) => w.id === 'WAL_1' || w.nama === 'Budi Santoso, S.Kom')
     );
-    if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 4 && isIncomingDemoWali) {
+    if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 10 && isIncomingDemoWali) {
       data.waliKelas = inMemoryAppDataCache.waliKelas;
     } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
       data.waliKelas = inMemoryAppDataCache.waliKelas;
@@ -874,8 +881,10 @@ function saveAppDataCache(data: any) {
     if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
       data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
     }
-    if (Array.isArray(inMemoryAppDataCache.guruMapelKelas) && inMemoryAppDataCache.guruMapelKelas.length > 0 && (!Array.isArray(data.guruMapelKelas) || data.guruMapelKelas.length === 0)) {
-      data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas;
+    if (Array.isArray(data.guruMapelKelas)) {
+      data.guruMapelKelas = data.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
+    } else if (Array.isArray(inMemoryAppDataCache.guruMapelKelas)) {
+      data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
     }
     if (Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0 && (!Array.isArray(data.presensiMengajarGuru) || data.presensiMengajarGuru.length === 0)) {
       data.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
@@ -889,10 +898,14 @@ function saveAppDataCache(data: any) {
     if (Array.isArray(inMemoryAppDataCache.pengumuman) && inMemoryAppDataCache.pengumuman.length > 0 && (!Array.isArray(data.pengumuman) || data.pengumuman.length === 0)) {
       data.pengumuman = inMemoryAppDataCache.pengumuman;
     }
-    if (Array.isArray(inMemoryAppDataCache.ekstrakurikuler) && inMemoryAppDataCache.ekstrakurikuler.length > 0 && (!Array.isArray(data.ekstrakurikuler) || data.ekstrakurikuler.length === 0)) {
+    if (Array.isArray(data.ekstrakurikuler)) {
+      inMemoryAppDataCache.ekstrakurikuler = data.ekstrakurikuler;
+    } else if (Array.isArray(inMemoryAppDataCache.ekstrakurikuler)) {
       data.ekstrakurikuler = inMemoryAppDataCache.ekstrakurikuler;
     }
-    if (Array.isArray(inMemoryAppDataCache.anggotaEkskul) && inMemoryAppDataCache.anggotaEkskul.length > 0 && (!Array.isArray(data.anggotaEkskul) || data.anggotaEkskul.length === 0)) {
+    if (Array.isArray(data.anggotaEkskul)) {
+      inMemoryAppDataCache.anggotaEkskul = data.anggotaEkskul;
+    } else if (Array.isArray(inMemoryAppDataCache.anggotaEkskul)) {
       data.anggotaEkskul = inMemoryAppDataCache.anggotaEkskul;
     }
     if (Array.isArray(inMemoryAppDataCache.chatMessages) && inMemoryAppDataCache.chatMessages.length > 0 && (!Array.isArray(data.chatMessages) || data.chatMessages.length === 0)) {
@@ -1152,6 +1165,14 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
     const [[{ dbKelasCount }]]: any = await db.execute(`SELECT COUNT(*) as dbKelasCount FROM kelas;`).catch(() => [[{ dbKelasCount: 0 }]]);
     const shouldProtectMasterData = isIncomingDemoClasses && Number(dbKelasCount) > 4;
 
+    const isIncomingDemoWali = (
+      Array.isArray(appData.waliKelas) &&
+      appData.waliKelas.length <= 10 &&
+      appData.waliKelas.some((w: any) => w.id === 'WAL_1' || w.nama === 'Budi Santoso, S.Kom')
+    );
+    const [[{ dbWaliCount }]]: any = await db.execute(`SELECT COUNT(*) as dbWaliCount FROM wali_kelas;`).catch(() => [[{ dbWaliCount: 0 }]]);
+    const shouldProtectWaliData = isIncomingDemoWali && Number(dbWaliCount) > 10;
+
     if (!shouldProtectMasterData && Array.isArray(appData.jurusan)) {
       await db.execute(`DELETE FROM jurusan;`);
       if (appData.jurusan.length > 0) {
@@ -1175,7 +1196,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
     }
 
-    if (!shouldProtectMasterData && Array.isArray(appData.waliKelas)) {
+    if (!shouldProtectWaliData && Array.isArray(appData.waliKelas) && appData.waliKelas.length > 0) {
       await db.execute(`DELETE FROM wali_kelas;`);
       if (appData.waliKelas.length > 0) {
         const CHUNK_SIZE = 50;
@@ -1184,7 +1205,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
           const batchValues: any[] = [];
           const placeholdersVal: string[] = [];
           for (const w of chunk) {
-            placeholdersVal.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            placeholdersVal.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             batchValues.push(
               w.id,
               w.nip || '',
@@ -1199,19 +1220,25 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
               w.tempatLahir || '',
               w.tanggalLahir || '',
               w.nik || '',
-              w.agamaId || '',
+              w.agamaId || '1',
               w.alamat || '',
               w.rt || '',
               w.rw || '',
               w.desaKelurahan || '',
               w.kecamatan || '',
+              w.kota || '',
               w.kodeWilayah || '',
               w.kodePos || '',
               w.email || '',
               w.gelarBelakang || '',
               w.tugasTambahan || '',
+              w.jabatan || w.tugasTambahan || '',
               w.mataPelajaran || '',
-              Array.isArray(w.hariMengajar) ? JSON.stringify(w.hariMengajar) : '[]'
+              Array.isArray(w.hariMengajar) ? JSON.stringify(w.hariMengajar) : '[]',
+              w.batasiLoginHariMengajar ? 1 : 0,
+              Array.isArray(w.roles) ? JSON.stringify(w.roles) : '[]',
+              Array.isArray(w.additionalRoles) ? JSON.stringify(w.additionalRoles) : '[]',
+              Array.isArray(w.tugasTambahanList) ? JSON.stringify(w.tugasTambahanList) : '[]'
             );
           }
           if (placeholdersVal.length > 0) {
@@ -1219,8 +1246,9 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
               `INSERT INTO wali_kelas (
                 id, nip, nama, username, password, no_hp, role, foto,
                 nuptk, jenis_kelamin, tempat_lahir, tanggal_lahir, nik, agama_id,
-                alamat, rt, rw, desa_kelurahan, kecamatan, kode_wilayah, kode_pos,
-                email, gelar_belakang, tugas_tambahan, mata_pelajaran, hari_mengajar
+                alamat, rt, rw, desa_kelurahan, kecamatan, kota, kode_wilayah, kode_pos,
+                email, gelar_belakang, tugas_tambahan, jabatan, mata_pelajaran, hari_mengajar,
+                batasi_login_hari_mengajar, roles, additional_roles, tugas_tambahan_list
               ) VALUES ${placeholdersVal.join(', ')}
                ON DUPLICATE KEY UPDATE
                 nip = VALUES(nip),
@@ -1241,13 +1269,19 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
                 rw = VALUES(rw),
                 desa_kelurahan = VALUES(desa_kelurahan),
                 kecamatan = VALUES(kecamatan),
+                kota = VALUES(kota),
                 kode_wilayah = VALUES(kode_wilayah),
                 kode_pos = VALUES(kode_pos),
                 email = VALUES(email),
                 gelar_belakang = VALUES(gelar_belakang),
                 tugas_tambahan = VALUES(tugas_tambahan),
+                jabatan = VALUES(jabatan),
                 mata_pelajaran = VALUES(mata_pelajaran),
-                hari_mengajar = VALUES(hari_mengajar);`,
+                hari_mengajar = VALUES(hari_mengajar),
+                batasi_login_hari_mengajar = VALUES(batasi_login_hari_mengajar),
+                roles = VALUES(roles),
+                additional_roles = VALUES(additional_roles),
+                tugas_tambahan_list = VALUES(tugas_tambahan_list);`,
               batchValues
             ).catch((err) => console.warn('Chunk waliKelas save warning:', err?.message || err));
           }
@@ -1758,42 +1792,57 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
     }
 
     // Save guru_mapel_kelas
-    if (Array.isArray(appData.guruMapelKelas) && appData.guruMapelKelas.length > 0) {
-      const CHUNK_SIZE = 50;
-      for (let i = 0; i < appData.guruMapelKelas.length; i += CHUNK_SIZE) {
-        const chunk = appData.guruMapelKelas.slice(i, i + CHUNK_SIZE);
-        const batchVals: any[] = [];
-        const phs: string[] = [];
-        for (const g of chunk) {
-          phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-          batchVals.push(
-            g.id,
-            g.guruId || '',
-            g.guruUsername || '',
-            g.guruNama || '',
-            g.guruNip || '',
-            g.kodeMapel || '',
-            g.namaMapel || '',
-            g.kategori || '',
-            g.tingkat || '',
-            Number(g.alokasiJp) || 0,
-            Number(g.kkm) || 75,
-            g.deskripsi || '',
-            JSON.stringify(g.kelasIds || []),
-            g.catatan || '',
-            g.createdAt || new Date().toISOString()
-          );
+    if (Array.isArray(appData.deletedGmkIds) && appData.deletedGmkIds.length > 0) {
+      const delPh = appData.deletedGmkIds.map(() => '?').join(', ');
+      await db.execute(`DELETE FROM guru_mapel_kelas WHERE id IN (${delPh});`, appData.deletedGmkIds).catch(() => {});
+    }
+
+    if (Array.isArray(appData.guruMapelKelas)) {
+      const currentIds = appData.guruMapelKelas.map((g: any) => String(g.id)).filter(Boolean);
+      if (currentIds.length === 0) {
+        await db.execute(`DELETE FROM guru_mapel_kelas;`).catch(() => {});
+      } else {
+        const phDel = currentIds.map(() => '?').join(', ');
+        await db.execute(`DELETE FROM guru_mapel_kelas WHERE id NOT IN (${phDel});`, currentIds).catch(() => {});
+      }
+
+      if (appData.guruMapelKelas.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < appData.guruMapelKelas.length; i += CHUNK_SIZE) {
+          const chunk = appData.guruMapelKelas.slice(i, i + CHUNK_SIZE);
+          const batchVals: any[] = [];
+          const phs: string[] = [];
+          for (const g of chunk) {
+            phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            batchVals.push(
+              g.id,
+              g.guruId || '',
+              g.guruUsername || '',
+              g.guruNama || '',
+              g.guruNip || '',
+              g.kodeMapel || '',
+              g.namaMapel || '',
+              g.kategori || '',
+              g.tingkat || '',
+              Number(g.alokasiJp) || 0,
+              Number(g.kkm) || 75,
+              g.deskripsi || '',
+              JSON.stringify(g.kelasIds || []),
+              g.catatan || '',
+              g.createdAt || new Date().toISOString()
+            );
+          }
+          await db.execute(
+            `INSERT INTO guru_mapel_kelas (id, guru_id, guru_username, guru_nama, guru_nip, kode_mapel, nama_mapel, kategori, tingkat, alokasi_jp, kkm, deskripsi, kelas_ids, catatan, created_at)
+             VALUES ${phs.join(', ')}
+             ON DUPLICATE KEY UPDATE
+               guru_id=VALUES(guru_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama), guru_nip=VALUES(guru_nip),
+               kode_mapel=VALUES(kode_mapel), nama_mapel=VALUES(nama_mapel), kategori=VALUES(kategori), tingkat=VALUES(tingkat),
+               alokasi_jp=VALUES(alokasi_jp), kkm=VALUES(kkm), deskripsi=VALUES(deskripsi), kelas_ids=VALUES(kelas_ids),
+               catatan=VALUES(catatan), created_at=VALUES(created_at);`,
+            batchVals
+          ).catch(() => {});
         }
-        await db.execute(
-          `INSERT INTO guru_mapel_kelas (id, guru_id, guru_username, guru_nama, guru_nip, kode_mapel, nama_mapel, kategori, tingkat, alokasi_jp, kkm, deskripsi, kelas_ids, catatan, created_at)
-           VALUES ${phs.join(', ')}
-           ON DUPLICATE KEY UPDATE
-             guru_id=VALUES(guru_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama), guru_nip=VALUES(guru_nip),
-             kode_mapel=VALUES(kode_mapel), nama_mapel=VALUES(nama_mapel), kategori=VALUES(kategori), tingkat=VALUES(tingkat),
-             alokasi_jp=VALUES(alokasi_jp), kkm=VALUES(kkm), deskripsi=VALUES(deskripsi), kelas_ids=VALUES(kelas_ids),
-             catatan=VALUES(catatan), created_at=VALUES(created_at);`,
-          batchVals
-        ).catch(() => {});
       }
     }
 
@@ -1932,36 +1981,53 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       ).catch(() => {});
     }
 
-    // Save ekstrakurikuler & anggotaEkskul
-    if (Array.isArray(appData.ekstrakurikuler) && appData.ekstrakurikuler.length > 0) {
-      const ph = appData.ekstrakurikuler.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
-      const vals: any[] = [];
-      for (const e of appData.ekstrakurikuler) {
-        vals.push(e.id, e.nama, e.pembinaId || '', e.pembinaNama || '', e.jadwalHari || '', e.jamMulai || '', e.jamSelesai || '', e.tempat || '', e.deskripsi || '');
+    // Save ekstrakurikuler
+    if (Array.isArray(appData.ekstrakurikuler)) {
+      if (appData.ekstrakurikuler.length === 0) {
+        await db.execute(`DELETE FROM ekstrakurikuler;`).catch(() => {});
+      } else {
+        const currentIds = appData.ekstrakurikuler.map((e: any) => e.id);
+        const phDel = currentIds.map(() => '?').join(', ');
+        await db.execute(`DELETE FROM ekstrakurikuler WHERE id NOT IN (${phDel});`, currentIds).catch(() => {});
+
+        const ph = appData.ekstrakurikuler.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const e of appData.ekstrakurikuler) {
+          vals.push(e.id, e.nama, e.pembinaId || '', e.pembinaNama || '', e.jadwalHari || '', e.jamMulai || '', e.jamSelesai || '', e.tempat || '', e.deskripsi || '');
+        }
+        await db.execute(
+          `INSERT INTO ekstrakurikuler (id, nama, pembina_id, pembina_nama, jadwal_hari, jam_mulai, jam_selesai, tempat, deskripsi)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             nama=VALUES(nama), pembina_id=VALUES(pembina_id), pembina_nama=VALUES(pembina_nama), jadwal_hari=VALUES(jadwal_hari),
+             jam_mulai=VALUES(jam_mulai), jam_selesai=VALUES(jam_selesai), tempat=VALUES(tempat), deskripsi=VALUES(deskripsi);`,
+          vals
+        ).catch(() => {});
       }
-      await db.execute(
-        `INSERT INTO ekstrakurikuler (id, nama, pembina_id, pembina_nama, jadwal_hari, jam_mulai, jam_selesai, tempat, deskripsi)
-         VALUES ${ph}
-         ON DUPLICATE KEY UPDATE
-           nama=VALUES(nama), pembina_id=VALUES(pembina_id), pembina_nama=VALUES(pembina_nama), jadwal_hari=VALUES(jadwal_hari),
-           jam_mulai=VALUES(jam_mulai), jam_selesai=VALUES(jam_selesai), tempat=VALUES(tempat), deskripsi=VALUES(deskripsi);`,
-        vals
-      ).catch(() => {});
     }
 
-    if (Array.isArray(appData.anggotaEkskul) && appData.anggotaEkskul.length > 0) {
-      const ph = appData.anggotaEkskul.map(() => '(?, ?, ?, ?)').join(', ');
-      const vals: any[] = [];
-      for (const a of appData.anggotaEkskul) {
-        vals.push(a.id, a.ekskulId, a.siswaId, a.tanggalBergabung || '');
+    // Save anggotaEkskul
+    if (Array.isArray(appData.anggotaEkskul)) {
+      if (appData.anggotaEkskul.length === 0) {
+        await db.execute(`DELETE FROM anggota_ekskul;`).catch(() => {});
+      } else {
+        const currentIds = appData.anggotaEkskul.map((a: any) => a.id);
+        const phDel = currentIds.map(() => '?').join(', ');
+        await db.execute(`DELETE FROM anggota_ekskul WHERE id NOT IN (${phDel});`, currentIds).catch(() => {});
+
+        const ph = appData.anggotaEkskul.map(() => '(?, ?, ?, ?)').join(', ');
+        const vals: any[] = [];
+        for (const a of appData.anggotaEkskul) {
+          vals.push(a.id, a.ekskulId, a.siswaId, a.tanggalBergabung || '');
+        }
+        await db.execute(
+          `INSERT INTO anggota_ekskul (id, ekskul_id, siswa_id, tanggal_bergabung)
+           VALUES ${ph}
+           ON DUPLICATE KEY UPDATE
+             ekskul_id=VALUES(ekskul_id), siswa_id=VALUES(siswa_id), tanggal_bergabung=VALUES(tanggal_bergabung);`,
+          vals
+        ).catch(() => {});
       }
-      await db.execute(
-        `INSERT INTO anggota_ekskul (id, ekskul_id, siswa_id, tanggal_bergabung)
-         VALUES ${ph}
-         ON DUPLICATE KEY UPDATE
-           ekskul_id=VALUES(ekskul_id), siswa_id=VALUES(siswa_id), tanggal_bergabung=VALUES(tanggal_bergabung);`,
-        vals
-      ).catch(() => {});
     }
 
     // Save chat_messages
@@ -2418,6 +2484,33 @@ async function performMySQLLoad(config: any) {
             hariMengajarArr = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
           }
         }
+        let rolesArr: string[] = [];
+        if (w.roles) {
+          try {
+            rolesArr = typeof w.roles === 'string' ? JSON.parse(w.roles) : w.roles;
+          } catch {
+            rolesArr = [];
+          }
+        }
+        let additionalRolesArr: any[] = [];
+        if (w.additional_roles) {
+          try {
+            additionalRolesArr = typeof w.additional_roles === 'string' ? JSON.parse(w.additional_roles) : w.additional_roles;
+          } catch {
+            additionalRolesArr = [];
+          }
+        }
+        let tugasTambahanListArr: string[] = [];
+        if (w.tugas_tambahan_list) {
+          try {
+            tugasTambahanListArr = typeof w.tugas_tambahan_list === 'string' ? JSON.parse(w.tugas_tambahan_list) : w.tugas_tambahan_list;
+          } catch {
+            tugasTambahanListArr = [];
+          }
+        } else if (w.tugas_tambahan) {
+          tugasTambahanListArr = String(w.tugas_tambahan).split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+
         return {
           id: w.id,
           nip: w.nip || '',
@@ -2427,12 +2520,13 @@ async function performMySQLLoad(config: any) {
           tempatLahir: w.tempat_lahir || '',
           tanggalLahir: w.tanggal_lahir || '',
           nik: w.nik || '',
-          agamaId: w.agama_id || '',
+          agamaId: w.agama_id || '1',
           alamat: w.alamat || '',
           rt: w.rt || '',
           rw: w.rw || '',
           desaKelurahan: w.desa_kelurahan || '',
           kecamatan: w.kecamatan || '',
+          kota: w.kota || 'Garut',
           kodeWilayah: w.kode_wilayah || '',
           kodePos: w.kode_pos || '',
           noHp: w.no_hp || '',
@@ -2441,8 +2535,11 @@ async function performMySQLLoad(config: any) {
           username: w.username || `guru_${String(w.nip || w.nama).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
           password: w.password || '123',
           role: w.role || 'wali',
+          roles: rolesArr,
+          additionalRoles: additionalRolesArr,
           foto: w.foto || '',
           tugasTambahan: w.tugas_tambahan || '',
+          tugasTambahanList: tugasTambahanListArr,
           jabatan: w.jabatan || w.tugas_tambahan || '',
           mataPelajaran: w.mata_pelajaran || '',
           hariMengajar: hariMengajarArr,
@@ -2623,32 +2720,35 @@ async function performMySQLLoad(config: any) {
       appData.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
     }
 
+    const deletedGmkSet = new Set([...(appData.deletedGmkIds || []), ...(inMemoryAppDataCache?.deletedGmkIds || [])]);
     if (Array.isArray(gmkRows) && gmkRows.length > 0) {
-      appData.guruMapelKelas = gmkRows.map((g: any) => {
-        let kelasIds: string[] = [];
-        try {
-          kelasIds = typeof g.kelas_ids === 'string' ? JSON.parse(g.kelas_ids) : (Array.isArray(g.kelas_ids) ? g.kelas_ids : []);
-        } catch (e) {}
-        return {
-          id: g.id,
-          guruId: g.guru_id || '',
-          guruUsername: g.guru_username || '',
-          guruNama: g.guru_nama || '',
-          guruNip: g.guru_nip || '',
-          kodeMapel: g.kode_mapel || '',
-          namaMapel: g.nama_mapel || '',
-          kategori: g.kategori || '',
-          tingkat: g.tingkat || '',
-          alokasiJp: Number(g.alokasi_jp) || 0,
-          kkm: Number(g.kkm) || 75,
-          deskripsi: g.deskripsi || '',
-          kelasIds,
-          catatan: g.catatan || '',
-          createdAt: g.created_at || ''
-        };
-      });
-    } else if (inMemoryAppDataCache?.guruMapelKelas && Array.isArray(inMemoryAppDataCache.guruMapelKelas) && inMemoryAppDataCache.guruMapelKelas.length > 0) {
-      appData.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas;
+      appData.guruMapelKelas = gmkRows
+        .filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)))
+        .map((g: any) => {
+          let kelasIds: string[] = [];
+          try {
+            kelasIds = typeof g.kelas_ids === 'string' ? JSON.parse(g.kelas_ids) : (Array.isArray(g.kelas_ids) ? g.kelas_ids : []);
+          } catch (e) {}
+          return {
+            id: g.id,
+            guruId: g.guru_id || '',
+            guruUsername: g.guru_username || '',
+            guruNama: g.guru_nama || '',
+            guruNip: g.guru_nip || '',
+            kodeMapel: g.kode_mapel || '',
+            namaMapel: g.nama_mapel || '',
+            kategori: g.kategori || '',
+            tingkat: g.tingkat || '',
+            alokasiJp: Number(g.alokasi_jp) || 0,
+            kkm: Number(g.kkm) || 75,
+            deskripsi: g.deskripsi || '',
+            kelasIds,
+            catatan: g.catatan || '',
+            createdAt: g.created_at || ''
+          };
+        });
+    } else if (inMemoryAppDataCache?.guruMapelKelas && Array.isArray(inMemoryAppDataCache.guruMapelKelas)) {
+      appData.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
     }
 
     if (Array.isArray(pmgRows) && pmgRows.length > 0) {
@@ -2742,32 +2842,40 @@ async function performMySQLLoad(config: any) {
     }
 
     // Ekstrakurikuler
-    if (Array.isArray(ekskulRows) && ekskulRows.length > 0) {
-      appData.ekstrakurikuler = ekskulRows.map((e: any) => ({
-        id: e.id,
-        nama: e.nama,
-        pembinaId: e.pembina_id || '',
-        pembinaNama: e.pembina_nama || '',
-        jadwalHari: e.jadwal_hari || '',
-        jamMulai: e.jam_mulai || '',
-        jamSelesai: e.jam_selesai || '',
-        tempat: e.tempat || '',
-        deskripsi: e.deskripsi || ''
-      }));
-    } else if (inMemoryAppDataCache?.ekstrakurikuler && inMemoryAppDataCache.ekstrakurikuler.length > 0) {
-      appData.ekstrakurikuler = inMemoryAppDataCache.ekstrakurikuler;
+    if (Array.isArray(ekskulRows)) {
+      if (ekskulRows.length > 0) {
+        appData.ekstrakurikuler = ekskulRows.map((e: any) => ({
+          id: e.id,
+          nama: e.nama,
+          pembinaId: e.pembina_id || '',
+          pembinaNama: e.pembina_nama || '',
+          jadwalHari: e.jadwal_hari || '',
+          jamMulai: e.jam_mulai || '',
+          jamSelesai: e.jam_selesai || '',
+          tempat: e.tempat || '',
+          deskripsi: e.deskripsi || ''
+        }));
+      } else if (Array.isArray(inMemoryAppDataCache?.ekstrakurikuler)) {
+        appData.ekstrakurikuler = inMemoryAppDataCache.ekstrakurikuler;
+      } else {
+        appData.ekstrakurikuler = [];
+      }
     }
 
     // Anggota Ekskul
-    if (Array.isArray(anggotaEkskulRows) && anggotaEkskulRows.length > 0) {
-      appData.anggotaEkskul = anggotaEkskulRows.map((a: any) => ({
-        id: a.id,
-        ekskulId: a.ekskul_id,
-        siswaId: a.siswa_id,
-        tanggalBergabung: a.tanggal_bergabung || ''
-      }));
-    } else if (inMemoryAppDataCache?.anggotaEkskul && inMemoryAppDataCache.anggotaEkskul.length > 0) {
-      appData.anggotaEkskul = inMemoryAppDataCache.anggotaEkskul;
+    if (Array.isArray(anggotaEkskulRows)) {
+      if (anggotaEkskulRows.length > 0) {
+        appData.anggotaEkskul = anggotaEkskulRows.map((a: any) => ({
+          id: a.id,
+          ekskulId: a.ekskul_id,
+          siswaId: a.siswa_id,
+          tanggalBergabung: a.tanggal_bergabung || ''
+        }));
+      } else if (Array.isArray(inMemoryAppDataCache?.anggotaEkskul)) {
+        appData.anggotaEkskul = inMemoryAppDataCache.anggotaEkskul;
+      } else {
+        appData.anggotaEkskul = [];
+      }
     }
 
     // Chat Messages
@@ -4364,6 +4472,8 @@ app.post("/api/mysql/test", async (req, res) => {
           rw VARCHAR(20),
           desa_kelurahan VARCHAR(100),
           kecamatan VARCHAR(100),
+          kota VARCHAR(100),
+          kodeWilayah VARCHAR(50),
           kode_wilayah VARCHAR(50),
           kode_pos VARCHAR(20),
           no_hp VARCHAR(50),
@@ -4377,7 +4487,10 @@ app.post("/api/mysql/test", async (req, res) => {
           jabatan VARCHAR(100),
           mata_pelajaran VARCHAR(255),
           hari_mengajar JSON,
-          batasi_login_hari_mengajar BOOLEAN DEFAULT FALSE
+          batasi_login_hari_mengajar BOOLEAN DEFAULT FALSE,
+          roles TEXT,
+          additional_roles TEXT,
+          tugas_tambahan_list TEXT
         );
       `);
 
@@ -4512,6 +4625,299 @@ app.post("/api/mysql/test", async (req, res) => {
           INDEX idx_username (username),
           INDEX idx_timestamp (timestamp),
           INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS presensi_guru (
+          id VARCHAR(100) PRIMARY KEY,
+          tanggal DATE NOT NULL,
+          guru_id VARCHAR(100) NOT NULL,
+          guru_username VARCHAR(100),
+          guru_nama VARCHAR(255) NOT NULL,
+          guru_nip VARCHAR(100),
+          hari VARCHAR(50) NOT NULL,
+          shift VARCHAR(50),
+          status VARCHAR(20) NOT NULL,
+          jam_masuk VARCHAR(20),
+          jam_pulang VARCHAR(20),
+          catatan TEXT,
+          jadwal_hari_ini TEXT,
+          sumber_presensi VARCHAR(50) DEFAULT 'Manual',
+          is_overridden BOOLEAN DEFAULT FALSE,
+          overridden_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_tanggal_guru (tanggal, guru_id),
+          INDEX idx_tanggal (tanggal),
+          INDEX idx_guru_id (guru_id),
+          INDEX idx_status (status),
+          INDEX idx_shift (shift)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS mata_pelajaran (
+          id VARCHAR(100) PRIMARY KEY,
+          kode_mapel VARCHAR(100) NOT NULL,
+          nama_mapel VARCHAR(255) NOT NULL,
+          kelompok VARCHAR(100) DEFAULT 'Kelompok A (Umum)',
+          jurusan_nama VARCHAR(100),
+          kkm INT DEFAULT 75,
+          deskripsi TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_mapel_kode (kode_mapel)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS guru_mapel_kelas (
+          id VARCHAR(100) PRIMARY KEY,
+          guru_id VARCHAR(100) NOT NULL,
+          guru_nama VARCHAR(255) NOT NULL,
+          guru_username VARCHAR(100) NOT NULL,
+          kelas_id VARCHAR(100) NOT NULL,
+          kelas_nama VARCHAR(100) NOT NULL,
+          mapel_id VARCHAR(100) NOT NULL,
+          kode_mapel VARCHAR(100) NOT NULL,
+          nama_mapel VARCHAR(255) NOT NULL,
+          alokasi_jp INT DEFAULT 2,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_gmk_guru (guru_id),
+          INDEX idx_gmk_kelas (kelas_id),
+          INDEX idx_gmk_mapel (mapel_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS presensi_mengajar_guru (
+          id VARCHAR(100) PRIMARY KEY,
+          tanggal DATE NOT NULL,
+          hari VARCHAR(50) NOT NULL,
+          jam_ke VARCHAR(50),
+          guru_id VARCHAR(100) NOT NULL,
+          guru_nama VARCHAR(255) NOT NULL,
+          kelas_id VARCHAR(100) NOT NULL,
+          kelas_nama VARCHAR(100) NOT NULL,
+          kode_mapel VARCHAR(100),
+          nama_mapel VARCHAR(255) NOT NULL,
+          materi_pembelajaran TEXT,
+          status_kehadiran VARCHAR(50) DEFAULT 'Hadir',
+          keterangan TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_pmg_tanggal (tanggal),
+          INDEX idx_pmg_guru (guru_id),
+          INDEX idx_pmg_kelas (kelas_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS hari_libur (
+          id VARCHAR(100) PRIMARY KEY,
+          tanggal DATE NOT NULL,
+          nama_libur VARCHAR(255) NOT NULL,
+          jenis_libur VARCHAR(100) DEFAULT 'Nasional',
+          keterangan TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_libur_tanggal (tanggal)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS shift_config (
+          id VARCHAR(100) PRIMARY KEY,
+          nama_shift VARCHAR(100) NOT NULL,
+          jam_masuk VARCHAR(20) NOT NULL,
+          jam_pulang VARCHAR(20) NOT NULL,
+          toleransi_terlambat_menit INT DEFAULT 15,
+          is_active BOOLEAN DEFAULT TRUE,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS ekstrakurikuler (
+          id VARCHAR(100) PRIMARY KEY,
+          nama VARCHAR(255) NOT NULL,
+          pembina VARCHAR(255),
+          hari VARCHAR(50),
+          jam_mulai VARCHAR(20),
+          jam_selesai VARCHAR(20),
+          lokasi VARCHAR(255),
+          deskripsi TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS anggota_ekskul (
+          id VARCHAR(100) PRIMARY KEY,
+          ekskul_id VARCHAR(100) NOT NULL,
+          siswa_id VARCHAR(100) NOT NULL,
+          siswa_nama VARCHAR(255) NOT NULL,
+          kelas_nama VARCHAR(100),
+          jabatan VARCHAR(100) DEFAULT 'Anggota',
+          tanggal_bergabung DATE,
+          INDEX idx_ae_ekskul (ekskul_id),
+          INDEX idx_ae_siswa (siswa_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS presensi_ekskul (
+          id VARCHAR(100) PRIMARY KEY,
+          ekskul_id VARCHAR(100) NOT NULL,
+          tanggal DATE NOT NULL,
+          data_presensi JSON NOT NULL,
+          catatan TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_pe_ekskul (ekskul_id),
+          INDEX idx_pe_tanggal (tanggal)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS custom_roles (
+          id VARCHAR(100) PRIMARY KEY,
+          role_key VARCHAR(100) UNIQUE NOT NULL,
+          role_name VARCHAR(255) NOT NULL,
+          description TEXT,
+          is_system BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS role_menu_permissions (
+          id VARCHAR(100) PRIMARY KEY,
+          role_key VARCHAR(100) NOT NULL,
+          menu_key VARCHAR(100) NOT NULL,
+          is_enabled BOOLEAN DEFAULT TRUE,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_role_menu (role_key, menu_key),
+          INDEX idx_rmp_role (role_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS security_incidents (
+          id VARCHAR(100) PRIMARY KEY,
+          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          type VARCHAR(100) NOT NULL,
+          severity VARCHAR(50) DEFAULT 'medium',
+          ip_address VARCHAR(50),
+          user_agent TEXT,
+          username VARCHAR(100),
+          details TEXT,
+          resolved BOOLEAN DEFAULT FALSE,
+          INDEX idx_si_timestamp (timestamp),
+          INDEX idx_si_ip (ip_address)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS blocked_ips (
+          id VARCHAR(100) PRIMARY KEY,
+          ip_address VARCHAR(50) UNIQUE NOT NULL,
+          reason TEXT,
+          blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NULL,
+          is_permanent BOOLEAN DEFAULT FALSE,
+          blocked_by VARCHAR(100) DEFAULT 'System Firewall'
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS active_user_sessions (
+          id VARCHAR(100) PRIMARY KEY,
+          session_id VARCHAR(100) UNIQUE NOT NULL,
+          user_id VARCHAR(100) NOT NULL,
+          username VARCHAR(100) NOT NULL,
+          nama VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          ip_address VARCHAR(50),
+          device VARCHAR(100),
+          browser VARCHAR(100),
+          login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_aus_user (user_id),
+          INDEX idx_aus_session (session_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          id VARCHAR(100) PRIMARY KEY,
+          sender_id VARCHAR(100) NOT NULL,
+          sender_nama VARCHAR(255) NOT NULL,
+          sender_role VARCHAR(50) NOT NULL,
+          recipient_id VARCHAR(100),
+          recipient_role VARCHAR(50),
+          message TEXT NOT NULL,
+          is_read BOOLEAN DEFAULT FALSE,
+          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_cm_sender (sender_id),
+          INDEX idx_cm_recipient (recipient_id),
+          INDEX idx_cm_timestamp (timestamp)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS pengumuman_sekolah (
+          id VARCHAR(100) PRIMARY KEY,
+          judul VARCHAR(255) NOT NULL,
+          konten TEXT NOT NULL,
+          penulis VARCHAR(255),
+          kategori VARCHAR(50) DEFAULT 'Umum',
+          target_role VARCHAR(50) DEFAULT 'Semua',
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS whatsapp_gateway_config (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          api_provider VARCHAR(100) DEFAULT 'Fonnte',
+          api_key TEXT,
+          sender_number VARCHAR(50),
+          is_active BOOLEAN DEFAULT FALSE,
+          auto_notify_presensi BOOLEAN DEFAULT TRUE,
+          auto_notify_pelanggaran BOOLEAN DEFAULT TRUE,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS whatsapp_logs (
+          id VARCHAR(100) PRIMARY KEY,
+          recipient_number VARCHAR(50) NOT NULL,
+          recipient_name VARCHAR(255),
+          message TEXT NOT NULL,
+          status VARCHAR(50) NOT NULL,
+          response_data TEXT,
+          sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_wal_status (status),
+          INDEX idx_wal_sent_at (sent_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id VARCHAR(100) PRIMARY KEY,
+          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          user_id VARCHAR(100),
+          username VARCHAR(100) NOT NULL,
+          nama VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          action VARCHAR(255) NOT NULL,
+          module VARCHAR(100) NOT NULL,
+          details TEXT,
+          ip_address VARCHAR(50),
+          INDEX idx_al_user (username),
+          INDEX idx_al_module (module),
+          INDEX idx_al_timestamp (timestamp)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 

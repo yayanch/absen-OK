@@ -333,6 +333,253 @@ CREATE TABLE IF NOT EXISTS presensi_guru (
   INDEX idx_status (status),
   INDEX idx_shift (shift)
 );
+
+-- 14. Tabel Master Katalog Mata Pelajaran
+CREATE TABLE IF NOT EXISTS mata_pelajaran (
+  id VARCHAR(100) PRIMARY KEY,
+  kode_mapel VARCHAR(100) NOT NULL,
+  nama_mapel VARCHAR(255) NOT NULL,
+  kelompok VARCHAR(100) DEFAULT 'Kelompok A (Umum)',
+  jurusan_nama VARCHAR(100),
+  kkm INT DEFAULT 75,
+  deskripsi TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_mapel_kode (kode_mapel)
+);
+
+-- 15. Tabel Plotting Mapel Guru & Rombel (Guru Mapel Kelas)
+CREATE TABLE IF NOT EXISTS guru_mapel_kelas (
+  id VARCHAR(100) PRIMARY KEY,
+  guru_id VARCHAR(100) NOT NULL,
+  guru_nama VARCHAR(255) NOT NULL,
+  guru_username VARCHAR(100) NOT NULL,
+  kelas_id VARCHAR(100) NOT NULL,
+  kelas_nama VARCHAR(100) NOT NULL,
+  mapel_id VARCHAR(100) NOT NULL,
+  kode_mapel VARCHAR(100) NOT NULL,
+  nama_mapel VARCHAR(255) NOT NULL,
+  alokasi_jp INT DEFAULT 2,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_gmk_guru (guru_id),
+  INDEX idx_gmk_kelas (kelas_id),
+  INDEX idx_gmk_mapel (mapel_id)
+);
+
+-- 16. Tabel Jurnal & Presensi Mengajar Guru di Kelas
+CREATE TABLE IF NOT EXISTS presensi_mengajar_guru (
+  id VARCHAR(100) PRIMARY KEY,
+  tanggal DATE NOT NULL,
+  hari VARCHAR(50) NOT NULL,
+  jam_ke VARCHAR(50),
+  guru_id VARCHAR(100) NOT NULL,
+  guru_nama VARCHAR(255) NOT NULL,
+  kelas_id VARCHAR(100) NOT NULL,
+  kelas_nama VARCHAR(100) NOT NULL,
+  kode_mapel VARCHAR(100),
+  nama_mapel VARCHAR(255) NOT NULL,
+  materi_pembelajaran TEXT,
+  status_kehadiran VARCHAR(50) DEFAULT 'Hadir',
+  keterangan TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pmg_tanggal (tanggal),
+  INDEX idx_pmg_guru (guru_id),
+  INDEX idx_pmg_kelas (kelas_id)
+);
+
+-- 17. Tabel Hari Libur & Kalender Akademik
+CREATE TABLE IF NOT EXISTS hari_libur (
+  id VARCHAR(100) PRIMARY KEY,
+  tanggal DATE NOT NULL,
+  nama_libur VARCHAR(255) NOT NULL,
+  jenis_libur VARCHAR(100) DEFAULT 'Nasional',
+  keterangan TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_libur_tanggal (tanggal)
+);
+
+-- 18. Tabel Pengaturan Shift Jam Kerja & Presensi
+CREATE TABLE IF NOT EXISTS shift_config (
+  id VARCHAR(100) PRIMARY KEY,
+  nama_shift VARCHAR(100) NOT NULL,
+  jam_masuk VARCHAR(20) NOT NULL,
+  jam_pulang VARCHAR(20) NOT NULL,
+  toleransi_terlambat_menit INT DEFAULT 15,
+  is_active BOOLEAN DEFAULT TRUE,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 19. Tabel Master Ekstrakurikuler
+CREATE TABLE IF NOT EXISTS ekstrakurikuler (
+  id VARCHAR(100) PRIMARY KEY,
+  nama VARCHAR(255) NOT NULL,
+  pembina VARCHAR(255),
+  hari VARCHAR(50),
+  jam_mulai VARCHAR(20),
+  jam_selesai VARCHAR(20),
+  lokasi VARCHAR(255),
+  deskripsi TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 20. Tabel Anggota Ekstrakurikuler
+CREATE TABLE IF NOT EXISTS anggota_ekskul (
+  id VARCHAR(100) PRIMARY KEY,
+  ekskul_id VARCHAR(100) NOT NULL,
+  siswa_id VARCHAR(100) NOT NULL,
+  siswa_nama VARCHAR(255) NOT NULL,
+  kelas_nama VARCHAR(100),
+  jabatan VARCHAR(100) DEFAULT 'Anggota',
+  tanggal_bergabung DATE,
+  FOREIGN KEY (ekskul_id) REFERENCES ekstrakurikuler(id) ON DELETE CASCADE,
+  INDEX idx_ae_ekskul (ekskul_id),
+  INDEX idx_ae_siswa (siswa_id)
+);
+
+-- 21. Tabel Presensi Ekstrakurikuler
+CREATE TABLE IF NOT EXISTS presensi_ekskul (
+  id VARCHAR(100) PRIMARY KEY,
+  ekskul_id VARCHAR(100) NOT NULL,
+  tanggal DATE NOT NULL,
+  data_presensi JSON NOT NULL,
+  catatan TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_pe_ekskul (ekskul_id),
+  INDEX idx_pe_tanggal (tanggal)
+);
+
+-- 22. Tabel Role Tambahan Kustom (Custom Roles)
+CREATE TABLE IF NOT EXISTS custom_roles (
+  id VARCHAR(100) PRIMARY KEY,
+  role_key VARCHAR(100) UNIQUE NOT NULL,
+  role_name VARCHAR(255) NOT NULL,
+  description TEXT,
+  is_system BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 23. Tabel Hak Akses Menu / Role Permissions
+CREATE TABLE IF NOT EXISTS role_menu_permissions (
+  id VARCHAR(100) PRIMARY KEY,
+  role_key VARCHAR(100) NOT NULL,
+  menu_key VARCHAR(100) NOT NULL,
+  is_enabled BOOLEAN DEFAULT TRUE,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_role_menu (role_key, menu_key),
+  INDEX idx_rmp_role (role_key)
+);
+
+-- 24. Tabel Insiden Keamanan & Logs Firewall
+CREATE TABLE IF NOT EXISTS security_incidents (
+  id VARCHAR(100) PRIMARY KEY,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  type VARCHAR(100) NOT NULL,
+  severity VARCHAR(50) DEFAULT 'medium',
+  ip_address VARCHAR(50),
+  user_agent TEXT,
+  username VARCHAR(100),
+  details TEXT,
+  resolved BOOLEAN DEFAULT FALSE,
+  INDEX idx_si_timestamp (timestamp),
+  INDEX idx_si_ip (ip_address)
+);
+
+-- 25. Tabel IP Terblokir Otomatis
+CREATE TABLE IF NOT EXISTS blocked_ips (
+  id VARCHAR(100) PRIMARY KEY,
+  ip_address VARCHAR(50) UNIQUE NOT NULL,
+  reason TEXT,
+  blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NULL,
+  is_permanent BOOLEAN DEFAULT FALSE,
+  blocked_by VARCHAR(100) DEFAULT 'System Firewall'
+);
+
+-- 26. Tabel Sesi Login Aktif Real-time
+CREATE TABLE IF NOT EXISTS active_user_sessions (
+  id VARCHAR(100) PRIMARY KEY,
+  session_id VARCHAR(100) UNIQUE NOT NULL,
+  user_id VARCHAR(100) NOT NULL,
+  username VARCHAR(100) NOT NULL,
+  nama VARCHAR(255) NOT NULL,
+  role VARCHAR(50) NOT NULL,
+  ip_address VARCHAR(50),
+  device VARCHAR(100),
+  browser VARCHAR(100),
+  login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_aus_user (user_id),
+  INDEX idx_aus_session (session_id)
+);
+
+-- 27. Tabel Pesan Live Chat
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id VARCHAR(100) PRIMARY KEY,
+  sender_id VARCHAR(100) NOT NULL,
+  sender_nama VARCHAR(255) NOT NULL,
+  sender_role VARCHAR(50) NOT NULL,
+  recipient_id VARCHAR(100),
+  recipient_role VARCHAR(50),
+  message TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT FALSE,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cm_sender (sender_id),
+  INDEX idx_cm_recipient (recipient_id),
+  INDEX idx_cm_timestamp (timestamp)
+);
+
+-- 28. Tabel Pengumuman Sekolah
+CREATE TABLE IF NOT EXISTS pengumuman_sekolah (
+  id VARCHAR(100) PRIMARY KEY,
+  judul VARCHAR(255) NOT NULL,
+  konten TEXT NOT NULL,
+  penulis VARCHAR(255),
+  kategori VARCHAR(50) DEFAULT 'Umum',
+  target_role VARCHAR(50) DEFAULT 'Semua',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 29. Tabel Konfigurasi & Log WhatsApp Gateway
+CREATE TABLE IF NOT EXISTS whatsapp_gateway_config (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  api_provider VARCHAR(100) DEFAULT 'Fonnte',
+  api_key TEXT,
+  sender_number VARCHAR(50),
+  is_active BOOLEAN DEFAULT FALSE,
+  auto_notify_presensi BOOLEAN DEFAULT TRUE,
+  auto_notify_pelanggaran BOOLEAN DEFAULT TRUE,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS whatsapp_logs (
+  id VARCHAR(100) PRIMARY KEY,
+  recipient_number VARCHAR(50) NOT NULL,
+  recipient_name VARCHAR(255),
+  message TEXT NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  response_data TEXT,
+  sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_wal_status (status),
+  INDEX idx_wal_sent_at (sent_at)
+);
+
+-- 30. Tabel Audit Logs Aktivitas Sistem
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(100) PRIMARY KEY,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  user_id VARCHAR(100),
+  username VARCHAR(100) NOT NULL,
+  nama VARCHAR(255) NOT NULL,
+  role VARCHAR(50) NOT NULL,
+  action VARCHAR(255) NOT NULL,
+  module VARCHAR(100) NOT NULL,
+  details TEXT,
+  ip_address VARCHAR(50),
+  INDEX idx_al_user (username),
+  INDEX idx_al_module (module),
+  INDEX idx_al_timestamp (timestamp)
+);
 `;
 
   const handleTestConnection = async (e: React.FormEvent) => {

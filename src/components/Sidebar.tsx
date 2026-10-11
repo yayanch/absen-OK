@@ -278,6 +278,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
           sectionHeading: 'text-white/60 font-bold text-[11px] uppercase tracking-wider',
           activeBg: 'bg-white text-blue-600 font-bold shadow-xs',
         };
+      case 'emerald':
+        return {
+          aside: 'bg-[#059669] dark:bg-[#064E3B] text-white border-r border-emerald-800/30 dark:border-emerald-950/40 shadow-xs',
+          header: 'bg-white/10 dark:bg-black/20 text-white border-b border-white/10',
+          itemNormal: 'text-white/85 hover:bg-white/[0.08] hover:text-white border-transparent',
+          sectionHeading: 'text-white/60 font-bold text-[11px] uppercase tracking-wider',
+          activeBg: 'bg-white text-emerald-700 font-bold shadow-xs',
+        };
+      case 'crimson':
+        return {
+          aside: 'bg-[#DC2626] dark:bg-[#7F1D1D] text-white border-r border-red-800/30 dark:border-red-950/40 shadow-xs',
+          header: 'bg-white/10 dark:bg-black/20 text-white border-b border-white/10',
+          itemNormal: 'text-white/85 hover:bg-white/[0.08] hover:text-white border-transparent',
+          sectionHeading: 'text-white/60 font-bold text-[11px] uppercase tracking-wider',
+          activeBg: 'bg-white text-red-700 font-bold shadow-xs',
+        };
+      case 'amber':
+        return {
+          aside: 'bg-[#D97706] dark:bg-[#78350F] text-white border-r border-amber-800/30 dark:border-amber-950/40 shadow-xs',
+          header: 'bg-white/10 dark:bg-black/20 text-white border-b border-white/10',
+          itemNormal: 'text-white/85 hover:bg-white/[0.08] hover:text-white border-transparent',
+          sectionHeading: 'text-white/60 font-bold text-[11px] uppercase tracking-wider',
+          activeBg: 'bg-white text-amber-800 font-bold shadow-xs',
+        };
+      case 'amethyst':
+        return {
+          aside: 'bg-[#7C3AED] dark:bg-[#4C1D95] text-white border-r border-purple-800/30 dark:border-purple-950/40 shadow-xs',
+          header: 'bg-white/10 dark:bg-black/20 text-white border-b border-white/10',
+          itemNormal: 'text-white/85 hover:bg-white/[0.08] hover:text-white border-transparent',
+          sectionHeading: 'text-white/60 font-bold text-[11px] uppercase tracking-wider',
+          activeBg: 'bg-white text-purple-700 font-bold shadow-xs',
+        };
+      case 'teal':
+        return {
+          aside: 'bg-[#0891B2] dark:bg-[#164E63] text-white border-r border-teal-800/30 dark:border-teal-950/40 shadow-xs',
+          header: 'bg-white/10 dark:bg-black/20 text-white border-b border-white/10',
+          itemNormal: 'text-white/85 hover:bg-white/[0.08] hover:text-white border-transparent',
+          sectionHeading: 'text-white/60 font-bold text-[11px] uppercase tracking-wider',
+          activeBg: 'bg-white text-teal-700 font-bold shadow-xs',
+        };
       case 'royal':
       default:
         return {

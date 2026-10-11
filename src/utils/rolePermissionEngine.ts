@@ -465,6 +465,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'master_jurusan',
       'hari_libur',
       'catatan_pelanggaran',
+      'ekstrakurikuler',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -490,6 +491,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'jadwal_shift',
       'catatan_pelanggaran',
       'home_visit',
+      'ekstrakurikuler',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -509,6 +511,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'jadwal_minggu_ini',
       'jadwal_shift',
       'catatan_pelanggaran',
+      'ekstrakurikuler',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -528,6 +531,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'master_mapel',
       'mapel_kelas_guru',
       'master_kelas',
+      'ekstrakurikuler',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -543,6 +547,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'master_siswa',
       'master_jurusan',
       'catatan_pelanggaran',
+      'ekstrakurikuler',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -560,6 +565,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'rekap_siswa',
       'jadwal_mengajar',
       'catatan_pelanggaran',
+      'ekstrakurikuler',
       'live_chat',
     ],
   },
@@ -663,6 +669,11 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
         const pIdx = allowed.indexOf('presensi_input');
         if (pIdx !== -1) allowed.splice(pIdx + 1, 0, 'absen_harian_guru');
         else allowed.push('absen_harian_guru');
+      }
+
+      // Ensure 'ekstrakurikuler' is included for system roles if allowed in default configuration
+      if (existing.allowedMenus.includes('ekstrakurikuler') && !allowed.includes('ekstrakurikuler')) {
+        allowed.push('ekstrakurikuler');
       }
 
       // Remove rekap_pengisian_kelas and rekap_harian from piket_guru

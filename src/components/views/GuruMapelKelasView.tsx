@@ -533,6 +533,7 @@ export const GuruMapelKelasView: React.FC<GuruMapelKelasViewProps> = ({
       'danger',
       () => {
         const updatedList = allMapelKelasList.filter((m) => m.id !== item.id);
+        const allDeletedGmk = Array.from(new Set([...(appData.deletedGmkIds || []), item.id]));
         const updatedWaliKelas = (appData.waliKelas || []).map((w) => {
           if (w.id === item.guruId) {
             const teacherItems = updatedList.filter((i) => i.guruId === w.id);
@@ -554,6 +555,7 @@ export const GuruMapelKelasView: React.FC<GuruMapelKelasViewProps> = ({
           ...dataWithAudit,
           guruMapelKelas: updatedList,
           waliKelas: updatedWaliKelas,
+          deletedGmkIds: allDeletedGmk,
         });
 
         onShowToast(`Mapel "${item.namaMapel}" berhasil dihapus.`, 'info');

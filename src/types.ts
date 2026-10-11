@@ -1,8 +1,8 @@
 export type PresensiStatus = 'H' | 'I' | 'S' | 'A' | 'K' | 'D' | 'TAP' | '';
 
-export type SidebarThemeOption = 'royal' | 'navy' | 'sky' | 'denim' | 'slate';
+export type SidebarThemeOption = 'royal' | 'navy' | 'sky' | 'denim' | 'slate' | 'emerald' | 'crimson' | 'amber' | 'amethyst' | 'teal';
 
-export type PageHeaderBackgroundOption = 'white' | 'royal' | 'deep_blue' | 'indigo' | 'slate' | 'soft_blue' | 'gradient_royal';
+export type PageHeaderBackgroundOption = 'white' | 'royal' | 'deep_blue' | 'indigo' | 'slate' | 'soft_blue' | 'gradient_royal' | 'emerald' | 'crimson' | 'amber' | 'amethyst' | 'teal';
 
 export type ThemeOption = 'school_blue' | 'professional' | 'ocean' | 'emerald' | 'warm' | 'amethyst' | 'violet' | 'crimson' | 'indigo' | 'slate' | 'pastel_blue' | 'pastel_mint' | 'pastel_peach' | 'pastel_lavender';
 
@@ -626,6 +626,7 @@ export interface AppData {
   deletedPelanggaranIds?: string[];
   deletedSiswaIds?: string[];
   deletedJadwalIds?: string[];
+  deletedGmkIds?: string[];
   violationTemplates?: ViolationTemplate[];
   chatMessages?: ChatMessage[];
   enableLiveChat?: boolean;

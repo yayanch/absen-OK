@@ -358,6 +358,7 @@ export default function App() {
               const allDeletedHomeVisits = Array.from(new Set([...(prev.deletedHomeVisitIds || []), ...(data.appData.deletedHomeVisitIds || [])]));
               const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
               const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
+              const allDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(data.appData.deletedGmkIds || [])]));
               const mergedPelanggaran = mergePelanggaran(prev.pelanggaran, data.appData.pelanggaran, allDeletedPelanggaran);
               const mergedHomeVisits = mergeHomeVisits(prev.homeVisits, data.appData.homeVisits, allDeletedHomeVisits);
               const mergedSiswa = mergeSiswa(prev.siswa, data.appData.siswa, allDeletedSiswa);
@@ -373,9 +374,10 @@ export default function App() {
               const mergedMapel = (Array.isArray(data.appData.mataPelajaran) && data.appData.mataPelajaran.length > 0)
                 ? data.appData.mataPelajaran
                 : (prev.mataPelajaran || []);
-              const mergedGmk = (Array.isArray(data.appData.guruMapelKelas) && data.appData.guruMapelKelas.length > 0)
+              const rawGmk = Array.isArray(data.appData.guruMapelKelas)
                 ? data.appData.guruMapelKelas
                 : (prev.guruMapelKelas || []);
+              const mergedGmk = rawGmk.filter((g: any) => g && g.id && !allDeletedGmk.includes(String(g.id)));
               const mergedPmg = (Array.isArray(data.appData.presensiMengajarGuru) && data.appData.presensiMengajarGuru.length > 0)
                 ? data.appData.presensiMengajarGuru
                 : (prev.presensiMengajarGuru || []);
@@ -388,7 +390,7 @@ export default function App() {
               const mergedPengumuman = (Array.isArray(data.appData.pengumuman) && data.appData.pengumuman.length > 0)
                 ? data.appData.pengumuman
                 : (prev.pengumuman || []);
-              const mergedEkskul = (Array.isArray(data.appData.ekstrakurikuler) && data.appData.ekstrakurikuler.length > 0)
+              const mergedEkskul = Array.isArray(data.appData.ekstrakurikuler)
                 ? data.appData.ekstrakurikuler
                 : (prev.ekstrakurikuler || []);
               const mergedPetugasPiket = (Array.isArray(data.appData.petugasPiket) && data.appData.petugasPiket.length > 0)
@@ -397,7 +399,7 @@ export default function App() {
               const mergedCatatanPiket = Array.isArray(data.appData.catatanPiketHarian)
                 ? data.appData.catatanPiketHarian
                 : (prev.catatanPiketHarian || []);
-              const mergedAnggotaEkskul = (Array.isArray(data.appData.anggotaEkskul) && data.appData.anggotaEkskul.length > 0)
+              const mergedAnggotaEkskul = Array.isArray(data.appData.anggotaEkskul)
                 ? data.appData.anggotaEkskul
                 : (prev.anggotaEkskul || []);
               const mergedPresensiEkskul = (data.appData.presensiEkskul && Object.keys(data.appData.presensiEkskul).length > 0)
@@ -454,6 +456,7 @@ export default function App() {
                 deletedHomeVisitIds: allDeletedHomeVisits,
                 deletedSiswaIds: allDeletedSiswa,
                 deletedJadwalIds: allDeletedJadwal,
+                deletedGmkIds: allDeletedGmk,
               };
               const newStr = JSON.stringify(targetAppData);
               if (!prev || newStr.length !== JSON.stringify(prev).length || newStr !== JSON.stringify(prev)) {
@@ -497,6 +500,7 @@ export default function App() {
           const mergedMessages = mergeChatMessages(prev.chatMessages, customEvent.detail.chatMessages);
           const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(customEvent.detail.deletedSiswaIds || [])]));
           const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(customEvent.detail.deletedJadwalIds || [])]));
+          const allDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(customEvent.detail.deletedGmkIds || [])]));
           const mergedSiswa = mergeSiswa(prev.siswa, customEvent.detail.siswa, allDeletedSiswa);
           const customPresensi = customEvent.detail.presensi || {};
           const isCustomPresensiReset = Object.keys(customPresensi).length === 0;
@@ -505,19 +509,24 @@ export default function App() {
           const customMapel = (Array.isArray(customEvent.detail.mataPelajaran) && customEvent.detail.mataPelajaran.length > 0)
             ? customEvent.detail.mataPelajaran
             : prev.mataPelajaran;
-          const customGmk = (Array.isArray(customEvent.detail.guruMapelKelas) && customEvent.detail.guruMapelKelas.length > 0)
+          const rawCustomGmk = Array.isArray(customEvent.detail.guruMapelKelas)
             ? customEvent.detail.guruMapelKelas
             : prev.guruMapelKelas;
+          const customGmk = (rawCustomGmk || []).filter((g: any) => g && g.id && !allDeletedGmk.includes(String(g.id)));
           const customPmg = (Array.isArray(customEvent.detail.presensiMengajarGuru) && customEvent.detail.presensiMengajarGuru.length > 0)
             ? customEvent.detail.presensiMengajarGuru
             : prev.presensiMengajarGuru;
           const customShiftConfig = customEvent.detail.shiftConfig || prev.shiftConfig;
           const customHariLibur = customEvent.detail.hariLibur || prev.hariLibur;
           const customPengumuman = customEvent.detail.pengumuman || prev.pengumuman;
-          const customEkskul = customEvent.detail.ekstrakurikuler || prev.ekstrakurikuler;
+          const customEkskul = Array.isArray(customEvent.detail.ekstrakurikuler)
+            ? customEvent.detail.ekstrakurikuler
+            : prev.ekstrakurikuler;
           const customPetugasPiket = customEvent.detail.petugasPiket || prev.petugasPiket;
           const customCatatanPiket = customEvent.detail.catatanPiketHarian || prev.catatanPiketHarian;
-          const customAnggotaEkskul = customEvent.detail.anggotaEkskul || prev.anggotaEkskul;
+          const customAnggotaEkskul = Array.isArray(customEvent.detail.anggotaEkskul)
+            ? customEvent.detail.anggotaEkskul
+            : prev.anggotaEkskul;
           const customPresensiEkskul = customEvent.detail.presensiEkskul || prev.presensiEkskul;
           const customAuditLogs = customEvent.detail.auditLogs || prev.auditLogs;
           const customWhatsappLogs = customEvent.detail.whatsappLogs || prev.whatsappLogs;
@@ -550,6 +559,7 @@ export default function App() {
             chatMessages: mergedMessages,
             deletedSiswaIds: allDeletedSiswa,
             deletedJadwalIds: allDeletedJadwal,
+            deletedGmkIds: allDeletedGmk,
           };
         });
       }
@@ -780,6 +790,46 @@ export default function App() {
       },
       gradient_royal: {
         bg: 'linear-gradient(135deg, #1646E3 0%, #4338CA 100%)',
+        title: '#FFFFFF',
+        subtitle: 'rgba(255, 255, 255, 0.80)',
+        badgeBg: 'rgba(255, 255, 255, 0.12)',
+        badgeBorder: 'rgba(255, 255, 255, 0.18)',
+        badgeText: '#FFFFFF',
+      },
+      emerald: {
+        bg: '#059669',
+        title: '#FFFFFF',
+        subtitle: 'rgba(255, 255, 255, 0.80)',
+        badgeBg: 'rgba(255, 255, 255, 0.12)',
+        badgeBorder: 'rgba(255, 255, 255, 0.18)',
+        badgeText: '#FFFFFF',
+      },
+      crimson: {
+        bg: '#DC2626',
+        title: '#FFFFFF',
+        subtitle: 'rgba(255, 255, 255, 0.80)',
+        badgeBg: 'rgba(255, 255, 255, 0.12)',
+        badgeBorder: 'rgba(255, 255, 255, 0.18)',
+        badgeText: '#FFFFFF',
+      },
+      amber: {
+        bg: '#D97706',
+        title: '#FFFFFF',
+        subtitle: 'rgba(255, 255, 255, 0.80)',
+        badgeBg: 'rgba(255, 255, 255, 0.12)',
+        badgeBorder: 'rgba(255, 255, 255, 0.18)',
+        badgeText: '#FFFFFF',
+      },
+      amethyst: {
+        bg: '#7C3AED',
+        title: '#FFFFFF',
+        subtitle: 'rgba(255, 255, 255, 0.80)',
+        badgeBg: 'rgba(255, 255, 255, 0.12)',
+        badgeBorder: 'rgba(255, 255, 255, 0.18)',
+        badgeText: '#FFFFFF',
+      },
+      teal: {
+        bg: '#0891B2',
         title: '#FFFFFF',
         subtitle: 'rgba(255, 255, 255, 0.80)',
         badgeBg: 'rgba(255, 255, 255, 0.12)',
@@ -1025,17 +1075,21 @@ export default function App() {
     showToast('Anda telah keluar dari sistem.', 'info');
   };
 
-  // Reset & Restore Demo
+  // Inisialisasi State Awal
   const handleRestoreDemoData = () => {
+    if (appData.siswa && appData.siswa.length > 0) {
+      showToast(`Sistem sudah memiliki data riil sekolah (${appData.siswa.length} siswa, ${appData.waliKelas?.length || 0} guru). Data demo telah dihapus dan dinonaktifkan demi keamanan data sekolah.`, 'warning');
+      return;
+    }
     openConfirmModal(
-      'Isi / Restore Data Demo',
-      'Apakah Anda yakin ingin mengisi data sampel demo? Data jurusan, kelas, wali kelas, siswa, dan sampel presensi bawaan akan dimuat ulang ke sistem.',
-      'emerald',
+      'Inisialisasi State Bersih',
+      'Apakah Anda yakin ingin mengatur ulang aplikasi ke keadaan awal bersih (clean state)? Seluruh tabel akan dimulai dari awal.',
+      'warning',
       () => {
         const resetData = JSON.parse(JSON.stringify(DEMO_DATASET));
         handleUpdateAppData(resetData);
 
-        showToast('Data demo berhasil dimuat ulang ke dalam sistem!', 'success');
+        showToast('State awal bersih berhasil diterapkan.', 'success');
       }
     );
   };
@@ -1441,7 +1495,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'ekstrakurikuler' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'piket_kesiswaan' || currentUser.role === 'piket_guru' || currentUser.role === 'piket') && (
+            {currentView === 'ekstrakurikuler' && (
               <EkstrakurikulerView
                 appData={appData}
                 currentUser={currentUser}

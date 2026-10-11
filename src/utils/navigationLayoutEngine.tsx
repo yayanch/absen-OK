@@ -280,12 +280,34 @@ export function getNavigationLayout(appData?: AppData): NavigationLayoutConfig {
     }
   }
 
+  // Ensure ekstrakurikuler is in the 'kegiatan' section
+  const kegiatanSec = clonedSections.find((s) => s.id === 'kegiatan');
+  if (kegiatanSec) {
+    if (!kegiatanSec.menuIds.includes('ekstrakurikuler')) {
+      clonedSections.forEach((s) => {
+        if (s.id !== 'kegiatan') {
+          s.menuIds = s.menuIds.filter((m) => m !== 'ekstrakurikuler');
+        }
+      });
+      kegiatanSec.menuIds.push('ekstrakurikuler');
+    }
+  }
+
+  // Ensure itemOverrides['ekstrakurikuler'] is not hidden
+  const cleanedItemOverrides = { ...(existingLayout.itemOverrides || {}) };
+  if (cleanedItemOverrides['ekstrakurikuler']) {
+    cleanedItemOverrides['ekstrakurikuler'] = {
+      ...cleanedItemOverrides['ekstrakurikuler'],
+      visible: true,
+    };
+  }
+
   // Remove any legacy standalone piket_section
   const filteredSections = clonedSections.filter((s) => s.id !== 'piket_section');
 
   return {
     sections: filteredSections,
-    itemOverrides: existingLayout.itemOverrides || {},
+    itemOverrides: cleanedItemOverrides,
     version: existingLayout.version || 1,
     updatedAt: existingLayout.updatedAt || new Date().toISOString()
   };

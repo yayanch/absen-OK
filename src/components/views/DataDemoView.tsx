@@ -30,6 +30,10 @@ export const DataDemoView: React.FC<DataDemoViewProps> = ({
   onConfirmModal,
 }) => {
   const handleGenerateSampleData = () => {
+    if (appData.siswa && appData.siswa.length > 50) {
+      onShowToast(`Sistem saat ini memiliki ${appData.siswa.length} data siswa riil. Pembuatan data sampel demo dinonaktifkan untuk melindungi data sekolah.`, 'warning');
+      return;
+    }
     if (!appData.kelas || appData.kelas.length === 0) {
       onShowToast('Silakan tambahkan data Kelas terlebih dahulu.', 'warning');
       return;
