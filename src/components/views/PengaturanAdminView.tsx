@@ -566,7 +566,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
                         <div className="font-bold text-slate-700 dark:text-slate-200">{test.metrics.recordedDays}</div>
                       </div>
                       <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <div className="text-slate-400">Unfilled</div>
+                        <div className="text-slate-400">Belum diisi</div>
                         <div className="font-bold text-slate-700 dark:text-slate-200">{test.metrics.unfilledEvents}</div>
                       </div>
                       <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-100 dark:border-slate-800">

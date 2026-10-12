@@ -387,13 +387,13 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
             className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
           >
             <option value="all">Semua Siswa Terdaftar</option>
-            <option value="absent_only">Hanya Siswa Pernah Tidak Hadir / Unfilled</option>
+            <option value="absent_only">Hanya Siswa Pernah Tidak Hadir / Belum diisi</option>
             <option value="S">Siswa Pernah Sakit (S)</option>
             <option value="I">Siswa Pernah Izin (I)</option>
             <option value="A">Siswa Pernah Alpa (A)</option>
             <option value="K">Siswa Pernah Kesiangan (K)</option>
             <option value="D">Siswa Pernah Dispensasi (D)</option>
-            <option value="unfilled">Siswa Memiliki Hari Belum Terisi (Unfilled)</option>
+            <option value="unfilled">Siswa Memiliki Hari Belum Terisi (Belum diisi)</option>
           </select>
         </div>
       </div>
@@ -431,7 +431,7 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
                 <th className="p-4">Kelas</th>
                 <th className="p-4 text-center text-slate-600">Efektif</th>
                 <th className="p-4 text-center text-slate-600">Tercatat</th>
-                <th className="p-4 text-center text-slate-600">Unfilled</th>
+                <th className="p-4 text-center text-slate-600">Belum diisi</th>
                 <th className="p-4 text-center text-emerald-600">Hadir</th>
                 <th className="p-4 text-center text-amber-600">Izin</th>
                 <th className="p-4 text-center text-indigo-600">Sakit</th>
@@ -544,7 +544,7 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
                       <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200 mt-0.5">{item.expectedDays} hr</p>
                     </div>
                     <div className="bg-rose-50/80 dark:bg-rose-950/40 p-1.5 rounded-xl text-center border border-rose-200/60 dark:border-rose-900/50">
-                      <p className="text-[8px] font-bold text-rose-600 dark:text-rose-400 uppercase">Unfilled</p>
+                      <p className="text-[8px] font-bold text-rose-600 dark:text-rose-400 uppercase">Belum diisi</p>
                       <p className="text-xs font-extrabold text-rose-700 dark:text-rose-300 mt-0.5">{item.unfilledDays} hr</p>
                     </div>
                   </div>

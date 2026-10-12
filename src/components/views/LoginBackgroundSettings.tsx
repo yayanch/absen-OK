@@ -2091,7 +2091,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
               </div>
 
               {/* Mock Footer */}
-              <div className="relative z-10 p-2 text-center text-[9px] text-white/80 font-medium">
+              <div className="relative z-10 mt-3 pt-2 border-t border-white/20 p-1.5 text-center text-[9px] text-white/80 font-medium">
                 © {new Date().getFullYear()} {sekolah.nama || 'SMKN 6 Garut'}. Sistem Presensi Sekolah.
               </div>
             </div>

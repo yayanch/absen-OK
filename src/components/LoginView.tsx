@@ -290,8 +290,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   }, [activeRoleTab]);
 
   const [currentAnnouncementIdx, setCurrentAnnouncementIdx] = useState<number>(0);
-  const isPopupEligible = Boolean(sekolah.loginAnnouncementModal);
-  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState<boolean>(() => isPopupEligible);
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState<boolean>(false);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
 
   // State for Custom Links Dropdown
@@ -316,11 +315,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     };
   }, [isCustomLinksDropdownOpen]);
 
-  useEffect(() => {
-    if (sekolah.loginAnnouncementModal) {
-      setIsAnnouncementModalOpen(true);
-    }
-  }, [sekolah.loginAnnouncementModal]);
+  // Auto modal popup removed to keep default login page clean and direct
 
   const handleRecordFailedAttempt = (targetUser: string, roleAttempted: string = 'unknown') => {
     const client = getClientMetadata();
@@ -1789,7 +1784,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
 
             {/* FOOTER BAR */}
-            <footer className={`w-full relative z-20 pt-3 sm:pt-1 pb-4 sm:pb-0 text-center shrink-0 ${isBackgroundDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+            <footer className={`w-full relative z-20 mt-5 sm:mt-6 pt-4 pb-1 sm:pb-2 border-t border-slate-200/50 dark:border-zinc-800/50 text-center shrink-0 ${isBackgroundDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
               <p className="text-[11px] font-bold drop-shadow-xs opacity-90">
                 {sekolah.footerTeks || `© ${new Date().getFullYear()} ${sekolah.nama || 'SMKN 6 Garut'}. Hak Cipta Dilindungi.`}
               </p>

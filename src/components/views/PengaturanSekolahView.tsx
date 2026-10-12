@@ -275,7 +275,7 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const raw = evt.target?.result as string;
-      const compressed = await compressBase64Image(raw, 350, 0.7);
+      const compressed = await compressBase64Image(raw, 350, 0.9, true);
       setLogoBase64(compressed);
     };
     reader.readAsDataURL(file);
@@ -288,7 +288,7 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const raw = evt.target?.result as string;
-      const compressed = await compressBase64Image(raw, 128, 0.8);
+      const compressed = await compressBase64Image(raw, 128, 0.9, true);
       setFaviconBase64(compressed);
     };
     reader.readAsDataURL(file);

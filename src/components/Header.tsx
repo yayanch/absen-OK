@@ -36,7 +36,8 @@ import {
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData, Siswa, Kelas, WaliKelas, SiswaPresensiItem } from '../types';
 import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString } from '../utils/helpers';
-import { getRoleBadgeMeta } from '../utils/rolePermissionEngine';
+import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess } from '../utils/rolePermissionEngine';
+import { renderNavIcon } from '../utils/navigationLayoutEngine';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -95,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchCategory, setSearchCategory] = useState<'semua' | 'siswa' | 'guru'>('semua');
+  const [searchCategory, setSearchCategory] = useState<'semua' | 'menu' | 'siswa' | 'guru'>('semua');
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
 
@@ -439,16 +440,38 @@ export const Header: React.FC<HeaderProps> = ({
     return (appData?.kelas || []).filter((k) => authorizedClassIds.has(k.id)).length;
   }, [appData?.kelas, authorizedClassIds]);
 
-  const { matchedSiswa, matchedKelas, matchedGuru, totalResultCount } = useMemo(() => {
+  const userEffectiveRoles = useMemo(() => {
+    if (!currentUser) return [];
+    if (Array.isArray(currentUser.roles) && currentUser.roles.length > 0) {
+      return currentUser.roles;
+    }
+    return [currentUser.role || 'guest'];
+  }, [currentUser]);
+
+  const { matchedMenu, matchedSiswa, matchedKelas, matchedGuru, totalResultCount } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) {
       return {
+        matchedMenu: [],
         matchedSiswa: [],
         matchedKelas: [],
         matchedGuru: [],
         totalResultCount: 0,
       };
     }
+
+    // 0. Menu & Bagian Aplikasi (Role-scoped)
+    const filteredMenu = ALL_MENU_ITEMS.filter((item) => {
+      const canAccess = hasMenuAccess(userEffectiveRoles, item.id, appData);
+      if (!canAccess) return false;
+
+      const labelMatch = item.label.toLowerCase().includes(q);
+      const descMatch = item.shortDesc.toLowerCase().includes(q);
+      const catMatch = item.category.toLowerCase().includes(q);
+      const idMatch = item.id.toLowerCase().includes(q);
+
+      return labelMatch || descMatch || catMatch || idMatch;
+    });
 
     // 1. Siswa (Role-scoped for Wali Kelas, Guru, and Murid)
     const siswaList = appData?.siswa || [];
@@ -516,20 +539,28 @@ export const Header: React.FC<HeaderProps> = ({
       });
 
     return {
+      matchedMenu: filteredMenu,
       matchedSiswa: filteredSiswa,
       matchedKelas: [],
       matchedGuru: filteredGuru,
-      totalResultCount: filteredSiswa.length + filteredGuru.length,
+      totalResultCount: filteredMenu.length + filteredSiswa.length + filteredGuru.length,
     };
-  }, [searchQuery, appData, kelasMap, jurusanMap, waliMap, authorizedClassIds]);
+  }, [searchQuery, appData, kelasMap, jurusanMap, waliMap, authorizedClassIds, userEffectiveRoles]);
 
   // Flattened items for keyboard arrow navigation
   const flattenedItems = useMemo(() => {
     const items: Array<{
-      type: 'siswa' | 'guru';
+      type: 'menu' | 'siswa' | 'guru';
       id: string;
       data: any;
     }> = [];
+
+    if (searchCategory === 'semua' || searchCategory === 'menu') {
+      const limit = searchCategory === 'semua' ? 5 : 25;
+      matchedMenu.slice(0, limit).forEach((m) => {
+        items.push({ type: 'menu', id: m.id, data: m });
+      });
+    }
 
     if (searchCategory === 'semua' || searchCategory === 'siswa') {
       const limit = searchCategory === 'semua' ? 5 : 25;
@@ -546,12 +577,14 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     return items;
-  }, [searchCategory, matchedSiswa, matchedGuru]);
+  }, [searchCategory, matchedMenu, matchedSiswa, matchedGuru]);
 
-  const handleSelectItem = (item: { type: 'siswa' | 'guru'; data: any }) => {
+  const handleSelectItem = (item: { type: 'menu' | 'siswa' | 'guru'; data: any }) => {
     setIsSearchOpen(false);
     setIsMobileSearchExpanded(false);
-    if (item.type === 'siswa') {
+    if (item.type === 'menu') {
+      onNavigate(item.data.id as ViewType);
+    } else if (item.type === 'siswa') {
       handleOpenStudentDetail(item.data);
     } else if (item.type === 'guru') {
       if (onNavigateToMasterGuru) {
@@ -865,8 +898,8 @@ export const Header: React.FC<HeaderProps> = ({
                 }
               }}
               onKeyDown={handleInputKeyDown}
-              placeholder="Cari siswa, guru..."
-              aria-label="Cari data sekolah"
+              placeholder="Cari menu, bagian aplikasi, siswa, guru..."
+              aria-label="Cari data dan menu aplikasi"
               className="w-full pl-9 pr-10 py-1.5 sm:py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200/70 focus:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800 dark:focus:bg-slate-900 border border-slate-200/80 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition shadow-2xs cursor-pointer"
             />
             {searchQuery && (
@@ -907,6 +940,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setSearchCategory('menu')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer shrink-0 ${
+                    searchCategory === 'menu'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  Menu &amp; Fitur ({matchedMenu.length})
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSearchCategory('siswa')}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer shrink-0 ${
                     searchCategory === 'siswa'
@@ -935,6 +979,58 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="py-8 text-center text-slate-400">
                     <Search className="w-6 h-6 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
                     <span>Tidak ditemukan hasil untuk "{searchQuery}"</span>
+                  </div>
+                )}
+
+                {/* MENU & FITUR APLIKASI RESULTS */}
+                {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'menu') && matchedMenu.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="px-2.5 py-1 text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Settings className="w-3.5 h-3.5" />
+                        <span>Menu &amp; Bagian Aplikasi ({matchedMenu.length})</span>
+                      </span>
+                      {searchCategory === 'semua' && matchedMenu.length > 5 && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchCategory('menu')}
+                          className="hover:underline font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer"
+                        >
+                          Lihat semua {matchedMenu.length} menu →
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      {(searchCategory === 'semua' ? matchedMenu.slice(0, 5) : matchedMenu.slice(0, 25)).map((menu) => (
+                        <div
+                          key={menu.id}
+                          onClick={() => handleSelectItem({ type: 'menu', data: menu })}
+                          className="p-2 sm:p-2.5 rounded-xl transition flex items-center justify-between gap-2.5 cursor-pointer border bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-200/60 dark:border-indigo-900/60 hover:bg-indigo-100/70 dark:hover:bg-indigo-900/50 hover:border-indigo-300 dark:hover:border-indigo-700"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/80 dark:text-indigo-300 flex items-center justify-center shrink-0 shadow-2xs">
+                              {renderNavIcon(menu.iconName, 'w-4 h-4')}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                {highlightMatch(menu.label, searchQuery)}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                {highlightMatch(menu.shortDesc, searchQuery)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 rounded-md">
+                              {menu.category}
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

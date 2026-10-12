@@ -315,13 +315,13 @@ export const RekapMingguanView: React.FC<RekapMingguanViewProps> = ({ appData, c
             className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
           >
             <option value="all">Semua Siswa Terdaftar</option>
-            <option value="absent_only">Hanya Siswa Pernah Tidak Hadir / Unfilled</option>
+            <option value="absent_only">Hanya Siswa Pernah Tidak Hadir / Belum diisi</option>
             <option value="S">Siswa Pernah Sakit (S)</option>
             <option value="I">Siswa Pernah Izin (I)</option>
             <option value="A">Siswa Pernah Alpa (A)</option>
             <option value="K">Siswa Pernah Kesiangan (K)</option>
             <option value="D">Siswa Pernah Dispensasi (D)</option>
-            <option value="unfilled">Siswa Memiliki Hari Belum Terisi (Unfilled)</option>
+            <option value="unfilled">Siswa Memiliki Hari Belum Terisi (Belum diisi)</option>
           </select>
         </div>
       </div>
@@ -377,7 +377,7 @@ export const RekapMingguanView: React.FC<RekapMingguanViewProps> = ({ appData, c
                 <th className="p-4 text-center text-amber-600">I</th>
                 <th className="p-4 text-center text-indigo-600">S</th>
                 <th className="p-4 text-center text-rose-600">A</th>
-                <th className="p-4 text-center text-slate-600">Unfilled</th>
+                <th className="p-4 text-center text-slate-600">Belum diisi</th>
                 <th className="p-4 text-center text-blue-600">Kehadiran (%)</th>
               </tr>
             </thead>

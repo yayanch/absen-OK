@@ -1472,20 +1472,22 @@ export async function syncSiswaProfileToServer(siswa: Siswa): Promise<{ success:
 }
 
 export async function cleanLogoImage(dataUrl: string): Promise<string> {
-  // Automatic background removal removed: returns original image data directly
   return dataUrl || '';
 }
 
 export async function makeImageBackgroundTransparent(dataUrl: string): Promise<string> {
-  // Automatic background removal removed: returns original image data directly
   return dataUrl || '';
+}
+
+export function removeBackgroundAndMakePng(dataUrl: string, _tolerance = 35): Promise<string> {
+  return Promise.resolve(dataUrl || '');
 }
 
 export async function compressBase64Image(
   dataUrl: string | File | Blob,
   maxDim = 1024,
   quality = 0.75,
-  preserveTransparency = false
+  preserveTransparency = true
 ): Promise<string> {
   if (!dataUrl) return '';
   if (typeof Blob !== 'undefined' && dataUrl instanceof Blob) {
@@ -1507,7 +1509,7 @@ export async function compressBase64Image(
     return typeof dataUrl === 'string' ? dataUrl : '';
   }
 
-  const isPng = (dataUrl.startsWith('data:image/png') || dataUrl.includes('image/png')) && preserveTransparency;
+  const isPng = preserveTransparency || dataUrl.startsWith('data:image/png') || dataUrl.includes('image/png');
 
   return new Promise((resolve) => {
     const img = new Image();

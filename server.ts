@@ -1131,16 +1131,65 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
 
     if (appData.sekolah) {
       const s = appData.sekolah;
-      await db.execute(
-        `INSERT INTO sekolah_config (id, nama, alamat, tahun_ajaran, tanggal_mulai, logo, favicon, nama_kepala_sekolah, nip_kepala_sekolah, theme, font_theme)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-         nama=?, alamat=?, tahun_ajaran=?, tanggal_mulai=?, logo=?, favicon=?, nama_kepala_sekolah=?, nip_kepala_sekolah=?, theme=?, font_theme=?;`,
-        [
-          s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern',
-          s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern'
-        ]
-      );
+      const loginConfigObj = {
+        headerTitle: s.headerTitle || '',
+        headerSubtitle: s.headerSubtitle || '',
+        loginAnnouncementModal: Boolean(s.loginAnnouncementModal),
+        loginAnnouncementTitle: s.loginAnnouncementTitle || '',
+        loginAnnouncementText: s.loginAnnouncementText || '',
+        loginAnnouncementType: s.loginAnnouncementType || 'info',
+        loginCustomLinksDisplayMode: s.loginCustomLinksDisplayMode || 'dropdown',
+        loginCustomLinksTitle: s.loginCustomLinksTitle || '',
+        loginCustomLinks: s.loginCustomLinks || [],
+        loginBgType: s.loginBgType || 'gradient',
+        loginBgOverlayOpacity: s.loginBgOverlayOpacity ?? 0,
+        loginBgOpacity: s.loginBgOpacity ?? 100,
+        bgImageOpacity: s.bgImageOpacity ?? 100,
+        loginBgBlur: s.loginBgBlur || 'none',
+        loginBgFit: s.loginBgFit || 'cover',
+        loginBgOverlayColor: s.loginBgOverlayColor || '#000000',
+        loginCardOpacity: s.loginCardOpacity ?? 95,
+        loginCardBlur: s.loginCardBlur || 'md',
+        loginLeftShowPanel: s.loginLeftShowPanel !== false,
+        loginLeftBadgeText: s.loginLeftBadgeText || '',
+        loginLeftTitlePrefix: s.loginLeftTitlePrefix || '',
+        loginLeftTitleHighlight: s.loginLeftTitleHighlight || '',
+        loginLeftDescription: s.loginLeftDescription || '',
+        loginLeftFeature1Title: s.loginLeftFeature1Title || '',
+        loginLeftFeature1Subtitle: s.loginLeftFeature1Subtitle || '',
+        loginLeftFeature2Title: s.loginLeftFeature2Title || '',
+        loginLeftFeature2Subtitle: s.loginLeftFeature2Subtitle || '',
+        footerTeks: s.footerTeks || '',
+        footerSubTeks: s.footerSubTeks || '',
+        maintenanceMode: Boolean(s.maintenanceMode),
+        maintenanceMessage: s.maintenanceMessage || '',
+        maintenanceEstimatedEnd: s.maintenanceEstimatedEnd || ''
+      };
+      const loginConfigStr = JSON.stringify(loginConfigObj);
+
+      try {
+        await db.execute(
+          `INSERT INTO sekolah_config (id, nama, alamat, tahun_ajaran, tanggal_mulai, logo, favicon, nama_kepala_sekolah, nip_kepala_sekolah, theme, font_theme, login_config)
+           VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           nama=?, alamat=?, tahun_ajaran=?, tanggal_mulai=?, logo=?, favicon=?, nama_kepala_sekolah=?, nip_kepala_sekolah=?, theme=?, font_theme=?, login_config=?;`,
+          [
+            s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern', loginConfigStr,
+            s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern', loginConfigStr
+          ]
+        );
+      } catch (err) {
+        await db.execute(
+          `INSERT INTO sekolah_config (id, nama, alamat, tahun_ajaran, tanggal_mulai, logo, favicon, nama_kepala_sekolah, nip_kepala_sekolah, theme, font_theme)
+           VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           nama=?, alamat=?, tahun_ajaran=?, tanggal_mulai=?, logo=?, favicon=?, nama_kepala_sekolah=?, nip_kepala_sekolah=?, theme=?, font_theme=?;`,
+          [
+            s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern',
+            s.nama || '', s.alamat || '', s.tahunAjaran || '', s.tanggalMulai || '', s.logo || '', s.favicon || '', s.namaKepalaSekolah || '', s.nipKepalaSekolah || '', s.theme || 'ocean', s.fontTheme || 'modern'
+          ]
+        );
+      }
     }
 
     if (appData.admin) {
@@ -2441,6 +2490,12 @@ async function performMySQLLoad(config: any) {
 
     if (sekolahRows && sekolahRows.length > 0) {
       const s = sekolahRows[0];
+      let loginCfg = {};
+      if (s.login_config) {
+        try {
+          loginCfg = typeof s.login_config === 'string' ? JSON.parse(s.login_config) : s.login_config;
+        } catch (e) {}
+      }
       appData.sekolah = {
         ...(appData.sekolah || {}),
         nama: s.nama || appData.sekolah?.nama,
@@ -2452,7 +2507,8 @@ async function performMySQLLoad(config: any) {
         namaKepalaSekolah: s.nama_kepala_sekolah || appData.sekolah?.namaKepalaSekolah,
         nipKepalaSekolah: s.nip_kepala_sekolah || appData.sekolah?.nipKepalaSekolah,
         theme: s.theme || appData.sekolah?.theme,
-        fontTheme: s.font_theme || appData.sekolah?.fontTheme
+        fontTheme: s.font_theme || appData.sekolah?.fontTheme,
+        ...loginCfg
       };
     }
 
@@ -4434,9 +4490,11 @@ app.post("/api/mysql/test", async (req, res) => {
           nama_kepala_sekolah VARCHAR(255),
           nip_kepala_sekolah VARCHAR(100),
           theme VARCHAR(50) DEFAULT 'ocean',
-          font_theme VARCHAR(50) DEFAULT 'modern'
+          font_theme VARCHAR(50) DEFAULT 'modern',
+          login_config LONGTEXT
         );
       `);
+      await db.execute(`ALTER TABLE sekolah_config ADD COLUMN IF NOT EXISTS login_config LONGTEXT;`).catch(() => {});
 
       await db.execute(`
         CREATE TABLE IF NOT EXISTS admin_account (
