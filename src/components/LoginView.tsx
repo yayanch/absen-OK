@@ -997,6 +997,118 @@ export const LoginView: React.FC<LoginViewProps> = ({
     return {};
   };
 
+  // Dynamic Container Card Helper Classes
+  const getContainerMaxWidthClass = () => {
+    switch (sekolah.loginCardMaxWidth) {
+      case 'compact': return 'max-w-sm';
+      case 'wide': return 'max-w-lg';
+      case 'large': return 'max-w-xl';
+      case 'standard':
+      default: return 'max-w-md';
+    }
+  };
+
+  const getContainerAlignmentClass = () => {
+    switch (sekolah.loginCardLayout) {
+      case 'left': return 'mr-auto md:ml-0';
+      case 'center': return 'mx-auto';
+      case 'right':
+      default: return 'ml-auto md:mr-0';
+    }
+  };
+
+  const getContainerRoundedClass = () => {
+    switch (sekolah.loginCardRounded) {
+      case 'none': return 'rounded-none';
+      case 'lg': return 'rounded-2xl';
+      case 'xl': return 'rounded-3xl';
+      case 'full_pill': return 'rounded-[36px] sm:rounded-[44px]';
+      case '3xl': return 'rounded-[32px] sm:rounded-[36px]';
+      case '2xl':
+      default: return 'rounded-2xl sm:rounded-3xl';
+    }
+  };
+
+  const getContainerShadowClass = () => {
+    switch (sekolah.loginCardShadow) {
+      case 'none': return 'shadow-none';
+      case 'soft': return 'shadow-lg shadow-slate-900/5 dark:shadow-black/40';
+      case 'glow': return 'shadow-2xl shadow-blue-500/20 dark:shadow-blue-600/30 ring-2 ring-blue-500/20';
+      case 'neon': return 'shadow-[0_0_40px_rgba(59,130,246,0.3)] dark:shadow-[0_0_50px_rgba(99,102,241,0.4)] border-blue-500/40 ring-1 ring-blue-400/30';
+      case 'medium':
+      default: return isDarkMode ? 'shadow-2xl shadow-black/80' : 'shadow-2xl shadow-slate-900/10';
+    }
+  };
+
+  const getContainerBorderClass = () => {
+    switch (sekolah.loginCardBorder) {
+      case 'none': return 'border-transparent';
+      case 'subtle': return 'border border-slate-200 dark:border-zinc-800';
+      case 'gradient': return 'border-2 border-transparent bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500 bg-origin-border';
+      case 'accent': return 'border-2 border-blue-500/50 dark:border-blue-400/50';
+      case 'glass':
+      default: return isDarkMode ? 'border-zinc-800/80' : 'border-white/90 ring-1 ring-black/5';
+    }
+  };
+
+  const getLogoSizeClass = () => {
+    switch (sekolah.loginCardLogoSize) {
+      case 'sm': return 'w-11 h-11 sm:w-12 sm:h-12';
+      case 'lg': return 'w-18 h-18 sm:w-20 sm:h-20';
+      case 'md':
+      default: return 'w-14 h-14 sm:w-16 sm:h-16';
+    }
+  };
+
+  const getLogoAlignClass = () => {
+    switch (sekolah.loginCardLogoAlign) {
+      case 'left': return 'justify-start text-left';
+      case 'right': return 'justify-end text-right';
+      case 'center':
+      default: return 'justify-center text-center';
+    }
+  };
+
+  const getInputStyleClass = () => {
+    const rounded = sekolah.loginCardInputRounded === 'full' ? 'rounded-full' : sekolah.loginCardInputRounded === 'lg' ? 'rounded-lg' : 'rounded-xl';
+    switch (sekolah.loginCardInputStyle) {
+      case 'filled':
+        return `bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700/60 text-zinc-950 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-blue-500 ${rounded}`;
+      case 'underlined':
+        return `bg-transparent border-b-2 border-slate-300 dark:border-zinc-700 text-zinc-950 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:border-blue-600 rounded-none px-1`;
+      case 'outlined':
+      default:
+        return `${rounded} ${
+          isDarkMode
+            ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
+            : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
+        }`;
+    }
+  };
+
+  const getSubmitButtonClass = () => {
+    const rounded = sekolah.loginCardButtonRounded === 'full' ? 'rounded-full' : sekolah.loginCardButtonRounded === 'lg' ? 'rounded-lg' : 'rounded-2xl';
+    switch (sekolah.loginCardButtonAccent) {
+      case 'emerald':
+        return `bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 ${rounded}`;
+      case 'violet':
+        return `bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/30 ${rounded}`;
+      case 'amber':
+        return `bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/30 ${rounded}`;
+      case 'rose':
+        return `bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 ${rounded}`;
+      case 'slate':
+        return `bg-zinc-900 hover:bg-black text-white shadow-lg shadow-zinc-900/30 ${rounded}`;
+      case 'blue':
+      default:
+        return `${rounded} ${
+          isDarkMode
+            ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg shadow-blue-950/80 hover:shadow-blue-600/30'
+            : 'bg-zinc-950 hover:bg-black text-white shadow-lg shadow-zinc-950/30'
+        }`;
+    }
+  };
+
   return (
     <div
       className={`h-screen w-full flex flex-col justify-between items-center relative overflow-hidden select-none transition-colors duration-300 ${
@@ -1143,7 +1255,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <span className="text-base select-none">{greeting.icon}</span>
               <span className={isBackgroundDark ? 'text-zinc-200' : 'text-zinc-800'}>{greeting.text}</span>
               <span className="opacity-30">·</span>
-              <span className="uppercase tracking-wider text-[11px] font-black text-blue-600 dark:text-blue-400">
+              <span className={`uppercase tracking-wider text-[11px] font-black ${isBackgroundDark ? 'text-blue-400' : 'text-blue-600'}`}>
                 {sekolah.loginLeftBadgeText || `Portal Presensi Digital ${sekolah.nama || 'SMK Negeri 6 Garut'}`}
               </span>
             </div>
@@ -1180,17 +1292,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl pt-1">
               <div className={`p-3.5 rounded-2xl border transition-all duration-200 flex items-start gap-3 backdrop-blur-md ${
                 isBackgroundDark
-                  ? 'bg-zinc-900/60 border-zinc-800/80 text-zinc-200 hover:border-zinc-700'
-                  : 'bg-white/80 border-slate-200 text-slate-800 hover:border-slate-300 shadow-xs'
+                  ? 'bg-zinc-900/75 border-zinc-700/80 text-zinc-100 hover:border-zinc-600'
+                  : 'bg-white/85 border-slate-200 text-slate-800 hover:border-slate-300 shadow-xs'
               }`}>
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                   <Smartphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                  <h4 className={`text-xs font-bold ${isBackgroundDark ? 'text-white' : 'text-slate-900'}`}>
                     {sekolah.loginLeftFeature1Title || 'Kunci 1 HP 1 Siswa'}
                   </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5 leading-snug">
+                  <p className={`text-[11px] mt-0.5 leading-snug ${isBackgroundDark ? 'text-zinc-300' : 'text-slate-600'}`}>
                     {sekolah.loginLeftFeature1Subtitle || 'Proteksi device binding anti-titip absen.'}
                   </p>
                 </div>
@@ -1198,17 +1310,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               <div className={`p-3.5 rounded-2xl border transition-all duration-200 flex items-start gap-3 backdrop-blur-md ${
                 isBackgroundDark
-                  ? 'bg-zinc-900/60 border-zinc-800/80 text-zinc-200 hover:border-zinc-700'
-                  : 'bg-white/80 border-slate-200 text-slate-800 hover:border-slate-300 shadow-xs'
+                  ? 'bg-zinc-900/75 border-zinc-700/80 text-zinc-100 hover:border-zinc-600'
+                  : 'bg-white/85 border-slate-200 text-slate-800 hover:border-slate-300 shadow-xs'
               }`}>
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
                   <MessageSquare className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                  <h4 className={`text-xs font-bold ${isBackgroundDark ? 'text-white' : 'text-slate-900'}`}>
                     {sekolah.loginLeftFeature2Title || 'Notifikasi WhatsApp'}
                   </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5 leading-snug">
+                  <p className={`text-[11px] mt-0.5 leading-snug ${isBackgroundDark ? 'text-zinc-300' : 'text-slate-600'}`}>
                     {sekolah.loginLeftFeature2Subtitle || 'Laporan presensi instan kepada orang tua.'}
                   </p>
                 </div>
@@ -1216,7 +1328,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
 
             {/* Live System Health indicator */}
-            <div className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+            <div className={`flex items-center gap-2 pt-1 text-[11px] font-semibold ${isBackgroundDark ? 'text-zinc-300' : 'text-slate-600'}`}>
               <span className="flex h-2 w-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -1232,74 +1344,73 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         {/* RIGHT SIDE LOGIN CARD */}
         <div className={`w-full ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-center my-auto`}>
-          <div className="w-full max-w-md flex flex-col justify-center my-auto">
+          <div className={`w-full ${getContainerMaxWidthClass()} ${getContainerAlignmentClass()} flex flex-col justify-center my-auto`}>
             {/* Main Card Container with White Gradient Styling */}
             <div
-              className={`${getCardBlurClass()} border rounded-2xl sm:rounded-3xl px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
+              className={`${getBlurFilter()} border ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
                 isDarkMode
-                  ? 'shadow-2xl shadow-black/80 text-zinc-100 border-zinc-800/80'
-                  : 'shadow-2xl shadow-slate-900/10 text-slate-900 border-white/90 ring-1 ring-black/5'
+                  ? 'text-zinc-100'
+                  : 'text-slate-900'
               }`}
               style={{
                 background: isDarkMode
                   ? `linear-gradient(145deg, rgba(24, 24, 27, ${Math.min(0.95, (cardOpacity / 100) + 0.15)}) 0%, rgba(9, 9, 11, ${cardOpacity / 100}) 100%)`
                   : `linear-gradient(145deg, rgba(255, 255, 255, ${Math.min(0.98, (cardOpacity / 100) + 0.25)}) 0%, rgba(255, 255, 255, ${Math.min(0.92, (cardOpacity / 100) + 0.15)}) 45%, rgba(248, 250, 252, ${Math.min(0.96, (cardOpacity / 100) + 0.2)}) 100%)`,
-                boxShadow: isDarkMode
-                  ? '0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 1px 1px 0 rgba(255, 255, 255, 0.1)'
-                  : '0 20px 45px -12px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.9) inset, 0 2px 4px 0 rgba(255, 255, 255, 0.8) inset',
+                backdropFilter: cardBlur !== 'none' ? `blur(${cardBlur === 'sm' ? '4px' : cardBlur === 'md' ? '8px' : cardBlur === 'lg' ? '16px' : cardBlur === 'xl' ? '24px' : '32px'})` : 'none',
               }}
             >
               <div className="w-full space-y-4 my-auto">
                 {/* School Branding Header */}
-                <div className="text-center space-y-3 pb-1">
-                <div className="inline-flex justify-center transition-transform hover:scale-105">
-                  {logoSrc ? (
-                    <img
-                      src={logoSrc}
-                      alt="Logo Sekolah"
-                      className="w-14 h-14 sm:w-16 sm:h-16 object-contain mx-auto drop-shadow-sm"
-                    />
-                  ) : (
-                    <div
-                      className={`w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center rounded-2xl border shadow-inner ${
-                        isDarkMode
-                          ? 'bg-zinc-900/60 border-zinc-700/50 text-blue-400'
-                          : 'bg-white/70 border-slate-200 text-zinc-900'
+                <div className={`space-y-3 pb-1 ${getLogoAlignClass()}`}>
+                  {sekolah.loginCardShowLogo !== false && (
+                    <div className={`flex transition-transform hover:scale-105 ${getLogoAlignClass()}`}>
+                      {logoSrc ? (
+                        <img
+                          src={logoSrc}
+                          alt="Logo Sekolah"
+                          className={`${getLogoSizeClass()} object-contain drop-shadow-sm`}
+                        />
+                      ) : (
+                        <div
+                          className={`${getLogoSizeClass()} flex items-center justify-center rounded-2xl border shadow-inner ${
+                            isDarkMode
+                              ? 'bg-zinc-900/60 border-zinc-700/50 text-blue-400'
+                              : 'bg-white/70 border-slate-200 text-zinc-900'
+                          }`}
+                        >
+                          <School className="w-8 h-8 sm:w-10 sm:h-10" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    {sekolah.loginCardShowSchoolName !== false && (
+                      <h1
+                        className={`text-xs sm:text-sm font-semibold tracking-normal uppercase ${
+                          isDarkMode ? 'text-zinc-400' : 'text-zinc-600'
+                        }`}
+                      >
+                        {sekolah.nama || 'SMK NEGERI 6 GARUT'}
+                      </h1>
+                    )}
+                    <p
+                      className={`text-lg sm:text-xl font-black tracking-tight mt-0.5 ${
+                        isDarkMode ? 'text-white' : 'text-black'
                       }`}
                     >
-                      <School className="w-8 h-8 sm:w-10 sm:h-10" />
+                      {sekolah.loginCardWelcomeTitle || sekolah.headerSubtitle || 'Sistem Absensi Siswa'}
+                    </p>
+                  </div>
+
+                  {sekolah.loginCardShowAcademicYear !== false && (
+                    <div className={`flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-zinc-400 ${getLogoAlignClass()}`}>
+                      <span>Tahun Ajaran {tahunAjaran}</span>
+                      <span className="opacity-40">·</span>
+                      <span>Semester {semester}</span>
                     </div>
                   )}
                 </div>
-
-                <div>
-                  <h1
-                    className={`text-xs sm:text-sm font-semibold tracking-normal uppercase ${
-                      isDarkMode ? 'text-zinc-400' : 'text-zinc-600'
-                    }`}
-                  >
-                    {sekolah.nama || 'SMK NEGERI 6 GARUT'}
-                  </h1>
-                  <p
-                    className={`text-lg sm:text-xl font-black tracking-tight mt-0.5 ${
-                      isDarkMode ? 'text-white' : 'text-black'
-                    }`}
-                  >
-                    {(!sekolah.headerSubtitle ||
-                    sekolah.headerSubtitle.toLowerCase().includes('smkn 6') ||
-                    sekolah.headerSubtitle.toLowerCase().includes('smk negeri 6') ||
-                    sekolah.headerSubtitle === 'Portal Presensi Siswa & Tenaga Pendidik')
-                      ? 'Sistem Absensi Siswa'
-                      : sekolah.headerSubtitle}
-                  </p>
-                </div>
-
-                <div className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 dark:text-zinc-400">
-                  <span>Tahun Ajaran {tahunAjaran}</span>
-                  <span className="opacity-40">·</span>
-                  <span>Semester {semester}</span>
-                </div>
-              </div>
 
               {/* MAINTENANCE MODE ALERT BANNER */}
               {sekolah.maintenanceMode && (
@@ -1352,11 +1463,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder={roleInfo.placeholder}
-                      className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
-                        isDarkMode
-                          ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
-                          : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
-                      }`}
+                      className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
                     />
                   </div>
                 </div>
@@ -1383,11 +1490,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Masukkan password akun Anda"
-                      className={`w-full pl-10 sm:pl-10.5 pr-11 py-2.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition focus:outline-none focus:ring-2 ${
-                        isDarkMode
-                          ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
-                          : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
-                      }`}
+                      className={`w-full pl-10 sm:pl-10.5 pr-11 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
                     />
                     <button
                       type="button"
@@ -1438,11 +1541,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className={`w-full py-3 sm:py-3.5 px-4 font-black rounded-2xl text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
-                    isDarkMode
-                      ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg shadow-blue-950/80 hover:shadow-blue-600/30'
-                      : 'bg-zinc-950 hover:bg-black text-white shadow-lg shadow-zinc-950/30'
-                  }`}
+                  className={`w-full py-3 sm:py-3.5 px-4 font-black text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${getSubmitButtonClass()}`}
                 >
                   {isLoggingIn ? (
                     <>

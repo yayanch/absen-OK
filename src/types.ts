@@ -65,6 +65,24 @@ export interface SekolahConfig {
   loginBgFit?: 'cover' | 'contain' | 'tile';
   loginCardOpacity?: number; // 0 - 100 (%)
   loginCardBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  // Pengaturan Kustomisasi Container / Kartu Form Login
+  loginCardLayout?: 'center' | 'left' | 'right';
+  loginCardMaxWidth?: 'compact' | 'standard' | 'wide' | 'large';
+  loginCardRounded?: 'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill';
+  loginCardShadow?: 'none' | 'soft' | 'medium' | 'glow' | 'neon';
+  loginCardBorder?: 'none' | 'subtle' | 'gradient' | 'glass' | 'accent';
+  loginCardShowLogo?: boolean;
+  loginCardLogoAlign?: 'left' | 'center' | 'right';
+  loginCardLogoSize?: 'sm' | 'md' | 'lg';
+  loginCardShowSchoolName?: boolean;
+  loginCardShowSubtitle?: boolean;
+  loginCardShowAcademicYear?: boolean;
+  loginCardWelcomeTitle?: string;
+  loginCardWelcomeSubtext?: string;
+  loginCardInputStyle?: 'outlined' | 'filled' | 'underlined';
+  loginCardInputRounded?: 'lg' | 'xl' | 'full';
+  loginCardButtonAccent?: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate';
+  loginCardButtonRounded?: 'lg' | 'xl' | 'full';
   loginLeftBadgeText?: string;
   loginLeftTitlePrefix?: string;
   loginLeftTitleHighlight?: string;

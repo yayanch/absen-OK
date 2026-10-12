@@ -60,7 +60,7 @@ interface LoginBackgroundSettingsProps {
   ) => void;
 }
 
-type SettingsTab = 'left_panel' | 'background' | 'custom_links';
+type SettingsTab = 'left_panel' | 'container_card' | 'background' | 'custom_links';
 type BgTypeTab = 'default' | 'image' | 'gradient' | 'pattern' | 'color';
 
 export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = ({
@@ -107,6 +107,59 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   );
   const [cardBlur, setCardBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(
     sekolah.loginCardBlur || '2xl'
+  );
+
+  // Container Card Form States
+  const [cardLayout, setCardLayout] = useState<'center' | 'left' | 'right'>(
+    sekolah.loginCardLayout || 'right'
+  );
+  const [cardMaxWidth, setCardMaxWidth] = useState<'compact' | 'standard' | 'wide' | 'large'>(
+    sekolah.loginCardMaxWidth || 'standard'
+  );
+  const [cardRounded, setCardRounded] = useState<'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill'>(
+    sekolah.loginCardRounded || '2xl'
+  );
+  const [cardShadow, setCardShadow] = useState<'none' | 'soft' | 'medium' | 'glow' | 'neon'>(
+    sekolah.loginCardShadow || 'medium'
+  );
+  const [cardBorder, setCardBorder] = useState<'none' | 'subtle' | 'gradient' | 'glass' | 'accent'>(
+    sekolah.loginCardBorder || 'glass'
+  );
+  const [cardShowLogo, setCardShowLogo] = useState<boolean>(
+    sekolah.loginCardShowLogo !== false
+  );
+  const [cardLogoAlign, setCardLogoAlign] = useState<'left' | 'center' | 'right'>(
+    sekolah.loginCardLogoAlign || 'center'
+  );
+  const [cardLogoSize, setCardLogoSize] = useState<'sm' | 'md' | 'lg'>(
+    sekolah.loginCardLogoSize || 'md'
+  );
+  const [cardShowSchoolName, setCardShowSchoolName] = useState<boolean>(
+    sekolah.loginCardShowSchoolName !== false
+  );
+  const [cardShowSubtitle, setCardShowSubtitle] = useState<boolean>(
+    sekolah.loginCardShowSubtitle !== false
+  );
+  const [cardShowAcademicYear, setCardShowAcademicYear] = useState<boolean>(
+    sekolah.loginCardShowAcademicYear !== false
+  );
+  const [cardWelcomeTitle, setCardWelcomeTitle] = useState<string>(
+    sekolah.loginCardWelcomeTitle || 'Sistem Absensi Siswa'
+  );
+  const [cardWelcomeSubtext, setCardWelcomeSubtext] = useState<string>(
+    sekolah.loginCardWelcomeSubtext || 'Masuk dengan Username / NISN / NIP Anda'
+  );
+  const [cardInputStyle, setCardInputStyle] = useState<'outlined' | 'filled' | 'underlined'>(
+    sekolah.loginCardInputStyle || 'outlined'
+  );
+  const [cardInputRounded, setCardInputRounded] = useState<'lg' | 'xl' | 'full'>(
+    sekolah.loginCardInputRounded || 'xl'
+  );
+  const [cardButtonAccent, setCardButtonAccent] = useState<'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate'>(
+    sekolah.loginCardButtonAccent || 'blue'
+  );
+  const [cardButtonRounded, setCardButtonRounded] = useState<'lg' | 'xl' | 'full'>(
+    sekolah.loginCardButtonRounded || 'xl'
   );
 
   // Left Panel Text States
@@ -433,6 +486,24 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginBgOverlayColor: overlayColor,
       loginCardOpacity: cardOpacity,
       loginCardBlur: cardBlur,
+      // Container Card Customizations
+      loginCardLayout: cardLayout,
+      loginCardMaxWidth: cardMaxWidth,
+      loginCardRounded: cardRounded,
+      loginCardShadow: cardShadow,
+      loginCardBorder: cardBorder,
+      loginCardShowLogo: cardShowLogo,
+      loginCardLogoAlign: cardLogoAlign,
+      loginCardLogoSize: cardLogoSize,
+      loginCardShowSchoolName: cardShowSchoolName,
+      loginCardShowSubtitle: cardShowSubtitle,
+      loginCardShowAcademicYear: cardShowAcademicYear,
+      loginCardWelcomeTitle: cardWelcomeTitle,
+      loginCardWelcomeSubtext: cardWelcomeSubtext,
+      loginCardInputStyle: cardInputStyle,
+      loginCardInputRounded: cardInputRounded,
+      loginCardButtonAccent: cardButtonAccent,
+      loginCardButtonRounded: cardButtonRounded,
       loginLeftShowPanel,
       loginLeftBadgeText,
       loginLeftTitlePrefix,
@@ -477,6 +548,23 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setOverlayColor('#020617');
       setCardOpacity(60);
       setCardBlur('2xl');
+      setCardLayout('right');
+      setCardMaxWidth('standard');
+      setCardRounded('2xl');
+      setCardShadow('medium');
+      setCardBorder('glass');
+      setCardShowLogo(true);
+      setCardLogoAlign('center');
+      setCardLogoSize('md');
+      setCardShowSchoolName(true);
+      setCardShowSubtitle(true);
+      setCardShowAcademicYear(true);
+      setCardWelcomeTitle('Sistem Absensi Siswa');
+      setCardWelcomeSubtext('Masuk dengan Username / NISN / NIP Anda');
+      setCardInputStyle('outlined');
+      setCardInputRounded('xl');
+      setCardButtonAccent('blue');
+      setCardButtonRounded('xl');
 
       // Reset text
       setLoginLeftShowPanel(true);
@@ -631,12 +719,12 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         )}
       </div>
 
-      {/* TABS SELECTOR: PANEL TEKS KIRI vs LATAR BELAKANG vs TAUTAN KUSTOM */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 max-w-2xl">
+      {/* TABS SELECTOR: PANEL TEKS KIRI vs CONTAINER LOGIN vs LATAR BELAKANG vs TAUTAN KUSTOM */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 max-w-3xl">
         <button
           type="button"
           onClick={() => setActiveTab('left_panel')}
-          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'left_panel'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -647,8 +735,20 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab('container_card')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            activeTab === 'container_card'
+              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Container Kartu Login</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('background')}
-          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'background'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -660,14 +760,14 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         <button
           type="button"
           onClick={() => setActiveTab('custom_links')}
-          className={`flex-1 min-w-[150px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'custom_links'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <Link className="w-4 h-4" />
-          <span>Tautan Kustom / Link</span>
+          <span>Tautan Kustom</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
             {customLinks.length}
           </span>
@@ -893,7 +993,531 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
           )}
 
           {/* ========================================================= */}
-          {/* TAB 2: KUSTOMISASI LATAR BELAKANG                         */}
+          {/* TAB 2: KUSTOMISASI CONTAINER & KARTU LOGIN                 */}
+          {/* ========================================================= */}
+          {activeTab === 'container_card' && (
+            <div className="space-y-6">
+              {/* Card 1: Preset Instant Container Login */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span>Pilihan Preset Gaya Container Instant</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-slate-400">1 Klik Terapkan</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCardLayout('right');
+                      setCardMaxWidth('standard');
+                      setCardRounded('3xl');
+                      setCardShadow('medium');
+                      setCardBorder('glass');
+                      setCardOpacity(65);
+                      setCardBlur('2xl');
+                      setCardInputStyle('outlined');
+                      setCardInputRounded('xl');
+                      setCardButtonAccent('blue');
+                      setCardButtonRounded('xl');
+                      onShowToast('Preset Glassmorphism Modern diterapkan!', 'success');
+                    }}
+                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
+                  >
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">✨ Glassmorphism</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Efek kaca transparan & blur modern</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCardLayout('center');
+                      setCardMaxWidth('standard');
+                      setCardRounded('xl');
+                      setCardShadow('soft');
+                      setCardBorder('subtle');
+                      setCardOpacity(95);
+                      setCardBlur('sm');
+                      setCardInputStyle('outlined');
+                      setCardInputRounded('lg');
+                      setCardButtonAccent('slate');
+                      setCardButtonRounded('lg');
+                      onShowToast('Preset Clean Minimalist diterapkan!', 'success');
+                    }}
+                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
+                  >
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">💎 Clean Minimalist</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Tampilan bersih, padat, & profesional</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCardLayout('center');
+                      setCardMaxWidth('wide');
+                      setCardRounded('2xl');
+                      setCardShadow('neon');
+                      setCardBorder('accent');
+                      setCardOpacity(85);
+                      setCardBlur('xl');
+                      setCardInputStyle('filled');
+                      setCardInputRounded('xl');
+                      setCardButtonAccent('emerald');
+                      setCardButtonRounded('xl');
+                      onShowToast('Preset Floating Neon diterapkan!', 'success');
+                    }}
+                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
+                  >
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">⚡ Floating Neon</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Glow cyan/emerald futuristik</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCardLayout('right');
+                      setCardMaxWidth('compact');
+                      setCardRounded('full_pill');
+                      setCardShadow('glow');
+                      setCardBorder('glass');
+                      setCardOpacity(75);
+                      setCardBlur('2xl');
+                      setCardInputStyle('outlined');
+                      setCardInputRounded('full');
+                      setCardButtonAccent('violet');
+                      setCardButtonRounded('full');
+                      onShowToast('Preset Pill Compact diterapkan!', 'success');
+                    }}
+                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
+                  >
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">💊 Pill Curves</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Sudut melengkung penuh (pill shape)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCardLayout('right');
+                      setCardMaxWidth('large');
+                      setCardRounded('2xl');
+                      setCardShadow('medium');
+                      setCardBorder('gradient');
+                      setCardOpacity(90);
+                      setCardBlur('lg');
+                      setCardInputStyle('outlined');
+                      setCardInputRounded('xl');
+                      setCardButtonAccent('amber');
+                      setCardButtonRounded('xl');
+                      onShowToast('Preset Wide Executive diterapkan!', 'success');
+                    }}
+                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
+                  >
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">🌟 Wide Executive</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Form ekstra luas dengan border gradasi</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 2: Tata Letak & Ukuran Lebar Container */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-blue-600" />
+                  <span>Tata Letak & Ukuran Container</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Posisi Alignment */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Posisi Horisontal Container
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'left', label: 'Kiri' },
+                        { id: 'center', label: 'Tengah' },
+                        { id: 'right', label: 'Kanan' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardLayout(item.id as any)}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                            cardLayout === item.id
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Lebar Maksimal Container */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Lebar Maksimal Form Container
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'compact', label: 'Ringkas (380px)' },
+                        { id: 'standard', label: 'Standar (448px)' },
+                        { id: 'wide', label: 'Lebar (512px)' },
+                        { id: 'large', label: 'Ekstra (576px)' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardMaxWidth(item.id as any)}
+                          className={`py-2 px-2.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                            cardMaxWidth === item.id
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Bentuk & Efek Visual Kartu Form */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-purple-600" />
+                  <span>Bentuk, Efek Kaca & Bayangan Container</span>
+                </h4>
+
+                <div className="space-y-4">
+                  {/* Sudut Lengkungan (Rounded Corners) */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Kelengkungan Sudut Kartu (Rounded Corners)
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { id: 'none', label: 'Kotak (0px)' },
+                        { id: 'lg', label: 'Halus (16px)' },
+                        { id: 'xl', label: 'Sedang (24px)' },
+                        { id: '2xl', label: 'Lengkung (32px)' },
+                        { id: 'full_pill', label: 'Pill (40px)' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardRounded(item.id as any)}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                            cardRounded === item.id
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Efek Bayangan & Glow */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Efek Bayangan (Shadow & Glow Effect)
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { id: 'none', label: 'Tanpa' },
+                        { id: 'soft', label: 'Halus' },
+                        { id: 'medium', label: 'Sedang' },
+                        { id: 'glow', label: 'Glow Indigo' },
+                        { id: 'neon', label: 'Neon Cyan' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardShadow(item.id as any)}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                            cardShadow === item.id
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Gaya Border / Bingkai */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Gaya Bingkai (Border Style)
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { id: 'none', label: 'Tanpa' },
+                        { id: 'subtle', label: 'Tipis' },
+                        { id: 'glass', label: 'Kaca White' },
+                        { id: 'gradient', label: 'Gradasi' },
+                        { id: 'accent', label: 'Accent Solid' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardBorder(item.id as any)}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                            cardBorder === item.id
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Transparansi Kartu & Blur Slider */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Transparansi Kartu ({cardOpacity}%)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={cardOpacity}
+                        onChange={(e) => setCardOpacity(Number(e.target.value))}
+                        className="w-full accent-blue-600 cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Efek Blur Background (Glass Blur)</span>
+                        <span className="text-[10px] uppercase font-mono bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">
+                          {cardBlur}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {['none', 'sm', 'md', 'lg', 'xl', '2xl'].map((b) => (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => setCardBlur(b as any)}
+                            className={`py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer text-center ${
+                              cardBlur === b
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {b === 'none' ? '0' : b}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Header Kartu & Pengaturan Elemen */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <School className="w-4 h-4 text-emerald-600" />
+                  <span>Elemen Branding Header Kartu</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Toggle Logo */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Tampilkan Logo</span>
+                      <p className="text-[10px] text-slate-400">Logo sekolah di header</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={cardShowLogo}
+                      onChange={(e) => setCardShowLogo(e.target.checked)}
+                      className="w-4 h-4 accent-blue-600 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Toggle Nama Sekolah */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Nama Sekolah</span>
+                      <p className="text-[10px] text-slate-400">Teks nama sekolah di atas</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={cardShowSchoolName}
+                      onChange={(e) => setCardShowSchoolName(e.target.checked)}
+                      className="w-4 h-4 accent-blue-600 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Toggle Academic Year */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Thn Ajaran & Sem</span>
+                      <p className="text-[10px] text-slate-400">Status semester di kartu</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={cardShowAcademicYear}
+                      onChange={(e) => setCardShowAcademicYear(e.target.checked)}
+                      className="w-4 h-4 accent-blue-600 cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Ukuran & Posisi Logo */}
+                {cardShowLogo && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Posisi Alignment Logo</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'left', label: 'Kiri' },
+                          { id: 'center', label: 'Tengah' },
+                          { id: 'right', label: 'Kanan' },
+                        ].map((a) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => setCardLogoAlign(a.id as any)}
+                            className={`py-1.5 text-xs font-bold rounded-xl border cursor-pointer ${
+                              cardLogoAlign === a.id
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {a.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Ukuran Logo</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'sm', label: 'Kecil (48px)' },
+                          { id: 'md', label: 'Sedang (64px)' },
+                          { id: 'lg', label: 'Besar (80px)' },
+                        ].map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setCardLogoSize(s.id as any)}
+                            className={`py-1.5 text-[11px] font-bold rounded-xl border cursor-pointer ${
+                              cardLogoSize === s.id
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Welcome Titles */}
+                <div className="space-y-3 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Judul Pesan Sambutan / Sub-Header Kustom
+                    </label>
+                    <input
+                      type="text"
+                      value={cardWelcomeTitle}
+                      onChange={(e) => setCardWelcomeTitle(e.target.value)}
+                      placeholder="Contoh: Sistem Absensi Siswa"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 5: Gaya Input & Tombol Submit */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <Edit className="w-4 h-4 text-indigo-600" />
+                  <span>Gaya Isian Form & Tombol Masuk</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Input Style */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Varian Gaya Kolom Input
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'outlined', label: 'Outlined' },
+                        { id: 'filled', label: 'Filled Soft' },
+                        { id: 'underlined', label: 'Underlined' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardInputStyle(item.id as any)}
+                          className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                            cardInputStyle === item.id
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Button Accent Color */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Warna Akses Tombol Submit
+                    </label>
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {[
+                        { id: 'blue', color: 'bg-blue-600', label: 'Biru' },
+                        { id: 'emerald', color: 'bg-emerald-600', label: 'Hijau' },
+                        { id: 'violet', color: 'bg-indigo-600', label: 'Ungu' },
+                        { id: 'amber', color: 'bg-amber-600', label: 'Kuning' },
+                        { id: 'rose', color: 'bg-rose-600', label: 'Merah' },
+                        { id: 'slate', color: 'bg-zinc-900', label: 'Gelap' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setCardButtonAccent(item.id as any)}
+                          title={item.label}
+                          className={`h-9 rounded-xl ${item.color} transition cursor-pointer flex items-center justify-center text-white font-bold border-2 ${
+                            cardButtonAccent === item.id
+                              ? 'border-white ring-2 ring-blue-500 scale-105 shadow-md'
+                              : 'border-transparent opacity-80 hover:opacity-100'
+                          }`}
+                        >
+                          {cardButtonAccent === item.id && <Check className="w-4 h-4" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 3: KUSTOMISASI LATAR BELAKANG                         */}
           {/* ========================================================= */}
           {activeTab === 'background' && (
             <div className="space-y-6">
