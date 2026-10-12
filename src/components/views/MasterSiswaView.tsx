@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
-import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, User, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown } from 'lucide-react';
+import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, User, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown, FileText } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppData, Siswa, Kelas, UserSession } from '../../types';
 import { sortKelasList } from '../../data/initialData';
 import { compressBase64Image, addAuditLog, formatTTL, extractKelasTingkat, deduplicateSiswa, syncSiswaProfileToServer, saveSessionUser } from '../../utils/helpers';
 import { Pagination } from '../Pagination';
 import { ImportSiswaModal } from './ImportSiswaModal';
+import { SuratKeteranganNonAktifModal } from './SuratKeteranganNonAktifModal';
 import { PageHeader } from '../common/UIComponents';
 
 interface MasterSiswaViewProps {
@@ -410,7 +411,8 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     tempatLahir: string = '',
     tanggalLahir: string = '',
     password: string = '',
-    foto: string = ''
+    foto: string = '',
+    suratNonAktifBukti: string = ''
   ) => {
     let newSiswa = [...appData.siswa];
     let savedSiswaObj: Siswa | null = null;
@@ -434,6 +436,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             tanggalLahir,
             password: password.trim() ? password.trim() : (s.password || s.nisn || ''),
             foto,
+            suratNonAktifBukti,
           };
           return savedSiswaObj;
         }
@@ -456,6 +459,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         tanggalLahir,
         password: password.trim() || nisn || '',
         foto,
+        suratNonAktifBukti,
       };
       newSiswa.push(savedSiswaObj);
       onShowToast('Siswa baru berhasil ditambahkan!', 'success');
@@ -615,6 +619,41 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               )}
             </div>
           </div>
+
+          {/* Bukti Upload Surat Non-Aktif / Pindah */}
+          {s.suratNonAktifBukti && (
+            <div className="bg-amber-50 dark:bg-amber-950/40 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/60 sm:col-span-2 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider flex items-center gap-1">
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  Bukti File Upload Surat Non-Aktif / Mutasi
+                </span>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 font-semibold">
+                  Dokumen fisik permohonan / surat keterangan resmi terlampir.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenModal(`Bukti Surat Non-Aktif - ${s.nama}`, (
+                    <div className="space-y-4 p-2 text-center">
+                      {s.suratNonAktifBukti?.startsWith('data:image') ? (
+                        <img src={s.suratNonAktifBukti} alt="Bukti Surat Non-Aktif" className="max-h-[70vh] mx-auto rounded-2xl shadow-lg border" />
+                      ) : (
+                        <iframe src={s.suratNonAktifBukti} title="Bukti Surat Non-Aktif" className="w-full h-[70vh] rounded-2xl border" />
+                      )}
+                      <div className="flex justify-end pt-2">
+                        <button type="button" onClick={onCloseModal} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-xl text-xs font-bold">Tutup</button>
+                      </div>
+                    </div>
+                  ));
+                }}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-xs cursor-pointer shrink-0"
+              >
+                Pratinjau Bukti
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
@@ -668,6 +707,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       const [password, setPassword] = useState(siswa ? siswa.password || '' : '');
       const [showPassword, setShowPassword] = useState(false);
       const [foto, setFoto] = useState(siswa ? siswa.foto || '' : '');
+      const [suratNonAktifBukti, setSuratNonAktifBukti] = useState(siswa ? siswa.suratNonAktifBukti || '' : '');
       const [isUploadingFoto, setIsUploadingFoto] = useState(false);
 
       const [kelasId, setKelasId] = useState<string>(
@@ -719,7 +759,8 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               tempatLahir.trim(),
               tanggalLahir.trim(),
               password.trim(),
-              foto
+              foto,
+              suratNonAktifBukti
             );
           }}
           className="space-y-4 max-h-[75vh] overflow-y-auto pr-1"
@@ -916,6 +957,82 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               </select>
             </div>
 
+            {/* Bukti Upload Surat Non-Aktif / Pindah / Mutasi */}
+            {status === 'tidak_aktif' && (
+              <div className="sm:col-span-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl space-y-2">
+                <label className="block text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Upload className="w-4 h-4 text-amber-600" />
+                  <span>Bukti Upload Surat (Foto / Scan Dokumen / PDF)</span>
+                </label>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <label className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                    <Upload className="w-4 h-4" />
+                    <span>{suratNonAktifBukti ? 'Ganti Bukti Surat' : 'Unggah Bukti Surat'}</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          const res = evt.target?.result as string;
+                          if (file.type.startsWith('image/')) {
+                            compressBase64Image(res, 900, 900, 0.8)
+                              .then((comp) => setSuratNonAktifBukti(comp))
+                              .catch(() => setSuratNonAktifBukti(res));
+                          } else {
+                            setSuratNonAktifBukti(res);
+                          }
+                          onShowToast('File bukti surat berhasil diunggah!', 'success');
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {suratNonAktifBukti ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        Bukti File Terlampir
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenModal('Preview Bukti Surat Non-Aktif', (
+                            <div className="space-y-4 p-2 text-center">
+                              {suratNonAktifBukti.startsWith('data:image') ? (
+                                <img src={suratNonAktifBukti} alt="Bukti Surat Non-Aktif" className="max-h-[70vh] mx-auto rounded-2xl shadow-lg border" />
+                              ) : (
+                                <iframe src={suratNonAktifBukti} title="Bukti Surat Non-Aktif" className="w-full h-[70vh] rounded-2xl border" />
+                              )}
+                              <div className="flex justify-end pt-2">
+                                <button type="button" onClick={onCloseModal} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white rounded-xl text-xs font-bold">Tutup</button>
+                              </div>
+                            </div>
+                          ));
+                        }}
+                        className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Pratinjau Bukti
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSuratNonAktifBukti('')}
+                        className="px-3 py-1.5 bg-rose-100 dark:bg-rose-950/60 hover:bg-rose-200 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Hapus Bukti
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">Belum ada file bukti surat diunggah</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Password Login Akun Siswa
@@ -972,6 +1089,18 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         siswa={s}
         kelasNama={kelasNama}
         sekolahNama={sekolahNama}
+        onShowToast={onShowToast}
+        onClose={onCloseModal}
+      />
+    );
+  };
+
+  const handleOpenSuratNonAktifModal = (s?: Siswa) => {
+    onOpenModal(
+      'Penerbitan Surat Keterangan Siswa Non-Aktif',
+      <SuratKeteranganNonAktifModal
+        appData={appData}
+        initialSiswa={s || null}
         onShowToast={onShowToast}
         onClose={onCloseModal}
       />
@@ -2001,6 +2130,30 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         </div>
       )}
 
+      {filterStatus === 'tidak_aktif' && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 dark:text-amber-200 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black">Layanan Penerbitan Surat Keterangan Siswa Non-Aktif</h4>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                Cetak berkas Surat Keterangan Non-Aktif, Pindah Sekolah/Mutasi, Mengundurkan Diri, atau Kelulusan ber-Kop Surat Resmi.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleOpenSuratNonAktifModal()}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Buat Surat Keterangan Non-Aktif</span>
+          </button>
+        </div>
+      )}
+
       {/* Student List Card */}
       <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
         <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2145,6 +2298,23 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                       <div>
                         <div className="font-bold">Cetak Semua Kartu QR</div>
                         <div className="text-[10px] text-slate-400 group-hover:text-indigo-600/70">Cetak lembar kartu QR kelas</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettingsMenu(false);
+                        handleOpenSuratNonAktifModal();
+                      }}
+                      className="w-full px-3 py-2 text-left rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
+                    >
+                      <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white transition shrink-0">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="font-bold">Cetak Surat Ket. Non-Aktif</div>
+                        <div className="text-[10px] text-slate-400 group-hover:text-amber-600/70">Surat Keterangan, Mutasi & Pengunduran Diri</div>
                       </div>
                     </button>
 
@@ -2350,11 +2520,27 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Kelas Badge */}
-                      <div className="mb-2">
+                      {/* Kelas & Status Badges */}
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
                         <span className="inline-flex items-center px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg border border-indigo-100 dark:border-indigo-800 text-xs">
                           Kelas {k ? k.nama : '-'}
                         </span>
+                        {s.status === 'tidak_aktif' && (
+                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-lg text-[10px] border border-slate-200">
+                            Non-Aktif
+                          </span>
+                        )}
+                        {s.suratNonAktifBukti && (
+                          <button
+                            type="button"
+                            onClick={() => openDetailSiswaModal(s)}
+                            className="inline-flex items-center px-2 py-0.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 dark:text-amber-300 text-amber-800 font-bold rounded-lg text-[10px] border border-amber-300/80 gap-1 cursor-pointer transition"
+                            title="Lihat Bukti Upload Surat Non-Aktif"
+                          >
+                            <FileText className="w-3 h-3 text-amber-600" />
+                            <span>Bukti Surat</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -2380,6 +2566,15 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                             >
                               <QrCode className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                               <span>QR</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSuratNonAktifModal(s)}
+                              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 text-amber-700 border border-amber-200/80 dark:border-amber-800 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                              title="Cetak Surat Keterangan Non-Aktif / Mutasi / Pengunduran Diri"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              <span>Surat</span>
                             </button>
                             {canEdit && (
                               <button
@@ -2493,6 +2688,22 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                             </div>
                           )}
                           <span className="text-sm font-semibold">{s.nama}</span>
+                          {s.status === 'tidak_aktif' && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                              Non-Aktif
+                            </span>
+                          )}
+                          {s.suratNonAktifBukti && (
+                            <button
+                              type="button"
+                              onClick={() => openDetailSiswaModal(s)}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition cursor-pointer flex items-center gap-1"
+                              title="Lihat Bukti Upload Surat"
+                            >
+                              <FileText className="w-3 h-3 text-amber-600" />
+                              <span>Bukti Surat</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td className="p-4">
@@ -2519,6 +2730,14 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                               title="Lihat Kartu & QR Code Siswa"
                             >
                               <QrCode className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSuratNonAktifModal(s)}
+                              className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-300 rounded-xl border border-amber-200/80 dark:border-amber-800 transition cursor-pointer flex items-center gap-1"
+                              title="Cetak Surat Keterangan Non-Aktif / Mutasi"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
                             </button>
                             {canEdit && (
                               <button

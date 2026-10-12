@@ -46,6 +46,14 @@ import {
   LOGIN_PATTERN_PRESETS,
 } from '../../data/loginBackgroundPresets';
 import { compressBase64Image, addAuditLog } from '../../utils/helpers';
+import {
+  parseColorToRgb,
+  calculateLuminance,
+  blendRgb,
+  parseGradientAverageRgb,
+  sampleImageLuminance,
+  RGB,
+} from '../../utils/colorDetection';
 
 interface LoginBackgroundSettingsProps {
   appData: AppData;
@@ -102,12 +110,55 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [overlayColor, setOverlayColor] = useState<string>(
     sekolah.loginBgOverlayColor || '#020617'
   );
+  const [contrastMode, setContrastMode] = useState<'auto' | 'dark' | 'light'>(
+    sekolah.loginContrastMode || 'auto'
+  );
   const [cardOpacity, setCardOpacity] = useState<number>(
     sekolah.loginCardOpacity ?? 60
   );
   const [cardBlur, setCardBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(
     sekolah.loginCardBlur || '2xl'
   );
+
+  // Luminance & Dark/Light Detection for Live Preview
+  const [detectedLuminance, setDetectedLuminance] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (bgType === 'image' && bgImage) {
+      let isCancelled = false;
+      sampleImageLuminance(bgImage).then((lum) => {
+        if (!isCancelled) setDetectedLuminance(lum);
+      });
+      return () => { isCancelled = true; };
+    } else {
+      setDetectedLuminance(null);
+    }
+  }, [bgType, bgImage]);
+
+  const liveDetectedDark = React.useMemo(() => {
+    if (contrastMode === 'dark') return { isDark: true, luminance: 40 };
+    if (contrastMode === 'light') return { isDark: false, luminance: 210 };
+
+    const overlayRgb = parseColorToRgb(overlayColor) || { r: 2, g: 6, b: 23 };
+    const overlayAlpha = (overlayOpacity ?? 35) / 100;
+    let baseRgb: RGB = { r: 240, g: 242, b: 245 };
+
+    if (bgType === 'color' && bgColor) {
+      baseRgb = parseColorToRgb(bgColor) || { r: 30, g: 41, b: 59 };
+    } else if (bgType === 'gradient' && bgGradient) {
+      baseRgb = parseGradientAverageRgb(bgGradient);
+    } else if (bgType === 'pattern' && bgPattern) {
+      const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
+      baseRgb = parseColorToRgb(pat.bgBase) || { r: 15, g: 23, b: 42 };
+    } else if (bgType === 'image') {
+      const rawLum = detectedLuminance !== null ? detectedLuminance : 40;
+      baseRgb = { r: rawLum, g: rawLum, b: rawLum };
+    }
+
+    const effectiveRgb = blendRgb(baseRgb, overlayRgb, overlayAlpha);
+    const lum = Math.round(calculateLuminance(effectiveRgb));
+    return { isDark: lum < 135, luminance: lum };
+  }, [contrastMode, bgType, bgColor, bgGradient, bgPattern, detectedLuminance, overlayColor, overlayOpacity]);
 
   // Container Card Form States
   const [cardLayout, setCardLayout] = useState<'center' | 'left' | 'right'>(
@@ -484,6 +535,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginBgBlur: blurLevel,
       loginBgFit: bgFit,
       loginBgOverlayColor: overlayColor,
+      loginContrastMode: contrastMode,
       loginCardOpacity: cardOpacity,
       loginCardBlur: cardBlur,
       // Container Card Customizations
@@ -2074,6 +2126,106 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                         ))}
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* CARD DETEKSI GELAP / TERANG & MODE KONTRAS */}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                        <Sun className="w-4 h-4 text-amber-500" />
+                        <span>Deteksi Gelap & Terang Latar Belakang (Luminance Auto-Detection)</span>
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Sistem mengukur kecerahan (*luminance*) gambar/warna latar secara otomatis untuk menyesuaikan keterbacaan teks dan kontras kartu login.
+                      </p>
+                    </div>
+
+                    {/* Live Status Badge */}
+                    <div className={`px-3 py-1.5 rounded-2xl border text-xs font-bold flex items-center gap-2 shrink-0 ${
+                      liveDetectedDark.isDark
+                        ? 'bg-slate-950 text-amber-300 border-slate-800 shadow-md'
+                        : 'bg-amber-50 text-amber-900 border-amber-200'
+                    }`}>
+                      {liveDetectedDark.isDark ? (
+                        <>
+                          <Moon className="w-4 h-4 text-amber-400 animate-pulse" />
+                          <span>Terdeteksi Gelap ({liveDetectedDark.luminance}/255)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sun className="w-4 h-4 text-amber-600 animate-spin" style={{ animationDuration: '10s' }} />
+                          <span>Terdeteksi Terang ({liveDetectedDark.luminance}/255)</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Contrast Mode Radio Options */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setContrastMode('auto')}
+                      className={`p-3.5 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
+                        contrastMode === 'auto'
+                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold">
+                          <Sparkles className="w-4 h-4 text-blue-600" />
+                          <span>Otomatis Cerdas (Auto)</span>
+                        </div>
+                        {contrastMode === 'auto' && <Check className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                        Menyesuaikan kontras teks & kartu secara dinamis berdasarkan hasil deteksi nilai kecerahan latar.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setContrastMode('dark')}
+                      className={`p-3.5 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
+                        contrastMode === 'dark'
+                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold">
+                          <Moon className="w-4 h-4 text-indigo-500" />
+                          <span>Paksa Gelap (Dark Mode)</span>
+                        </div>
+                        {contrastMode === 'dark' && <Check className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                        Selalu gunakan teks terang/putih & kartu login bertema malam/kaca gelap.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setContrastMode('light')}
+                      className={`p-3.5 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
+                        contrastMode === 'light'
+                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold">
+                          <Sun className="w-4 h-4 text-amber-500" />
+                          <span>Paksa Terang (Light Mode)</span>
+                        </div>
+                        {contrastMode === 'light' && <Check className="w-4 h-4 text-blue-600" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                        Selalu gunakan teks gelap/slate & kartu login latar terang bersih.
+                      </p>
+                    </button>
                   </div>
                 </div>
               </div>

@@ -930,6 +930,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
   );
 
   const isBackgroundDark = useMemo(() => {
+    if (sekolah.loginContrastMode === 'dark') return true;
+    if (sekolah.loginContrastMode === 'light') return false;
+
     if (!isCustomBgActive) {
       return isDarkMode;
     }
@@ -955,7 +958,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const effectiveLuminance = calculateLuminance(effectiveRgb);
 
     return effectiveLuminance < 135;
-  }, [isCustomBgActive, isDarkMode, bgType, bgColor, bgGradient, bgPattern, imageLuminance, overlayColor, overlayOpacity]);
+  }, [sekolah.loginContrastMode, isCustomBgActive, isDarkMode, bgType, bgColor, bgGradient, bgPattern, imageLuminance, overlayColor, overlayOpacity]);
+
+  const darkTheme = isBackgroundDark || isDarkMode;
 
   const getBlurFilter = () => {
     switch (blurLevel) {
@@ -1036,7 +1041,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       case 'glow': return 'shadow-2xl shadow-blue-500/20 dark:shadow-blue-600/30 ring-2 ring-blue-500/20';
       case 'neon': return 'shadow-[0_0_40px_rgba(59,130,246,0.3)] dark:shadow-[0_0_50px_rgba(99,102,241,0.4)] border-blue-500/40 ring-1 ring-blue-400/30';
       case 'medium':
-      default: return isDarkMode ? 'shadow-2xl shadow-black/80' : 'shadow-2xl shadow-slate-900/10';
+      default: return darkTheme ? 'shadow-2xl shadow-black/80' : 'shadow-2xl shadow-slate-900/10';
     }
   };
 
@@ -1047,7 +1052,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       case 'gradient': return 'border-2 border-transparent bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500 bg-origin-border';
       case 'accent': return 'border-2 border-blue-500/50 dark:border-blue-400/50';
       case 'glass':
-      default: return isDarkMode ? 'border-zinc-800/80' : 'border-white/90 ring-1 ring-black/5';
+      default: return darkTheme ? 'border-zinc-800/80' : 'border-white/90 ring-1 ring-black/5';
     }
   };
 
@@ -1073,15 +1078,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const rounded = sekolah.loginCardInputRounded === 'full' ? 'rounded-full' : sekolah.loginCardInputRounded === 'lg' ? 'rounded-lg' : 'rounded-xl';
     switch (sekolah.loginCardInputStyle) {
       case 'filled':
-        return `bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700/60 text-zinc-950 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-blue-500 ${rounded}`;
+        return `bg-slate-100/90 dark:bg-zinc-800/80 border border-slate-300 dark:border-zinc-700/60 text-slate-900 dark:text-white placeholder-slate-500 font-medium dark:placeholder-zinc-400 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-blue-500 ${rounded}`;
       case 'underlined':
-        return `bg-transparent border-b-2 border-slate-300 dark:border-zinc-700 text-zinc-950 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:border-blue-600 rounded-none px-1`;
+        return `bg-transparent border-b-2 ${darkTheme ? 'border-zinc-600 text-white placeholder-zinc-400' : 'border-slate-400 text-slate-900 placeholder-slate-500'} focus:border-blue-600 rounded-none px-1 font-medium`;
       case 'outlined':
       default:
         return `${rounded} ${
-          isDarkMode
-            ? 'bg-zinc-900/60 border border-zinc-700/60 text-white placeholder-zinc-500 focus:bg-zinc-900/90 focus:ring-blue-600 focus:border-blue-600'
-            : 'bg-white/70 border border-slate-300/80 text-zinc-950 placeholder-slate-400 focus:bg-white focus:ring-zinc-900 focus:border-zinc-900'
+          darkTheme
+            ? 'bg-zinc-900/80 border border-zinc-700/80 text-white placeholder-zinc-400 focus:bg-zinc-900/95 focus:ring-blue-500 focus:border-blue-500'
+            : 'bg-white/85 border border-slate-300/90 text-slate-900 placeholder-slate-500 font-medium focus:bg-white focus:ring-slate-900 focus:border-slate-900'
         }`;
     }
   };
@@ -1102,7 +1107,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       case 'blue':
       default:
         return `${rounded} ${
-          isDarkMode
+          darkTheme
             ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg shadow-blue-950/80 hover:shadow-blue-600/30'
             : 'bg-zinc-950 hover:bg-black text-white shadow-lg shadow-zinc-950/30'
         }`;
@@ -1348,12 +1353,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Main Card Container with White Gradient Styling */}
             <div
               className={`${getBlurFilter()} border ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
-                isDarkMode
+                darkTheme
                   ? 'text-zinc-100'
                   : 'text-slate-900'
               }`}
               style={{
-                background: isDarkMode
+                background: darkTheme
                   ? `linear-gradient(145deg, rgba(24, 24, 27, ${Math.min(0.95, (cardOpacity / 100) + 0.15)}) 0%, rgba(9, 9, 11, ${cardOpacity / 100}) 100%)`
                   : `linear-gradient(145deg, rgba(255, 255, 255, ${Math.min(0.98, (cardOpacity / 100) + 0.25)}) 0%, rgba(255, 255, 255, ${Math.min(0.92, (cardOpacity / 100) + 0.15)}) 45%, rgba(248, 250, 252, ${Math.min(0.96, (cardOpacity / 100) + 0.2)}) 100%)`,
                 backdropFilter: cardBlur !== 'none' ? `blur(${cardBlur === 'sm' ? '4px' : cardBlur === 'md' ? '8px' : cardBlur === 'lg' ? '16px' : cardBlur === 'xl' ? '24px' : '32px'})` : 'none',
@@ -1373,7 +1378,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       ) : (
                         <div
                           className={`${getLogoSizeClass()} flex items-center justify-center rounded-2xl border shadow-inner ${
-                            isDarkMode
+                            darkTheme
                               ? 'bg-zinc-900/60 border-zinc-700/50 text-blue-400'
                               : 'bg-white/70 border-slate-200 text-zinc-900'
                           }`}
@@ -1387,16 +1392,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <div>
                     {sekolah.loginCardShowSchoolName !== false && (
                       <h1
-                        className={`text-xs sm:text-sm font-semibold tracking-normal uppercase ${
-                          isDarkMode ? 'text-zinc-400' : 'text-zinc-600'
+                        className={`text-xs sm:text-sm font-bold tracking-normal uppercase ${
+                          darkTheme ? 'text-zinc-300' : 'text-slate-700'
                         }`}
                       >
                         {sekolah.nama || 'SMK NEGERI 6 GARUT'}
                       </h1>
                     )}
                     <p
-                      className={`text-lg sm:text-xl font-black tracking-tight mt-0.5 ${
-                        isDarkMode ? 'text-white' : 'text-black'
+                      className={`text-xl sm:text-2xl font-black tracking-tight mt-0.5 ${
+                        darkTheme ? 'text-white' : 'text-slate-950'
                       }`}
                     >
                       {sekolah.loginCardWelcomeTitle || sekolah.headerSubtitle || 'Sistem Absensi Siswa'}
@@ -1404,7 +1409,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
 
                   {sekolah.loginCardShowAcademicYear !== false && (
-                    <div className={`flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-zinc-400 ${getLogoAlignClass()}`}>
+                    <div className={`flex items-center gap-2 text-xs font-bold ${darkTheme ? 'text-zinc-300' : 'text-slate-700'} ${getLogoAlignClass()}`}>
                       <span>Tahun Ajaran {tahunAjaran}</span>
                       <span className="opacity-40">·</span>
                       <span>Semester {semester}</span>
@@ -1442,8 +1447,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <form onSubmit={handleSubmit} className="space-y-4 pt-1 w-full">
                 <div className="space-y-1.5 text-left">
                   <label
-                    className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
-                      isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
+                    className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider ${
+                      isDarkMode ? 'text-zinc-200' : 'text-slate-900'
                     }`}
                   >
                     Username / NIP / NISN
@@ -1451,7 +1456,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <div className="relative">
                     <div
                       className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                        isDarkMode ? 'text-blue-400' : 'text-zinc-500'
+                        isDarkMode ? 'text-blue-400' : 'text-zinc-600'
                       }`}
                     >
                       <User className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
@@ -1470,8 +1475,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                 <div className="space-y-1.5 text-left">
                   <label
-                    className={`block text-[11px] sm:text-xs font-bold uppercase tracking-wider ${
-                      isDarkMode ? 'text-zinc-300' : 'text-zinc-800'
+                    className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider ${
+                      isDarkMode ? 'text-zinc-200' : 'text-slate-900'
                     }`}
                   >
                     Password
@@ -1479,7 +1484,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <div className="relative">
                     <div
                       className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                        isDarkMode ? 'text-blue-400' : 'text-zinc-500'
+                        isDarkMode ? 'text-blue-400' : 'text-zinc-600'
                       }`}
                     >
                       <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
@@ -1500,7 +1505,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       className={`absolute inset-y-0 right-0 my-auto h-8 w-8 mr-1.5 flex items-center justify-center rounded-lg transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 active:scale-95 ${
                         isDarkMode
                           ? 'text-zinc-400 hover:text-blue-400 hover:bg-zinc-800/70'
-                          : 'text-slate-500 hover:text-zinc-900 hover:bg-slate-100/80'
+                          : 'text-slate-600 hover:text-zinc-950 hover:bg-slate-100'
                       }`}
                     >
                       {showPassword ? (
@@ -1520,17 +1525,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         className={`w-3.5 h-3.5 rounded border-2 transition-colors cursor-pointer accent-blue-600 ${
                           isDarkMode
                             ? 'bg-zinc-900 border-zinc-700'
-                            : 'bg-white border-slate-300'
+                            : 'bg-white border-slate-400'
                         }`}
                       />
-                      <span className={`text-xs font-medium ${isDarkMode ? 'text-zinc-400' : 'text-zinc-600'}`}>Ingat saya</span>
+                      <span className={`text-xs font-bold ${isDarkMode ? 'text-zinc-300' : 'text-slate-800'}`}>Ingat saya</span>
                     </label>
 
                     <button
                       type="button"
                       onClick={() => setIsHelpModalOpen(true)}
-                      className={`text-xs font-semibold hover:underline cursor-pointer transition ${
-                        isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'
+                      className={`text-xs font-bold hover:underline cursor-pointer transition ${
+                        isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-900'
                       }`}
                     >
                       Lupa password?

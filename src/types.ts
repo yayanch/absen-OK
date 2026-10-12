@@ -83,6 +83,7 @@ export interface SekolahConfig {
   loginCardInputRounded?: 'lg' | 'xl' | 'full';
   loginCardButtonAccent?: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate';
   loginCardButtonRounded?: 'lg' | 'xl' | 'full';
+  loginContrastMode?: 'auto' | 'dark' | 'light';
   loginLeftBadgeText?: string;
   loginLeftTitlePrefix?: string;
   loginLeftTitleHighlight?: string;
@@ -322,6 +323,10 @@ export interface Siswa {
   deviceInfo?: string;
   deviceLockedAt?: string;
   isDeviceLocked?: boolean;
+  suratNonAktifBukti?: string; // Base64 image/document proof file of Surat Non-Aktif / Pindah
+  suratNonAktifNomor?: string;
+  suratNonAktifTanggal?: string;
+  suratNonAktifKeterangan?: string;
   roles?: string[];
 }
 
