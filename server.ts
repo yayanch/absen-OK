@@ -4,7 +4,6 @@ dotenv.config();
 import express from "express";
 import path from "path";
 import os from "os";
-import { createServer as createViteServer } from "vite";
 import mysql from "mysql2/promise";
 import fs from "fs";
 import QRCode from "qrcode";
@@ -5794,6 +5793,7 @@ async function startServer() {
     const isProduction = process.env.NODE_ENV === "production";
 
     if (!isProduction) {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",

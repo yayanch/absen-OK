@@ -11,7 +11,21 @@ async function buildServer() {
   console.log('⚡ Mengompilasi backend server.ts...');
 
   try {
-    // 1. Generate dist/server.cjs (CommonJS - rekomendasi PM2 & Node.js)
+    // 1. Generate dist/server.js (ES Module format for package.json "type": "module")
+    await esbuild.build({
+      entryPoints: ['server.ts'],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      outfile: 'dist/server.js',
+      external: ['fsevents', 'vite'],
+      logLevel: 'warning',
+      banner: {
+        js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`,
+      },
+    });
+
+    // 2. Generate dist/server.cjs (CommonJS fallback)
     await esbuild.build({
       entryPoints: ['server.ts'],
       bundle: true,
@@ -22,10 +36,10 @@ async function buildServer() {
       logLevel: 'warning',
     });
 
-    // 2. Juga buat dist/server.js (untuk kompatibilitas bila mencari server.js)
-    fs.copyFileSync('dist/server.cjs', 'dist/server.js');
+    // 3. Copy dist/server.js to root server.js for fallback compatibility
+    fs.copyFileSync('dist/server.js', 'server.js');
 
-    // 3. Re-sync dist to build directory to ensure deployment systems checking either path get full artifacts
+    // 4. Re-sync dist to build directory to ensure deployment systems checking either path get full artifacts
     const buildDir = path.resolve(process.cwd(), 'build');
     if (fs.existsSync(distDir)) {
       if (fs.existsSync(buildDir)) {
