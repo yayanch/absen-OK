@@ -177,7 +177,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
     sekolah.loginCardShadow,
     sekolah.loginCardBorder,
   ]);
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [activeRoleTab, setActiveRoleTab] = useState<'semua' | 'siswa' | 'guru' | 'admin'>('semua');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -886,7 +885,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       setIsLoggingIn(false);
       handleRecordFailedAttempt(uInput, 'unknown');
-      onShowToast('Username / NIP / NISN tidak ditemukan! Silakan periksa kembali atau gunakan tombol Bantuan Akun.', 'error');
+      onShowToast('Username / NIP / NISN tidak ditemukan! Silakan periksa kembali.', 'error');
     }, 350);
   };
 
@@ -1590,16 +1589,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       />
                       <span className={`text-xs font-bold ${isDarkMode ? 'text-zinc-300' : 'text-slate-800'}`}>Ingat saya</span>
                     </label>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsHelpModalOpen(true)}
-                      className={`text-xs font-bold hover:underline cursor-pointer transition ${
-                        isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-900'
-                      }`}
-                    >
-                      Lupa password?
-                    </button>
                   </div>
                 </div>
 
@@ -2238,98 +2227,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
               type="button"
               onClick={() => setShowMaintenanceModal(false)}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-black rounded-2xl text-xs shadow-md transition cursor-pointer"
-            >
-              Saya Mengerti
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* QUICK LOGIN HELP MODAL */}
-      {isHelpModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200 select-text">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full shadow-2xl p-6 sm:p-7 space-y-5 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                  <HelpCircle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white">
-                    Panduan &amp; Bantuan Masuk Akun
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Petunjuk autentikasi presensi {sekolah.nama || 'SMKN 6 Garut'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsHelpModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-                title="Tutup Jendela"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs leading-relaxed">
-              {/* Petunjuk Siswa */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-blue-600 dark:text-blue-400">
-                  <GraduationCap className="w-4 h-4" />
-                  <span>Siswa / Murid</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300">
-                  Gunakan <strong>NISN</strong> resmi Anda (10 digit angka) sebagai username. Password default adalah <strong>NISN</strong> atau <strong>123</strong>.
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-zinc-400 italic">
-                  *Ponsel Anda akan otomatis terkunci ke akun Anda (Kunci 1 HP 1 Siswa) untuk mencegah titip absen.
-                </p>
-              </div>
-
-              {/* Petunjuk Guru */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
-                  <Briefcase className="w-4 h-4" />
-                  <span>Guru &amp; Tenaga Pendidik</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300">
-                  Gunakan <strong>NIP</strong> atau <strong>Username</strong> yang telah didaftarkan oleh sekolah. Password default adalah <strong>123</strong> atau password yang telah ditentukan.
-                </p>
-              </div>
-
-              {/* Petunjuk Piket */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-purple-600 dark:text-purple-400">
-                  <Users className="w-4 h-4" />
-                  <span>Petugas Piket Kelas</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300">
-                  Masukkan nama kelas lengkap sebagai username (contoh: <code>X RPL 1</code> atau <code>XII TKJ 2</code>) dan password default <code>123</code>.
-                </p>
-              </div>
-
-              {/* Petunjuk Admin */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Administrator</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300">
-                  Gunakan akun Administrator resmi sekolah untuk manajemen master data, konfigurasi koneksi MySQL, jadwal, dan mode pemeliharaan.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-[11px] text-amber-800 dark:text-amber-300">
-              💡 <strong>Lupa Password?</strong> Silakan hubungi <strong>Wali Kelas</strong> atau <strong>Operator / Tim IT Presensi Sekolah</strong> untuk melakukan reset password atau pembebasan kunci perangkat.
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsHelpModalOpen(false)}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-blue-600/25 transition cursor-pointer"
             >
               Saya Mengerti
             </button>
