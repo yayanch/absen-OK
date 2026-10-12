@@ -65,6 +65,9 @@ export interface SekolahConfig {
   loginBgFit?: 'cover' | 'contain' | 'tile';
   loginCardOpacity?: number; // 0 - 100 (%)
   loginCardBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  loginCardStyle?: LoginCardStyleOption | string;
+  namaDinas?: string;
+  namaDinasDetail?: string;
   // Pengaturan Kustomisasi Container / Kartu Form Login
   loginCardLayout?: 'center' | 'left' | 'right';
   loginCardMaxWidth?: 'compact' | 'standard' | 'wide' | 'large';

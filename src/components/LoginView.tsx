@@ -122,6 +122,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
   isDarkMode = false,
   onToggleTheme,
 }) => {
+  const sekolah: Partial<SekolahConfig> = appData.sekolah || {};
+  const tahunAjaran = sekolah.tahunAjaran || '2026/2027';
+  const semester = sekolah.semester || 'Ganjil';
+  const logoSrc = sekolah.logo || DEFAULT_TOGA_LOGO;
+  const adminData = appData.admin || {
+    username: 'admin',
+    password: 'admin123',
+    nama: 'Administrator Utama',
+    foto: '',
+  };
+
   // Unified Standard Login States (Admin, Guru, Wali Kelas, Staf, & Siswa)
   const [username, setUsername] = useState(() => {
     try {
@@ -144,7 +155,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSettingUpView, setIsSettingUpView] = useState<boolean>(true);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsSettingUpView(true);
+    const timer = setTimeout(() => {
+      setIsSettingUpView(false);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [
+    sekolah.loginBgType,
+    sekolah.loginBgImage,
+    sekolah.loginCardLayout,
+    sekolah.loginCardMaxWidth,
+    sekolah.loginCardStyle,
+    sekolah.loginContrastMode,
+    sekolah.loginCardOpacity,
+    sekolah.loginBgBlur,
+    sekolah.loginCardRounded,
+    sekolah.loginCardShadow,
+    sekolah.loginCardBorder,
+  ]);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [activeRoleTab, setActiveRoleTab] = useState<'semua' | 'siswa' | 'guru' | 'admin'>('semua');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -172,17 +204,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
     } else {
       document.exitFullscreen().catch(() => {});
     }
-  };
-
-  const sekolah: Partial<SekolahConfig> = appData.sekolah || {};
-  const tahunAjaran = sekolah.tahunAjaran || '2026/2027';
-  const semester = sekolah.semester || 'Ganjil';
-  const logoSrc = sekolah.logo || DEFAULT_TOGA_LOGO;
-  const adminData = appData.admin || {
-    username: 'admin',
-    password: 'admin123',
-    nama: 'Administrator Utama',
-    foto: '',
   };
 
   const [loginFailedAttempts, setLoginFailedAttempts] = useState<{ [username: string]: number }>({});
@@ -1114,6 +1135,45 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
+  if (isSettingUpView) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 text-white p-6 font-sans">
+        <div className="relative flex flex-col items-center justify-center space-y-5 max-w-sm text-center">
+          {/* Glowing Animated Backdrop Halo */}
+          <div className="absolute -inset-10 bg-gradient-to-tr from-blue-600/30 via-indigo-600/30 to-purple-600/30 rounded-full blur-3xl opacity-80 animate-pulse pointer-events-none" />
+
+          {/* School / System Logo Container */}
+          <div className="relative w-20 h-20 rounded-3xl bg-slate-900/90 border border-slate-700/80 p-3 shadow-2xl flex items-center justify-center">
+            {logoSrc ? (
+              <img src={logoSrc} alt="Logo Sekolah" className="w-full h-full object-contain" />
+            ) : (
+              <School className="w-10 h-10 text-blue-400" />
+            )}
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-blue-600 border-2 border-slate-950 flex items-center justify-center shadow-md">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+            </div>
+          </div>
+
+          {/* Title & Status Indicator */}
+          <div className="space-y-1.5 relative z-10">
+            <h2 className="text-lg font-black text-white tracking-tight">
+              {sekolah.nama || 'Sistem Absensi Digital'}
+            </h2>
+            <p className="text-xs text-slate-400 font-medium">
+              Memuat Tampilan Sesuai Pengaturan Sistem...
+            </p>
+          </div>
+
+          {/* Loading Spinner & Status Badge */}
+          <div className="flex items-center gap-2.5 px-4 py-2 bg-slate-900/80 border border-slate-800 rounded-2xl text-xs font-bold text-blue-400 shadow-inner relative z-10">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+            <span className="font-mono text-[11px] tracking-wider uppercase text-slate-300">Menyiapkan Interface...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`h-screen w-full flex flex-col justify-between items-center relative overflow-hidden select-none transition-colors duration-300 ${
@@ -1680,7 +1740,40 @@ export const LoginView: React.FC<LoginViewProps> = ({
               })()}
 
               {/* TAUTAN KUSTOM HALAMAN LOGIN (CUSTOM LINKS - DROPDOWN / INLINE) */}
-              {Array.isArray(sekolah.loginCustomLinks) && sekolah.loginCustomLinks.length > 0 && (() => {
+              {(() => {
+                const effectiveCustomLinks = sekolah.loginCustomLinks !== undefined
+                  ? sekolah.loginCustomLinks
+                  : [
+                      {
+                        id: 'LNK_1',
+                        label: 'Website Sekolah',
+                        description: 'Kunjungi portal website utama SMK Negeri 6 Garut',
+                        url: 'https://smkn6garut.sch.id',
+                        iconName: 'Globe',
+                        openInNewTab: true,
+                      },
+                      {
+                        id: 'LNK_2',
+                        label: 'Pusat Bantuan WhatsApp',
+                        description: 'Layanan konsultasi & kendala teknis presensi',
+                        url: 'https://wa.me/6281234567890',
+                        iconName: 'Phone',
+                        openInNewTab: true,
+                      },
+                      {
+                        id: 'LNK_3',
+                        label: 'Panduan Presensi',
+                        description: 'Petunjuk cara absensi siswa & tata tertib',
+                        url: '#',
+                        iconName: 'BookOpen',
+                        openInNewTab: false,
+                      },
+                    ];
+
+                if (!Array.isArray(effectiveCustomLinks) || effectiveCustomLinks.length === 0) {
+                  return null;
+                }
+
                 const isDropdownMode = (sekolah.loginCustomLinksDisplayMode || 'dropdown') === 'dropdown';
 
                 const renderIcon = (iconName?: string) => {
@@ -1738,7 +1831,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                                 : 'bg-slate-100 text-slate-600'
                             }`}
                           >
-                            {sekolah.loginCustomLinks.length}
+                            {effectiveCustomLinks.length}
                           </span>
                           <ChevronDown
                             className={`w-3.5 h-3.5 transition-transform duration-200 ${
@@ -1781,7 +1874,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                           {/* Dropdown Items List */}
                           <div className="p-1.5 max-h-64 overflow-y-auto space-y-1 divide-y divide-slate-100/50 dark:divide-zinc-800/50">
-                            {sekolah.loginCustomLinks.map((lnk) => {
+                            {effectiveCustomLinks.map((lnk) => {
                               const isExternal =
                                 lnk.url.startsWith('http://') ||
                                 lnk.url.startsWith('https://') ||
@@ -1845,7 +1938,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 return (
                   <div className="pt-2.5 border-t border-slate-200/70 dark:border-zinc-800/70 space-y-1.5">
                     <div className="flex flex-wrap items-center justify-center gap-1.5">
-                      {sekolah.loginCustomLinks.map((lnk) => {
+                      {effectiveCustomLinks.map((lnk) => {
                         const isExternal =
                           lnk.url.startsWith('http://') ||
                           lnk.url.startsWith('https://') ||

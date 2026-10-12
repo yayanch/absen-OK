@@ -244,36 +244,38 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   );
 
   // Custom Links state
+  const defaultCustomLinksList: LoginCustomLink[] = [
+    {
+      id: 'LNK_1',
+      label: 'Website Sekolah',
+      description: 'Kunjungi portal website utama SMK Negeri 6 Garut',
+      url: 'https://smkn6garut.sch.id',
+      iconName: 'Globe',
+      openInNewTab: true,
+    },
+    {
+      id: 'LNK_2',
+      label: 'Pusat Bantuan WhatsApp',
+      description: 'Layanan konsultasi & kendala teknis presensi',
+      url: 'https://wa.me/6281234567890',
+      iconName: 'Phone',
+      openInNewTab: true,
+    },
+    {
+      id: 'LNK_3',
+      label: 'Panduan Presensi',
+      description: 'Petunjuk cara absensi siswa & tata tertib',
+      url: '#',
+      iconName: 'BookOpen',
+      openInNewTab: false,
+    },
+  ];
+
   const [customLinks, setCustomLinks] = useState<LoginCustomLink[]>(() => {
-    if (Array.isArray(sekolah.loginCustomLinks) && sekolah.loginCustomLinks.length > 0) {
+    if (Array.isArray(sekolah.loginCustomLinks)) {
       return JSON.parse(JSON.stringify(sekolah.loginCustomLinks));
     }
-    return [
-      {
-        id: 'LNK_1',
-        label: 'Website Sekolah',
-        description: 'Kunjungi portal website utama SMK Negeri 6 Garut',
-        url: 'https://smkn6garut.sch.id',
-        iconName: 'Globe',
-        openInNewTab: true,
-      },
-      {
-        id: 'LNK_2',
-        label: 'Pusat Bantuan WhatsApp',
-        description: 'Layanan konsultasi & kendala teknis presensi',
-        url: 'https://wa.me/6281234567890',
-        iconName: 'Phone',
-        openInNewTab: true,
-      },
-      {
-        id: 'LNK_3',
-        label: 'Panduan Presensi',
-        description: 'Petunjuk cara absensi siswa & tata tertib',
-        url: '#',
-        iconName: 'BookOpen',
-        openInNewTab: false,
-      },
-    ];
+    return defaultCustomLinksList;
   });
   const [customLinksDisplayMode, setCustomLinksDisplayMode] = useState<'dropdown' | 'inline'>(
     sekolah.loginCustomLinksDisplayMode || 'dropdown'
@@ -618,7 +620,10 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setCardButtonAccent('blue');
       setCardButtonRounded('xl');
 
-      // Reset text
+      // Reset text & custom links
+      setCustomLinks(defaultCustomLinksList);
+      setCustomLinksDisplayMode('dropdown');
+      setCustomLinksTitle('Tautan Cepat & Bantuan');
       setLoginLeftShowPanel(true);
       setLoginLeftBadgeText(`Portal Kehadiran Terpadu ${sekolah.nama || 'SMK Negeri 6 Garut'}`);
       setLoginLeftTitlePrefix('Sistem Presensi');
@@ -660,6 +665,9 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         loginLeftFeature1Subtitle: undefined,
         loginLeftFeature2Title: undefined,
         loginLeftFeature2Subtitle: undefined,
+        loginCustomLinks: defaultCustomLinksList,
+        loginCustomLinksDisplayMode: 'dropdown',
+        loginCustomLinksTitle: 'Tautan Cepat & Bantuan',
       };
 
       const updatedAppData = addAuditLog(

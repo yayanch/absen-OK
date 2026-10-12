@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
-import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, User, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown, FileText } from 'lucide-react';
+import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, CheckCircle2, User, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown, FileText } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppData, Siswa, Kelas, UserSession } from '../../types';
 import { sortKelasList } from '../../data/initialData';
@@ -978,7 +978,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                         reader.onload = (evt) => {
                           const res = evt.target?.result as string;
                           if (file.type.startsWith('image/')) {
-                            compressBase64Image(res, 900, 900, 0.8)
+                            compressBase64Image(res, 900, 0.8, true)
                               .then((comp) => setSuratNonAktifBukti(comp))
                               .catch(() => setSuratNonAktifBukti(res));
                           } else {
@@ -1101,6 +1101,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
       <SuratKeteranganNonAktifModal
         appData={appData}
         initialSiswa={s || null}
+        onUpdateAppData={onUpdateAppData}
         onShowToast={onShowToast}
         onClose={onCloseModal}
       />

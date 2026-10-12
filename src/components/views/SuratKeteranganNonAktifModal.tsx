@@ -25,6 +25,7 @@ import { formatDateIndo, compressBase64Image } from '../../utils/helpers';
 interface SuratKeteranganNonAktifModalProps {
   appData: AppData;
   initialSiswa?: Siswa | null;
+  onUpdateAppData?: (updated: AppData) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onClose: () => void;
 }
@@ -34,6 +35,7 @@ export type JenisSuratNonAktif = 'non_aktif' | 'pindah_sekolah' | 'mengundurkan_
 export const SuratKeteranganNonAktifModal: React.FC<SuratKeteranganNonAktifModalProps> = ({
   appData,
   initialSiswa,
+  onUpdateAppData,
   onShowToast,
   onClose,
 }) => {
@@ -97,6 +99,19 @@ export const SuratKeteranganNonAktifModal: React.FC<SuratKeteranganNonAktifModal
   // QR Verification Data URL
   const [qrUrl, setQrUrl] = useState<string>('');
   const [copiedText, setCopiedText] = useState<boolean>(false);
+
+  const handleSaveBuktiToAppData = (fileRes: string) => {
+    setBuktiSuratFile(fileRes);
+    if (selectedSiswa && onUpdateAppData) {
+      const updatedSiswa = appData.siswa.map((s) =>
+        s.id === selectedSiswa.id ? { ...s, suratNonAktifBukti: fileRes } : s
+      );
+      onUpdateAppData({
+        ...appData,
+        siswa: updatedSiswa,
+      });
+    }
+  };
 
   // Update presets based on type change
   const handleJenisSuratChange = (type: JenisSuratNonAktif) => {
@@ -553,13 +568,13 @@ NIP. ${nipKepalaSekolah}
                         reader.onload = (evt) => {
                           const res = evt.target?.result as string;
                           if (file.type.startsWith('image/')) {
-                            compressBase64Image(res, 900, 900, 0.8)
-                              .then((comp) => setBuktiSuratFile(comp))
-                              .catch(() => setBuktiSuratFile(res));
+                            compressBase64Image(res, 900, 0.8, true)
+                              .then((comp) => handleSaveBuktiToAppData(comp))
+                              .catch(() => handleSaveBuktiToAppData(res));
                           } else {
-                            setBuktiSuratFile(res);
+                            handleSaveBuktiToAppData(res);
                           }
-                          onShowToast('File bukti surat berhasil diunggah!', 'success');
+                          onShowToast('File bukti surat berhasil diunggah & disimpan!', 'success');
                         };
                         reader.readAsDataURL(file);
                       }}
@@ -570,8 +585,8 @@ NIP. ${nipKepalaSekolah}
                   {buktiSuratFile && (
                     <button
                       type="button"
-                      onClick={() => setBuktiSuratFile('')}
-                      className="px-2.5 py-1.5 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-xl text-xs font-bold transition"
+                      onClick={() => handleSaveBuktiToAppData('')}
+                      className="px-2.5 py-1.5 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-xl text-xs font-bold transition cursor-pointer"
                     >
                       Hapus Bukti
                     </button>
