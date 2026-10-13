@@ -480,11 +480,14 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'dashboard',
       'presensi_input',
       'broadcast_wa',
+      'rekap_pengisian_kelas',
       'rekap_harian',
       'rekap_mingguan',
       'rekap_bulanan',
       'rekap_ketidakhadiran_tertinggi',
+      'rekap_siswa',
       'master_siswa',
+      'master_kelas',
       'mapel_kelas_guru',
       'jadwal_mengajar',
       'jadwal_minggu_ini',
@@ -492,6 +495,9 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'catatan_pelanggaran',
       'home_visit',
       'ekstrakurikuler',
+      'absen_qr',
+      'kartu_pelajar',
+      'cetak_kartu_qr',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -499,12 +505,13 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
   {
     roleId: 'guru',
     roleName: 'Guru & Tenaga Pendidik',
-    description: 'Melihat jadwal mengajar pribadi, kelas ajar, dan mencatat pelanggaran siswa',
+    description: 'Melihat jadwal mengajar pribadi, kelas ajar, absensi harian, dan mencatat pelanggaran siswa',
     badgeColor: 'indigo',
     isSystem: true,
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'absen_harian_guru',
       'broadcast_wa',
       'mapel_kelas_guru',
       'jadwal_mengajar',
@@ -512,6 +519,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'jadwal_shift',
       'catatan_pelanggaran',
       'ekstrakurikuler',
+      'absen_qr',
       'live_chat',
       'pengaturan_admin',
     ],
@@ -652,34 +660,7 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
     const norm = normalizeRoleKey(stored.roleId);
     const existing = roleMap.get(norm);
     if (existing) {
-      let allowed = Array.isArray(stored.allowedMenus) ? [...stored.allowedMenus] : existing.allowedMenus;
-      
-      // Enforce: absen_harian_guru is ONLY for kurikulum, piket_guru, piket, and admin
-      const isAllowedAbsenGuru =
-        norm === 'kurikulum' ||
-        norm === 'admin_kurikulum' ||
-        norm === 'piket_guru' ||
-        norm === 'piket' ||
-        norm === 'admin' ||
-        norm === 'superadmin';
-
-      if (!isAllowedAbsenGuru) {
-        allowed = allowed.filter((m) => m !== 'absen_harian_guru');
-      } else if (!allowed.includes('absen_harian_guru')) {
-        const pIdx = allowed.indexOf('presensi_input');
-        if (pIdx !== -1) allowed.splice(pIdx + 1, 0, 'absen_harian_guru');
-        else allowed.push('absen_harian_guru');
-      }
-
-      // Ensure 'ekstrakurikuler' is included for system roles if allowed in default configuration
-      if (existing.allowedMenus.includes('ekstrakurikuler') && !allowed.includes('ekstrakurikuler')) {
-        allowed.push('ekstrakurikuler');
-      }
-
-      // Remove rekap_pengisian_kelas and rekap_harian from piket_guru
-      if (norm === 'piket_guru' || norm === 'piket') {
-        allowed = allowed.filter((m) => m !== 'rekap_pengisian_kelas' && m !== 'rekap_harian');
-      }
+      const allowed = Array.isArray(stored.allowedMenus) ? [...stored.allowedMenus] : existing.allowedMenus;
       roleMap.set(norm, {
         ...existing,
         roleName: stored.roleName || existing.roleName,
@@ -689,18 +670,7 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
       });
     } else {
       // It's a custom role stored in rolePermissions
-      let customAllowed: ViewType[] = Array.isArray(stored.allowedMenus) ? ([...stored.allowedMenus] as ViewType[]) : ['dashboard', 'live_chat'];
-      // Hide absen_harian_guru from custom roles unless explicitly kurikulum/piket_guru
-      const isAllowedAbsenGuru =
-        norm === 'kurikulum' ||
-        norm === 'admin_kurikulum' ||
-        norm === 'piket_guru' ||
-        norm === 'piket' ||
-        norm === 'admin' ||
-        norm === 'superadmin';
-      if (!isAllowedAbsenGuru) {
-        customAllowed = customAllowed.filter((m) => m !== 'absen_harian_guru');
-      }
+      const customAllowed: ViewType[] = Array.isArray(stored.allowedMenus) ? ([...stored.allowedMenus] as ViewType[]) : ['dashboard', 'live_chat'];
 
       roleMap.set(norm, {
         roleId: stored.roleId,
@@ -716,19 +686,9 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
   // Ensure any customRoles in appData.customRoles are registered
   customRoles.forEach((cr) => {
     const norm = normalizeRoleKey(cr.id || cr.name);
-    const isAllowedAbsenGuru =
-      norm === 'kurikulum' ||
-      norm === 'admin_kurikulum' ||
-      norm === 'piket_guru' ||
-      norm === 'piket' ||
-      norm === 'admin' ||
-      norm === 'superadmin';
 
     if (!roleMap.has(norm)) {
-      let customAllowed: ViewType[] = cr.allowedMenus ? ([...cr.allowedMenus] as ViewType[]) : ['dashboard', 'live_chat'];
-      if (!isAllowedAbsenGuru) {
-        customAllowed = customAllowed.filter((m) => m !== 'absen_harian_guru');
-      }
+      const customAllowed: ViewType[] = cr.allowedMenus ? ([...cr.allowedMenus] as ViewType[]) : ['dashboard', 'live_chat'];
 
       roleMap.set(norm, {
         roleId: cr.id || cr.name,
@@ -748,11 +708,7 @@ export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
         current.badgeColor = cr.color;
       }
       if (cr.allowedMenus && !storedPermissions.some((p) => normalizeRoleKey(p.roleId) === norm)) {
-        let customAllowed: ViewType[] = [...cr.allowedMenus] as ViewType[];
-        if (!isAllowedAbsenGuru) {
-          customAllowed = customAllowed.filter((m) => m !== 'absen_harian_guru');
-        }
-        current.allowedMenus = customAllowed;
+        current.allowedMenus = [...cr.allowedMenus] as ViewType[];
       }
     }
   });

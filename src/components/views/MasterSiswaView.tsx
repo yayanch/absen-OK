@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
-import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, CheckCircle2, User, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown, FileText } from 'lucide-react';
+import { Users, Plus, Edit, Trash, Trash2, FileSpreadsheet, Download, Upload, AlertTriangle, Eye, EyeOff, Search, Phone, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, QrCode, Printer, Copy, Check, CheckCircle2, User, UserCheck, UserX, MapPin, Calendar, Lock, GraduationCap, Camera, LayoutGrid, List, Settings, ChevronDown, FileText } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AppData, Siswa, Kelas, UserSession } from '../../types';
 import { sortKelasList } from '../../data/initialData';
@@ -339,15 +339,21 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     }
   }
   if (filterKelasId) {
-    filteredSiswa = filteredSiswa.filter((s) => s.kelasId === filterKelasId);
+    if (filterKelasId === 'tanpa_kelas') {
+      filteredSiswa = filteredSiswa.filter(
+        (s) => !s.kelasId || !appData.kelas.some((k) => k.id === s.kelasId)
+      );
+    } else {
+      filteredSiswa = filteredSiswa.filter((s) => s.kelasId === filterKelasId);
+    }
   }
   if (filterStatus === 'aktif') {
     filteredSiswa = filteredSiswa.filter(
-      (s) => s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif' && s.kelasId && appData.kelas.some((k) => k.id === s.kelasId)
+      (s) => s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif'
     );
   } else if (filterStatus === 'tidak_aktif') {
     filteredSiswa = filteredSiswa.filter(
-      (s) => s.status === 'tidak_aktif' || (s as any).status === 'nonaktif' || !s.kelasId || !appData.kelas.some((k) => k.id === s.kelasId)
+      (s) => s.status === 'tidak_aktif' || (s as any).status === 'nonaktif'
     );
   }
   if (searchTerm) {
@@ -500,6 +506,152 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     onCloseModal();
   };
 
+  const executeAktifkanSiswa = (siswa: Siswa, targetKelasId: string) => {
+    const updatedSiswaObj: Siswa = {
+      ...siswa,
+      status: 'aktif',
+      kelasId: targetKelasId,
+    };
+
+    const newSiswaList = appData.siswa.map((item) =>
+      item.id === siswa.id ? updatedSiswaObj : item
+    );
+
+    const nextAppData: AppData = addAuditLog(
+      {
+        ...appData,
+        siswa: newSiswaList,
+      },
+      'Mengaktifkan kembali siswa',
+      `Mengaktifkan kembali siswa: ${siswa.nama} (NISN: ${siswa.nisn || '-'}) ke status Aktif`
+    );
+
+    onUpdateAppData(nextAppData);
+
+    // Sync to server and database immediately
+    syncSiswaProfileToServer(updatedSiswaObj).catch((err) => {
+      console.warn('Sync siswa aktif error:', err);
+    });
+
+    onShowToast(`Siswa "${siswa.nama}" berhasil diaktifkan kembali!`, 'success');
+  };
+
+  const handleAktifkanKembaliSiswa = (siswa: Siswa) => {
+    const matchedKelas = appData.kelas.find((k) => k.id === siswa.kelasId);
+
+    // If student already has a valid class assigned
+    if (matchedKelas) {
+      onConfirmModal(
+        'Aktifkan Kembali Siswa',
+        `Apakah Anda yakin ingin mengaktifkan kembali status siswa "${siswa.nama}" (NISN: ${siswa.nisn || '-'}) ke Kelas ${matchedKelas.nama}? Siswa akan kembali aktif di sistem presensi, daftar kehadiran, kartu QR, dan rekap akademik.`,
+        'emerald',
+        () => {
+          executeAktifkanSiswa(siswa, matchedKelas.id);
+        }
+      );
+      return;
+    }
+
+    // If student has no class or class not found, open a quick modal to select class
+    const SelectClassModalContent = () => {
+      const [chosenKelasId, setChosenKelasId] = useState<string>(
+        (isWali ? waliClasses[0]?.id : appData.kelas[0]?.id) || ''
+      );
+
+      return (
+        <div className="space-y-4 p-2 text-left">
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-slate-800 dark:text-slate-100">
+                Aktivasi Kembali: {siswa.nama}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                NISN: {siswa.nisn || '-'} • Silakan tentukan penempatan kelas untuk mengaktifkan kembali siswa ini.
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+              Pilih Kelas Penempatan
+            </label>
+            <select
+              value={chosenKelasId}
+              onChange={(e) => setChosenKelasId(e.target.value)}
+              className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500"
+            >
+              {(isWali ? waliClasses : appData.kelas).map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.nama}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={onCloseModal}
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!chosenKelasId) {
+                  onShowToast('Pilih kelas penempatan terlebih dahulu!', 'warning');
+                  return;
+                }
+                onCloseModal();
+                executeAktifkanSiswa(siswa, chosenKelasId);
+              }}
+              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>Aktifkan Siswa Sekarang</span>
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    onOpenModal('Aktifkan Kembali Siswa - Penempatan Kelas', <SelectClassModalContent />);
+  };
+
+  const handleNonAktifkanSiswa = (siswa: Siswa) => {
+    onConfirmModal(
+      'Non-Aktifkan Siswa',
+      `Apakah Anda yakin ingin mengubah status siswa "${siswa.nama}" (NISN: ${siswa.nisn || '-'}) menjadi Tidak Aktif / Lulus / Pindah? Siswa tidak akan muncul di presensi harian, namun riwayat kehadiran tetap tersimpan aman.`,
+      'warning',
+      () => {
+        const updatedSiswaObj: Siswa = {
+          ...siswa,
+          status: 'tidak_aktif',
+        };
+        const newSiswaList = appData.siswa.map((item) =>
+          item.id === siswa.id ? updatedSiswaObj : item
+        );
+        const nextAppData: AppData = addAuditLog(
+          {
+            ...appData,
+            siswa: newSiswaList,
+          },
+          'Menonaktifkan siswa',
+          `Mengubah status siswa: ${siswa.nama} (NISN: ${siswa.nisn || '-'}) menjadi Tidak Aktif`
+        );
+        onUpdateAppData(nextAppData);
+        syncSiswaProfileToServer(updatedSiswaObj).catch((err) => {
+          console.warn('Sync siswa nonaktif error:', err);
+        });
+        onShowToast(`Status siswa "${siswa.nama}" diubah menjadi Tidak Aktif.`, 'info');
+      }
+    );
+  };
+
   const openDetailSiswaModal = (s: Siswa) => {
     const k = appData.kelas.find((item) => item.id === s.kelasId);
     const kelasNama = k ? k.nama : '-';
@@ -536,13 +688,24 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               >
                 {s.gender === 'L' ? 'Laki-Laki (L)' : 'Perempuan (P)'}
               </span>
-              <span
-                className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${
-                  s.status === 'tidak_aktif' ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                }`}
-              >
-                {s.status === 'tidak_aktif' ? 'Tidak Aktif / Lulus' : 'Aktif'}
-              </span>
+              {s.status === 'tidak_aktif' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCloseModal();
+                    setTimeout(() => handleAktifkanKembaliSiswa(s), 100);
+                  }}
+                  className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-xs"
+                  title="Klik untuk mengaktifkan kembali siswa ini"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Aktifkan Kembali</span>
+                </button>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full font-bold text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  Aktif
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -665,6 +828,19 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
           >
             Tutup
           </button>
+          {s.status === 'tidak_aktif' && canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                onCloseModal();
+                setTimeout(() => handleAktifkanKembaliSiswa(s), 100);
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Aktifkan Kembali Siswa</span>
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -2044,6 +2220,8 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             {!isWali && <option value="">-- Semua Kelas ({appData.siswa.filter(s => s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif').length} Siswa Aktif) --</option>}
+            {isWali && <option value="">-- Semua Kelas Binaan --</option>}
+            <option value="tanpa_kelas">-- Siswa Tanpa Kelas ({appData.siswa.filter(s => !s.kelasId || !appData.kelas.some(k => k.id === s.kelasId)).length}) --</option>
             {waliClasses.map((k) => {
               const count = appData.siswa.filter((s) => s.kelasId === k.id && s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif').length;
               return (
@@ -2052,7 +2230,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                 </option>
               );
             })}
-            {filterKelasId && !waliClasses.some((k) => k.id === filterKelasId) && (() => {
+            {filterKelasId && filterKelasId !== 'tanpa_kelas' && !waliClasses.some((k) => k.id === filterKelasId) && (() => {
               const extraK = appData.kelas.find((k) => k.id === filterKelasId);
               if (!extraK) return null;
               const count = appData.siswa.filter((s) => s.kelasId === extraK.id && s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif').length;
@@ -2075,9 +2253,9 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             }}
             className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="semua">Semua Status</option>
-            <option value="aktif">Aktif</option>
-            <option value="tidak_aktif">Tidak Aktif</option>
+            <option value="semua">Semua Status ({appData.siswa.length})</option>
+            <option value="aktif">Aktif ({appData.siswa.filter(s => s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif').length})</option>
+            <option value="tidak_aktif">Tidak Aktif / Lulus / Pindah ({appData.siswa.filter(s => s.status === 'tidak_aktif' || (s as any).status === 'nonaktif').length})</option>
           </select>
         </div>
 
@@ -2138,20 +2316,41 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="text-xs font-black">Layanan Penerbitan Surat Keterangan Siswa Non-Aktif</h4>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                Cetak berkas Surat Keterangan Non-Aktif, Pindah Sekolah/Mutasi, Mengundurkan Diri, atau Kelulusan ber-Kop Surat Resmi.
+              <h4 className="text-xs font-black flex items-center gap-2">
+                <span>Daftar Siswa Tidak Aktif / Lulus / Pindah</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
+                  {filteredSiswa.length} Siswa Terfilter
+                </span>
+              </h4>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                Gunakan tombol <span className="font-bold text-emerald-600 dark:text-emerald-400">"Aktifkan"</span> pada baris siswa untuk mengembalikannya menjadi siswa aktif. Cetak surat keterangan kelulusan atau mutasi bila dibutuhkan.
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => handleOpenSuratNonAktifModal()}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0 cursor-pointer"
-          >
-            <FileText className="w-4 h-4" />
-            <span>Buat Surat Keterangan Non-Aktif</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {filterKelasId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterKelasId('');
+                  setCurrentPage(1);
+                  onShowToast('Menampilkan seluruh siswa tidak aktif dari semua kelas', 'info');
+                }}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                title="Tampilkan seluruh siswa tidak aktif tanpa dibatasi kelas yang dipilih"
+              >
+                <span>Semua Kelas ({appData.siswa.filter(s => s.status === 'tidak_aktif' || (s as any).status === 'nonaktif').length})</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleOpenSuratNonAktifModal()}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Surat Keterangan Non-Aktif</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -2316,6 +2515,28 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                       <div>
                         <div className="font-bold">Cetak Surat Ket. Non-Aktif</div>
                         <div className="text-[10px] text-slate-400 group-hover:text-amber-600/70">Surat Keterangan, Mutasi & Pengunduran Diri</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettingsMenu(false);
+                        setFilterStatus('tidak_aktif');
+                        setFilterKelasId('');
+                        setCurrentPage(1);
+                        onShowToast('Menampilkan seluruh data siswa tidak aktif.', 'info');
+                      }}
+                      className="w-full px-3 py-2 text-left rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 hover:text-rose-700 dark:hover:text-rose-300 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
+                    >
+                      <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 group-hover:bg-rose-600 group-hover:text-white transition shrink-0">
+                        <UserCheck className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="font-bold">Kelola Siswa Non-Aktif</div>
+                        <div className="text-[10px] text-slate-400 group-hover:text-rose-600/70">
+                          Lihat & aktifkan kembali siswa ({appData.siswa.filter(s => s.status === 'tidak_aktif' || (s as any).status === 'nonaktif').length} Siswa)
+                        </div>
                       </div>
                     </button>
 
@@ -2526,11 +2747,17 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                         <span className="inline-flex items-center px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg border border-indigo-100 dark:border-indigo-800 text-xs">
                           Kelas {k ? k.nama : '-'}
                         </span>
-                        {s.status === 'tidak_aktif' && (
-                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-lg text-[10px] border border-slate-200">
-                            Non-Aktif
-                          </span>
-                        )}
+                        {s.status === 'tidak_aktif' ? (
+                          <button
+                            type="button"
+                            onClick={() => canEdit && handleAktifkanKembaliSiswa(s)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-50 hover:bg-emerald-50 dark:bg-rose-950/60 dark:hover:bg-emerald-950/60 text-rose-700 hover:text-emerald-700 dark:text-rose-300 dark:hover:text-emerald-300 font-bold rounded-lg text-[10px] border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                            title={canEdit ? 'Klik untuk mengaktifkan kembali siswa ini' : 'Status Siswa: Non-Aktif'}
+                          >
+                            <UserX className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <span>Non-Aktif {canEdit ? '(Klik Aktifkan)' : ''}</span>
+                          </button>
+                        ) : null}
                         {s.suratNonAktifBukti && (
                           <button
                             type="button"
@@ -2550,6 +2777,17 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                       {showFullActions ? (
                         <>
                           <div className="flex items-center gap-1.5">
+                            {s.status === 'tidak_aktif' && canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleAktifkanKembaliSiswa(s)}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-xs"
+                                title="Aktifkan Kembali Siswa Ini"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>Aktifkan</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => openDetailSiswaModal(s)}
@@ -2690,9 +2928,15 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                           )}
                           <span className="text-sm font-semibold">{s.nama}</span>
                           {s.status === 'tidak_aktif' && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                              Non-Aktif
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => canEdit && handleAktifkanKembaliSiswa(s)}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 hover:bg-emerald-50 text-rose-700 hover:text-emerald-700 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                              title={canEdit ? 'Klik untuk mengaktifkan kembali siswa ini' : 'Non-Aktif'}
+                            >
+                              <UserX className="w-3 h-3 text-rose-600" />
+                              <span>Non-Aktif {canEdit ? '(Aktifkan)' : ''}</span>
+                            </button>
                           )}
                           {s.suratNonAktifBukti && (
                             <button
@@ -2715,6 +2959,17 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                       <td className="p-4 text-center">
                         {showFullActions ? (
                           <div className="flex items-center justify-center gap-1.5">
+                            {s.status === 'tidak_aktif' && canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleAktifkanKembaliSiswa(s)}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                                title="Aktifkan Kembali Siswa Ini"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>Aktifkan</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => openDetailSiswaModal(s)}

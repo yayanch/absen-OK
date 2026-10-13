@@ -17,10 +17,12 @@ import {
   RefreshCw,
   Search,
   ChevronDown,
-  Upload
+  Upload,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { AppData, Siswa, SekolahConfig } from '../../types';
-import { formatDateIndo, compressBase64Image } from '../../utils/helpers';
+import { formatDateIndo, compressBase64Image, syncSiswaProfileToServer } from '../../utils/helpers';
 
 interface SuratKeteranganNonAktifModalProps {
   appData: AppData;
@@ -446,6 +448,59 @@ NIP. ${nipKepalaSekolah}
               })}
             </select>
           </div>
+
+          {selectedSiswa && onUpdateAppData && (
+            <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                Status saat ini:{' '}
+                <strong className={selectedSiswa.status === 'tidak_aktif' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                  {selectedSiswa.status === 'tidak_aktif' ? 'Non-Aktif' : 'Aktif'}
+                </strong>
+              </span>
+
+              {selectedSiswa.status === 'tidak_aktif' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updatedSiswaList = appData.siswa.map((s) =>
+                      s.id === selectedSiswa.id ? { ...s, status: 'aktif' as const } : s
+                    );
+                    onUpdateAppData({
+                      ...appData,
+                      siswa: updatedSiswaList,
+                    });
+                    syncSiswaProfileToServer({ ...selectedSiswa, status: 'aktif' }).catch(console.warn);
+                    onShowToast(`Siswa "${selectedSiswa.nama}" berhasil diaktifkan kembali!`, 'success');
+                  }}
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                  title="Aktifkan Kembali Siswa Ini"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Aktifkan Kembali</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updatedSiswaList = appData.siswa.map((s) =>
+                      s.id === selectedSiswa.id ? { ...s, status: 'tidak_aktif' as const } : s
+                    );
+                    onUpdateAppData({
+                      ...appData,
+                      siswa: updatedSiswaList,
+                    });
+                    syncSiswaProfileToServer({ ...selectedSiswa, status: 'tidak_aktif' }).catch(console.warn);
+                    onShowToast(`Status siswa "${selectedSiswa.nama}" diubah menjadi Non-Aktif.`, 'info');
+                  }}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                  title="Tandai Siswa Ini Sebagai Non-Aktif"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Tandai Non-Aktif</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

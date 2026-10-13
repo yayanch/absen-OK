@@ -80,7 +80,7 @@ const WhatsAppGatewayView = React.lazy(() => import('./components/views/WhatsApp
 
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';
-import { hasMenuAccess } from './utils/rolePermissionEngine';
+import { hasMenuAccess, getEffectiveUserRoles, ALL_MENU_ITEMS } from './utils/rolePermissionEngine';
 import { getAccessToken, uploadBackupToGoogleDrive } from './services/googleDriveService';
 
 export default function App() {
@@ -161,14 +161,21 @@ export default function App() {
     };
   }, []);
 
-  // Keep currentUser in sync with the latest AppData (e.g. photo deletion/update, profile change)
+  // Keep currentUser and roles in sync with the latest AppData (e.g. role update, photo, profile change)
   useEffect(() => {
     if (!currentUser || !currentUser.data) return;
     const currentData = currentUser.data as any;
 
     let updatedData: any = null;
+    let nextRole = currentUser.role;
+    let nextRoles = currentUser.roles;
+
     if (currentUser.role === 'admin') {
-      if (appData.admin && (appData.admin.foto !== currentData.foto || appData.admin.nama !== currentData.nama)) {
+      if (appData.admin && (
+        appData.admin.foto !== currentData.foto ||
+        appData.admin.nama !== currentData.nama ||
+        appData.admin.username !== currentData.username
+      )) {
         updatedData = { ...currentData, ...appData.admin };
       }
     } else if (currentUser.role === 'murid' || currentUser.role === 'siswa') {
@@ -177,26 +184,60 @@ export default function App() {
         (currentData.nisn && s.nisn === currentData.nisn) ||
         (currentData.username && s.username === currentData.username)
       );
-      if (match && (match.foto !== currentData.foto || match.nama !== currentData.nama)) {
+      if (match && (
+        match.foto !== currentData.foto ||
+        match.nama !== currentData.nama ||
+        match.kelasId !== currentData.kelasId ||
+        match.status !== currentData.status
+      )) {
         updatedData = { ...currentData, ...match };
       }
     } else {
-      const match = (appData.waliKelas || []).find((w) => 
+      const matchWali = (appData.waliKelas || []).find((w) => 
         (currentData.id && w.id === currentData.id) ||
         (currentData.username && String(w.username).toLowerCase() === String(currentData.username).toLowerCase()) ||
         (currentData.nip && String(w.nip).toLowerCase() === String(currentData.nip).toLowerCase())
       );
-      if (match && (match.foto !== currentData.foto || match.nama !== currentData.nama)) {
-        updatedData = { ...currentData, ...match };
+      if (matchWali) {
+        const roleChanged = matchWali.role && matchWali.role !== currentUser.role;
+        const rolesChanged = JSON.stringify(matchWali.roles || []) !== JSON.stringify(currentUser.roles || []);
+        const dataChanged = matchWali.foto !== currentData.foto || matchWali.nama !== currentData.nama;
+        if (roleChanged || rolesChanged || dataChanged) {
+          updatedData = { ...currentData, ...matchWali };
+          if (matchWali.role) nextRole = matchWali.role as any;
+          if (matchWali.roles) nextRoles = matchWali.roles;
+        }
       }
     }
 
-    if (updatedData) {
-      const nextSession: UserSession = { ...currentUser, data: updatedData };
+    if (updatedData || nextRole !== currentUser.role || nextRoles !== currentUser.roles) {
+      const nextSession: UserSession = {
+        ...currentUser,
+        role: nextRole,
+        roles: nextRoles,
+        data: updatedData || currentUser.data
+      };
       setCurrentUser(nextSession);
       saveSessionUser(nextSession);
     }
-  }, [appData.admin, appData.siswa, appData.waliKelas]);
+  }, [appData.admin, appData.siswa, appData.waliKelas, appData.kesiswaan, appData.stafJadwal, appData.userBiasa]);
+
+  // Keep currentView within authorized menus for active user role
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'admin') return;
+    const effectiveRoles = getEffectiveUserRoles(currentUser, appData);
+    if (!hasMenuAccess(effectiveRoles, currentView, appData)) {
+      const fallbackView: ViewType = effectiveRoles.includes('murid') ? 'portal_murid' : 'dashboard';
+      if (hasMenuAccess(effectiveRoles, fallbackView, appData)) {
+        setCurrentView(fallbackView);
+      } else {
+        const firstAllowed = ALL_MENU_ITEMS.find((item) => hasMenuAccess(effectiveRoles, item.id, appData));
+        if (firstAllowed) {
+          setCurrentView(firstAllowed.id);
+        }
+      }
+    }
+  }, [currentUser, appData, currentView]);
 
   const [isServerQrModalOpen, setIsServerQrModalOpen] = useState<boolean>(false);
   const [isLiveChatOpen, setIsLiveChatOpen] = useState<boolean>(false);
@@ -1048,7 +1089,15 @@ export default function App() {
   const handleLogin = (session: UserSession, rememberMe: boolean = true) => {
     setCurrentUser(session);
     saveSessionUser(session, rememberMe);
-    handleNavigate('dashboard', true);
+    const effectiveRoles = getEffectiveUserRoles(session, appData);
+    if (effectiveRoles.includes('murid') || session.role === 'murid' || session.role === 'siswa') {
+      handleNavigate('portal_murid', true);
+    } else if (hasMenuAccess(effectiveRoles, 'dashboard', appData)) {
+      handleNavigate('dashboard', true);
+    } else {
+      const firstAllowed = ALL_MENU_ITEMS.find((item) => hasMenuAccess(effectiveRoles, item.id, appData));
+      handleNavigate(firstAllowed ? firstAllowed.id : 'dashboard', true);
+    }
   };
 
   const handleLogout = () => {
@@ -1247,10 +1296,7 @@ export default function App() {
   const isStudentRole = currentUser.role === 'murid' || currentUser.role === 'siswa';
   const isStudentPortal = isStudentRole || currentView === 'portal_murid' || currentView === 'absen_qr' || currentView === 'kartu_pelajar' || currentView === 'rekap_siswa';
 
-  const userEffectiveRoles = [
-    currentUser.role,
-    ...((currentUser.data as any)?.additionalRoles || [])
-  ].filter(Boolean);
+  const userEffectiveRoles = getEffectiveUserRoles(currentUser, appData);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors relative">
@@ -1457,25 +1503,18 @@ export default function App() {
               />
             )}
 
-            {currentView === 'absen_harian_guru' &&
-              (currentUser.role === 'kurikulum' ||
-                currentUser.role === 'admin_kurikulum' ||
-                currentUser.role === 'piket_guru' ||
-                currentUser.role === 'piket' ||
-                currentUser.role === 'admin' ||
-                currentUser.role === 'superadmin' ||
-                isMenuAllowed(currentUser.role, 'absen_harian_guru', appData)) && (
+            {currentView === 'absen_harian_guru' && (
               <AbsenHarianGuruTab
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={false}
+                readOnly={!userEffectiveRoles.includes('admin') && !userEffectiveRoles.includes('kurikulum') && !userEffectiveRoles.includes('piket_guru')}
                 onUpdateAppData={handleUpdateAppData}
                 onShowToast={showToast}
                 onBackToTable={() => handleNavigate('jadwal_mengajar')}
               />
             )}
 
-            {currentView === 'home_visit' && currentUser.role !== 'kurikulum' && (
+            {currentView === 'home_visit' && (
               <HomeVisitView
                 appData={appData}
                 currentUser={currentUser}
@@ -1485,7 +1524,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'catatan_pelanggaran' && currentUser.role !== 'kurikulum' && (
+            {currentView === 'catatan_pelanggaran' && (
               <PelanggaranView
                 appData={appData}
                 currentUser={currentUser}
@@ -1530,19 +1569,19 @@ export default function App() {
               />
             )}
 
-            {currentView === 'rekap_harian' && currentUser.role !== 'kurikulum' && (
+            {currentView === 'rekap_harian' && (
               <RekapHarianView appData={appData} currentUser={currentUser} />
             )}
 
-            {currentView === 'rekap_mingguan' && currentUser.role !== 'kurikulum' && (
+            {currentView === 'rekap_mingguan' && (
               <RekapMingguanView appData={appData} currentUser={currentUser} />
             )}
 
-            {currentView === 'rekap_bulanan' && currentUser.role !== 'kurikulum' && (
+            {currentView === 'rekap_bulanan' && (
               <RekapBulananView appData={appData} currentUser={currentUser} />
             )}
 
-            {currentView === 'rekap_ketidakhadiran_tertinggi' && currentUser.role !== 'kurikulum' && (
+            {currentView === 'rekap_ketidakhadiran_tertinggi' && (
               <RekapKetidakhadiranTertinggiView
                 appData={appData}
                 currentUser={currentUser}
@@ -1551,10 +1590,10 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_jurusan' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'master_jurusan' && (
               <MasterJurusanView
                 appData={appData}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
@@ -1563,11 +1602,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_guru' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'master_guru' && (
               <MasterGuruView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 initialSearchQuery={selectedMasterGuruQuery}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
@@ -1577,11 +1616,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_mapel' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'master_mapel' && (
               <MasterMataPelajaranView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin' && currentUser.role !== 'kurikulum'}
+                readOnly={!userEffectiveRoles.includes('admin') && !userEffectiveRoles.includes('kurikulum')}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
@@ -1590,7 +1629,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'mapel_kelas_guru' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'mapel_kelas_guru' && (
               <GuruMapelKelasView
                 appData={appData}
                 currentUser={currentUser}
@@ -1608,7 +1647,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'jadwal_mengajar' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'jadwal_mengajar' && (
               <JadwalMengajarView
                 appData={appData}
                 currentUser={currentUser}
@@ -1622,7 +1661,7 @@ export default function App() {
               />
             )}
 
-            {currentView === 'jadwal_minggu_ini' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'jadwal_minggu_ini' && (
               <JadwalMengajarMingguIniView
                 appData={appData}
                 currentUser={currentUser}
@@ -1635,11 +1674,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_user' && (currentUser.role === 'admin') && (
+            {currentView === 'master_user' && (
               <MasterUserView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
                 onCloseModal={closeGeneralModal}
@@ -1649,11 +1688,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'pengaturan_role' && (currentUser.role === 'admin' || hasMenuAccess(currentUser.role, 'pengaturan_role', appData)) && (
+            {currentView === 'pengaturan_role' && (
               <PengaturanRoleView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
@@ -1661,11 +1700,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'pengaturan_menu' && (currentUser.role === 'admin' || hasMenuAccess(currentUser.role, 'pengaturan_menu', appData)) && (
+            {currentView === 'pengaturan_menu' && (
               <PengaturanMenuView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
@@ -1673,11 +1712,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_kelas' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'master_kelas' && (
               <MasterKelasView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 initialSearchQuery={selectedMasterKelasQuery}
                 onUpdateAppData={handleUpdateAppData}
                 onOpenModal={openGeneralModal}
@@ -1687,11 +1726,11 @@ export default function App() {
               />
             )}
 
-            {currentView === 'master_siswa' && (currentUser.role === 'admin' || currentUser.role === 'kesiswaan' || currentUser.role === 'user' || currentUser.role === 'guru' || currentUser.role === 'kurikulum' || currentUser.role === 'hubin' || currentUser.role === 'wali' || currentUser.role === 'staf_jadwal') && (
+            {currentView === 'master_siswa' && (
               <MasterSiswaView
                 appData={appData}
                 currentUser={currentUser}
-                readOnly={currentUser.role !== 'admin' && currentUser.role !== 'wali'}
+                readOnly={!userEffectiveRoles.includes('admin') && !userEffectiveRoles.includes('wali')}
                 initialSearchQuery={selectedMasterSiswaQuery}
                 initialKelasId={selectedInputKelasId}
                 onUpdateAppData={handleUpdateAppData}
@@ -1706,7 +1745,7 @@ export default function App() {
             {currentView === 'hari_libur' && (
               <HariLiburView
                 appData={appData}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
                 onShowToast={showToast}
                 onConfirmModal={openConfirmModal}
@@ -1726,7 +1765,7 @@ export default function App() {
             {currentView === 'pengaturan_sekolah' && (
               <PengaturanSekolahView
                 appData={appData}
-                readOnly={currentUser.role !== 'admin'}
+                readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
@@ -1734,24 +1773,12 @@ export default function App() {
             )}
 
             {currentView === 'pengaturan_tema' && (
-              currentUser.role === 'admin' ? (
-                <PengaturanTemaView
-                  appData={appData}
-                  readOnly={false}
-                  onUpdateAppData={handleUpdateAppData}
-                  onShowToast={showToast}
-                />
-              ) : (
-                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md mx-auto my-12 shadow-xl">
-                  <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 font-black">
-                    <ShieldAlert className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Akses Terbatas</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                    Menu Tema &amp; Tampilan hanya dapat diakses dan diatur oleh Administrator Utama.
-                  </p>
-                </div>
-              )
+              <PengaturanTemaView
+                appData={appData}
+                readOnly={!userEffectiveRoles.includes('admin')}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+              />
             )}
 
             {currentView === 'data_demo' && (

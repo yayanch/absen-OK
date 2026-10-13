@@ -51,7 +51,8 @@ import {
   compressBase64Image,
   validateAttendanceBatch,
   deduplicateAttendanceRecords,
-  isValidPresensiStatus
+  isValidPresensiStatus,
+  syncSiswaProfileToServer
 } from '../../utils/helpers';
 import { DatePickerWithStatus } from '../DatePickerWithStatus';
 import { StudentAttendanceRow } from './StudentAttendanceRow';
@@ -1500,6 +1501,12 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
       siswa: updatedSiswa,
     };
     onSavePresensi(nextAppData);
+
+    const savedTarget = updatedSiswa.find((s) => s.id === (editingStudentId || ''));
+    if (savedTarget) {
+      syncSiswaProfileToServer(savedTarget).catch(console.warn);
+    }
+
     setIsStudentModalOpen(false);
   };
 
@@ -2471,9 +2478,28 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                         )}
                       </td>
                       <td className="p-3.5">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${s.status === 'tidak_aktif' ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'}`}>
-                          {s.status === 'tidak_aktif' ? 'Tidak Aktif' : 'Aktif'}
-                        </span>
+                        {s.status === 'tidak_aktif' ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updatedSiswa = appData.siswa.map((item) =>
+                                item.id === s.id ? { ...item, status: 'aktif' as const } : item
+                              );
+                              const nextData = { ...appData, siswa: updatedSiswa };
+                              onSavePresensi(nextData);
+                              syncSiswaProfileToServer({ ...s, status: 'aktif' }).catch(console.warn);
+                              onShowToast(`Siswa "${s.nama}" berhasil diaktifkan kembali!`, 'success');
+                            }}
+                            className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 hover:bg-emerald-50 text-rose-700 hover:text-emerald-700 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:text-emerald-300 transition cursor-pointer"
+                            title="Klik untuk mengaktifkan kembali siswa ini"
+                          >
+                            Tidak Aktif (Aktifkan)
+                          </button>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                            Aktif
+                          </span>
+                        )}
                       </td>
                       {canManageSiswa && (
                         <td className="p-3.5 text-right">

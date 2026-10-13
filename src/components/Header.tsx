@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData, Siswa, Kelas, WaliKelas, SiswaPresensiItem } from '../types';
 import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString } from '../utils/helpers';
-import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess } from '../utils/rolePermissionEngine';
+import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
 import { renderNavIcon } from '../utils/navigationLayoutEngine';
 
 interface HeaderProps {
@@ -441,12 +441,8 @@ export const Header: React.FC<HeaderProps> = ({
   }, [appData?.kelas, authorizedClassIds]);
 
   const userEffectiveRoles = useMemo(() => {
-    if (!currentUser) return [];
-    if (Array.isArray(currentUser.roles) && currentUser.roles.length > 0) {
-      return currentUser.roles;
-    }
-    return [currentUser.role || 'guest'];
-  }, [currentUser]);
+    return getEffectiveUserRoles(currentUser, appData);
+  }, [currentUser, appData]);
 
   const { matchedMenu, matchedSiswa, matchedKelas, matchedGuru, totalResultCount } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

@@ -22,6 +22,7 @@ import { WaliKelasDashboardView } from '../dashboard/WaliKelasDashboardView';
 import { GuruDashboardView } from '../dashboard/GuruDashboardView';
 import { KurikulumDashboardView } from '../dashboard/KurikulumDashboardView';
 import { StafJadwalDashboardView } from '../dashboard/StafJadwalDashboardView';
+import { getEffectiveUserRoles } from '../../utils/rolePermissionEngine';
 
 interface DashboardViewProps {
   appData: AppData;
@@ -123,20 +124,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayStr = getTodayString();
   const sortedKelas = sortKelasList(appData.kelas);
 
+  const effectiveRoles = React.useMemo(() => getEffectiveUserRoles(currentUser, appData), [currentUser, appData]);
+  const isWaliRole = effectiveRoles.includes('wali') || Boolean((currentUser.data as any)?.id && appData?.kelas?.some((k) => k.waliKelasId === (currentUser.data as any)?.id));
+  const isPiketKelasRole = effectiveRoles.includes('piket_kelas');
+
   const userScope = React.useMemo(() => {
-    if (currentUser.role === 'wali') {
+    if (isWaliRole) {
       return { waliKelasId: (currentUser.data as any)?.id };
     }
-    if (currentUser.role === 'piket_kelas') {
+    if (isPiketKelasRole) {
       return { kelasId: (currentUser.data as any)?.kelasId };
     }
     return undefined;
-  }, [currentUser]);
+  }, [currentUser, isWaliRole, isPiketKelasRole]);
 
   let targetClasses = sortedKelas;
-  if (currentUser.role === 'wali') {
+  if (isWaliRole) {
     targetClasses = sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any)?.id);
-  } else if (currentUser.role === 'piket_kelas') {
+  } else if (isPiketKelasRole) {
     targetClasses = sortedKelas.filter((k) => k.id === (currentUser.data as any)?.kelasId);
   }
 
@@ -349,7 +354,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Render Role-based View
   const renderRoleDashboard = () => {
-    switch (currentUser.role) {
+    const primaryEffectiveRole = effectiveRoles.includes('admin')
+      ? 'admin'
+      : effectiveRoles.includes('kesiswaan') || effectiveRoles.includes('piket_kesiswaan')
+      ? 'kesiswaan'
+      : isWaliRole || isPiketKelasRole
+      ? 'wali'
+      : effectiveRoles.includes('kurikulum')
+      ? 'kurikulum'
+      : effectiveRoles.includes('staf_jadwal')
+      ? 'staf_jadwal'
+      : (currentUser.role || 'guru');
+
+    switch (primaryEffectiveRole) {
       case 'admin':
         return (
           <AdminDashboardView

@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
-import { hasMenuAccess } from '../utils/rolePermissionEngine';
+import { hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
 import {
   getNavigationLayout,
   getEffectiveMenuLabel,
@@ -83,15 +83,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenServerQrModal,
   onMouseEnter,
 }) => {
-  const isAdmin = currentUser.role === 'admin';
-  const isKesiswaan = currentUser.role === 'kesiswaan';
-  const isKurikulum = currentUser.role === 'kurikulum';
-  const isStafJadwal = currentUser.role === 'staf_jadwal';
-  const isHubin = currentUser.role === 'hubin';
-  const isUserBiasa = currentUser.role === 'user' || currentUser.role === 'guru' || isKurikulum || isHubin || isStafJadwal;
-  const isWali = currentUser.role === 'wali';
-  const isMurid = currentUser.role === 'murid';
-  const isGuruOnly = (currentUser.role === 'guru' || currentUser.role === 'user') && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal;
+  const userEffectiveRoles = getEffectiveUserRoles(currentUser, appData);
+  const isAdmin = userEffectiveRoles.includes('admin');
+  const isKesiswaan = userEffectiveRoles.includes('kesiswaan') || userEffectiveRoles.includes('piket_kesiswaan');
+  const isKurikulum = userEffectiveRoles.includes('kurikulum');
+  const isStafJadwal = userEffectiveRoles.includes('staf_jadwal');
+  const isHubin = userEffectiveRoles.includes('hubin');
+  const isWali = userEffectiveRoles.includes('wali') || Boolean((currentUser.data as any)?.id && appData?.kelas?.some((k) => k.waliKelasId === (currentUser.data as any)?.id));
+  const isMurid = userEffectiveRoles.includes('murid') || userEffectiveRoles.includes('siswa');
+  const isUserBiasa = userEffectiveRoles.includes('user') || userEffectiveRoles.includes('guru') || isKurikulum || isHubin || isStafJadwal;
+  const isGuruOnly = (userEffectiveRoles.includes('guru') || userEffectiveRoles.includes('user')) && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal;
   const canViewMaster = !isMurid;
   const isLiveChatEnabled = enableLiveChat ?? sekolah.enableLiveChat ?? true;
 
@@ -398,10 +399,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {(() => {
               const navLayout = getNavigationLayout(appData);
 
-              const userRoles = [
-                currentUser.role,
-                ...((currentUser.data as any)?.additionalRoles || [])
-              ].filter(Boolean);
+              const userRoles = userEffectiveRoles;
 
               const hasAnyMenuAccess = (views: ViewType[]) => {
                 return views.some(
@@ -626,7 +624,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               ))}
 
                               {/* Backup modal shortcut in sistem section */}
-                              {sec.id === 'sistem' && hasMenuAccess(currentUser.role, 'audit_logs', appData) && onOpenBackupModal && (
+                              {sec.id === 'sistem' && hasMenuAccess(userRoles, 'audit_logs', appData) && onOpenBackupModal && (
                                 renderItem(
                                   'audit_logs' as ViewType,
                                   <HardDriveDownload className="w-4 h-4 text-blue-300 shrink-0" />,

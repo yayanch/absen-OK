@@ -204,7 +204,7 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
   onNavigateView,
 }) => {
   // Main Tab: 'menus' | 'chat_contacts' | 'chat_matrix'
-  const [activeMainTab, setActiveMainTab] = useState<'menus' | 'chat_contacts' | 'chat_matrix'>('chat_contacts');
+  const [activeMainTab, setActiveMainTab] = useState<'menus' | 'chat_contacts' | 'chat_matrix'>('menus');
 
   // Get all registered roles for menus
   const roles = useMemo(() => getAllRolePermissions(appData), [appData]);
@@ -222,6 +222,21 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     });
     return map;
   });
+
+  // Track modified status
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasUnsavedChatChanges, setHasUnsavedChatChanges] = useState(false);
+
+  // Keep draftPermissions synchronized with roles when saved / updated from appData
+  React.useEffect(() => {
+    if (!hasUnsavedChanges) {
+      const map: Record<string, ViewType[]> = {};
+      roles.forEach((r) => {
+        map[r.roleId] = [...r.allowedMenus];
+      });
+      setDraftPermissions(map);
+    }
+  }, [roles, hasUnsavedChanges]);
 
   // Local draft state of role chat contact rules map (roleKey -> allowedTargets)
   const [draftChatRules, setDraftChatRules] = useState<Record<string, ChatTargetPermission[]>>(() => {
@@ -242,10 +257,6 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     });
     return map;
   });
-
-  // Track modified status
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [hasUnsavedChatChanges, setHasUnsavedChatChanges] = useState(false);
 
   // Search filter for menu items
   const [searchMenuQuery, setSearchMenuQuery] = useState('');
@@ -881,10 +892,26 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
       <div className="bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
         <button
           type="button"
+          onClick={() => setActiveMainTab('menus')}
+          className={`flex-1 min-w-[200px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+            activeMainTab === 'menus'
+              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Hak Akses Menu & Navigasi</span>
+          {hasUnsavedChanges && (
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveMainTab('chat_contacts')}
           className={`flex-1 min-w-[200px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
             activeMainTab === 'chat_contacts'
-              ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -900,28 +927,12 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
           onClick={() => setActiveMainTab('chat_matrix')}
           className={`flex-1 min-w-[180px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
             activeMainTab === 'chat_matrix'
-              ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
+              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <Grid className="w-4 h-4" />
           <span>Tabel Matriks Kontak Antar-Role (Overview)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('menus')}
-          className={`flex-1 min-w-[180px] px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
-            activeMainTab === 'menus'
-              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-700'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Hak Akses Menu & Navigasi</span>
-          {hasUnsavedChanges && (
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          )}
         </button>
       </div>
 

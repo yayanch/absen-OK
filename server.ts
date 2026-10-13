@@ -1384,6 +1384,8 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
 
       // Add columns safely if not yet present
       const addColumnQueries = [
+        "ALTER TABLE siswa ADD COLUMN status VARCHAR(50) DEFAULT 'aktif';",
+        "ALTER TABLE siswa ADD COLUMN surat_non_aktif_bukti LONGTEXT;",
         "ALTER TABLE siswa ADD COLUMN username VARCHAR(100);",
         "ALTER TABLE siswa ADD COLUMN password VARCHAR(255);",
         "ALTER TABLE siswa ADD COLUMN foto LONGTEXT;",
@@ -2628,7 +2630,8 @@ async function performMySQLLoad(config: any) {
             nama: s.nama || prev.nama || '',
             gender: s.gender || prev.gender || 'L',
             kelasId: s.kelas_id || prev.kelasId || '',
-            status: s.status || prev.status || 'aktif',
+            status: (s.status && String(s.status).trim()) ? s.status : (prev.status || 'aktif'),
+            suratNonAktifBukti: s.surat_non_aktif_bukti || prev.suratNonAktifBukti || '',
             noWa: s.no_wa !== null && s.no_wa !== undefined ? s.no_wa : (prev.noWa || ''),
             namaOrangTua: s.nama_orang_tua !== null && s.nama_orang_tua !== undefined ? s.nama_orang_tua : (prev.namaOrangTua || ''),
             noWaOrangTua: s.no_wa_orang_tua !== null && s.no_wa_orang_tua !== undefined ? s.no_wa_orang_tua : (prev.noWaOrangTua || ''),
