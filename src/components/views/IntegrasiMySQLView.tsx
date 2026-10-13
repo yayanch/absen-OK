@@ -101,6 +101,37 @@ export const IntegrasiMySQLView: React.FC<IntegrasiMySQLViewProps> = ({
     }
   };
 
+  const handleSaveToEnv = async () => {
+    setIsLoadingEnv(true);
+    try {
+      const res = await fetch('/api/mysql/save-env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host, port, user, password, database }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsEnvMode(true);
+        if (data.config) {
+          setEnvDetails({
+            host: data.config.host,
+            port: data.config.port,
+            user: data.config.user,
+            database: data.config.database,
+            hasPassword: !!data.config.password,
+          });
+        }
+        onShowToast(data.message, data.connectionOk ? 'success' : 'warning');
+      } else {
+        onShowToast(data.message || 'Gagal menyimpan konfigurasi ke file .env', 'error');
+      }
+    } catch (err: any) {
+      onShowToast('Gagal menghubungi server untuk menyimpan file .env', 'error');
+    } finally {
+      setIsLoadingEnv(false);
+    }
+  };
+
   const handlePreviewDatabase = async () => {
     setIsPreviewing(true);
     setPreviewData(null);
@@ -601,12 +632,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
         localStorage.setItem('mysql_database', database);
         localStorage.setItem('mysql_user', user);
         localStorage.setItem('mysql_password', password);
+        fetch('/api/mysql/save-env', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host, port, user, password, database }),
+        }).catch(() => {});
         fetch('/api/global-state', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mysqlConfig: { host, port, user, password, database }, appData }),
         }).catch(() => {});
-        onShowToast('Koneksi database MySQL berhasil dan tabel siap!', 'success');
+        setIsEnvMode(true);
+        onShowToast('Koneksi database MySQL berhasil dan tersimpan ke file .env!', 'success');
       } else {
         onShowToast(data.message || 'Gagal terhubung ke MySQL', 'error');
       }
@@ -747,33 +784,57 @@ CREATE TABLE IF NOT EXISTS audit_logs (
                     )}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleReloadEnv}
-                  disabled={isLoadingEnv}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-[11px] font-bold shrink-0 transition flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
-                  title="Muat ulang konfigurasi dari .env tanpa restart server"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isLoadingEnv ? 'animate-spin' : ''}`} />
-                  <span>{isLoadingEnv ? 'Memuat...' : 'Muat .env'}</span>
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleReloadEnv}
+                    disabled={isLoadingEnv}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-[11px] font-bold shrink-0 transition flex items-center justify-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Muat ulang konfigurasi dari .env tanpa restart server"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isLoadingEnv ? 'animate-spin' : ''}`} />
+                    <span>{isLoadingEnv ? 'Memuat...' : 'Muat .env'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveToEnv}
+                    disabled={isLoadingEnv}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-[11px] font-bold shrink-0 transition flex items-center justify-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Simpan nilai form saat ini langsung ke file .env"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>Tulis ke .env</span>
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="mb-5 p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 text-xs">
+              <div className="mb-5 p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
                   <Terminal className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
                   <span>Koneksi dapat diatur permanen di file <strong className="font-mono text-slate-800 dark:text-slate-100">.env</strong> (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME).</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleReloadEnv}
-                  disabled={isLoadingEnv}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold shrink-0 transition flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
-                  title="Periksa apakah file .env telah diisi di server"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isLoadingEnv ? 'animate-spin' : ''}`} />
-                  <span>{isLoadingEnv ? 'Memeriksa...' : 'Cek .env'}</span>
-                </button>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleReloadEnv}
+                    disabled={isLoadingEnv}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold shrink-0 transition flex items-center justify-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Periksa apakah file .env telah diisi di server"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isLoadingEnv ? 'animate-spin' : ''}`} />
+                    <span>{isLoadingEnv ? 'Memeriksa...' : 'Cek .env'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveToEnv}
+                    disabled={isLoadingEnv}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold shrink-0 transition flex items-center justify-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Simpan nilai form ke file .env"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>Simpan ke .env</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -865,28 +926,38 @@ CREATE TABLE IF NOT EXISTS audit_logs (
               </button>
             </form>
 
-            <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+              <button
+                type="button"
+                onClick={handleSaveToEnv}
+                disabled={isLoadingEnv || isTesting}
+                className="py-2.5 px-3 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs cursor-pointer"
+                title="Tulis dan simpan konfigurasi koneksi ini langsung ke file .env"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Simpan ke .env</span>
+              </button>
               <button
                 type="button"
                 onClick={handleSaveToMySQL}
                 disabled={isTesting}
-                className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs"
+                className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs cursor-pointer"
               >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Simpan
+                <CheckCircle2 className="w-3.5 h-3.5" /> Simpan ke DB
               </button>
               <button
                 type="button"
                 onClick={handleLoadFromMySQL}
                 disabled={isTesting}
-                className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs"
+                className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs cursor-pointer"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Muat
+                <RefreshCw className="w-3.5 h-3.5" /> Muat dari DB
               </button>
               <button
                 type="button"
                 onClick={handlePreviewDatabase}
                 disabled={isPreviewing}
-                className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs"
+                className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs cursor-pointer"
               >
                 {isPreviewing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />} Preview DB
               </button>

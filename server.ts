@@ -557,12 +557,42 @@ function resolveMySQLConfig(incoming?: any) {
   return loadSavedServerConfig();
 }
 
+function updateEnvFile(config: any) {
+  try {
+    const envPath = path.join(process.cwd(), ".env");
+    let existingContent = "";
+    if (fs.existsSync(envPath)) {
+      existingContent = fs.readFileSync(envPath, "utf-8");
+    }
+
+    const setEnvVar = (content: string, key: string, value: string) => {
+      const regex = new RegExp(`^${key}=.*$`, "m");
+      const newLine = `${key}="${value}"`;
+      if (regex.test(content)) {
+        return content.replace(regex, newLine);
+      } else {
+        return content.trim() ? `${content.trim()}\n${newLine}\n` : `${newLine}\n`;
+      }
+    };
+
+    let updated = existingContent;
+    if (config.host) updated = setEnvVar(updated, "DB_HOST", String(config.host).trim());
+    if (config.port) updated = setEnvVar(updated, "DB_PORT", String(config.port || "3306").trim());
+    if (config.user) updated = setEnvVar(updated, "DB_USER", String(config.user).trim());
+    if (config.password !== undefined) updated = setEnvVar(updated, "DB_PASSWORD", String(config.password));
+    if (config.database) updated = setEnvVar(updated, "DB_NAME", String(config.database).trim());
+
+    fs.writeFileSync(envPath, updated, "utf-8");
+    dotenv.config({ override: true });
+  } catch (e) {
+    console.error("[Env Update Error]", e);
+  }
+}
+
 function saveServerConfig(config: any) {
   try {
     if (config && config.host && config.database && config.user) {
-      const content = JSON.stringify(config, null, 2);
-      fs.writeFileSync(MYSQL_CONFIG_FILE, content);
-      try { fs.writeFileSync(MYSQL_CONFIG_FILE_TMP, content); } catch (e) {}
+      updateEnvFile(config);
     }
   } catch (e) {}
 }
@@ -4009,6 +4039,53 @@ app.post("/api/mysql/reload-env", async (req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ success: false, message: e?.message || "Gagal memuat ulang environment .env" });
+  }
+});
+
+// API: Save Database Config Directly to .env
+app.post("/api/mysql/save-env", async (req, res) => {
+  try {
+    const { host, port, user, password, database } = req.body;
+    if (!host || !user || !database) {
+      return res.status(400).json({ success: false, message: "Host, User, dan Database wajib diisi." });
+    }
+
+    const config = {
+      host: String(host).trim(),
+      port: String(port || "3306").trim(),
+      user: String(user).trim(),
+      password: password !== undefined ? String(password) : "",
+      database: String(database).trim()
+    };
+
+    updateEnvFile(config);
+    saveServerConfig(config);
+
+    let connectionOk = false;
+    let errorDetail = "";
+    try {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        const conn = await pool.getConnection();
+        await conn.ping();
+        conn.release();
+        connectionOk = true;
+      }
+    } catch (dbErr: any) {
+      errorDetail = dbErr?.message || String(dbErr);
+    }
+
+    res.json({
+      success: true,
+      message: connectionOk
+        ? `Konfigurasi berhasil disimpan ke file .env dan terhubung ke MySQL (${config.host}:${config.port}/${config.database})!`
+        : `Konfigurasi disimpan ke file .env (${config.host}:${config.port}/${config.database}), namun koneksi belum aktif: ${errorDetail}`,
+      config,
+      isEnv: true,
+      connectionOk
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e?.message || "Gagal menyimpan ke file .env" });
   }
 });
 
