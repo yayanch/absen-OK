@@ -1,4 +1,4 @@
-import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit, JadwalMengajarGuru } from '../types';
+import { AppData, UserSession, Siswa, PresensiMap, SiswaPresensiItem, ShiftPeriod, ChatMessage, SyncResult, SyncStatus, Pelanggaran, HomeVisit, JadwalMengajarGuru, WaliKelas } from '../types';
 import { DEMO_DATASET, DEFAULT_TOGA_LOGO, getTodayString, randomizeWaForStudents, INITIAL_HOME_VISITS, INITIAL_PELANGGARAN } from '../data/initialData';
 import {
   DEFAULT_SECURITY_CONFIG,
@@ -2483,6 +2483,199 @@ export function deduplicateSiswa(appData: AppData): { nextAppData: AppData; remo
 
   return { nextAppData, removedCount };
 }
+
+// Strict helper to distinguish picket accounts (Piket Guru & Piket Kesiswaan) from teaching teachers
+export const isPiketAccount = (g: any): boolean => {
+  if (!g) return false;
+  const r = String(g.role || '').toLowerCase();
+  const u = String(g.username || '').toLowerCase();
+  const n = String(g.nama || '').toLowerCase();
+  const t = String(g.tugasTambahan || '').toLowerCase();
+  const j = String(g.jabatan || '').toLowerCase();
+  return (
+    r === 'piket' ||
+    r === 'piket_guru' ||
+    r === 'piket_kesiswaan' ||
+    u === 'piket' ||
+    u === 'piket_guru' ||
+    u === 'piket_kesiswaan' ||
+    u.startsWith('piket_') ||
+    n.includes('(piket kesiswaan)') ||
+    n.includes('(piket guru)') ||
+    n.includes('piket kesiswaan') ||
+    n.includes('piket guru') ||
+    t.includes('piket') ||
+    j.includes('piket')
+  );
+};
+
+// Helper to detect Admin Siswa accounts (adm_siswa TIDAK termasuk guru)
+export const isAdmSiswaAccount = (g: any): boolean => {
+  if (!g) return false;
+  const r = String(g.role || '').toLowerCase();
+  const u = String(g.username || '').toLowerCase();
+  const n = String(g.nama || '').toLowerCase();
+  const t = String(g.tugasTambahan || '').toLowerCase();
+  const j = String(g.jabatan || '').toLowerCase();
+  const roles: string[] = Array.isArray(g.roles) ? g.roles.map((x: string) => String(x).toLowerCase()) : [];
+
+  return (
+    r === 'adm_siswa' ||
+    r === 'admin_siswa' ||
+    roles.includes('adm_siswa') ||
+    roles.includes('admin_siswa') ||
+    u === 'adm_siswa' ||
+    u.startsWith('adm_siswa') ||
+    u === 'admin_siswa' ||
+    n.includes('adm_siswa') ||
+    n.includes('admin siswa') ||
+    n.includes('administrasi siswa') ||
+    t.includes('adm_siswa') ||
+    t.includes('admin siswa') ||
+    t.includes('administrasi siswa') ||
+    j.includes('adm_siswa') ||
+    j.includes('admin siswa') ||
+    j.includes('administrasi siswa')
+  );
+};
+
+// Strict helper to distinguish non-teacher accounts (Piket, Adm Siswa, dll) from teaching teachers
+export const isNonTeacherAccount = (g: any): boolean => {
+  if (!g) return false;
+  if (isPiketAccount(g)) return true;
+  if (isAdmSiswaAccount(g)) return true;
+  return false;
+};
+
+// Canonical teacher list: Returns only active teaching teachers (WaliKelas objects)
+export function getCanonicalTeacherList(appData: AppData): WaliKelas[] {
+  if (!appData || !Array.isArray(appData.waliKelas)) return [];
+  return appData.waliKelas.filter((g) => !isNonTeacherAccount(g));
+}
+
+// Canonical teacher count across all dashboards, modals, and services
+export function getCanonicalTeacherCount(appData: AppData): number {
+  return getCanonicalTeacherList(appData).length;
+}
+
+/**
+ * Synchronizes teacher data across all collections in AppData:
+ * 1. Syncs guruNama, guruNip, guruUsername in appData.guruMapelKelas with appData.waliKelas.
+ * 2. Syncs guruNama, guruNip, guruUsername in appData.jadwalMengajar with appData.waliKelas.
+ * 3. Syncs guruNama, guruNip, guruUsername in appData.presensiMengajarGuru with appData.waliKelas.
+ */
+export function syncTeacherDataAcrossAppData(appData: AppData): AppData {
+  if (!appData || !Array.isArray(appData.waliKelas)) return appData;
+
+  const teacherMap = new Map<string, WaliKelas>();
+  const teacherUserMap = new Map<string, WaliKelas>();
+  const teacherNipMap = new Map<string, WaliKelas>();
+
+  appData.waliKelas.forEach((w) => {
+    if (w.id) teacherMap.set(String(w.id).trim().toLowerCase(), w);
+    if (w.username) teacherUserMap.set(String(w.username).trim().toLowerCase(), w);
+    if (w.nip) teacherNipMap.set(String(w.nip).trim().toLowerCase(), w);
+  });
+
+  const findTeacher = (id?: string, username?: string, nip?: string, nama?: string): WaliKelas | undefined => {
+    if (id && teacherMap.has(String(id).trim().toLowerCase())) {
+      return teacherMap.get(String(id).trim().toLowerCase());
+    }
+    if (username && teacherUserMap.has(String(username).trim().toLowerCase())) {
+      return teacherUserMap.get(String(username).trim().toLowerCase());
+    }
+    if (nip && teacherNipMap.has(String(nip).trim().toLowerCase())) {
+      return teacherNipMap.get(String(nip).trim().toLowerCase());
+    }
+    if (nama) {
+      const lowerNama = String(nama).trim().toLowerCase();
+      return appData.waliKelas.find((w) => String(w.nama || '').trim().toLowerCase() === lowerNama);
+    }
+    return undefined;
+  };
+
+  let changed = false;
+
+  // 1. Sync guruMapelKelas
+  const updatedGmk = (appData.guruMapelKelas || []).map((item) => {
+    const matched = findTeacher(item.guruId, item.guruUsername, item.guruNip, item.guruNama);
+    if (matched) {
+      const needSync =
+        item.guruNama !== matched.nama ||
+        item.guruNip !== (matched.nip || '') ||
+        item.guruUsername !== (matched.username || '') ||
+        item.guruId !== matched.id;
+      if (needSync) {
+        changed = true;
+        return {
+          ...item,
+          guruId: matched.id,
+          guruNama: matched.nama,
+          guruNip: matched.nip || '',
+          guruUsername: matched.username || '',
+        };
+      }
+    }
+    return item;
+  });
+
+  // 2. Sync jadwalMengajar
+  const updatedJadwal = (appData.jadwalMengajar || []).map((item) => {
+    const matched = findTeacher(item.guruId, item.guruUsername, item.guruNip, item.guruNama);
+    if (matched) {
+      const needSync =
+        item.guruNama !== matched.nama ||
+        item.guruNip !== (matched.nip || '') ||
+        item.guruUsername !== (matched.username || '') ||
+        item.guruId !== matched.id;
+      if (needSync) {
+        changed = true;
+        return {
+          ...item,
+          guruId: matched.id,
+          guruNama: matched.nama,
+          guruNip: matched.nip || '',
+          guruUsername: matched.username || '',
+        };
+      }
+    }
+    return item;
+  });
+
+  // 3. Sync presensiMengajarGuru
+  const updatedPmg = (appData.presensiMengajarGuru || []).map((item) => {
+    const itemAny = item as any;
+    const matched = findTeacher(itemAny.guruId, item.guruUsername, itemAny.guruNip, item.guruNama);
+    if (matched) {
+      const needSync =
+        item.guruNama !== matched.nama ||
+        itemAny.guruNip !== (matched.nip || '') ||
+        item.guruUsername !== (matched.username || '') ||
+        itemAny.guruId !== matched.id;
+      if (needSync) {
+        changed = true;
+        return {
+          ...item,
+          guruId: matched.id,
+          guruNama: matched.nama,
+          guruNip: matched.nip || '',
+          guruUsername: matched.username || '',
+        };
+      }
+    }
+    return item;
+  });
+
+  if (!changed) return appData;
+
+  return {
+    ...appData,
+    guruMapelKelas: updatedGmk,
+    jadwalMengajar: updatedJadwal,
+    presensiMengajarGuru: updatedPmg,
+  };
+}
+
 
 
 

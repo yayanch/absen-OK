@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
-import { formatDateIndo, cleanMapelName } from '../../utils/helpers';
+import { formatDateIndo, cleanMapelName, getCanonicalTeacherList } from '../../utils/helpers';
 import { RoleQuickActions } from './RoleQuickActions';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
@@ -36,7 +36,7 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
 }) => {
   const mapelList = appData.mataPelajaran || [];
   const jadwalList = appData.jadwalMengajar || [];
-  const guruList = appData.waliKelas || [];
+  const guruList = getCanonicalTeacherList(appData);
   const kelasList = appData.kelas || [];
 
   // Hitung metrik jadwal

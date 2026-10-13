@@ -23,7 +23,8 @@ import {
   mergeSiswa,
   mergePresensi,
   mergeJadwalMengajar,
-  getTodayString
+  getTodayString,
+  syncTeacherDataAcrossAppData
 } from './utils/helpers';
 import { DEMO_DATASET } from './data/initialData';
 import { isMenuAllowed } from './utils/rolePermissionEngine';
@@ -1050,8 +1051,9 @@ export default function App() {
     lastLocalChangeRef.current = Date.now();
     setAppData((prev) => {
       const nextData = typeof updated === 'function' ? updated(prev) : updated;
-      saveAppData(nextData);
-      return nextData;
+      const syncedData = syncTeacherDataAcrossAppData(nextData);
+      saveAppData(syncedData);
+      return syncedData;
     });
   };
 

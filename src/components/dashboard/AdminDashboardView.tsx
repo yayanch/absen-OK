@@ -21,7 +21,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
-import { formatDateIndo, calculateDailyAttendanceStats } from '../../utils/helpers';
+import { formatDateIndo, calculateDailyAttendanceStats, getCanonicalTeacherCount } from '../../utils/helpers';
 import { AttendanceTrendChart, AttendanceRecapChart, TrendRangeOption } from './AttendanceTrendChart';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 import { WhatsAppLiveMonitoringCard } from './WhatsAppLiveMonitoringCard';
@@ -235,7 +235,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <StatCard
           index={1}
           label="Total Guru"
-          value={appData.waliKelas?.length || (appData as any).users?.filter((u: any) => u.role === 'guru' || u.role === 'wali').length || 0}
+          value={getCanonicalTeacherCount(appData)}
           subtitle="Tenaga Pendidik & Wali"
           icon={GraduationCap}
           variant="primary"

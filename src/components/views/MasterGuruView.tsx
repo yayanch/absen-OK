@@ -43,7 +43,7 @@ import {
 import { AppData, WaliKelas, UserSession, ViewType } from '../../types';
 import { Pagination } from '../Pagination';
 import { PageHeader } from '../common/UIComponents';
-import { addAuditLog, compressBase64Image } from '../../utils/helpers';
+import { addAuditLog, compressBase64Image, getCanonicalTeacherList, isPiketAccount, isAdmSiswaAccount, isNonTeacherAccount } from '../../utils/helpers';
 import { ImportGuruModal } from './ImportGuruModal';
 import {
   getAllRolePermissions,
@@ -54,68 +54,7 @@ import {
   reconcileRolesAndDuties,
 } from '../../utils/rolePermissionEngine';
 
-// Strict helper to distinguish picket accounts (Piket Guru & Piket Kesiswaan) from teaching teachers
-export const isPiketAccount = (g: any): boolean => {
-  if (!g) return false;
-  const r = String(g.role || '').toLowerCase();
-  const u = String(g.username || '').toLowerCase();
-  const n = String(g.nama || '').toLowerCase();
-  const t = String(g.tugasTambahan || '').toLowerCase();
-  const j = String(g.jabatan || '').toLowerCase();
-  return (
-    r === 'piket' ||
-    r === 'piket_guru' ||
-    r === 'piket_kesiswaan' ||
-    u === 'piket' ||
-    u === 'piket_guru' ||
-    u === 'piket_kesiswaan' ||
-    u.startsWith('piket_') ||
-    n.includes('(piket kesiswaan)') ||
-    n.includes('(piket guru)') ||
-    n.includes('piket kesiswaan') ||
-    n.includes('piket guru') ||
-    t.includes('piket') ||
-    j.includes('piket')
-  );
-};
 
-// Helper to detect Admin Siswa accounts (adm_siswa TIDAK termasuk guru)
-export const isAdmSiswaAccount = (g: any): boolean => {
-  if (!g) return false;
-  const r = String(g.role || '').toLowerCase();
-  const u = String(g.username || '').toLowerCase();
-  const n = String(g.nama || '').toLowerCase();
-  const t = String(g.tugasTambahan || '').toLowerCase();
-  const j = String(g.jabatan || '').toLowerCase();
-  const roles: string[] = Array.isArray(g.roles) ? g.roles.map((x: string) => String(x).toLowerCase()) : [];
-
-  return (
-    r === 'adm_siswa' ||
-    r === 'admin_siswa' ||
-    roles.includes('adm_siswa') ||
-    roles.includes('admin_siswa') ||
-    u === 'adm_siswa' ||
-    u.startsWith('adm_siswa') ||
-    u === 'admin_siswa' ||
-    n.includes('adm_siswa') ||
-    n.includes('admin siswa') ||
-    n.includes('administrasi siswa') ||
-    t.includes('adm_siswa') ||
-    t.includes('admin siswa') ||
-    t.includes('administrasi siswa') ||
-    j.includes('adm_siswa') ||
-    j.includes('admin siswa') ||
-    j.includes('administrasi siswa')
-  );
-};
-
-// Strict helper to distinguish non-teacher accounts (Piket, Adm Siswa, dll) from teaching teachers
-export const isNonTeacherAccount = (g: any): boolean => {
-  if (!g) return false;
-  if (isPiketAccount(g)) return true;
-  if (isAdmSiswaAccount(g)) return true;
-  return false;
-};
 
 const NAMA_BULAN_INDONESIA = [
   'Januari',
@@ -1935,7 +1874,7 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
   const allRoles = useMemo(() => getAllRolePermissions(appData), [appData]);
 
   // List of all teachers (biodata) - strictly excludes piket and non-teacher accounts (like adm_siswa)
-  const guruList: WaliKelas[] = (appData.waliKelas || []).filter((g) => !isNonTeacherAccount(g));
+  const guruList: WaliKelas[] = getCanonicalTeacherList(appData);
 
   // Filter list
   let filteredGuru = guruList.filter((g) => {

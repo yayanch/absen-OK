@@ -35,7 +35,7 @@ import {
   Info,
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData, Siswa, Kelas, WaliKelas, SiswaPresensiItem } from '../types';
-import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString } from '../utils/helpers';
+import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString, getCanonicalTeacherList } from '../utils/helpers';
 import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
 import { renderNavIcon } from '../utils/navigationLayoutEngine';
 
@@ -523,7 +523,7 @@ export const Header: React.FC<HeaderProps> = ({
       });
 
     // 3. Guru (Hanya menampilkan nama dan no WA)
-    const guruList = appData?.waliKelas || [];
+    const guruList = appData ? getCanonicalTeacherList(appData) : [];
     const filteredGuru = guruList
       .filter((g) => {
         return (

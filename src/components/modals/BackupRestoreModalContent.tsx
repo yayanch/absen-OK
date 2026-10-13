@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { AppData, Siswa, Kelas, Jurusan, WaliKelas, BackupScheduleConfig } from '../../types';
-import { getTodayString, getIndonesianTimeString, formatDateIndo } from '../../utils/helpers';
+import { getTodayString, getIndonesianTimeString, formatDateIndo, getCanonicalTeacherCount } from '../../utils/helpers';
 import {
   initGoogleAuth,
   signInWithGoogle,
@@ -169,7 +169,7 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
     const siswaCount = Array.isArray(appData?.siswa) ? appData.siswa.length : 0;
     const kelasCount = Array.isArray(appData?.kelas) ? appData.kelas.length : 0;
     const jurusanCount = Array.isArray(appData?.jurusan) ? appData.jurusan.length : 0;
-    const guruCount = Array.isArray(appData?.waliKelas) ? appData.waliKelas.length : 0;
+    const guruCount = getCanonicalTeacherCount(appData);
     const presensiKeys = appData?.presensi ? Object.keys(appData.presensi) : [];
     let presensiEntries = 0;
     if (appData?.presensi) {

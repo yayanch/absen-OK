@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { AppData } from '../types';
-import { getTodayString, getIndonesianTimeString } from '../utils/helpers';
+import { getTodayString, getIndonesianTimeString, getCanonicalTeacherCount } from '../utils/helpers';
 
 // Initialize Firebase App instance safely (singleton pattern)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -184,7 +184,7 @@ export const uploadBackupToGoogleDrive = async (
 
   const siswaCount = Array.isArray(appData.siswa) ? appData.siswa.length : 0;
   const kelasCount = Array.isArray(appData.kelas) ? appData.kelas.length : 0;
-  const guruCount = Array.isArray(appData.waliKelas) ? appData.waliKelas.length : 0;
+  const guruCount = getCanonicalTeacherCount(appData);
   const presensiKeys = appData.presensi ? Object.keys(appData.presensi) : [];
   let presensiEntries = 0;
   if (appData.presensi) {
