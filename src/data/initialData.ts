@@ -345,6 +345,7 @@ export const DEMO_DATASET: AppData = {
     loginCustomLinks: [],
     theme: "indigo",
     sidebarBehavior: "collapsed",
+    loginCardTheme: "white",
   },
   admin: {
     username: "admin",

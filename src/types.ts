@@ -69,6 +69,7 @@ export interface SekolahConfig {
   namaDinas?: string;
   namaDinasDetail?: string;
   // Pengaturan Kustomisasi Container / Kartu Form Login
+  loginCardTheme?: 'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto';
   loginCardLayout?: 'center' | 'left' | 'right';
   loginCardMaxWidth?: 'compact' | 'standard' | 'wide' | 'large';
   loginCardRounded?: 'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill';
@@ -84,7 +85,7 @@ export interface SekolahConfig {
   loginCardWelcomeSubtext?: string;
   loginCardInputStyle?: 'outlined' | 'filled' | 'underlined';
   loginCardInputRounded?: 'lg' | 'xl' | 'full';
-  loginCardButtonAccent?: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate';
+  loginCardButtonAccent?: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate' | 'neutral';
   loginCardButtonRounded?: 'lg' | 'xl' | 'full';
   loginContrastMode?: 'auto' | 'dark' | 'light';
   loginLeftBadgeText?: string;

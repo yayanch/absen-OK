@@ -113,8 +113,11 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [contrastMode, setContrastMode] = useState<'auto' | 'dark' | 'light'>(
     sekolah.loginContrastMode || 'auto'
   );
+  const [cardTheme, setCardTheme] = useState<'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto'>(
+    sekolah.loginCardTheme || 'white'
+  );
   const [cardOpacity, setCardOpacity] = useState<number>(
-    sekolah.loginCardOpacity ?? 60
+    sekolah.loginCardOpacity ?? 100
   );
   const [cardBlur, setCardBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(
     sekolah.loginCardBlur || '2xl'
@@ -206,7 +209,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [cardInputRounded, setCardInputRounded] = useState<'lg' | 'xl' | 'full'>(
     sekolah.loginCardInputRounded || 'xl'
   );
-  const [cardButtonAccent, setCardButtonAccent] = useState<'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate'>(
+  const [cardButtonAccent, setCardButtonAccent] = useState<'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate' | 'neutral'>(
     sekolah.loginCardButtonAccent || 'blue'
   );
   const [cardButtonRounded, setCardButtonRounded] = useState<'lg' | 'xl' | 'full'>(
@@ -538,6 +541,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginBgFit: bgFit,
       loginBgOverlayColor: overlayColor,
       loginContrastMode: contrastMode,
+      loginCardTheme: cardTheme,
       loginCardOpacity: cardOpacity,
       loginCardBlur: cardBlur,
       // Container Card Customizations

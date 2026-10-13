@@ -951,7 +951,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     : (typeof sekolah.loginBgOpacity === 'number' && sekolah.loginBgOpacity <= 1 ? sekolah.loginBgOpacity : 1);
   const overlayOpacity = sekolah.loginBgOverlayOpacity ?? 35;
   const overlayColor = sekolah.loginBgOverlayColor || (isDarkMode ? '#020617' : '#0f172a');
-  const cardOpacity = sekolah.loginCardOpacity ?? 60;
+  const cardOpacity = sekolah.loginCardOpacity ?? 100;
   const cardBlur = sekolah.loginCardBlur || '2xl';
 
   const getCardBlurClass = () => {
@@ -1025,6 +1025,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   const darkTheme = isBackgroundDark || isDarkMode;
 
+  const isCardDark = useMemo(() => {
+    const cardTheme = sekolah.loginCardTheme || 'white';
+    const alpha = cardOpacity / 100;
+
+    if (cardTheme === 'dark') return true;
+    if (cardTheme === 'white' || cardTheme === 'light') return false;
+
+    if (cardTheme === 'glass') {
+      if (darkTheme) return true;
+      if (alpha < 0.5 && isBackgroundDark) return true;
+      return false;
+    }
+
+    if (cardTheme === 'neutral' || cardTheme === 'auto') {
+      if (darkTheme) return true;
+      if (alpha < 0.5 && isBackgroundDark) return true;
+      return false;
+    }
+
+    return darkTheme;
+  }, [sekolah.loginCardTheme, cardOpacity, darkTheme, isBackgroundDark]);
+
   const getBlurFilter = () => {
     switch (blurLevel) {
       case 'sm': return 'blur(4px)';
@@ -1066,6 +1088,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   // Dynamic Container Card Helper Classes
+  const getCardBackgroundStyle = () => {
+    const cardTheme = sekolah.loginCardTheme || 'white';
+    const alpha = cardOpacity / 100;
+
+    if (cardTheme === 'dark') {
+      return `rgba(18, 18, 21, ${Math.min(0.98, alpha)})`;
+    }
+    if (cardTheme === 'glass') {
+      return darkTheme
+        ? `rgba(24, 24, 27, ${alpha * 0.7})`
+        : `rgba(255, 255, 255, ${alpha * 0.85})`;
+    }
+    if (darkTheme && cardTheme !== 'white' && cardTheme !== 'light') {
+      return `linear-gradient(145deg, rgba(24, 24, 27, ${Math.min(0.96, alpha + 0.15)}) 0%, rgba(9, 9, 11, ${Math.min(0.95, alpha + 0.10)}) 100%)`;
+    }
+    // Gradient White card background for white / light / default theme
+    return `linear-gradient(135deg, rgba(255, 255, 255, ${alpha}) 0%, rgba(248, 250, 252, ${alpha * 0.98}) 50%, rgba(241, 245, 249, ${alpha * 0.92}) 100%)`;
+  };
+
   const getContainerMaxWidthClass = () => {
     switch (sekolah.loginCardMaxWidth) {
       case 'compact': return 'max-w-sm';
@@ -1141,15 +1182,23 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const rounded = sekolah.loginCardInputRounded === 'full' ? 'rounded-full' : sekolah.loginCardInputRounded === 'lg' ? 'rounded-lg' : 'rounded-xl';
     switch (sekolah.loginCardInputStyle) {
       case 'filled':
-        return `bg-slate-100/90 dark:bg-zinc-800/80 border border-slate-300 dark:border-zinc-700/60 text-slate-900 dark:text-white placeholder-slate-500 font-medium dark:placeholder-zinc-400 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-blue-500 ${rounded}`;
+        return `border transition-all ${
+          isCardDark
+            ? 'bg-zinc-900/90 border-zinc-700/80 text-white placeholder-zinc-400 focus:bg-zinc-950 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40'
+            : 'bg-slate-100 border-slate-300 text-slate-900 placeholder-slate-500 font-medium focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 shadow-2xs'
+        } ${rounded}`;
       case 'underlined':
-        return `bg-transparent border-b-2 ${darkTheme ? 'border-zinc-600 text-white placeholder-zinc-400' : 'border-slate-400 text-slate-900 placeholder-slate-500'} focus:border-blue-600 rounded-none px-1 font-medium`;
+        return `bg-transparent border-b-2 ${
+          isCardDark
+            ? 'border-zinc-600 text-white placeholder-zinc-400 focus:border-blue-400'
+            : 'border-slate-400 text-slate-900 placeholder-slate-500 focus:border-blue-600 font-medium'
+        } rounded-none px-1`;
       case 'outlined':
       default:
         return `${rounded} ${
-          darkTheme
-            ? 'bg-zinc-900/80 border border-zinc-700/80 text-white placeholder-zinc-400 focus:bg-zinc-900/95 focus:ring-blue-500 focus:border-blue-500'
-            : 'bg-white/85 border border-slate-300/90 text-slate-900 placeholder-slate-500 font-medium focus:bg-white focus:ring-slate-900 focus:border-slate-900'
+          isCardDark
+            ? 'bg-zinc-900/90 border border-zinc-700/90 text-white placeholder-zinc-400 focus:bg-zinc-950 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500'
+            : 'bg-white border border-slate-300 text-slate-900 placeholder-slate-500 font-medium focus:bg-white focus:ring-2 focus:ring-blue-600/30 focus:border-blue-600 shadow-2xs'
         }`;
     }
   };
@@ -1166,14 +1215,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
       case 'rose':
         return `bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 ${rounded}`;
       case 'slate':
-        return `bg-zinc-900 hover:bg-black text-white shadow-lg shadow-zinc-900/30 ${rounded}`;
+      case 'neutral':
+        return `${
+          isCardDark
+            ? 'bg-zinc-100 hover:bg-white text-zinc-950 shadow-lg shadow-black/50'
+            : 'bg-slate-900 hover:bg-slate-950 text-white shadow-lg shadow-slate-900/25'
+        } font-bold transition-all ${rounded}`;
       case 'blue':
       default:
-        return `${rounded} ${
-          darkTheme
-            ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 text-white shadow-lg shadow-blue-950/80 hover:shadow-blue-600/30'
-            : 'bg-zinc-950 hover:bg-black text-white shadow-lg shadow-zinc-950/30'
-        }`;
+        return `bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/30 ${rounded} font-bold transition-all`;
     }
   };
 
@@ -1455,14 +1505,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Main Card Container with White Gradient Styling */}
             <div
               className={`${getBlurFilter()} border ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
-                darkTheme
+                isCardDark
                   ? 'text-zinc-100'
                   : 'text-slate-900'
               }`}
               style={{
-                background: darkTheme
-                  ? `linear-gradient(145deg, rgba(24, 24, 27, ${Math.min(0.95, (cardOpacity / 100) + 0.15)}) 0%, rgba(9, 9, 11, ${cardOpacity / 100}) 100%)`
-                  : `linear-gradient(145deg, rgba(255, 255, 255, ${Math.min(0.98, (cardOpacity / 100) + 0.25)}) 0%, rgba(255, 255, 255, ${Math.min(0.92, (cardOpacity / 100) + 0.15)}) 45%, rgba(248, 250, 252, ${Math.min(0.96, (cardOpacity / 100) + 0.2)}) 100%)`,
+                background: getCardBackgroundStyle(),
                 backdropFilter: cardBlur !== 'none' ? `blur(${cardBlur === 'sm' ? '4px' : cardBlur === 'md' ? '8px' : cardBlur === 'lg' ? '16px' : cardBlur === 'xl' ? '24px' : '32px'})` : 'none',
               }}
             >
@@ -1480,7 +1528,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       ) : (
                         <div
                           className={`${getLogoSizeClass()} flex items-center justify-center rounded-2xl border shadow-inner ${
-                            darkTheme
+                            isCardDark
                               ? 'bg-zinc-900/60 border-zinc-700/50 text-blue-400'
                               : 'bg-white/70 border-slate-200 text-zinc-900'
                           }`}
@@ -1495,7 +1543,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     {sekolah.loginCardShowSchoolName !== false && (
                       <h1
                         className={`text-xs sm:text-sm font-bold tracking-normal uppercase ${
-                          darkTheme ? 'text-zinc-300' : 'text-slate-700'
+                          isCardDark ? 'text-zinc-300' : 'text-slate-700'
                         }`}
                       >
                         {sekolah.nama || 'SMK NEGERI 6 GARUT'}
@@ -1503,7 +1551,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     )}
                     <p
                       className={`text-xl sm:text-2xl font-black tracking-tight mt-0.5 ${
-                        darkTheme ? 'text-white' : 'text-slate-950'
+                        isCardDark ? 'text-white' : 'text-slate-950'
                       }`}
                     >
                       {sekolah.loginCardWelcomeTitle || sekolah.headerSubtitle || 'Sistem Absensi Siswa'}
@@ -1511,7 +1559,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
 
                   {sekolah.loginCardShowAcademicYear !== false && (
-                    <div className={`flex items-center gap-2 text-xs font-bold ${darkTheme ? 'text-zinc-300' : 'text-slate-700'} ${getLogoAlignClass()}`}>
+                    <div className={`flex items-center gap-2 text-xs font-bold ${isCardDark ? 'text-zinc-300' : 'text-slate-700'} ${getLogoAlignClass()}`}>
                       <span>Tahun Ajaran {tahunAjaran}</span>
                       <span className="opacity-40">·</span>
                       <span>Semester {semester}</span>
@@ -1550,7 +1598,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <div className="space-y-1.5 text-left">
                   <label
                     className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider ${
-                      isDarkMode ? 'text-zinc-200' : 'text-slate-900'
+                      isCardDark ? 'text-zinc-200' : 'text-slate-900'
                     }`}
                   >
                     Username / NIP / NISN
@@ -1558,7 +1606,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <div className="relative">
                     <div
                       className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                        isDarkMode ? 'text-blue-400' : 'text-zinc-600'
+                        isCardDark ? 'text-blue-400' : 'text-slate-600'
                       }`}
                     >
                       <User className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
@@ -1578,7 +1626,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <div className="space-y-1.5 text-left">
                   <label
                     className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider ${
-                      isDarkMode ? 'text-zinc-200' : 'text-slate-900'
+                      isCardDark ? 'text-zinc-200' : 'text-slate-900'
                     }`}
                   >
                     Password
@@ -1586,7 +1634,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <div className="relative">
                     <div
                       className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${
-                        isDarkMode ? 'text-blue-400' : 'text-zinc-600'
+                        isCardDark ? 'text-blue-400' : 'text-slate-600'
                       }`}
                     >
                       <Lock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
@@ -1605,7 +1653,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
                       title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
                       className={`absolute inset-y-0 right-0 my-auto h-8 w-8 mr-1.5 flex items-center justify-center rounded-lg transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 active:scale-95 ${
-                        isDarkMode
+                        isCardDark
                           ? 'text-zinc-400 hover:text-blue-400 hover:bg-zinc-800/70'
                           : 'text-slate-600 hover:text-zinc-950 hover:bg-slate-100'
                       }`}
@@ -1625,12 +1673,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
                         className={`w-3.5 h-3.5 rounded border-2 transition-colors cursor-pointer accent-blue-600 ${
-                          isDarkMode
+                          isCardDark
                             ? 'bg-zinc-900 border-zinc-700'
                             : 'bg-white border-slate-400'
                         }`}
                       />
-                      <span className={`text-xs font-bold ${isDarkMode ? 'text-zinc-300' : 'text-slate-800'}`}>Ingat saya</span>
+                      <span className={`text-xs font-bold ${isCardDark ? 'text-zinc-300' : 'text-slate-800'}`}>Ingat saya</span>
                     </label>
                   </div>
                 </div>
@@ -1684,7 +1732,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     <div className="flex items-center justify-between gap-2 px-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Megaphone className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                        <span className={`text-[11px] font-black uppercase tracking-wider ${isDarkMode ? 'text-zinc-300' : 'text-slate-700'}`}>
+                        <span className={`text-[11px] font-black uppercase tracking-wider ${isCardDark ? 'text-zinc-300' : 'text-slate-700'}`}>
                           Pengumuman
                         </span>
                         {totalAnnouncements > 1 && (
@@ -1741,7 +1789,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         }
                       }}
                       className={`px-3 py-2 rounded-xl border transition-all duration-150 hover:scale-[1.01] cursor-pointer flex items-center justify-between gap-2 ${
-                        isDarkMode
+                        isCardDark
                           ? 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-700/70 text-zinc-100 shadow-sm'
                           : 'bg-slate-50/90 hover:bg-slate-100 border-slate-200 text-slate-900 shadow-xs'
                       }`}
@@ -1833,9 +1881,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-between gap-2 cursor-pointer shadow-2xs border ${
                           isCustomLinksDropdownOpen
                             ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-500/30'
-                            : isDarkMode
+                            : isCardDark
                             ? 'bg-zinc-900/85 hover:bg-zinc-800 border-zinc-700/70 text-zinc-200 hover:text-white'
-                            : 'bg-white/95 hover:bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900'
+                            : 'bg-slate-100/90 hover:bg-slate-200/90 border-slate-300/80 text-slate-800 hover:text-slate-950 shadow-xs'
                         }`}
                         title="Klik untuk membuka tautan dan informasi penting"
                       >
@@ -1844,7 +1892,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                             className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                               isCustomLinksDropdownOpen
                                 ? 'bg-white/20 text-white'
-                                : isDarkMode
+                                : isCardDark
                                 ? 'bg-blue-950/60 text-blue-400'
                                 : 'bg-blue-50 text-blue-600'
                             }`}
@@ -1858,7 +1906,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                             className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
                               isCustomLinksDropdownOpen
                                 ? 'bg-white/25 text-white'
-                                : isDarkMode
+                                : isCardDark
                                 ? 'bg-zinc-800 text-zinc-300'
                                 : 'bg-slate-100 text-slate-600'
                             }`}
@@ -1992,9 +2040,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                               }
                             }}
                             className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all duration-150 flex items-center gap-1.5 shadow-2xs hover:scale-105 active:scale-95 cursor-pointer ${
-                              isDarkMode
+                              isCardDark
                                 ? 'bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/70 text-zinc-200 hover:text-white'
-                                : 'bg-white/90 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900'
+                                : 'bg-slate-100/90 hover:bg-slate-200/90 border border-slate-300/80 text-slate-800 hover:text-slate-950 shadow-xs'
                             }`}
                             title={lnk.description || lnk.label}
                           >
@@ -2012,12 +2060,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
               })()}
               </div>
 
-            {/* FOOTER BAR */}
-            <footer className={`w-full relative z-20 mt-5 sm:mt-6 pt-4 pb-1 sm:pb-2 border-t border-slate-200/50 dark:border-zinc-800/50 text-center shrink-0 ${isBackgroundDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
-              <p className="text-[11px] font-bold drop-shadow-xs opacity-90">
+            {/* FOOTER BAR (AT THE BOTTOM OF LOGIN CARD) */}
+            <footer className={`w-full relative z-20 mt-5 sm:mt-6 pt-3.5 pb-1 sm:pb-1.5 border-t text-center shrink-0 transition-colors ${
+              isCardDark 
+                ? 'border-zinc-800/80 text-zinc-300' 
+                : 'border-slate-200/80 text-slate-700'
+            }`}>
+              <p className={`text-[11px] font-bold tracking-tight ${isCardDark ? 'text-zinc-200' : 'text-slate-700'}`}>
                 {sekolah.footerTeks || `© ${new Date().getFullYear()} ${sekolah.nama || 'SMKN 6 Garut'}. Hak Cipta Dilindungi.`}
               </p>
-              <p className="text-[10px] font-medium mt-0.5 drop-shadow-xs opacity-75">
+              <p className={`text-[10px] font-medium mt-0.5 ${isCardDark ? 'text-zinc-400' : 'text-slate-500'}`}>
                 {sekolah.footerSubTeks || 'Sistem Rekapitulasi Presensi & Kehadiran Digital'}
               </p>
             </footer>
