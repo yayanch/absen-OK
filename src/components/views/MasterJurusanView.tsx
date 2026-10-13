@@ -14,7 +14,6 @@ interface MasterJurusanViewProps {
   onCloseModal: () => void;
   onConfirmModal: (title: string, message: string, type: 'danger' | 'warning' | 'info' | 'emerald', onConfirm: () => void) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
-  onRestoreDemo?: () => void;
 }
 
 interface JurusanFormModalContentProps {

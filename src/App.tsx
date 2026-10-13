@@ -59,7 +59,6 @@ const PengaturanAdminView = React.lazy(() => import('./components/views/Pengatur
 const MasterUserView = React.lazy(() => import('./components/views/MasterUserView').then(m => ({ default: m.MasterUserView })));
 const PengaturanRoleView = React.lazy(() => import('./components/views/PengaturanRoleView').then(m => ({ default: m.PengaturanRoleView })));
 const PengaturanMenuView = React.lazy(() => import('./components/views/PengaturanMenuView').then(m => ({ default: m.PengaturanMenuView })));
-const DataDemoView = React.lazy(() => import('./components/views/DataDemoView').then(m => ({ default: m.DataDemoView })));
 const IntegrasiMySQLView = React.lazy(() => import('./components/views/IntegrasiMySQLView').then(m => ({ default: m.IntegrasiMySQLView })));
 const DatabaseTrafficView = React.lazy(() => import('./components/views/DatabaseTrafficView').then(m => ({ default: m.DatabaseTrafficView })));
 const CetakKartuQrView = React.lazy(() => import('./components/views/CetakKartuQrView').then(m => ({ default: m.CetakKartuQrView })));
@@ -1133,23 +1132,6 @@ export default function App() {
   };
 
   // Inisialisasi State Awal
-  const handleRestoreDemoData = () => {
-    if (appData.siswa && appData.siswa.length > 0) {
-      showToast(`Sistem sudah memiliki data riil sekolah (${appData.siswa.length} siswa, ${appData.waliKelas?.length || 0} guru). Data demo telah dihapus dan dinonaktifkan demi keamanan data sekolah.`, 'warning');
-      return;
-    }
-    openConfirmModal(
-      'Inisialisasi State Bersih',
-      'Apakah Anda yakin ingin mengatur ulang aplikasi ke keadaan awal bersih (clean state)? Seluruh tabel akan dimulai dari awal.',
-      'warning',
-      () => {
-        const resetData = JSON.parse(JSON.stringify(DEMO_DATASET));
-        handleUpdateAppData(resetData);
-
-        showToast('State awal bersih berhasil diterapkan.', 'success');
-      }
-    );
-  };
 
   const handleResetPresensiData = () => {
     openConfirmModal(
@@ -1213,7 +1195,6 @@ export default function App() {
         onCloseModal={closeGeneralModal}
         onShowToast={showToast}
         onConfirmModal={openConfirmModal}
-        onRestoreDemoData={handleRestoreDemoData}
         onResetPresensiData={handleResetPresensiData}
         onResetAllData={handleResetAllData}
       />,
@@ -1320,7 +1301,6 @@ export default function App() {
           adminPassword={appData.admin?.password || 'admin123'}
           onSwitchView={(v) => handleNavigate(v)}
           onCloseMobile={() => setSidebarOpen(false)}
-          onRestoreDemo={handleRestoreDemoData}
           onResetPresensi={handleResetPresensiData}
           onResetAll={handleResetAllData}
           onOpenBackupModal={handleOpenBackupModal}
@@ -1785,16 +1765,6 @@ export default function App() {
                 appData={appData}
                 readOnly={!userEffectiveRoles.includes('admin')}
                 onUpdateAppData={handleUpdateAppData}
-                onShowToast={showToast}
-              />
-            )}
-
-            {currentView === 'data_demo' && (
-              <DataDemoView
-                appData={appData}
-                readOnly={currentUser.role !== 'admin'}
-                onUpdateAppData={handleUpdateAppData}
-                onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
               />
             )}

@@ -329,13 +329,6 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     category: 'pengaturan',
     iconName: 'Palette',
   },
-  {
-    id: 'data_demo',
-    label: 'Manajemen Data Demo',
-    shortDesc: 'Inisialisasi data sampel pengujian sistem dan reset demo',
-    category: 'pengaturan',
-    iconName: 'Sparkles',
-  },
 ];
 
 export const MENU_CATEGORIES: MenuCategoryInfo[] = [

@@ -58,7 +58,6 @@ interface SidebarProps {
   adminPassword?: string;
   onSwitchView: (view: ViewType) => void;
   onCloseMobile: () => void;
-  onRestoreDemo?: () => void;
   onResetPresensi?: () => void;
   onResetAll: () => void;
   onOpenBackupModal?: () => void;
@@ -76,7 +75,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   adminPassword,
   onSwitchView,
   onCloseMobile,
-  onRestoreDemo,
   onResetPresensi,
   onResetAll,
   onOpenBackupModal,

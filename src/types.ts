@@ -930,7 +930,6 @@ export type ViewType =
   | 'master_siswa'
   | 'jadwal_mengajar'
   | 'jadwal_minggu_ini'
-  | 'data_demo'
   | 'pengaturan_sekolah'
   | 'pengaturan_tema'
   | 'pengaturan_admin'

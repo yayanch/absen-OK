@@ -53,7 +53,6 @@ interface BackupRestoreModalContentProps {
     type: 'danger' | 'warning' | 'info' | 'emerald',
     onConfirm: () => void
   ) => void;
-  onRestoreDemoData?: () => void;
   onResetPresensiData?: () => void;
   onResetAllData?: () => void;
 }
@@ -99,7 +98,6 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
   onCloseModal,
   onShowToast,
   onConfirmModal,
-  onRestoreDemoData,
   onResetPresensiData,
   onResetAllData,
 }) => {
@@ -1426,28 +1424,6 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
               >
                 <RefreshCw className={`w-3 h-3 ${isCleaningCache ? 'animate-spin' : ''}`} />
                 <span>{isCleaningCache ? 'Membersihkan...' : 'Bersihkan Cache'}</span>
-              </button>
-            </div>
-
-            {/* Muat Ulang Demo */}
-            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-extrabold text-slate-800 dark:text-white">
-                  Muat Ulang Data Demo Sekolah
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Mengembalikan dataset sekolah contoh (jurusan, kelas, siswa, guru, jadwal &amp; presensi demo).
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onRestoreDemoData) onRestoreDemoData();
-                  else onShowToast('Fungsi muat demo siap dijalankan.', 'info');
-                }}
-                className="px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer"
-              >
-                Muat Demo
               </button>
             </div>
 

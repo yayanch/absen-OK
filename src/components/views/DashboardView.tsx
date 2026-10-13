@@ -29,7 +29,6 @@ interface DashboardViewProps {
   currentUser: UserSession;
   onNavigateToInput: (kelasId?: string) => void;
   onNavigateView: (view: ViewType) => void;
-  onRestoreDemo?: () => void;
   onOpenBackupModal?: () => void;
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;

@@ -198,8 +198,7 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
       'pengaturan_role',
       'pengaturan_menu',
       'pengaturan_sekolah',
-      'pengaturan_tema',
-      'data_demo'
+      'pengaturan_tema'
     ]
   }
 ];
