@@ -94,6 +94,9 @@ export const getRoleBadgeClass = (role?: string, customRoles?: CustomRole[]) => 
       return 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800';
     case 'staf_jadwal':
       return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800';
+    case 'adm_siswa':
+    case 'admin_siswa':
+      return 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800';
     case 'hubin':
       return 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800';
     case 'guru':
@@ -120,6 +123,9 @@ export const getRoleLabel = (role?: string, customRoles?: CustomRole[]) => {
       return 'WKS Kurikulum';
     case 'staf_jadwal':
       return 'Staf Pengelola Jadwal';
+    case 'adm_siswa':
+    case 'admin_siswa':
+      return 'Admin Siswa (Non-Guru)';
     case 'hubin':
       return 'WKS Hubin';
     case 'guru':
@@ -168,6 +174,7 @@ export const getAvailableRoleOptionsList = (appData: AppData): AvailableRoleOpti
     { id: 'kesiswaan', label: 'WKS Kesiswaan / BP BK', badgeColor: 'purple', description: 'Pengawasan presensi, kedisiplinan, poin pelanggaran & home visit', isSystem: true },
     { id: 'kurikulum', label: 'WKS Kurikulum', badgeColor: 'indigo', description: 'Master mapel, kurikulum pembelajaran & jadwal mengajar guru', isSystem: true },
     { id: 'staf_jadwal', label: 'Staf Pengelola Jadwal', badgeColor: 'cyan', description: 'Pengaturan teknis alokasi jadwal pelajaran dan plotting jam', isSystem: true },
+    { id: 'adm_siswa', label: 'Admin Siswa (Non-Guru)', badgeColor: 'sky', description: 'Pengelolaan data siswa, NISN, kartu pelajar & rekapitulasi siswa (Non-Guru)', isSystem: true },
     { id: 'hubin', label: 'WKS Hubin / Humas', badgeColor: 'teal', description: 'Kemitraan industri, data kejuruan & penelusuran lulusan', isSystem: true },
     { id: 'wali', label: 'Wali Kelas', badgeColor: 'emerald', description: 'Pembina kelas binaan, presensi harian & rekapitulasi kelas', isSystem: true },
     { id: 'piket_kesiswaan', label: 'Piket Kesiswaan', badgeColor: 'amber', description: 'Scan QR presensi, pencatatan pelanggaran & edit presensi siswa', isSystem: true },
@@ -955,10 +962,29 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       });
     }
 
+    // Staf Administrasi Siswa (Non-Guru - adm_siswa TIDAK termasuk guru)
+    if (appData.admSiswa) {
+      const asRoles = Array.isArray(appData.admSiswa.roles) && appData.admSiswa.roles.length > 0
+        ? appData.admSiswa.roles
+        : ['adm_siswa'];
+      list.push({
+        id: 'USER_ADM_SISWA',
+        nama: appData.admSiswa.nama || 'Staf Administrasi Siswa',
+        username: appData.admSiswa.username || 'adm_siswa',
+        nip: appData.admSiswa.nip || 'ADM-SISWA-01',
+        password: appData.admSiswa.password || '123',
+        role: asRoles[0] || 'adm_siswa',
+        roles: asRoles,
+        originalType: 'user',
+        noHp: appData.admSiswa.noHp,
+        foto: appData.admSiswa.foto,
+      });
+    }
+
     effectiveWaliKelas.forEach((w) => {
       const userRoles: UserRole[] = Array.isArray(w.roles) && w.roles.length > 0
         ? w.roles
-        : [w.role && ['admin', 'wali', 'kesiswaan', 'user', 'guru', 'kurikulum', 'hubin', 'staf_jadwal', 'murid'].includes(w.role) ? w.role : 'wali'];
+        : [w.role && ['admin', 'adm_siswa', 'wali', 'kesiswaan', 'user', 'guru', 'kurikulum', 'hubin', 'staf_jadwal', 'murid'].includes(w.role) ? w.role : 'wali'];
       
       const primaryRole: UserRole = userRoles[0] || 'wali';
       const isWaliRole = userRoles.includes('wali');
@@ -980,7 +1006,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         password: effectivePassword,
         role: primaryRole,
         roles: userRoles,
-        originalType: userRoles.includes('kesiswaan') ? 'kesiswaan' : (userRoles.includes('user') || userRoles.includes('guru')) ? 'user' : 'wali',
+        originalType: userRoles.includes('adm_siswa') ? 'user' : userRoles.includes('kesiswaan') ? 'kesiswaan' : (userRoles.includes('user') || userRoles.includes('guru')) ? 'user' : 'wali',
         noHp: w.noHp,
         foto: w.foto,
         kelasNama: k ? k.nama : undefined,
@@ -1035,10 +1061,27 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   const userHasMatchingRole = (u: UserItem, targetRole: string) => {
     const roles = u.roles && u.roles.length > 0 ? u.roles : [u.role];
     if (targetRole === 'user' || targetRole === 'guru') {
+      // adm_siswa TIDAK termasuk guru!
+      const isAdmSiswa =
+        roles.includes('adm_siswa') ||
+        roles.includes('admin_siswa') ||
+        u.role === 'adm_siswa' ||
+        u.username === 'adm_siswa';
+      if (isAdmSiswa && !roles.includes('guru') && !roles.includes('user')) {
+        return false;
+      }
       return roles.some((r) => r === 'user' || r === 'guru');
     }
     if (targetRole === 'murid' || targetRole === 'siswa') {
       return roles.some((r) => r === 'murid' || r === 'siswa');
+    }
+    if (targetRole === 'adm_siswa' || targetRole === 'admin_siswa') {
+      return (
+        roles.includes('adm_siswa') ||
+        roles.includes('admin_siswa') ||
+        u.role === 'adm_siswa' ||
+        u.username === 'adm_siswa'
+      );
     }
     return roles.includes(targetRole);
   };
@@ -1372,6 +1415,32 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       return;
     }
 
+    // 2c. Staf Administrasi Siswa (Non-Guru - adm_siswa TIDAK termasuk guru)
+    if ((finalRoles.includes('adm_siswa') || finalRoles.includes('admin_siswa')) && editingUser?.id === 'USER_ADM_SISWA') {
+      const nextAdmSiswa = {
+        ...(appData.admSiswa || { jabatan: 'Staf Administrasi Siswa' }),
+        nama,
+        username,
+        nip: nip && nip !== '-' ? nip : 'ADM-SISWA-01',
+        password: password || '123',
+        noHp,
+        foto: editingUser?.foto || appData.admSiswa?.foto || '',
+        roles: finalRoles,
+      };
+      const nextAppData = addAuditLog(
+        {
+          ...appData,
+          admSiswa: nextAdmSiswa,
+        },
+        editingUser ? 'Ubah data staf adm siswa' : 'Tambah akun staf adm siswa',
+        `${editingUser ? 'Mengubah' : 'Menambahkan'} data akun Admin Siswa: ${nama} (Roles: ${finalRoles.join(', ')})`
+      );
+      onUpdateAppData(nextAppData);
+      onShowToast(`Data akun Admin Siswa "${nama}" berhasil ${editingUser ? 'diperbarui' : 'ditambahkan'}!`, 'success');
+      onCloseModal();
+      return;
+    }
+
     // 3. Wali / Kesiswaan / Guru / Kurikulum / Hubin / Multi-Role
     let updatedWaliKelas = [...(appData.waliKelas || [])];
     let nextKesiswaan = appData.kesiswaan ? { ...appData.kesiswaan } : undefined;
@@ -1596,6 +1665,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
   const kesiswaanCount = allUsers.filter((u) => userHasMatchingRole(u, 'kesiswaan')).length;
   const kurikulumCount = allUsers.filter((u) => userHasMatchingRole(u, 'kurikulum')).length;
   const stafJadwalCount = allUsers.filter((u) => userHasMatchingRole(u, 'staf_jadwal')).length;
+  const admSiswaCount = allUsers.filter((u) => userHasMatchingRole(u, 'adm_siswa')).length;
   const hubinCount = allUsers.filter((u) => userHasMatchingRole(u, 'hubin')).length;
   const piketGuruCount = allUsers.filter((u) => userHasMatchingRole(u, 'piket_guru')).length;
   const piketKesiswaanCount = allUsers.filter((u) => userHasMatchingRole(u, 'piket_kesiswaan')).length;
@@ -1657,6 +1727,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                   <option value="kesiswaan">Kesiswaan ({kesiswaanCount})</option>
                   <option value="kurikulum">Kurikulum ({kurikulumCount})</option>
                   <option value="staf_jadwal">Staf Jadwal ({stafJadwalCount})</option>
+                  <option value="adm_siswa">Admin Siswa ({admSiswaCount})</option>
                   <option value="hubin">Hubin ({hubinCount})</option>
                   <option value="piket_guru">Piket Guru ({piketGuruCount})</option>
                   <option value="piket_kesiswaan">Piket Kesiswaan ({piketKesiswaanCount})</option>

@@ -488,6 +488,52 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
     );
   }
 
+  if (role === 'adm_siswa') {
+    return (
+      <div className="space-y-2">
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+          Aksi Cepat Admin Siswa
+        </div>
+        <motion.div
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+          variants={cardContainerVariants}
+          initial="hidden"
+          animate="show"
+        >
+          <QuickActionBtn
+            onClick={() => onNavigateView('master_siswa')}
+            iconBgClass="bg-sky-500/10 text-sky-600 dark:text-sky-400"
+            icon={<Users className="w-4 h-4" />}
+            title="Data Siswa"
+            subtitle="Kelola master peserta didik"
+          />
+          <QuickActionBtn
+            onClick={() => onNavigateView('rekap_harian')}
+            iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            icon={<CheckCircle2 className="w-4 h-4" />}
+            title="Rekap Harian"
+            subtitle="Presensi harian siswa"
+          />
+          <QuickActionBtn
+            onClick={() => onNavigateView('cetak_kartu_qr')}
+            iconBgClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+            icon={<QrCode className="w-4 h-4" />}
+            title="Cetak Kartu QR"
+            subtitle="Kartu pelajar & barcode"
+          />
+          <QuickActionBtn
+            onClick={() => onNavigateView('catatan_pelanggaran')}
+            iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+            icon={<ShieldAlert className="w-4 h-4" />}
+            title="Pelanggaran Siswa"
+            subtitle="Catatan & poin kedisiplinan"
+          />
+        </motion.div>
+      </div>
+    );
+  }
+
   // Guru Role (Tidak menampilkan aksi cepat di dashboard guru sesuai permintaan)
   return null;
 };

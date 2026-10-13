@@ -88,11 +88,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isKesiswaan = userEffectiveRoles.includes('kesiswaan') || userEffectiveRoles.includes('piket_kesiswaan');
   const isKurikulum = userEffectiveRoles.includes('kurikulum');
   const isStafJadwal = userEffectiveRoles.includes('staf_jadwal');
+  const isAdmSiswa = userEffectiveRoles.includes('adm_siswa');
   const isHubin = userEffectiveRoles.includes('hubin');
   const isWali = userEffectiveRoles.includes('wali') || Boolean((currentUser.data as any)?.id && appData?.kelas?.some((k) => k.waliKelasId === (currentUser.data as any)?.id));
   const isMurid = userEffectiveRoles.includes('murid') || userEffectiveRoles.includes('siswa');
   const isUserBiasa = userEffectiveRoles.includes('user') || userEffectiveRoles.includes('guru') || isKurikulum || isHubin || isStafJadwal;
-  const isGuruOnly = (userEffectiveRoles.includes('guru') || userEffectiveRoles.includes('user')) && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal;
+  const isGuruOnly = (userEffectiveRoles.includes('guru') || userEffectiveRoles.includes('user')) && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal && !isAdmSiswa;
   const canViewMaster = !isMurid;
   const isLiveChatEnabled = enableLiveChat ?? sekolah.enableLiveChat ?? true;
 

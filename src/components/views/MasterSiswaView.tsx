@@ -246,28 +246,29 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
   const userRole = currentUser?.role || 'admin';
   const userRoles = Array.isArray(currentUser?.roles) ? currentUser.roles : [userRole];
   const isAdmin = userRole === 'admin';
+  const isAdmSiswa = userRole === 'adm_siswa' || userRoles.includes('adm_siswa');
   const isWali = userRole === 'wali' || userRoles.includes('wali');
   const isKesiswaan = userRole === 'kesiswaan' || userRoles.includes('kesiswaan');
-  const isGuru = userRole === 'guru' || userRole === 'user' || userRoles.includes('guru');
+  const isGuru = (userRole === 'guru' || userRole === 'user' || userRoles.includes('guru')) && !isAdmSiswa;
   const isMurid = userRole === 'murid' || userRole === 'siswa' || userRoles.includes('murid');
 
   const currentGuruId = String((currentUser?.data as any)?.id || '');
   const currentUsername = String((currentUser?.data as any)?.username || '').toLowerCase();
   const currentNip = String((currentUser?.data as any)?.nip || '').toLowerCase();
 
-  const canEdit = !readOnly || isAdmin || isWali || isKesiswaan;
-  const canAdd = !readOnly || isAdmin || isWali || isKesiswaan;
-  const canDelete = !readOnly && (isAdmin || isKesiswaan);
-  const canMassDelete = !readOnly && (isAdmin || isKesiswaan);
+  const canEdit = !readOnly || isAdmin || isWali || isKesiswaan || isAdmSiswa;
+  const canAdd = !readOnly || isAdmin || isWali || isKesiswaan || isAdmSiswa;
+  const canDelete = !readOnly && (isAdmin || isKesiswaan || isAdmSiswa);
+  const canMassDelete = !readOnly && (isAdmin || isKesiswaan || isAdmSiswa);
 
   const sortedKelas = sortKelasList(appData.kelas);
   const waliClasses = isWali
     ? sortedKelas.filter((k) => k.waliKelasId === (currentUser?.data as any)?.id)
     : sortedKelas;
 
-  // Compute class IDs that are strictly "Kelas Binaan" (wali kelas binaan or admin/kesiswaan)
+  // Compute class IDs that are strictly "Kelas Binaan" (wali kelas binaan or admin/kesiswaan/adm_siswa)
   const binaanClassIds = useMemo(() => {
-    if (isAdmin || isKesiswaan) return null; // Admin/kesiswaan has full management access
+    if (isAdmin || isKesiswaan || isAdmSiswa) return null; // Admin/kesiswaan/adm_siswa has full management access
     const matchedGuru = (appData?.waliKelas || []).find((g) => {
       return (
         (g.id && g.id === currentGuruId) ||

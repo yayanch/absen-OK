@@ -49,6 +49,13 @@ export const CHAT_TARGET_DEFINITIONS: ChatTargetInfo[] = [
     badgeColor: 'cyan',
   },
   {
+    id: 'adm_siswa',
+    label: 'Staf Administrasi Siswa',
+    shortDesc: 'Akses koordinasi data siswa, NISN, kartu pelajar & administrasi',
+    group: 'staff',
+    badgeColor: 'cyan',
+  },
+  {
     id: 'wali_all',
     label: 'Semua Wali Kelas',
     shortDesc: 'Akses kontak ke seluruh Wali Kelas yang terdaftar di sekolah',
@@ -497,6 +504,25 @@ export function getPermittedChatContacts(
         foto: (appData.stafJadwal as any)?.foto,
         noHp: (appData.stafJadwal as any)?.noHp || '',
         badge: 'Jadwal',
+      };
+    }
+  }
+
+  // 5b. Target: 'adm_siswa'
+  if (allowed.includes('adm_siswa')) {
+    const admSiswaUser = appData.admSiswa?.username || 'adm_siswa';
+    const asKey = String(admSiswaUser).toLowerCase();
+    if (asKey !== currentUsername) {
+      threadMap[asKey] = {
+        username: admSiswaUser,
+        nama: appData.admSiswa?.nama ? `${appData.admSiswa.nama} (Admin Siswa)` : 'Staf Administrasi Siswa',
+        role: 'adm_siswa',
+        lastTime: '',
+        unread: 0,
+        lastText: 'Administrasi Siswa & Kartu Pelajar',
+        foto: (appData.admSiswa as any)?.foto,
+        noHp: (appData.admSiswa as any)?.noHp || '',
+        badge: 'Admin Siswa',
       };
     }
   }

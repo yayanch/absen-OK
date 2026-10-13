@@ -374,6 +374,14 @@ export const DEMO_DATASET: AppData = {
     noHp: "6282112345678",
     foto: ""
   },
+  admSiswa: {
+    username: "adm_siswa",
+    password: "123",
+    nama: "Siti Rahmawati, A.Md (Admin Siswa)",
+    jabatan: "Staf Administrasi & Data Siswa (Non-Guru)",
+    noHp: "6282199887766",
+    foto: ""
+  },
   userBiasa: {
     username: "guru",
     password: "123",

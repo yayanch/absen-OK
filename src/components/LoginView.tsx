@@ -692,6 +692,43 @@ export const LoginView: React.FC<LoginViewProps> = ({
         }
       }
 
+      // 5b. Check Staf Administrasi Siswa (Non-Guru - adm_siswa TIDAK termasuk guru)
+      const admSiswaData = appData.admSiswa;
+      const isAdmSiswaAlias =
+        uInput === 'adm_siswa' ||
+        uInput === 'admsiswa' ||
+        uInput === 'admin_siswa' ||
+        uInput === 'adminsiswa' ||
+        uInput === 'operator_siswa' ||
+        (admSiswaData && (
+          String(admSiswaData.username || '').toLowerCase() === uInput ||
+          String(admSiswaData.nip || '').toLowerCase() === uInput
+        ));
+
+      if (isAdmSiswaAlias) {
+        const curAdmSiswa = admSiswaData || {
+          username: 'adm_siswa',
+          password: '123',
+          nama: 'Siti Rahmawati, A.Md (Admin Siswa)',
+        };
+        const expectedPassword = String(curAdmSiswa.password || '').trim();
+        const validAdmSiswaPasswords = Array.from(
+          new Set([expectedPassword, '123', 'admsiswa123', 'adm_siswa'])
+        ).filter(Boolean);
+
+        if (validAdmSiswaPasswords.includes(pInput)) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('adm_siswa', curAdmSiswa);
+          onShowToast(`Login berhasil sebagai Admin Siswa: ${curAdmSiswa.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'adm_siswa');
+          onShowToast('Password Admin Siswa salah! (Default: 123)', 'error');
+          return;
+        }
+      }
+
       // 6. Check User Biasa / Guru
       const userBiasaData = appData.userBiasa;
       const isUserBiasaAlias =
@@ -733,6 +770,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         const expectedPassword = String(
           matchedUser.password ||
             (role === 'kesiswaan' ? appData.kesiswaan?.password : '') ||
+            (role === 'adm_siswa' ? appData.admSiswa?.password : '') ||
             (role === 'guru' || role === 'user' ? appData.userBiasa?.password : '') ||
             '123'
         ).trim();
@@ -751,7 +789,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
         if (validWaliPasswords.includes(pInput)) {
           const todayDayName = getIndonesianDayName(new Date());
           const teachingDays = matchedUser.hariMengajar || [];
-          const isRestricted = matchedUser.batasiLoginHariMengajar && teachingDays.length > 0;
+          const isTeacher = role === 'guru' || role === 'user';
+          const isRestricted = isTeacher && matchedUser.batasiLoginHariMengajar && teachingDays.length > 0;
 
           if (isRestricted && !isTeacherTeachingToday(teachingDays)) {
             setIsLoggingIn(false);
@@ -767,12 +806,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
           setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
           handleSuccessfulLogin(role, matchedUser);
           const roleLabel =
-            role === 'kesiswaan'
+            role === 'adm_siswa'
+              ? 'Admin Siswa (Non-Guru)'
+              : role === 'kesiswaan'
               ? 'Tim Kesiswaan & BP BK'
               : role === 'kurikulum'
               ? 'WKS Kurikulum'
               : role === 'hubin'
               ? 'WKS Hubin / Humas'
+              : role === 'staf_jadwal'
+              ? 'Staf Pengelola Jadwal'
               : role === 'guru' || role === 'user'
               ? 'Guru Pengajar'
               : 'Wali Kelas';

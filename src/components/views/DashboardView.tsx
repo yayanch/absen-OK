@@ -364,6 +364,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ? 'kurikulum'
       : effectiveRoles.includes('staf_jadwal')
       ? 'staf_jadwal'
+      : effectiveRoles.includes('adm_siswa')
+      ? 'kesiswaan'
       : (currentUser.role || 'guru');
 
     switch (primaryEffectiveRole) {

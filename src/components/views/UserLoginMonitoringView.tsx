@@ -593,6 +593,12 @@ export const UserLoginMonitoringView: React.FC<UserLoginMonitoringViewProps> = (
             Staf Jadwal
           </span>
         );
+      case 'adm_siswa':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">
+            Admin Siswa
+          </span>
+        );
       default:
         return (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -1058,6 +1064,7 @@ export const UserLoginMonitoringView: React.FC<UserLoginMonitoringViewProps> = (
                 <option value="kesiswaan">Tim Kesiswaan / BK</option>
                 <option value="kurikulum">Tim Kurikulum</option>
                 <option value="staf_jadwal">Staf Pengelola Jadwal</option>
+                <option value="adm_siswa">Admin Siswa</option>
               </select>
             </div>
 

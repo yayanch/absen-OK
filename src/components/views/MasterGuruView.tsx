@@ -79,6 +79,44 @@ export const isPiketAccount = (g: any): boolean => {
   );
 };
 
+// Helper to detect Admin Siswa accounts (adm_siswa TIDAK termasuk guru)
+export const isAdmSiswaAccount = (g: any): boolean => {
+  if (!g) return false;
+  const r = String(g.role || '').toLowerCase();
+  const u = String(g.username || '').toLowerCase();
+  const n = String(g.nama || '').toLowerCase();
+  const t = String(g.tugasTambahan || '').toLowerCase();
+  const j = String(g.jabatan || '').toLowerCase();
+  const roles: string[] = Array.isArray(g.roles) ? g.roles.map((x: string) => String(x).toLowerCase()) : [];
+
+  return (
+    r === 'adm_siswa' ||
+    r === 'admin_siswa' ||
+    roles.includes('adm_siswa') ||
+    roles.includes('admin_siswa') ||
+    u === 'adm_siswa' ||
+    u.startsWith('adm_siswa') ||
+    u === 'admin_siswa' ||
+    n.includes('adm_siswa') ||
+    n.includes('admin siswa') ||
+    n.includes('administrasi siswa') ||
+    t.includes('adm_siswa') ||
+    t.includes('admin siswa') ||
+    t.includes('administrasi siswa') ||
+    j.includes('adm_siswa') ||
+    j.includes('admin siswa') ||
+    j.includes('administrasi siswa')
+  );
+};
+
+// Strict helper to distinguish non-teacher accounts (Piket, Adm Siswa, dll) from teaching teachers
+export const isNonTeacherAccount = (g: any): boolean => {
+  if (!g) return false;
+  if (isPiketAccount(g)) return true;
+  if (isAdmSiswaAccount(g)) return true;
+  return false;
+};
+
 const NAMA_BULAN_INDONESIA = [
   'Januari',
   'Februari',
@@ -311,10 +349,10 @@ const PengaturanHariMengajarModalContent: React.FC<PengaturanHariMengajarModalCo
   const [bulkDays, setBulkDays] = useState<string[]>(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
   const [bulkBatasiLogin, setBulkBatasiLogin] = useState<boolean>(false);
 
-  // Local Teachers list state for fine-tuning before saving (strictly excludes piket)
+  // Local Teachers list state for fine-tuning before saving (strictly excludes piket & non-teachers like adm_siswa)
   const [guruList, setGuruList] = useState<WaliKelas[]>(() => {
     return (appData.waliKelas || [])
-      .filter((g) => !isPiketAccount(g))
+      .filter((g) => !isNonTeacherAccount(g))
       .map((g) => ({
         ...g,
         hariMengajar: Array.isArray(g.hariMengajar) && g.hariMengajar.length > 0 ? [...g.hariMengajar] : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'],
@@ -337,6 +375,7 @@ const PengaturanHariMengajarModalContent: React.FC<PengaturanHariMengajarModalCo
 
       // Kelompok Filter
       if (kelompokFilter === 'guru') {
+        if (isNonTeacherAccount(g)) return false;
         if (g.role !== 'guru' && (!g.roles || !g.roles.includes('guru'))) return false;
       } else if (kelompokFilter === 'wali') {
         const isWali = g.role === 'wali' || (g.additionalRoles && g.additionalRoles.includes('wali')) || (g.tugasTambahanList && g.tugasTambahanList.some(t => t.toLowerCase().includes('wali')));
@@ -1895,8 +1934,8 @@ export const MasterGuruView: React.FC<MasterGuruViewProps> = ({
   // List of all registered roles
   const allRoles = useMemo(() => getAllRolePermissions(appData), [appData]);
 
-  // List of all teachers (biodata) - strictly excludes piket accounts
-  const guruList: WaliKelas[] = (appData.waliKelas || []).filter((g) => !isPiketAccount(g));
+  // List of all teachers (biodata) - strictly excludes piket and non-teacher accounts (like adm_siswa)
+  const guruList: WaliKelas[] = (appData.waliKelas || []).filter((g) => !isNonTeacherAccount(g));
 
   // Filter list
   let filteredGuru = guruList.filter((g) => {

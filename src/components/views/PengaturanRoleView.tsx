@@ -330,6 +330,10 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
       counts['staf_jadwal'] = (counts['staf_jadwal'] || 0) + 1;
     }
 
+    if (appData.admSiswa) {
+      counts['adm_siswa'] = (counts['adm_siswa'] || 0) + 1;
+    }
+
     counts['murid'] = (appData.siswa || []).length;
     counts['siswa'] = (appData.siswa || []).length;
     counts['piket'] = (appData.petugasPiket || []).length;

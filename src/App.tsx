@@ -178,6 +178,14 @@ export default function App() {
       )) {
         updatedData = { ...currentData, ...appData.admin };
       }
+    } else if (currentUser.role === 'adm_siswa') {
+      if (appData.admSiswa && (
+        appData.admSiswa.foto !== currentData.foto ||
+        appData.admSiswa.nama !== currentData.nama ||
+        appData.admSiswa.username !== currentData.username
+      )) {
+        updatedData = { ...currentData, ...appData.admSiswa };
+      }
     } else if (currentUser.role === 'murid' || currentUser.role === 'siswa') {
       const match = (appData.siswa || []).find((s) => 
         (currentData.id && s.id === currentData.id) ||

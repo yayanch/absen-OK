@@ -162,6 +162,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { label: 'Tim Kurikulum', icon: BookOpen, color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300' };
       case 'staf_jadwal':
         return { label: 'Staf Jadwal', icon: BookOpen, color: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300' };
+      case 'adm_siswa':
+        return { label: 'Admin Siswa', icon: UserCheck, color: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300' };
       case 'wali':
         return { label: 'Wali Kelas', icon: User, color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300' };
       case 'piket_kesiswaan':
@@ -213,6 +215,9 @@ export const Header: React.FC<HeaderProps> = ({
         (currentData.nip && String(w.nip).toLowerCase() === String(currentData.nip).toLowerCase())
       );
       return found || (currentData.username === 'kurikulum' ? appData?.kurikulum : null) || currentData;
+    }
+    if (currentUser.role === 'adm_siswa') {
+      return appData?.admSiswa || currentData;
     }
     // Wali / Guru / User
     const found = appData?.waliKelas?.find((w) => 
@@ -318,7 +323,7 @@ export const Header: React.FC<HeaderProps> = ({
     const currentNama = String(currentUserData.nama || '').toLowerCase();
     const userRoles = Array.isArray(currentUser?.roles) ? currentUser.roles : [userRole];
 
-    const isAdminLike = userRole === 'admin' || userRole === 'kesiswaan' || userRole === 'kurikulum' || userRole === 'hubin' || userRole === 'staf_jadwal';
+    const isAdminLike = userRole === 'admin' || userRole === 'kesiswaan' || userRole === 'kurikulum' || userRole === 'hubin' || userRole === 'staf_jadwal' || userRole === 'adm_siswa';
     if (isAdminLike) {
       return null; // Full school-wide access for admin & management
     }

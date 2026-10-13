@@ -243,6 +243,17 @@ export interface StafJadwalAccount {
   roles?: string[];
 }
 
+export interface AdmSiswaAccount {
+  username: string;
+  password: string;
+  nama: string;
+  nip?: string;
+  jabatan?: string;
+  foto?: string;
+  noHp?: string;
+  roles?: string[];
+}
+
 export interface UserBiasaAccount {
   username: string;
   password: string;
@@ -389,6 +400,7 @@ export type ChatTargetPermission =
   | 'kesiswaan'      // Tim Kesiswaan / BP-BK
   | 'kurikulum'      // Tim Kurikulum & Akademik
   | 'staf_jadwal'    // Staf Pengelola Jadwal
+  | 'adm_siswa'      // Staf Administrasi Siswa (Non-Guru)
   | 'piket'          // Petugas Piket (Guru/Kesiswaan/Kelas)
   | 'siswa_all'      // Semua Siswa Sekolah
   | 'siswa_binaan'   // Hanya Siswa Binaan / Siswa di Kelasnya Sendiri
@@ -637,6 +649,7 @@ export interface AppData {
   kesiswaan?: KesiswaanAccount;
   kurikulum?: KurikulumAccount;
   stafJadwal?: StafJadwalAccount;
+  admSiswa?: AdmSiswaAccount;
   userBiasa?: UserBiasaAccount;
   gsheetUrl?: string;
   spreadsheetId?: string;
@@ -886,7 +899,7 @@ export interface PiketKelasAccount {
 export interface UserSession {
   role: UserRole;
   roles?: string[];
-  data: AdminAccount | WaliKelas | KesiswaanAccount | KurikulumAccount | StafJadwalAccount | UserBiasaAccount | Siswa | PiketKelasAccount | any;
+  data: AdminAccount | WaliKelas | KesiswaanAccount | KurikulumAccount | StafJadwalAccount | AdmSiswaAccount | UserBiasaAccount | Siswa | PiketKelasAccount | any;
 }
 
 export type ViewType =

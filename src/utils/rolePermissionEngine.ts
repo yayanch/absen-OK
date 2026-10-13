@@ -545,6 +545,35 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     ],
   },
   {
+    roleId: 'adm_siswa',
+    roleName: 'Admin Siswa (Non-Guru)',
+    description: 'Pengelolaan data master siswa, kartu pelajar digital, cetak QR, dan rekapitulasi kehadiran siswa (bukan guru pengajar)',
+    badgeColor: 'sky',
+    isSystem: true,
+    allowedMenus: [
+      'dashboard',
+      'presensi_input',
+      'broadcast_wa',
+      'rekap_pengisian_kelas',
+      'rekap_harian',
+      'rekap_mingguan',
+      'rekap_bulanan',
+      'rekap_ketidakhadiran_tertinggi',
+      'rekap_siswa',
+      'master_siswa',
+      'master_kelas',
+      'master_jurusan',
+      'catatan_pelanggaran',
+      'home_visit',
+      'ekstrakurikuler',
+      'absen_qr',
+      'kartu_pelajar',
+      'cetak_kartu_qr',
+      'live_chat',
+      'pengaturan_admin',
+    ],
+  },
+  {
     roleId: 'hubin',
     roleName: 'WKS Hubin & Industri',
     description: 'Pemantauan data siswa, kompetensi jurusan, dan kemitraan industri',
@@ -638,6 +667,16 @@ export function normalizeRoleKey(role?: string): string {
   const lower = role.trim().toLowerCase();
   if (lower === 'user') return 'guru';
   if (lower === 'siswa') return 'murid';
+  if (
+    lower === 'adm_siswa' ||
+    lower === 'admin_siswa' ||
+    lower === 'admsiswa' ||
+    lower === 'adminsiswa' ||
+    lower === 'adm-siswa' ||
+    lower === 'operator_siswa'
+  ) {
+    return 'adm_siswa';
+  }
   return lower;
 }
 
@@ -823,6 +862,7 @@ export function getRoleBadgeMeta(
     normalized === 'kesiswaan' ? 'WKS Kesiswaan / BP BK' :
     normalized === 'kurikulum' ? 'WKS Kurikulum' :
     normalized === 'staf_jadwal' ? 'Staf Pengelola Jadwal' :
+    normalized === 'adm_siswa' ? 'Admin Siswa (Non-Guru)' :
     normalized === 'hubin' ? 'WKS Hubin & Humas' :
     normalized === 'wali' ? 'Wali Kelas' :
     normalized === 'guru' ? 'Guru Pengampu' :
@@ -836,6 +876,7 @@ export function getRoleBadgeMeta(
     normalized === 'kurikulum' ? 'amber' :
     normalized === 'wali' ? 'emerald' :
     normalized === 'staf_jadwal' ? 'cyan' :
+    normalized === 'adm_siswa' ? 'cyan' :
     normalized === 'hubin' ? 'teal' :
     normalized === 'murid' ? 'rose' :
     'indigo'
@@ -853,7 +894,7 @@ export function getRoleBadgeMeta(
   };
 
   const badgeClass = colorClasses[color] || colorClasses.indigo;
-  const isCustom = !matched?.isSystem && !['admin', 'kesiswaan', 'kurikulum', 'wali', 'guru', 'staf_jadwal', 'hubin', 'murid'].includes(normalized);
+  const isCustom = !matched?.isSystem && !['admin', 'kesiswaan', 'kurikulum', 'wali', 'guru', 'staf_jadwal', 'adm_siswa', 'hubin', 'murid'].includes(normalized);
 
   return {
     label: roleName,
@@ -933,6 +974,7 @@ export function mapDutyToRole(duty: string, customRoles?: CustomRole[]): string 
   if (d.includes('kurikulum')) return 'kurikulum';
   if (d.includes('hubin') || d.includes('hubungan industri') || d.includes('humas')) return 'hubin';
   if (d.includes('staf jadwal') || d.includes('pengelola jadwal') || d.includes('jadwal kbm')) return 'staf_jadwal';
+  if (d.includes('adm siswa') || d.includes('admin siswa') || d.includes('administrasi siswa') || d.includes('adm_siswa')) return 'adm_siswa';
   if (d.includes('administrator') || d === 'admin') return 'admin';
 
   // Check custom roles matching name or label
