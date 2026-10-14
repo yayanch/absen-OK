@@ -1271,7 +1271,16 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
 
     if (appData.sekolah) {
       const s = appData.sekolah;
+      
+      // Ensure login_config column exists across all MySQL versions (MySQL 5.7+)
+      try {
+        await db.execute(`ALTER TABLE sekolah_config ADD COLUMN login_config LONGTEXT;`);
+      } catch (e) {
+        // Column already exists or table altered
+      }
+
       const loginConfigObj = {
+        ...s, // Preserve all school config properties including all login background/card customization fields
         headerTitle: s.headerTitle || '',
         headerSubtitle: s.headerSubtitle || '',
         loginAnnouncementModal: Boolean(s.loginAnnouncementModal),
@@ -1282,14 +1291,37 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         loginCustomLinksTitle: s.loginCustomLinksTitle || '',
         loginCustomLinks: s.loginCustomLinks || [],
         loginBgType: s.loginBgType || 'gradient',
+        loginBgImage: s.loginBgImage || '',
+        loginBgGradient: s.loginBgGradient || '',
+        loginBgPattern: s.loginBgPattern || '',
+        loginBgColor: s.loginBgColor || '',
         loginBgOverlayOpacity: s.loginBgOverlayOpacity ?? 0,
         loginBgOpacity: s.loginBgOpacity ?? 100,
         bgImageOpacity: s.bgImageOpacity ?? 100,
         loginBgBlur: s.loginBgBlur || 'none',
         loginBgFit: s.loginBgFit || 'cover',
         loginBgOverlayColor: s.loginBgOverlayColor || '#000000',
+        loginContrastMode: s.loginContrastMode || 'auto',
+        loginCardTheme: s.loginCardTheme || 'glass',
         loginCardOpacity: s.loginCardOpacity ?? 95,
         loginCardBlur: s.loginCardBlur || 'md',
+        loginCardLayout: s.loginCardLayout || 'centered',
+        loginCardMaxWidth: s.loginCardMaxWidth || 'md',
+        loginCardRounded: s.loginCardRounded || '2xl',
+        loginCardShadow: s.loginCardShadow || '2xl',
+        loginCardBorder: s.loginCardBorder || 'subtle',
+        loginCardShowLogo: s.loginCardShowLogo !== false,
+        loginCardLogoAlign: s.loginCardLogoAlign || 'center',
+        loginCardLogoSize: s.loginCardLogoSize || 'md',
+        loginCardShowSchoolName: s.loginCardShowSchoolName !== false,
+        loginCardShowSubtitle: s.loginCardShowSubtitle !== false,
+        loginCardShowAcademicYear: s.loginCardShowAcademicYear !== false,
+        loginCardWelcomeTitle: s.loginCardWelcomeTitle || '',
+        loginCardWelcomeSubtext: s.loginCardWelcomeSubtext || '',
+        loginCardInputStyle: s.loginCardInputStyle || 'modern',
+        loginCardInputRounded: s.loginCardInputRounded || 'xl',
+        loginCardButtonAccent: s.loginCardButtonAccent || 'blue',
+        loginCardButtonRounded: s.loginCardButtonRounded || 'xl',
         loginLeftShowPanel: s.loginLeftShowPanel !== false,
         loginLeftBadgeText: s.loginLeftBadgeText || '',
         loginLeftTitlePrefix: s.loginLeftTitlePrefix || '',
@@ -1299,6 +1331,10 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         loginLeftFeature1Subtitle: s.loginLeftFeature1Subtitle || '',
         loginLeftFeature2Title: s.loginLeftFeature2Title || '',
         loginLeftFeature2Subtitle: s.loginLeftFeature2Subtitle || '',
+        browserTitle: s.browserTitle || '',
+        enableRunningText: Boolean(s.enableRunningText),
+        runningTextAnnouncement: s.runningTextAnnouncement || '',
+        runningTextSpeed: s.runningTextSpeed || 'medium',
         footerTeks: s.footerTeks || '',
         footerSubTeks: s.footerSubTeks || '',
         maintenanceMode: Boolean(s.maintenanceMode),
@@ -4770,7 +4806,9 @@ app.post("/api/mysql/test", async (req, res) => {
           login_config LONGTEXT
         );
       `);
-      await db.execute(`ALTER TABLE sekolah_config ADD COLUMN IF NOT EXISTS login_config LONGTEXT;`).catch(() => {});
+      try {
+        await db.execute(`ALTER TABLE sekolah_config ADD COLUMN login_config LONGTEXT;`);
+      } catch (e) {}
 
       await db.execute(`
         CREATE TABLE IF NOT EXISTS admin_account (
