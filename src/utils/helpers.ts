@@ -15,7 +15,13 @@ export function mergeJadwalMengajar(
 ): JadwalMengajarGuru[] {
   if (!Array.isArray(localList)) localList = [];
   if (!Array.isArray(serverList)) serverList = [];
-  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+
+  // Active schedules present in localList or serverList cannot be deleted by stale tombstones
+  const activeIds = new Set([
+    ...localList.map((j) => String(j?.id)).filter(Boolean),
+    ...serverList.map((j) => String(j?.id)).filter(Boolean),
+  ]);
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)).filter((id) => !activeIds.has(id)));
 
   if (localList.length === 0 && serverList.length === 0) return [];
 
@@ -24,7 +30,7 @@ export function mergeJadwalMengajar(
 
   const map = new Map<string, JadwalMengajarGuru>();
 
-  // 1. Insert server list first
+  // 1. Seed existing
   for (const s of filteredServer) {
     if (s && s.id && !deletedSet.has(String(s.id))) {
       map.set(String(s.id), { ...s });

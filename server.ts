@@ -450,9 +450,8 @@ async function generateQrDataUrl(tokenObj: typeof serverActiveQrToken) {
   }
 }
 
-const MYSQL_CONFIG_FILE = path.join(process.cwd(), "mysql_config.json");
-const MYSQL_CONFIG_FILE_TMP = "/tmp/mysql_config.json";
 const APP_DATA_CACHE_FILE = path.join(process.cwd(), "app_data_cache.json");
+const APP_DATA_CACHE_BAK_FILE = path.join(process.cwd(), "app_data_cache.json.bak");
 const APP_DATA_CACHE_FILE_TMP = "/tmp/app_data_cache.json";
 
 let activePool: mysql.Pool | null = null;
@@ -494,7 +493,7 @@ function setMySQLCooldown(reason?: string) {
 
 function loadSavedServerConfig() {
   try {
-    // 1. TOP PRIORITY: Check process environment variables (.env / VPS environment)
+    // Single Source of Truth: Check process environment variables (.env / VPS environment)
     const envHost = process.env.DB_HOST || process.env.MYSQL_HOST;
     if (envHost && String(envHost).trim() !== "") {
       return {
@@ -506,20 +505,6 @@ function loadSavedServerConfig() {
         isEnv: true,
         source: "env"
       };
-    }
-
-    // 2. Check workspace persistent file
-    if (fs.existsSync(MYSQL_CONFIG_FILE)) {
-      const content = fs.readFileSync(MYSQL_CONFIG_FILE, "utf-8");
-      const parsed = JSON.parse(content);
-      if (parsed && parsed.host) return { ...parsed, isEnv: false, source: "file" };
-    }
-
-    // 3. Check /tmp file
-    if (fs.existsSync(MYSQL_CONFIG_FILE_TMP)) {
-      const content = fs.readFileSync(MYSQL_CONFIG_FILE_TMP, "utf-8");
-      const parsed = JSON.parse(content);
-      if (parsed && parsed.host) return { ...parsed, isEnv: false, source: "file" };
     }
   } catch (e) {}
   return null;
@@ -639,22 +624,74 @@ function normalizeWeeklyShiftPeriods(rawPeriods: any[]): any[] {
   return result;
 }
 
-function loadSavedAppDataCache() {
+function writeAppDataCacheAtomic(data: any) {
+  if (!data || typeof data !== "object") return;
   try {
-    let parsed: any = null;
+    const content = JSON.stringify(data);
+    if (!content || content.length < 2) return;
+
+    // 1. Write to unique temporary file
+    const tmpPath = `${APP_DATA_CACHE_FILE}.tmp.${Date.now()}`;
+    fs.writeFileSync(tmpPath, content, "utf-8");
+
+    // 2. Backup current existing cache file before replacing
     if (fs.existsSync(APP_DATA_CACHE_FILE)) {
-      const content = fs.readFileSync(APP_DATA_CACHE_FILE, "utf-8");
-      parsed = JSON.parse(content);
-    } else if (fs.existsSync(APP_DATA_CACHE_FILE_TMP)) {
-      const content = fs.readFileSync(APP_DATA_CACHE_FILE_TMP, "utf-8");
-      parsed = JSON.parse(content);
+      try {
+        fs.copyFileSync(APP_DATA_CACHE_FILE, APP_DATA_CACHE_BAK_FILE);
+      } catch (e) {}
     }
-    if (parsed && parsed.shiftConfig && Array.isArray(parsed.shiftConfig.periods)) {
-      parsed.shiftConfig.periods = normalizeWeeklyShiftPeriods(parsed.shiftConfig.periods);
+
+    // 3. Atomically replace target cache file
+    fs.renameSync(tmpPath, APP_DATA_CACHE_FILE);
+
+    // 4. Also safely write to /tmp as emergency container fallback
+    try {
+      fs.writeFileSync(APP_DATA_CACHE_FILE_TMP, content, "utf-8");
+    } catch (e) {}
+  } catch (err) {
+    console.error("[Atomic Cache Write Error]", err);
+  }
+}
+
+function loadSavedAppDataCache() {
+  const tryLoad = (filePath: string): any => {
+    try {
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, "utf-8");
+        if (content && content.trim().length > 2) {
+          const parsed = JSON.parse(content);
+          if (parsed && typeof parsed === "object") return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn(`[Cache Read Warning] Failed parsing ${filePath}:`, e);
     }
-    return parsed;
-  } catch (e) {}
-  return null;
+    return null;
+  };
+
+  // 1. Try primary cache file
+  let parsed = tryLoad(APP_DATA_CACHE_FILE);
+
+  // 2. Fallback to backup file (.bak) if primary corrupted or missing
+  if (!parsed) {
+    parsed = tryLoad(APP_DATA_CACHE_BAK_FILE);
+    if (parsed) {
+      console.info("[Cache Recovery] Successfully restored from backup file app_data_cache.json.bak");
+    }
+  }
+
+  // 3. Fallback to /tmp cache
+  if (!parsed) {
+    parsed = tryLoad(APP_DATA_CACHE_FILE_TMP);
+    if (parsed) {
+      console.info("[Cache Recovery] Successfully restored from /tmp/app_data_cache.json");
+    }
+  }
+
+  if (parsed && parsed.shiftConfig && Array.isArray(parsed.shiftConfig.periods)) {
+    parsed.shiftConfig.periods = normalizeWeeklyShiftPeriods(parsed.shiftConfig.periods);
+  }
+  return parsed;
 }
 
 let appDataSaveTimeout: any = null;
@@ -784,7 +821,10 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
 function mergeJadwalMengajarServer(existingList: any[] = [], incomingList: any[] = [], deletedIds: string[] = []): any[] {
   if (!Array.isArray(existingList)) existingList = [];
   if (!Array.isArray(incomingList)) incomingList = [];
-  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+
+  // Active schedules in incomingList must NEVER be deleted by tombstones
+  const activeIds = new Set(incomingList.map((j) => String(j.id)));
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)).filter((id) => !activeIds.has(id)));
 
   if (existingList.length === 0 && incomingList.length === 0) return [];
 
@@ -827,41 +867,95 @@ function mergePresensiServer(existingMap: any = {}, incomingMap: any = {}): any 
   return sanitizeAndDeduplicatePresensiMap(merged);
 }
 
-function saveAppDataCache(data: any) {
+function saveAppDataCache(data: any, isRestore = false) {
   if (!data || typeof data !== "object") return;
 
-  // Track deleted siswa & jadwal
-  const deletedSiswaSet = new Set([
-    ...(inMemoryAppDataCache?.deletedSiswaIds || []),
-    ...(data.deletedSiswaIds || []),
-  ]);
+  const isRestoration = Boolean(isRestore || data._isRestore);
+
+  // If restoring, purge old deletion tombstones so previous deletions never kill restored data
+  if (isRestoration) {
+    if (inMemoryAppDataCache) {
+      inMemoryAppDataCache.deletedJadwalIds = [];
+      inMemoryAppDataCache.deletedGmkIds = [];
+      inMemoryAppDataCache.deletedSiswaIds = [];
+      inMemoryAppDataCache.deletedPelanggaranIds = [];
+      inMemoryAppDataCache.deletedHomeVisitIds = [];
+    }
+    data.deletedJadwalIds = Array.isArray(data.deletedJadwalIds) ? data.deletedJadwalIds : [];
+    data.deletedGmkIds = Array.isArray(data.deletedGmkIds) ? data.deletedGmkIds : [];
+    data.deletedSiswaIds = Array.isArray(data.deletedSiswaIds) ? data.deletedSiswaIds : [];
+    data.deletedPelanggaranIds = Array.isArray(data.deletedPelanggaranIds) ? data.deletedPelanggaranIds : [];
+    data.deletedHomeVisitIds = Array.isArray(data.deletedHomeVisitIds) ? data.deletedHomeVisitIds : [];
+  }
+
+  // Active schedules present in data are explicitly NOT deleted!
+  if (Array.isArray(data.jadwalMengajar) && data.jadwalMengajar.length > 0) {
+    const activeJadwalIdSet = new Set(data.jadwalMengajar.map((j: any) => String(j.id)));
+    data.deletedJadwalIds = (data.deletedJadwalIds || []).filter((id: string) => !activeJadwalIdSet.has(id));
+    if (inMemoryAppDataCache?.deletedJadwalIds) {
+      inMemoryAppDataCache.deletedJadwalIds = inMemoryAppDataCache.deletedJadwalIds.filter((id: string) => !activeJadwalIdSet.has(id));
+    }
+  }
+
+  if (Array.isArray(data.guruMapelKelas) && data.guruMapelKelas.length > 0) {
+    const activeGmkIdSet = new Set(data.guruMapelKelas.map((g: any) => String(g.id)));
+    data.deletedGmkIds = (data.deletedGmkIds || []).filter((id: string) => !activeGmkIdSet.has(id));
+    if (inMemoryAppDataCache?.deletedGmkIds) {
+      inMemoryAppDataCache.deletedGmkIds = inMemoryAppDataCache.deletedGmkIds.filter((id: string) => !activeGmkIdSet.has(id));
+    }
+  }
+
+  if (Array.isArray(data.siswa) && data.siswa.length > 0) {
+    const activeSiswaIdSet = new Set(data.siswa.map((s: any) => String(s.id)));
+    data.deletedSiswaIds = (data.deletedSiswaIds || []).filter((id: string) => !activeSiswaIdSet.has(id));
+    if (inMemoryAppDataCache?.deletedSiswaIds) {
+      inMemoryAppDataCache.deletedSiswaIds = inMemoryAppDataCache.deletedSiswaIds.filter((id: string) => !activeSiswaIdSet.has(id));
+    }
+  }
+
+  // Track deleted siswa & jadwal (respecting restoration)
+  const deletedSiswaSet = isRestoration
+    ? new Set(data.deletedSiswaIds || [])
+    : new Set([
+        ...(inMemoryAppDataCache?.deletedSiswaIds || []),
+        ...(data.deletedSiswaIds || []),
+      ]);
   const allDeletedSiswa = Array.from(deletedSiswaSet);
   data.deletedSiswaIds = allDeletedSiswa;
 
-  const deletedJadwalSet = new Set([
-    ...(inMemoryAppDataCache?.deletedJadwalIds || []),
-    ...(data.deletedJadwalIds || []),
-  ]);
+  const deletedJadwalSet = isRestoration
+    ? new Set(data.deletedJadwalIds || [])
+    : new Set([
+        ...(inMemoryAppDataCache?.deletedJadwalIds || []),
+        ...(data.deletedJadwalIds || []),
+      ]);
   const allDeletedJadwal = Array.from(deletedJadwalSet);
   data.deletedJadwalIds = allDeletedJadwal;
 
-  const deletedGmkSet = new Set([
-    ...(inMemoryAppDataCache?.deletedGmkIds || []),
-    ...(data.deletedGmkIds || []),
-  ]);
+  const deletedGmkSet = isRestoration
+    ? new Set(data.deletedGmkIds || [])
+    : new Set([
+        ...(inMemoryAppDataCache?.deletedGmkIds || []),
+        ...(data.deletedGmkIds || []),
+      ]);
   const allDeletedGmk = Array.from(deletedGmkSet);
   data.deletedGmkIds = allDeletedGmk;
 
   if (inMemoryAppDataCache) {
     // Safely merge siswa so existing students never vanish
-    if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
+    if (isRestoration) {
+      data.siswa = Array.isArray(data.siswa) ? data.siswa : (inMemoryAppDataCache.siswa || []);
+    } else if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
       data.siswa = mergeSiswaServer(inMemoryAppDataCache.siswa, data.siswa, allDeletedSiswa);
     } else if (Array.isArray(inMemoryAppDataCache.siswa) && (!Array.isArray(data.siswa) || data.siswa.length === 0)) {
       data.siswa = inMemoryAppDataCache.siswa.filter((s: any) => s && s.id && !deletedSiswaSet.has(String(s.id)));
     }
 
     // Safely merge jadwal so newly created or edited schedules never vanish
-    if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && Array.isArray(data.jadwalMengajar)) {
+    if (isRestoration) {
+      // Direct assignment for restore mode - never merge old ghost schedules!
+      data.jadwalMengajar = Array.isArray(data.jadwalMengajar) ? data.jadwalMengajar : [];
+    } else if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && Array.isArray(data.jadwalMengajar)) {
       data.jadwalMengajar = mergeJadwalMengajarServer(inMemoryAppDataCache.jadwalMengajar, data.jadwalMengajar, allDeletedJadwal);
     } else if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
       data.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar.filter((j: any) => j && j.id && !deletedJadwalSet.has(String(j.id)));
@@ -874,47 +968,56 @@ function saveAppDataCache(data: any) {
       data.presensi = inMemoryAppDataCache.presensi;
     }
 
-    // Preserve master collections if incoming is empty or accidental demo dataset
-    const isIncomingDemoClasses = (
-      Array.isArray(data.kelas) &&
-      data.kelas.length <= 4 &&
-      data.kelas.some((k: any) => k.id === 'KEL_1' || k.nama === 'XII RPL 1')
-    );
-    if (Array.isArray(inMemoryAppDataCache.kelas) && inMemoryAppDataCache.kelas.length > 4 && isIncomingDemoClasses) {
-      data.kelas = inMemoryAppDataCache.kelas;
-    } else if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
-      data.kelas = inMemoryAppDataCache.kelas;
+    if (!isRestoration) {
+      // Preserve master collections if incoming is empty or accidental demo dataset
+      const isIncomingDemoClasses = (
+        Array.isArray(data.kelas) &&
+        data.kelas.length <= 4 &&
+        data.kelas.some((k: any) => k.id === 'KEL_1' || k.nama === 'XII RPL 1')
+      );
+      if (Array.isArray(inMemoryAppDataCache.kelas) && inMemoryAppDataCache.kelas.length > 4 && isIncomingDemoClasses) {
+        data.kelas = inMemoryAppDataCache.kelas;
+      } else if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
+        data.kelas = inMemoryAppDataCache.kelas;
+      }
+
+      const isIncomingDemoWali = (
+        Array.isArray(data.waliKelas) &&
+        data.waliKelas.length <= 10 &&
+        data.waliKelas.some((w: any) => w.id === 'WAL_1' || w.nama === 'Budi Santoso, S.Kom')
+      );
+      if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 10 && isIncomingDemoWali) {
+        data.waliKelas = inMemoryAppDataCache.waliKelas;
+      } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
+        data.waliKelas = inMemoryAppDataCache.waliKelas;
+      }
+
+      const isIncomingDemoJurusan = (
+        Array.isArray(data.jurusan) &&
+        data.jurusan.length <= 4 &&
+        data.jurusan.some((j: any) => j.id === 'JUR_1' || j.kode === 'RPL')
+      );
+      if (Array.isArray(inMemoryAppDataCache.jurusan) && inMemoryAppDataCache.jurusan.length > 4 && isIncomingDemoJurusan) {
+        data.jurusan = inMemoryAppDataCache.jurusan;
+      } else if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
+        data.jurusan = inMemoryAppDataCache.jurusan;
+      }
     }
 
-    const isIncomingDemoWali = (
-      Array.isArray(data.waliKelas) &&
-      data.waliKelas.length <= 10 &&
-      data.waliKelas.some((w: any) => w.id === 'WAL_1' || w.nama === 'Budi Santoso, S.Kom')
-    );
-    if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 10 && isIncomingDemoWali) {
-      data.waliKelas = inMemoryAppDataCache.waliKelas;
-    } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
-      data.waliKelas = inMemoryAppDataCache.waliKelas;
+    if (isRestoration) {
+      data.guruMapelKelas = Array.isArray(data.guruMapelKelas) ? data.guruMapelKelas : [];
+      data.mataPelajaran = Array.isArray(data.mataPelajaran) ? data.mataPelajaran : [];
+    } else {
+      if (Array.isArray(data.guruMapelKelas)) {
+        data.guruMapelKelas = data.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
+      } else if (Array.isArray(inMemoryAppDataCache.guruMapelKelas)) {
+        data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
+      }
+      if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
+        data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
+      }
     }
 
-    const isIncomingDemoJurusan = (
-      Array.isArray(data.jurusan) &&
-      data.jurusan.length <= 4 &&
-      data.jurusan.some((j: any) => j.id === 'JUR_1' || j.kode === 'RPL')
-    );
-    if (Array.isArray(inMemoryAppDataCache.jurusan) && inMemoryAppDataCache.jurusan.length > 4 && isIncomingDemoJurusan) {
-      data.jurusan = inMemoryAppDataCache.jurusan;
-    } else if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
-      data.jurusan = inMemoryAppDataCache.jurusan;
-    }
-    if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
-      data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
-    }
-    if (Array.isArray(data.guruMapelKelas)) {
-      data.guruMapelKelas = data.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
-    } else if (Array.isArray(inMemoryAppDataCache.guruMapelKelas)) {
-      data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas.filter((g: any) => g && g.id && !deletedGmkSet.has(String(g.id)));
-    }
     if (Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0 && (!Array.isArray(data.presensiMengajarGuru) || data.presensiMengajarGuru.length === 0)) {
       data.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
     }
@@ -964,8 +1067,16 @@ function saveAppDataCache(data: any) {
     if (Array.isArray(inMemoryAppDataCache.userLoginLogs) && inMemoryAppDataCache.userLoginLogs.length > 0 && (!Array.isArray(data.userLoginLogs) || data.userLoginLogs.length === 0)) {
       data.userLoginLogs = inMemoryAppDataCache.userLoginLogs;
     }
-    if (Array.isArray(inMemoryAppDataCache.presensiGuru) && Object.keys(inMemoryAppDataCache.presensiGuru).length > 0 && (!data.presensiGuru || Object.keys(data.presensiGuru).length === 0)) {
-      data.presensiGuru = inMemoryAppDataCache.presensiGuru;
+    if (inMemoryAppDataCache.presensiGuru && typeof inMemoryAppDataCache.presensiGuru === 'object' && Object.keys(inMemoryAppDataCache.presensiGuru).length > 0) {
+      if (!data.presensiGuru || typeof data.presensiGuru !== 'object' || Object.keys(data.presensiGuru).length === 0) {
+        data.presensiGuru = inMemoryAppDataCache.presensiGuru;
+      } else {
+        // Deep-merge dates to maintain data integrity across different attendance dates
+        data.presensiGuru = {
+          ...inMemoryAppDataCache.presensiGuru,
+          ...data.presensiGuru
+        };
+      }
     }
     if (Array.isArray(inMemoryAppDataCache.homeVisits) && inMemoryAppDataCache.homeVisits.length > 0 && (!Array.isArray(data.homeVisits) || data.homeVisits.length === 0)) {
       data.homeVisits = inMemoryAppDataCache.homeVisits;
@@ -1965,6 +2076,60 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       }
     }
 
+    // Save presensi_guru (Harian)
+    if (appData.presensiGuru && typeof appData.presensiGuru === 'object') {
+      const allGuruPresensi: any[] = [];
+      for (const [tgl, list] of Object.entries(appData.presensiGuru)) {
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (item && item.id && (item.guruId || item.guruNama)) {
+              allGuruPresensi.push({ ...item, tanggal: tgl });
+            }
+          }
+        }
+      }
+
+      if (allGuruPresensi.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < allGuruPresensi.length; i += CHUNK_SIZE) {
+          const chunk = allGuruPresensi.slice(i, i + CHUNK_SIZE);
+          const batchVals: any[] = [];
+          const phs: string[] = [];
+          for (const p of chunk) {
+            phs.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            batchVals.push(
+              p.id,
+              p.tanggal,
+              p.guruId || p.guruUsername || p.guruNama,
+              p.guruUsername || '',
+              p.guruNama || '',
+              p.guruNip || '',
+              p.hari || '',
+              p.shift || 'Pagi',
+              p.status || 'H',
+              p.jamMasuk || '',
+              p.jamPulang || '',
+              p.catatan || '',
+              p.jadwalHariIni || '',
+              p.sumberPresensi || 'Manual'
+            );
+          }
+          await db.execute(
+            `INSERT INTO presensi_guru (id, tanggal, guru_id, guru_username, guru_nama, guru_nip, hari, shift, status, jam_masuk, jam_pulang, catatan, jadwal_hari_ini, sumber_presensi)
+             VALUES ${phs.join(', ')}
+             ON DUPLICATE KEY UPDATE
+               guru_id=VALUES(guru_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama),
+               guru_nip=VALUES(guru_nip), hari=VALUES(hari), shift=VALUES(shift), status=VALUES(status),
+               jam_masuk=VALUES(jam_masuk), jam_pulang=VALUES(jam_pulang), catatan=VALUES(catatan),
+               jadwal_hari_ini=VALUES(jadwal_hari_ini), sumber_presensi=VALUES(sumber_presensi);`,
+            batchVals
+          ).catch((e) => {
+            console.warn('[Sync Presensi Guru Warning]', e?.message || e);
+          });
+        }
+      }
+    }
+
     // Save shiftConfig
     if (appData.shiftConfig) {
       const sc = appData.shiftConfig;
@@ -2514,6 +2679,7 @@ async function performMySQLLoad(config: any) {
     const [siRows]: any = await db.execute(`SELECT * FROM security_incidents ORDER BY timestamp DESC;`).catch(() => [[]]);
     const [blRows]: any = await db.execute(`SELECT * FROM blocked_ips;`).catch(() => [[]]);
     const [userLoginRows]: any = await db.execute(`SELECT * FROM user_login_logs ORDER BY timestamp DESC LIMIT 500;`).catch(() => [[]]);
+    const [presensiGuruRows]: any = await db.execute(`SELECT * FROM presensi_guru ORDER BY tanggal DESC;`).catch(() => [[]]);
 
     if (!appData) {
       appData = {};
@@ -2864,6 +3030,37 @@ async function performMySQLLoad(config: any) {
       });
     } else if (inMemoryAppDataCache?.presensiMengajarGuru && Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0) {
       appData.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
+    }
+
+    // Presensi Guru (Harian)
+    if (Array.isArray(presensiGuruRows) && presensiGuruRows.length > 0) {
+      const pgMap: Record<string, any[]> = {};
+      for (const row of presensiGuruRows) {
+        const tgl = row.tanggal instanceof Date ? row.tanggal.toISOString().slice(0, 10) : String(row.tanggal || '').slice(0, 10);
+        if (!tgl) continue;
+        if (!pgMap[tgl]) pgMap[tgl] = [];
+        pgMap[tgl].push({
+          id: row.id,
+          tanggal: tgl,
+          guruId: row.guru_id,
+          guruUsername: row.guru_username || '',
+          guruNama: row.guru_nama,
+          guruNip: row.guru_nip || '',
+          hari: row.hari,
+          shift: row.shift || 'Pagi',
+          status: row.status,
+          jamMasuk: row.jam_masuk || '',
+          jamPulang: row.jam_pulang || '',
+          catatan: row.catatan || '',
+          jadwalHariIni: row.jadwal_hari_ini || '',
+          sumberPresensi: row.sumber_presensi || 'Manual',
+          isOverridden: Boolean(row.is_overridden),
+          overriddenBy: row.overridden_by || ''
+        });
+      }
+      appData.presensiGuru = pgMap;
+    } else if (inMemoryAppDataCache?.presensiGuru && typeof inMemoryAppDataCache.presensiGuru === 'object') {
+      appData.presensiGuru = inMemoryAppDataCache.presensiGuru;
     }
 
     // Shift Config
@@ -4101,9 +4298,9 @@ app.get("/api/global-state", async (req, res) => {
   const queryPass = (req.query.password !== undefined ? req.query.password : req.headers["x-mysql-password"]) as string;
   const queryPort = (req.query.port as string) || (req.headers["x-mysql-port"] as string) || "3306";
 
-  let config = loadSavedServerConfig();
+  let config: any = loadSavedServerConfig();
   if (!config && queryHost && queryDb && queryUser) {
-    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort };
+    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort, isEnv: false, source: "query" };
     saveServerConfig(config);
   }
 
@@ -5635,13 +5832,30 @@ app.post("/api/backup/restore", async (req, res) => {
   let incoming: any = backupData.data || backupData.appData || backupData;
 
   // Basic validation check
-  const hasSchoolOrStudents = incoming.sekolah || Array.isArray(incoming.siswa) || Array.isArray(incoming.kelas) || (incoming.presensi && typeof incoming.presensi === "object");
+  const hasSchoolOrStudents = incoming.sekolah || Array.isArray(incoming.siswa) || Array.isArray(incoming.kelas) || (incoming.presensi && typeof incoming.presensi === "object") || Array.isArray(incoming.jadwalMengajar) || Array.isArray(incoming.matriksMengajar);
   if (!hasSchoolOrStudents) {
     return res.status(400).json({
       success: false,
-      message: "Format file cadangan tidak dikenali. File harus memiliki data sekolah, kelas, siswa, atau presensi.",
+      message: "Format file cadangan tidak dikenali. File harus memiliki data sekolah, kelas, siswa, presensi, atau jadwal pelajaran.",
     });
   }
+
+  // Normalize aliases for schedules and subjects (supports matriksMengajar, jadwal, mapel, pembagianTugas)
+  const incomingJadwal = Array.isArray(incoming.jadwalMengajar)
+    ? incoming.jadwalMengajar
+    : (Array.isArray(incoming.matriksMengajar)
+      ? incoming.matriksMengajar
+      : (Array.isArray(incoming.jadwal)
+        ? incoming.jadwal
+        : (Array.isArray(incoming.jadwalPelajaran) ? incoming.jadwalPelajaran : [])));
+
+  const incomingGmk = Array.isArray(incoming.guruMapelKelas)
+    ? incoming.guruMapelKelas
+    : (Array.isArray(incoming.pembagianTugas) ? incoming.pembagianTugas : []);
+
+  const incomingMapel = Array.isArray(incoming.mataPelajaran)
+    ? incoming.mataPelajaran
+    : (Array.isArray(incoming.mapel) ? incoming.mapel : []);
 
   let baseData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
   let targetData: any = {};
@@ -5680,9 +5894,24 @@ app.post("/api/backup/restore", async (req, res) => {
         ...(incoming.presensi || {}),
       }),
       shiftConfig: incoming.shiftConfig || baseData.shiftConfig,
-      jadwalMengajar: incoming.jadwalMengajar || baseData.jadwalMengajar,
+      jadwalMengajar: mergeArrays(baseData.jadwalMengajar, incomingJadwal, "id"),
+      mataPelajaran: mergeArrays(baseData.mataPelajaran, incomingMapel, "id"),
+      guruMapelKelas: mergeArrays(baseData.guruMapelKelas, incomingGmk, "id"),
+      presensiMengajarGuru: Array.isArray(incoming.presensiMengajarGuru) ? incoming.presensiMengajarGuru : (baseData.presensiMengajarGuru || []),
+      presensiGuru: { ...(baseData.presensiGuru || {}), ...(incoming.presensiGuru || {}) },
+      hariLibur: mergeArrays(baseData.hariLibur, incoming.hariLibur, "id"),
+      pengumuman: mergeArrays(baseData.pengumuman, incoming.pengumuman, "id"),
+      ekstrakurikuler: mergeArrays(baseData.ekstrakurikuler, incoming.ekstrakurikuler, "id"),
+      anggotaEkskul: mergeArrays(baseData.anggotaEkskul, incoming.anggotaEkskul, "id"),
+      presensiEkskul: { ...(baseData.presensiEkskul || {}), ...(incoming.presensiEkskul || {}) },
+      petugasPiket: Array.isArray(incoming.petugasPiket) ? incoming.petugasPiket : (baseData.petugasPiket || []),
+      catatanPiketHarian: mergeArrays(baseData.catatanPiketHarian, incoming.catatanPiketHarian, "id"),
       chatMessages: Array.isArray(incoming.chatMessages) ? incoming.chatMessages : baseData.chatMessages,
       backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig,
+      deletedJadwalIds: [],
+      deletedGmkIds: [],
+      deletedSiswaIds: [],
+      _isRestore: true,
     };
   } else {
     // Full Replace
@@ -5699,11 +5928,33 @@ app.post("/api/backup/restore", async (req, res) => {
       homeVisits: Array.isArray(incoming.homeVisits) ? incoming.homeVisits : [],
       violationTemplates: Array.isArray(incoming.violationTemplates) ? incoming.violationTemplates : (baseData.violationTemplates || []),
       shiftConfig: incoming.shiftConfig || baseData.shiftConfig,
-      jadwalMengajar: incoming.jadwalMengajar || baseData.jadwalMengajar,
+      jadwalMengajar: incomingJadwal.length > 0 ? incomingJadwal : (Array.isArray(incoming.jadwalMengajar) ? incoming.jadwalMengajar : (baseData.jadwalMengajar || [])),
+      mataPelajaran: incomingMapel.length > 0 ? incomingMapel : (Array.isArray(incoming.mataPelajaran) ? incoming.mataPelajaran : (baseData.mataPelajaran || [])),
+      guruMapelKelas: incomingGmk.length > 0 ? incomingGmk : (Array.isArray(incoming.guruMapelKelas) ? incoming.guruMapelKelas : (baseData.guruMapelKelas || [])),
+      presensiMengajarGuru: Array.isArray(incoming.presensiMengajarGuru) ? incoming.presensiMengajarGuru : (baseData.presensiMengajarGuru || []),
+      presensiGuru: incoming.presensiGuru || baseData.presensiGuru || {},
+      hariLibur: Array.isArray(incoming.hariLibur) ? incoming.hariLibur : (baseData.hariLibur || []),
+      pengumuman: Array.isArray(incoming.pengumuman) ? incoming.pengumuman : (baseData.pengumuman || []),
+      ekstrakurikuler: Array.isArray(incoming.ekstrakurikuler) ? incoming.ekstrakurikuler : (baseData.ekstrakurikuler || []),
+      anggotaEkskul: Array.isArray(incoming.anggotaEkskul) ? incoming.anggotaEkskul : (baseData.anggotaEkskul || []),
+      presensiEkskul: incoming.presensiEkskul || baseData.presensiEkskul || {},
+      petugasPiket: Array.isArray(incoming.petugasPiket) ? incoming.petugasPiket : (baseData.petugasPiket || []),
+      catatanPiketHarian: Array.isArray(incoming.catatanPiketHarian) ? incoming.catatanPiketHarian : (baseData.catatanPiketHarian || []),
+      rolePermissions: Array.isArray(incoming.rolePermissions) ? incoming.rolePermissions : (baseData.rolePermissions || []),
+      whatsappGateway: incoming.whatsappGateway || baseData.whatsappGateway,
+      whatsappLogs: Array.isArray(incoming.whatsappLogs) ? incoming.whatsappLogs : (baseData.whatsappLogs || []),
+      securityIncidents: Array.isArray(incoming.securityIncidents) ? incoming.securityIncidents : (baseData.securityIncidents || []),
+      blockedIps: Array.isArray(incoming.blockedIps) ? incoming.blockedIps : (baseData.blockedIps || []),
       chatMessages: Array.isArray(incoming.chatMessages) ? incoming.chatMessages : (baseData.chatMessages || []),
       auditLogs: Array.isArray(incoming.auditLogs) ? incoming.auditLogs : (baseData.auditLogs || []),
       securityConfig: incoming.securityConfig || baseData.securityConfig,
       backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig,
+      deletedJadwalIds: [],
+      deletedGmkIds: [],
+      deletedSiswaIds: [],
+      deletedPelanggaranIds: [],
+      deletedHomeVisitIds: [],
+      _isRestore: true,
     };
   }
 
@@ -5714,14 +5965,23 @@ app.post("/api/backup/restore", async (req, res) => {
     waktu: `${dateStr} ${timeStr}`,
     role: "admin",
     namaUser: "Administrator Utama",
-    aksi: `RESTORE_DATABASE: Pemulihan database sistem mode [${mode}] berhasil`,
+    aksi: `RESTORE_DATABASE: Pemulihan database sistem mode [${mode}] berhasil (${(targetData.jadwalMengajar || []).length} Jadwal/Matriks)`,
     ip: req.ip || "127.0.0.1",
   };
   if (!Array.isArray(targetData.auditLogs)) targetData.auditLogs = [];
   targetData.auditLogs.unshift(restoreLog);
 
-  // Save to memory cache & trigger disk + MySQL persist
-  saveAppDataCache(targetData);
+  // Clear in-memory deletion tombstones explicitly
+  if (inMemoryAppDataCache) {
+    inMemoryAppDataCache.deletedJadwalIds = [];
+    inMemoryAppDataCache.deletedGmkIds = [];
+    inMemoryAppDataCache.deletedSiswaIds = [];
+    inMemoryAppDataCache.deletedPelanggaranIds = [];
+    inMemoryAppDataCache.deletedHomeVisitIds = [];
+  }
+
+  // Save to memory cache & trigger disk + MySQL persist with restore flag
+  saveAppDataCache(targetData, true);
   lastMySQLSyncTime = Date.now();
   queueAppDataPersist({ immediateMySQL: true });
 
@@ -5737,6 +5997,8 @@ app.post("/api/backup/restore", async (req, res) => {
       totalKelas: (targetData.kelas || []).length,
       totalJurusan: (targetData.jurusan || []).length,
       totalWaliKelas: (targetData.waliKelas || []).length,
+      totalJadwal: (targetData.jadwalMengajar || []).length,
+      totalMapel: (targetData.mataPelajaran || []).length,
       totalPresensiHari: presensiStats.datesCount,
       totalPresensiEntri: presensiStats.recordsCount,
       totalPelanggaran: (targetData.pelanggaran || []).length,
@@ -5821,9 +6083,8 @@ app.get("/api/backup/snapshot/:id/download", (req, res) => {
 });
 
 // 9. Restore from Server Snapshot
-app.post("/api/backup/snapshot/restore", (req, res) => {
+const handleRestoreSnapshotFile = (snapshotId: string, req: any, res: any) => {
   try {
-    const { snapshotId } = req.body;
     if (!snapshotId) {
       return res.status(400).json({ success: false, message: "ID Snapshot tidak valid." });
     }
@@ -5835,21 +6096,37 @@ app.post("/api/backup/snapshot/restore", (req, res) => {
 
     const content = fs.readFileSync(snapshotFile, "utf-8");
     const parsed = JSON.parse(content);
-    const restoredData = parsed.data || parsed;
+    const restoredData = parsed.data || parsed.appData || parsed;
 
-    saveAppDataCache(restoredData);
+    restoredData._isRestore = true;
+    restoredData.deletedJadwalIds = [];
+    restoredData.deletedGmkIds = [];
+    restoredData.deletedSiswaIds = [];
+
+    saveAppDataCache(restoredData, true);
     lastMySQLSyncTime = Date.now();
     queueAppDataPersist({ immediateMySQL: true });
 
     res.json({
       success: true,
-      message: `Database berhasil dipulihkan dari snapshot server [${parsed.metadata?.note || snapshotId}]!`,
+      message: `Database berhasil dipulihkan dari snapshot server [${parsed.metadata?.note || parsed._backupMetadata?.note || snapshotId}]!`,
       appData: restoredData,
+      restoredData,
       version: appDataVersion,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: `Gagal memulihkan snapshot: ${err.message}` });
   }
+};
+
+app.post("/api/backup/snapshot/restore", (req, res) => {
+  const snapshotId = req.body?.snapshotId || req.body?.id;
+  handleRestoreSnapshotFile(snapshotId, req, res);
+});
+
+app.post("/api/backup/restore-snapshot/:id", (req, res) => {
+  const snapshotId = req.params.id;
+  handleRestoreSnapshotFile(snapshotId, req, res);
 });
 
 // 10. Delete Server Snapshot

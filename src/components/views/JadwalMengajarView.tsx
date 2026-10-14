@@ -1815,28 +1815,95 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   const handleDownloadTemplate = () => {
     const templateRows = [
       {
-        HARI: 'Senin',
-        SHIFT: 'Pagi',
-        'NAMA GURU': guruList[0]?.nama || 'Budi Santoso, S.Kom',
-        'USERNAME / NIP': guruList[0]?.username || '1037',
-        KELAS: kelasList[0]?.nama || 'X RPL 1',
-        'MATA PELAJARAN': 'Pemrograman Web',
-        'JAM KE (1-10)': '1, 2, 3',
-        CATATAN: 'Materi Dasar HTML & CSS',
+        No: 1,
+        'Kelompok Tingkat': 'Kelompok 1 (Kelas X & XI)',
+        Shift: 'Shift Pagi',
+        'Hari Mengajar': 'Selasa',
+        'Nama Guru': guruList[0]?.nama || 'Yayan Cahyana, S.Kom',
+        'NIP Guru': guruList[0]?.nip || '197403112022211007',
+        'Kelas Ajar': kelasList[0]?.nama || 'XI TJKT 5',
+        'Mata Pelajaran': 'Administrasi Sistem Jaringan',
+        'Kode Mapel': 'MP-ELE-93',
+        'Jam Ke (1-10)': '1, 2, 3, 4',
+        Total: '4 JP',
+        Catatan: '-',
       },
       {
-        HARI: 'Selasa',
-        SHIFT: 'Siang',
-        'NAMA GURU': guruList[1]?.nama || 'Siti Rahma, M.Pd',
-        'USERNAME / NIP': guruList[1]?.username || 'siti',
-        KELAS: kelasList[1]?.nama || 'XI RPL 1',
-        'MATA PELAJARAN': 'Matematika Wajib',
-        'JAM KE (1-10)': '1, 2, 3, 4',
-        CATATAN: 'Aljabar Linear',
+        No: 2,
+        'Kelompok Tingkat': 'Kelompok 1 (Kelas X & XI)',
+        Shift: 'Shift Pagi',
+        'Hari Mengajar': 'Selasa',
+        'Nama Guru': guruList[0]?.nama || 'Yayan Cahyana, S.Kom',
+        'NIP Guru': guruList[0]?.nip || '197403112022211007',
+        'Kelas Ajar': kelasList[1]?.nama || 'XI TJKT 4',
+        'Mata Pelajaran': 'Administrasi Sistem Jaringan',
+        'Kode Mapel': 'MP-ELE-93',
+        'Jam Ke (1-10)': '7, 8, 9, 10',
+        Total: '4 JP',
+        Catatan: '-',
+      },
+      {
+        No: 3,
+        'Kelompok Tingkat': 'Kelompok 2 (Kelas XII)',
+        Shift: 'Shift Siang',
+        'Hari Mengajar': 'Rabu',
+        'Nama Guru': guruList[0]?.nama || 'Yayan Cahyana, S.Kom',
+        'NIP Guru': guruList[0]?.nip || '197403112022211007',
+        'Kelas Ajar': kelasList[2]?.nama || 'XII TJKT 2',
+        'Mata Pelajaran': 'Administrasi Sistem Jaringan (Mikrotik)',
+        'Kode Mapel': 'MP-TJKT-ASJ',
+        'Jam Ke (1-10)': '1, 2, 3, 4, 5',
+        Total: '5 JP',
+        Catatan: '-',
+      },
+      {
+        No: 4,
+        'Kelompok Tingkat': 'Kelompok 2 (Kelas XII)',
+        Shift: 'Shift Siang',
+        'Hari Mengajar': 'Kamis',
+        'Nama Guru': guruList[0]?.nama || 'Yayan Cahyana, S.Kom',
+        'NIP Guru': guruList[0]?.nip || '197403112022211007',
+        'Kelas Ajar': kelasList[3]?.nama || 'XII TJKT 3',
+        'Mata Pelajaran': 'Administrasi Sistem Jaringan (Mikrotik)',
+        'Kode Mapel': 'MP-TJKT-ASJ',
+        'Jam Ke (1-10)': '1, 2, 3, 4, 5',
+        Total: '5 JP',
+        Catatan: '-',
+      },
+      {
+        No: 5,
+        'Kelompok Tingkat': 'Kelompok 1 (Kelas X & XI)',
+        Shift: 'Shift Pagi',
+        'Hari Mengajar': 'Kamis',
+        'Nama Guru': guruList[0]?.nama || 'Yayan Cahyana, S.Kom',
+        'NIP Guru': guruList[0]?.nip || '197403112022211007',
+        'Kelas Ajar': kelasList[1]?.nama || 'XI TJKT 4',
+        'Mata Pelajaran': 'Administrasi Sistem Jaringan',
+        'Kode Mapel': 'MP-ELE-93',
+        'Jam Ke (1-10)': '1, 2, 3, 4',
+        Total: '4 JP',
+        Catatan: '-',
       },
     ];
 
     const ws = XLSX.utils.json_to_sheet(templateRows);
+
+    // Auto-fit column widths matching standard schedule reports
+    ws['!cols'] = [
+      { wch: 6 },  // No
+      { wch: 26 }, // Kelompok Tingkat
+      { wch: 14 }, // Shift
+      { wch: 16 }, // Hari Mengajar
+      { wch: 28 }, // Nama Guru
+      { wch: 22 }, // NIP Guru
+      { wch: 16 }, // Kelas Ajar
+      { wch: 38 }, // Mata Pelajaran
+      { wch: 16 }, // Kode Mapel
+      { wch: 18 }, // Jam Ke (1-10)
+      { wch: 10 }, // Total
+      { wch: 16 }, // Catatan
+    ];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Template Jadwal');
     XLSX.writeFile(wb, 'Template_Import_Jadwal_Guru.xlsx');
@@ -1865,25 +1932,35 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
         const newItems: JadwalMengajarGuru[] = [];
 
         rows.forEach((r, idx) => {
-          const hariRaw = String(r['HARI'] || r['Hari'] || r['hari'] || 'Senin').trim();
+          const hariRaw = String(
+            r['Hari Mengajar'] || r['HARI'] || r['Hari'] || r['hari'] || 'Senin'
+          ).trim();
           const matchedHari = (HARI_SENIN_JUMAT.find(
             (h) => h.toLowerCase() === hariRaw.toLowerCase()
           ) || 'Senin') as HariKerja;
 
-          const shiftRaw = String(r['SHIFT'] || r['Shift'] || r['shift'] || 'Pagi').trim().toLowerCase();
+          const shiftRaw = String(
+            r['Shift'] || r['SHIFT'] || r['shift'] || 'Pagi'
+          ).trim().toLowerCase();
           const finalShift: 'Pagi' | 'Siang' = shiftRaw.includes('siang') ? 'Siang' : 'Pagi';
 
-          const guruStr = String(r['NAMA GURU'] || r['Nama Guru'] || r['guru'] || '').trim();
-          const userStr = String(r['USERNAME / NIP'] || r['Username'] || r['nip'] || '').trim();
+          const guruStr = String(
+            r['Nama Guru'] || r['NAMA GURU'] || r['Guru'] || r['guru'] || ''
+          ).trim();
+          const nipStr = String(
+            r['NIP Guru'] || r['NIP'] || r['USERNAME / NIP'] || r['nip'] || r['Username'] || ''
+          ).trim();
 
           const matchedGuru = guruList.find(
             (g) =>
-              g.username === userStr ||
-              g.nama.toLowerCase() === guruStr.toLowerCase() ||
-              (g.nip && g.nip === userStr)
+              (nipStr && (g.nip === nipStr || g.username === nipStr)) ||
+              (guruStr && g.nama.toLowerCase() === guruStr.toLowerCase()) ||
+              (g.nip && nipStr && g.nip.replace(/\s+/g, '') === nipStr.replace(/\s+/g, ''))
           );
 
-          const kelasStr = String(r['KELAS'] || r['Kelas'] || r['kelas'] || '').trim();
+          const kelasStr = String(
+            r['Kelas Ajar'] || r['KELAS'] || r['Kelas'] || r['kelas'] || ''
+          ).trim();
           const matchedKelas = kelasList.find(
             (k) =>
               k.nama.toLowerCase() === kelasStr.toLowerCase() ||
@@ -1891,28 +1968,39 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           );
 
           const mapelStr = String(
-            r['MATA PELAJARAN'] || r['Mata Pelajaran'] || r['mapel'] || 'Pelajaran'
+            r['Mata Pelajaran'] || r['MATA PELAJARAN'] || r['Mapel'] || r['mapel'] || 'Pelajaran'
           ).trim();
 
-          const jamRaw = String(r['JAM KE (1-10)'] || r['JAM KE (1-11)'] || r['Jam Ke'] || r['jam'] || '1, 2').trim();
+          const kodeMapelStr = String(
+            r['Kode Mapel'] || r['KODE MAPEL'] || r['Kode'] || r['kode'] || ''
+          ).trim();
+
+          const jamRaw = String(
+            r['Jam Ke (1-10)'] || r['JAM KE (1-10)'] || r['JAM KE (1-11)'] || r['Jam Ke'] || r['jam'] || '1, 2'
+          ).trim();
           const parsedJam = parseJamKeList(jamRaw);
           const finalJam = parsedJam.length > 0 ? parsedJam : [1, 2];
           const sorted = [...finalJam].sort((a, b) => a - b);
 
+          const catatanStr = String(
+            r['Catatan'] || r['CATATAN'] || r['catatan'] || ''
+          ).trim();
+
           newItems.push({
             id: `JADWAL_IMP_${Date.now()}_${idx}`,
             guruId: matchedGuru?.id,
-            guruUsername: matchedGuru?.username || userStr || guruList[0]?.username || 'guru',
+            guruUsername: matchedGuru?.username || nipStr || guruList[0]?.username || 'guru',
             guruNama: matchedGuru?.nama || guruStr || 'Guru Pengampu',
-            guruNip: matchedGuru?.nip || '',
+            guruNip: matchedGuru?.nip || nipStr || '',
             hari: matchedHari,
             shift: finalShift,
             kelasId: matchedKelas?.id || kelasList[0]?.id || 'KELAS_1',
             kelasNama: matchedKelas?.nama || kelasStr || 'Kelas',
             mataPelajaran: mapelStr,
+            kodeMapel: kodeMapelStr || undefined,
             jamKeList: sorted,
             jamKe: formatJamKeDisplay(sorted),
-            catatan: String(r['CATATAN'] || r['Catatan'] || '').trim(),
+            catatan: catatanStr,
           });
           importedCount++;
         });

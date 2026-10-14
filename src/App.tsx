@@ -405,9 +405,30 @@ export default function App() {
               const mergedMessages = mergeChatMessages(prev.chatMessages, data.appData.chatMessages);
               const allDeletedPelanggaran = Array.from(new Set([...(prev.deletedPelanggaranIds || []), ...(data.appData.deletedPelanggaranIds || [])]));
               const allDeletedHomeVisits = Array.from(new Set([...(prev.deletedHomeVisitIds || []), ...(data.appData.deletedHomeVisitIds || [])]));
-              const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
-              const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
-              const allDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(data.appData.deletedGmkIds || [])]));
+
+              // Protect active schedules, GMK, and students from zombie deletion tombstones
+              const activeJadwalSet = new Set([
+                ...(prev.jadwalMengajar || []).map((j) => String(j.id)),
+                ...(data.appData.jadwalMengajar || []).map((j) => String(j.id)),
+              ]);
+              const activeGmkSet = new Set([
+                ...(prev.guruMapelKelas || []).map((g: any) => String(g.id)),
+                ...(data.appData.guruMapelKelas || []).map((g: any) => String(g.id)),
+              ]);
+              const activeSiswaSet = new Set([
+                ...(prev.siswa || []).map((s: any) => String(s.id)),
+                ...(data.appData.siswa || []).map((s: any) => String(s.id)),
+              ]);
+
+              const rawDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
+              const allDeletedSiswa = rawDeletedSiswa.filter((id) => !activeSiswaSet.has(id));
+
+              const rawDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
+              const allDeletedJadwal = rawDeletedJadwal.filter((id) => !activeJadwalSet.has(id));
+
+              const rawDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(data.appData.deletedGmkIds || [])]));
+              const allDeletedGmk = rawDeletedGmk.filter((id) => !activeGmkSet.has(id));
+
               const mergedPelanggaran = mergePelanggaran(prev.pelanggaran, data.appData.pelanggaran, allDeletedPelanggaran);
               const mergedHomeVisits = mergeHomeVisits(prev.homeVisits, data.appData.homeVisits, allDeletedHomeVisits);
               const mergedSiswa = mergeSiswa(prev.siswa, data.appData.siswa, allDeletedSiswa);

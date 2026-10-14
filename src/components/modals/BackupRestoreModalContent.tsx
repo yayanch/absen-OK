@@ -363,18 +363,47 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
         const rawJson = await downloadDriveBackupContent(item.id);
         const incoming = rawJson.data || rawJson.appData || rawJson;
 
-        const mergedAppData: AppData = {
-          ...appData,
-          ...incoming,
-          sekolah: incoming.sekolah || appData.sekolah,
-          siswa: Array.isArray(incoming.siswa) ? incoming.siswa : appData.siswa,
-          kelas: Array.isArray(incoming.kelas) ? incoming.kelas : appData.kelas,
-          jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : appData.jurusan,
-          waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : appData.waliKelas,
-          presensi: incoming.presensi || {},
-        };
+        let restoredAppData: AppData | null = null;
+        try {
+          const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              backupData: incoming,
+              mode: 'replace',
+            }),
+          });
+          const resJson = await res.json();
+          if (resJson && resJson.success && resJson.appData) {
+            restoredAppData = resJson.appData;
+          }
+        } catch (e) {}
 
-        onUpdateAppData(mergedAppData);
+        if (!restoredAppData) {
+          const jadwalMengajar = Array.isArray(incoming.jadwalMengajar)
+            ? incoming.jadwalMengajar
+            : (Array.isArray(incoming.matriksMengajar) ? incoming.matriksMengajar : (incoming.jadwal || []));
+
+          restoredAppData = {
+            ...appData,
+            ...incoming,
+            sekolah: incoming.sekolah || appData.sekolah,
+            siswa: Array.isArray(incoming.siswa) ? incoming.siswa : appData.siswa,
+            kelas: Array.isArray(incoming.kelas) ? incoming.kelas : appData.kelas,
+            jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : appData.jurusan,
+            waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : appData.waliKelas,
+            jadwalMengajar,
+            mataPelajaran: Array.isArray(incoming.mataPelajaran) ? incoming.mataPelajaran : (incoming.mapel || appData.mataPelajaran || []),
+            guruMapelKelas: Array.isArray(incoming.guruMapelKelas) ? incoming.guruMapelKelas : (incoming.pembagianTugas || appData.guruMapelKelas || []),
+            presensi: incoming.presensi || {},
+            deletedJadwalIds: [],
+            deletedGmkIds: [],
+            deletedSiswaIds: [],
+            _isRestore: true,
+          };
+        }
+
+        onUpdateAppData(restoredAppData);
         onShowToast(`Database berhasil dipulihkan dari Google Drive ("${item.name}")!`, 'success');
         onCloseModal();
       } catch (err: any) {
@@ -671,32 +700,102 @@ export const BackupRestoreModalContent: React.FC<BackupRestoreModalContentProps>
     const doRestore = async () => {
       setIsProcessing(true);
       try {
-        const incoming = inspection.parsedData;
-        let mergedAppData: AppData;
+        const rawIncoming = inspection.parsedData;
 
-        if (restoreMode === 'replace') {
-          mergedAppData = {
-            ...appData,
-            ...incoming,
-            sekolah: incoming.sekolah || appData.sekolah,
-            siswa: Array.isArray(incoming.siswa) ? incoming.siswa : appData.siswa,
-            kelas: Array.isArray(incoming.kelas) ? incoming.kelas : appData.kelas,
-            jurusan: Array.isArray(incoming.jurusan) ? incoming.jurusan : appData.jurusan,
-            waliKelas: Array.isArray(incoming.waliKelas) ? incoming.waliKelas : appData.waliKelas,
-            presensi: incoming.presensi || {},
-          };
-        } else {
-          // Merge mode
-          const mergedPresensi = { ...(appData.presensi || {}), ...(incoming.presensi || {}) };
-          mergedAppData = {
-            ...appData,
-            sekolah: { ...(appData.sekolah || {}), ...(incoming.sekolah || {}) },
-            presensi: mergedPresensi,
-          };
+        // Normalize aliases for schedules and subjects
+        const jadwalMengajar = Array.isArray(rawIncoming.jadwalMengajar)
+          ? rawIncoming.jadwalMengajar
+          : (Array.isArray(rawIncoming.matriksMengajar)
+            ? rawIncoming.matriksMengajar
+            : (Array.isArray(rawIncoming.jadwal) ? rawIncoming.jadwal : (rawIncoming.jadwalPelajaran || [])));
+
+        const guruMapelKelas = Array.isArray(rawIncoming.guruMapelKelas)
+          ? rawIncoming.guruMapelKelas
+          : (Array.isArray(rawIncoming.pembagianTugas) ? rawIncoming.pembagianTugas : []);
+
+        const mataPelajaran = Array.isArray(rawIncoming.mataPelajaran)
+          ? rawIncoming.mataPelajaran
+          : (Array.isArray(rawIncoming.mapel) ? rawIncoming.mapel : []);
+
+        const normalizedIncoming = {
+          ...rawIncoming,
+          jadwalMengajar,
+          guruMapelKelas,
+          mataPelajaran,
+          _isRestore: true,
+        };
+
+        // 1. Post to Server-side restore API for atomic persistence and cache reset
+        let restoredAppData: AppData | null = null;
+        try {
+          const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              backupData: normalizedIncoming,
+              mode: restoreMode,
+            }),
+          });
+          const resJson = await res.json();
+          if (resJson && resJson.success && resJson.appData) {
+            restoredAppData = resJson.appData;
+          }
+        } catch (serverErr) {
+          console.warn('Server restore API warning, using client fallback:', serverErr);
         }
 
-        onUpdateAppData(mergedAppData);
-        onShowToast('Database aplikasi berhasil dipulihkan!', 'success');
+        // 2. Fallback / Client state update
+        if (!restoredAppData) {
+          if (restoreMode === 'replace') {
+            restoredAppData = {
+              ...appData,
+              ...normalizedIncoming,
+              sekolah: normalizedIncoming.sekolah || appData.sekolah,
+              siswa: Array.isArray(normalizedIncoming.siswa) ? normalizedIncoming.siswa : appData.siswa,
+              kelas: Array.isArray(normalizedIncoming.kelas) ? normalizedIncoming.kelas : appData.kelas,
+              jurusan: Array.isArray(normalizedIncoming.jurusan) ? normalizedIncoming.jurusan : appData.jurusan,
+              waliKelas: Array.isArray(normalizedIncoming.waliKelas) ? normalizedIncoming.waliKelas : appData.waliKelas,
+              jadwalMengajar,
+              guruMapelKelas,
+              mataPelajaran,
+              presensi: normalizedIncoming.presensi || {},
+              deletedJadwalIds: [],
+              deletedGmkIds: [],
+              deletedSiswaIds: [],
+              _isRestore: true,
+            };
+          } else {
+            // Merge mode
+            const existingJadwal = appData.jadwalMengajar || [];
+            const jadwalMap = new Map<string, any>();
+            existingJadwal.forEach((j) => { if (j && j.id) jadwalMap.set(String(j.id), j); });
+            jadwalMengajar.forEach((j: any) => { if (j && j.id) jadwalMap.set(String(j.id), { ...(jadwalMap.get(String(j.id)) || {}), ...j }); });
+
+            const existingGmk = appData.guruMapelKelas || [];
+            const gmkMap = new Map<string, any>();
+            existingGmk.forEach((g) => { if (g && g.id) gmkMap.set(String(g.id), g); });
+            guruMapelKelas.forEach((g: any) => { if (g && g.id) gmkMap.set(String(g.id), { ...(gmkMap.get(String(g.id)) || {}), ...g }); });
+
+            const activeJadwalIds = new Set(Array.from(jadwalMap.keys()));
+
+            restoredAppData = {
+              ...appData,
+              sekolah: { ...(appData.sekolah || {}), ...(normalizedIncoming.sekolah || {}) },
+              presensi: { ...(appData.presensi || {}), ...(normalizedIncoming.presensi || {}) },
+              jadwalMengajar: Array.from(jadwalMap.values()),
+              guruMapelKelas: Array.from(gmkMap.values()),
+              mataPelajaran: mataPelajaran.length > 0 ? mataPelajaran : (appData.mataPelajaran || []),
+              deletedJadwalIds: (appData.deletedJadwalIds || []).filter((id) => !activeJadwalIds.has(id)),
+              _isRestore: true,
+            };
+          }
+        }
+
+        // Apply to React state and trigger synchronized storage
+        onUpdateAppData(restoredAppData);
+
+        const countJadwal = Array.isArray(restoredAppData.jadwalMengajar) ? restoredAppData.jadwalMengajar.length : 0;
+        onShowToast(`Database aplikasi (termasuk ${countJadwal} Matriks Mengajar Guru) berhasil dipulihkan secara permanen!`, 'success');
         onCloseModal();
       } catch (err: any) {
         onShowToast(`Gagal memulihkan data: ${err?.message || 'Error'}`, 'error');

@@ -25,7 +25,8 @@ import {
   Info,
   Layers,
   Table2,
-  CheckCheck
+  CheckCheck,
+  Sparkles
 } from 'lucide-react';
 import { AppData, UserSession, GuruPresensiItem } from '../../types';
 import {
@@ -36,7 +37,9 @@ import {
   cleanMapelName,
   addAuditLog,
   isWeekend,
-  generateWeeklyShiftSchedules
+  generateWeeklyShiftSchedules,
+  normalizeWeeklyShiftPeriods,
+  isNonTeacherAccount
 } from '../../utils/helpers';
 import {
   MATRIX_SHIFT_OPTIONS,
@@ -119,9 +122,8 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
 
   // Active Weekly Shift Period for selectedTanggal
   const activeShiftPeriod = useMemo(() => {
-    const periods = (appData.shiftConfig?.periods && appData.shiftConfig.periods.length > 0)
-      ? appData.shiftConfig.periods
-      : generateWeeklyShiftSchedules();
+    const rawPeriods = appData.shiftConfig?.periods;
+    const periods = normalizeWeeklyShiftPeriods(rawPeriods);
 
     const targetDateStr = selectedTanggal ? selectedTanggal.slice(0, 10) : getTodayString();
     const matched = periods.find((p) => {
@@ -130,7 +132,16 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
       return targetDateStr >= sStr && targetDateStr <= eStr;
     });
     return matched || periods[0];
-  }, [appData.shiftConfig, selectedTanggal]);
+  }, [appData.shiftConfig?.periods, selectedTanggal]);
+
+  // Formatted date range for active rotation period
+  const formattedPeriodRange = useMemo(() => {
+    if (!activeShiftPeriod) return 'Pekan Ini';
+    const sDate = new Date(activeShiftPeriod.startDate);
+    const eDate = new Date(activeShiftPeriod.endDate);
+    const fmt = (d: Date) => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    return `${fmt(sDate)} s.d. ${fmt(eDate)} ${eDate.getFullYear()}`;
+  }, [activeShiftPeriod]);
 
   // Active shift timings and rotation config
   const activePagiTime = appData.shiftConfig?.pagiTime || '06.30 - 12.00';
@@ -140,8 +151,8 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
   const activeSiangJamMasukMulai = appData.shiftConfig?.siangJamMasukMulai || '12:45';
   const activeSiangJamPulang = appData.shiftConfig?.siangJamPulang || '16:50';
 
-  const k1Type = activeShiftPeriod?.kelompok1Type || 'pagi';
-  const k2Type = activeShiftPeriod?.kelompok2Type || 'siang';
+  const k1Type = (activeShiftPeriod?.kelompok1Type || 'pagi').toLowerCase() as 'pagi' | 'siang';
+  const k2Type = (activeShiftPeriod?.kelompok2Type || 'siang').toLowerCase() as 'pagi' | 'siang';
 
   // Labels for classes assigned to each shift
   const isK1Pagi = k1Type === 'pagi';
@@ -165,7 +176,8 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
     ? 'Kelas X & XI (Kelompok 1)'
     : 'Tidak Ada KBM';
 
-  // Extract all scheduled teachers on this day from appData.jadwalMengajar
+  // Extract all scheduled teachers on this day from appData.jadwalMengajar,
+  // synchronized STRICTLY with the active rotation shift of each kelompok for this week!
   const scheduledTeachers = useMemo(() => {
     const list = appData.jadwalMengajar || [];
     const daySchedules = list.filter(
@@ -175,12 +187,34 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
     const map = new Map<string, ScheduledTeacherItem>();
 
     daySchedules.forEach((j) => {
-      const kelompok = determineKelasKelompok(j.kelasNama);
-      
-      // Determine effective shift based on active weekly rotation
+      // Find class details to determine kelompok
+      const targetKelas = (appData.kelas || []).find(
+        (k) => k.id === j.kelasId || k.nama === j.kelasNama || k.id === j.kelasNama
+      );
+      const kelasNama = targetKelas?.nama || j.kelasNama || '';
+      const kelompok = determineKelasKelompok(kelasNama);
+
+      // Determine active shift for this group based on current week's rotation:
+      // Kelompok 1 (Kelas X & XI) -> k1Type ('pagi' | 'siang')
+      // Kelompok 2 (Kelas XII) -> k2Type ('pagi' | 'siang')
       const activeKelompokShift: 'Pagi' | 'Siang' = kelompok === 2
         ? (k2Type === 'pagi' ? 'Pagi' : 'Siang')
         : (k1Type === 'siang' ? 'Siang' : 'Pagi');
+
+      // CRITICAL ROTATION RULE:
+      // If this week Kelas X & XI (Kelompok 1) turn is pagi, ONLY include morning schedules (j.shift === 'Pagi').
+      // Afternoon schedules for this group MUST NOT be included.
+      // If this week Kelas X & XI turn is siang, ONLY include afternoon schedules (j.shift === 'Siang').
+      // Morning schedules for this group MUST NOT be included.
+      // Likewise for Kelas XII (Kelompok 2):
+      // If this week Kelas XII turn is siang, ONLY include afternoon schedules (j.shift === 'Siang').
+      // If this week Kelas XII turn is pagi, ONLY include morning schedules (j.shift === 'Pagi').
+      const itemShift = String(j.shift || 'Pagi').toLowerCase().trim();
+      const expectedShift = activeKelompokShift.toLowerCase();
+
+      if (itemShift !== expectedShift) {
+        return; // Exclude schedules belonging to the non-active rotation turn of this group
+      }
 
       const shift: 'Pagi' | 'Siang' = activeKelompokShift;
       const shiftOptionId: MatrixShiftOptionId =
@@ -188,7 +222,23 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
           ? (kelompok === 1 ? 'pagi_k1' : 'pagi_k2')
           : (kelompok === 1 ? 'siang_k1' : 'siang_k2');
 
-      const teacherIdentifier = j.guruUsername || j.guruNama;
+      // Canonical teacher profile lookup from appData.waliKelas
+      const prof = (appData.waliKelas || []).find((w) => {
+        if (w.id && j.guruId && String(w.id).toLowerCase() === String(j.guruId).toLowerCase()) return true;
+        if (w.username && j.guruUsername && String(w.username).toLowerCase() === String(j.guruUsername).toLowerCase()) return true;
+        if (w.nip && j.guruNip && String(w.nip).toLowerCase() === String(j.guruNip).toLowerCase()) return true;
+        if (w.nama && j.guruNama && String(w.nama).toLowerCase() === String(j.guruNama).toLowerCase()) return true;
+        return false;
+      });
+
+      // Filter out non-teacher accounts (e.g. picket accounts, adm_siswa)
+      if (prof && isNonTeacherAccount(prof)) {
+        return;
+      }
+
+      const teacherIdentifier = j.guruUsername || prof?.username || j.guruNama || prof?.nama || 'unknown';
+      const teacherNama = prof?.nama || j.guruNama || teacherIdentifier;
+      const teacherNip = prof?.nip || j.guruNip || '';
       const groupKey = `${teacherIdentifier}__${shift}__${kelompok}`;
 
       const jamList = parseJamKeList(j.jamKe, j.jamKeList);
@@ -200,9 +250,9 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
       if (!map.has(groupKey)) {
         map.set(groupKey, {
           key: groupKey,
-          guruUsername: j.guruUsername || '',
-          guruNama: j.guruNama || teacherIdentifier,
-          guruNip: j.guruNip || '',
+          guruUsername: j.guruUsername || prof?.username || '',
+          guruNama: teacherNama,
+          guruNip: teacherNip,
           shift,
           kelompok,
           kelompokLabel: kelompok === 1 ? 'Kelas X & XI' : 'Kelas XII',
@@ -217,21 +267,22 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
 
       const item = map.get(groupKey)!;
       item.schedules.push({
-        kelasNama: j.kelasNama,
+        kelasNama: kelasNama || j.kelasNama,
         mataPelajaran: cleanMapelName(j.mataPelajaran),
         jamKeList: jamList,
         jamKeStr: j.jamKe || jamList.join(','),
         timeRange,
-        jp: jamList.length,
+        jp: jamList.length || 1,
       });
-      item.totalJp += jamList.length;
+      item.totalJp += jamList.length || 1;
 
       const cleanedMapel = cleanMapelName(j.mataPelajaran);
-      if (!item.mapelList.includes(cleanedMapel)) {
+      if (cleanedMapel && !item.mapelList.includes(cleanedMapel)) {
         item.mapelList.push(cleanedMapel);
       }
-      if (!item.kelasList.includes(j.kelasNama)) {
-        item.kelasList.push(j.kelasNama);
+      const finalKelas = kelasNama || j.kelasNama;
+      if (finalKelas && !item.kelasList.includes(finalKelas)) {
+        item.kelasList.push(finalKelas);
       }
     });
 
@@ -243,7 +294,7 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
       if (a.kelompok !== b.kelompok) return a.kelompok - b.kelompok;
       return a.guruNama.localeCompare(b.guruNama, 'id');
     });
-  }, [appData.jadwalMengajar, dayName, k1Type, k2Type]);
+  }, [appData.jadwalMengajar, appData.kelas, appData.waliKelas, dayName, k1Type, k2Type]);
 
   // Realtime counts for shift groups for the selected date
   const groupCounts = useMemo(() => {
@@ -273,43 +324,74 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
   const dynamicActiveShiftGroups = useMemo(() => {
     const groups = [];
 
-    // Active Pagi Group
-    const pagiKelompok = k1Type === 'pagi' ? 1 : k2Type === 'pagi' ? 2 : 1;
-    const pagiId: MatrixShiftOptionId = pagiKelompok === 1 ? 'pagi_k1' : 'pagi_k2';
-    groups.push({
-      id: pagiId,
-      filterId: 'pagi',
-      shift: 'Pagi' as const,
-      kelompok: pagiKelompok as 1 | 2,
-      kelompokTitle: pagiKelompok === 1 ? 'Kelompok 1 (Kelas X & XI)' : 'Kelompok 2 (Kelas XII)',
-      kelompokTingkat: pagiKelompok === 1 ? 'Kelas X & XI' : 'Kelas XII',
-      shiftTitle: 'Shift Pagi',
-      shiftWaktu: `Jam Ke 1 s.d. 10 • ${activePagiTime} WIB (30 mnt/JP • Istirahat 08.30-09.00)`,
-      icon: Sun,
-      headerColor: 'from-amber-500/15 via-amber-500/5 to-transparent border-amber-300 dark:border-amber-700/80',
-      badgeColor: 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800',
-      accentBorder: 'border-amber-400 dark:border-amber-600',
-    });
+    // Active Kelompok 1 (Kelas X & XI)
+    if (k1Type === 'pagi') {
+      groups.push({
+        id: 'pagi_k1' as MatrixShiftOptionId,
+        filterId: 'pagi',
+        shift: 'Pagi' as const,
+        kelompok: 1 as const,
+        kelompokTitle: 'Kelompok 1 (Kelas X & XI)',
+        kelompokTingkat: 'Kelas X & XI',
+        shiftTitle: 'Shift Pagi',
+        shiftWaktu: `Jam Ke 1 s.d. 10 • ${activePagiTime} WIB (30 mnt/JP • Istirahat 08.30-09.00)`,
+        icon: Sun,
+        headerColor: 'from-amber-500/15 via-amber-500/5 to-transparent border-amber-300 dark:border-amber-700/80',
+        badgeColor: 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800',
+        accentBorder: 'border-amber-400 dark:border-amber-600',
+      });
+    } else {
+      groups.push({
+        id: 'siang_k1' as MatrixShiftOptionId,
+        filterId: 'siang',
+        shift: 'Siang' as const,
+        kelompok: 1 as const,
+        kelompokTitle: 'Kelompok 1 (Kelas X & XI)',
+        kelompokTingkat: 'Kelas X & XI',
+        shiftTitle: 'Shift Siang',
+        shiftWaktu: `Jam Ke 1 s.d. 10 • ${activeSiangTime} WIB (30 mnt/JP • Sholat 15.00-15.30)`,
+        icon: Sunset,
+        headerColor: 'from-sky-500/15 via-sky-500/5 to-transparent border-sky-300 dark:border-sky-700/80',
+        badgeColor: 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-200 border-sky-300 dark:border-sky-800',
+        accentBorder: 'border-sky-400 dark:border-sky-600',
+      });
+    }
 
-    // Active Siang Group
-    const siangKelompok = k1Type === 'siang' ? 1 : k2Type === 'siang' ? 2 : 2;
-    const siangId: MatrixShiftOptionId = siangKelompok === 1 ? 'siang_k1' : 'siang_k2';
-    groups.push({
-      id: siangId,
-      filterId: 'siang',
-      shift: 'Siang' as const,
-      kelompok: siangKelompok as 1 | 2,
-      kelompokTitle: siangKelompok === 1 ? 'Kelompok 1 (Kelas X & XI)' : 'Kelompok 2 (Kelas XII)',
-      kelompokTingkat: siangKelompok === 1 ? 'Kelas X & XI' : 'Kelas XII',
-      shiftTitle: 'Shift Siang',
-      shiftWaktu: `Jam Ke 1 s.d. 10 • ${activeSiangTime} WIB (30 mnt/JP • Sholat 15.00-15.30)`,
-      icon: Sunset,
-      headerColor: 'from-sky-500/15 via-sky-500/5 to-transparent border-sky-300 dark:border-sky-700/80',
-      badgeColor: 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-200 border-sky-300 dark:border-sky-800',
-      accentBorder: 'border-sky-400 dark:border-sky-600',
-    });
+    // Active Kelompok 2 (Kelas XII)
+    if (k2Type === 'pagi') {
+      groups.push({
+        id: 'pagi_k2' as MatrixShiftOptionId,
+        filterId: 'pagi',
+        shift: 'Pagi' as const,
+        kelompok: 2 as const,
+        kelompokTitle: 'Kelompok 2 (Kelas XII)',
+        kelompokTingkat: 'Kelas XII',
+        shiftTitle: 'Shift Pagi',
+        shiftWaktu: `Jam Ke 1 s.d. 10 • ${activePagiTime} WIB (30 mnt/JP • Istirahat 08.30-09.00)`,
+        icon: Sun,
+        headerColor: 'from-amber-500/15 via-amber-500/5 to-transparent border-amber-300 dark:border-amber-700/80',
+        badgeColor: 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800',
+        accentBorder: 'border-amber-400 dark:border-amber-600',
+      });
+    } else {
+      groups.push({
+        id: 'siang_k2' as MatrixShiftOptionId,
+        filterId: 'siang',
+        shift: 'Siang' as const,
+        kelompok: 2 as const,
+        kelompokTitle: 'Kelompok 2 (Kelas XII)',
+        kelompokTingkat: 'Kelas XII',
+        shiftTitle: 'Shift Siang',
+        shiftWaktu: `Jam Ke 1 s.d. 10 • ${activeSiangTime} WIB (30 mnt/JP • Sholat 15.00-15.30)`,
+        icon: Sunset,
+        headerColor: 'from-sky-500/15 via-sky-500/5 to-transparent border-sky-300 dark:border-sky-700/80',
+        badgeColor: 'bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-200 border-sky-300 dark:border-sky-800',
+        accentBorder: 'border-sky-400 dark:border-sky-600',
+      });
+    }
 
-    return groups;
+    // Return sorted: Pagi first, Siang second
+    return groups.sort((a, b) => (a.shift === 'Pagi' ? -1 : 1));
   }, [k1Type, k2Type, activePagiTime, activeSiangTime]);
 
   // Attendance Records state (key: groupKey -> GuruPresensiItem)
@@ -320,55 +402,49 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
     const existingList: GuruPresensiItem[] = appData.presensiGuru?.[selectedTanggal] || [];
     const map: Record<string, GuruPresensiItem> = {};
 
-    // 1. Populate from existing saved list
-    existingList.forEach((rec) => {
-      const shift: 'Pagi' | 'Siang' = (rec.shift || 'Pagi') === 'Siang' ? 'Siang' : 'Pagi';
-      const kelompok = rec.kelompok || 1;
-      const teacherIdentifier = rec.guruUsername || rec.guruNama;
-      const key = `${teacherIdentifier}__${shift}__${kelompok}`;
-      map[key] = { ...rec };
-    });
-
-    // 2. Initialize scheduled teachers without record
     scheduledTeachers.forEach((st) => {
-      if (!map[st.key]) {
-        // Fallback check by username/nama and shift
-        const fallback = existingList.find(
-          (e) =>
-            (e.guruUsername === st.guruUsername || e.guruNama === st.guruNama) &&
-            ((e.shift || 'Pagi') === st.shift)
-        );
+      // Find matching record from existing saved attendance
+      const matched = existingList.find((e) => {
+        const uMatches = Boolean(e.guruUsername && st.guruUsername && e.guruUsername.toLowerCase() === st.guruUsername.toLowerCase());
+        const nMatches = Boolean(e.guruNama && st.guruNama && e.guruNama.toLowerCase() === st.guruNama.toLowerCase());
+        const shiftMatches = (e.shift || 'Pagi') === st.shift;
+        const kelompokMatches = !e.kelompok || e.kelompok === st.kelompok;
+        return (uMatches || nMatches) && shiftMatches && kelompokMatches;
+      });
 
-        if (fallback) {
-          map[st.key] = {
-            ...fallback,
-            id: fallback.id || `GPRES_${Date.now()}_${Math.random()}`,
-            kelompok: st.kelompok,
-            kelompokLabel: st.kelompokLabel,
-            totalJp: st.totalJp,
-            jadwalHariIni: st.schedules.map((s) => `${s.kelasNama}: ${s.mataPelajaran} (${s.jp} JP)`).join('; '),
-          };
-        } else {
-          map[st.key] = {
-            id: `GPRES_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-            guruId: st.guruUsername || st.guruNama,
-            guruUsername: st.guruUsername,
-            guruNama: st.guruNama,
-            guruNip: st.guruNip,
-            tanggal: selectedTanggal,
-            hari: dayName,
-            shift: st.shift,
-            kelompok: st.kelompok,
-            kelompokLabel: st.kelompokLabel,
-            status: '', // Belum absen
-            jamMasuk: '',
-            jamPulang: '',
-            catatan: '',
-            totalJp: st.totalJp,
-            jadwalHariIni: st.schedules.map((s) => `${s.kelasNama}: ${s.mataPelajaran} (${s.jp} JP)`).join('; '),
-            sumberPresensi: 'Jadwal Mengajar',
-          };
-        }
+      if (matched) {
+        map[st.key] = {
+          ...matched,
+          guruId: st.guruUsername || st.guruNama,
+          guruUsername: st.guruUsername,
+          guruNama: st.guruNama,
+          guruNip: st.guruNip,
+          shift: st.shift,
+          kelompok: st.kelompok,
+          kelompokLabel: st.kelompokLabel,
+          totalJp: st.totalJp,
+          jadwalHariIni: st.schedules.map((s) => `${s.kelasNama}: ${s.mataPelajaran} (${s.jp} JP)`).join('; '),
+        };
+      } else {
+        map[st.key] = {
+          id: `GPRES_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+          guruId: st.guruUsername || st.guruNama,
+          guruUsername: st.guruUsername,
+          guruNama: st.guruNama,
+          guruNip: st.guruNip,
+          tanggal: selectedTanggal,
+          hari: dayName,
+          shift: st.shift,
+          kelompok: st.kelompok,
+          kelompokLabel: st.kelompokLabel,
+          status: '', // Belum absen
+          jamMasuk: '',
+          jamPulang: '',
+          catatan: '',
+          totalJp: st.totalJp,
+          jadwalHariIni: st.schedules.map((s) => `${s.kelasNama}: ${s.mataPelajaran} (${s.jp} JP)`).join('; '),
+          sumberPresensi: 'Jadwal Mengajar',
+        };
       }
     });
 
@@ -526,11 +602,34 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
     if (readOnly) return;
     setIsSaving(true);
     try {
-      const recordsToSave: GuruPresensiItem[] = Object.values(attendanceRecords);
+      const recordsToSave: GuruPresensiItem[] = scheduledTeachers
+        .map((st) => attendanceRecords[st.key])
+        .filter(Boolean);
+
+      const existingList: GuruPresensiItem[] = appData.presensiGuru?.[selectedTanggal] || [];
+      const updatedKeys = new Set(
+        scheduledTeachers.map((st) => {
+          const u = (st.guruUsername || st.guruNama).toLowerCase().trim();
+          const s = st.shift.toLowerCase().trim();
+          const k = st.kelompok;
+          return `${u}__${s}__${k}`;
+        })
+      );
+
+      // Preserve existing records that are not part of current active scheduled teachers set
+      const preservedExisting = existingList.filter((item) => {
+        const u = (item.guruUsername || item.guruNama || item.guruId || '').toLowerCase().trim();
+        const s = (item.shift || 'Pagi').toLowerCase().trim();
+        const k = item.kelompok || 1;
+        const key = `${u}__${s}__${k}`;
+        return !updatedKeys.has(key);
+      });
+
+      const mergedRecordsToSave: GuruPresensiItem[] = [...preservedExisting, ...recordsToSave];
 
       const nextPresensiGuru = {
         ...(appData.presensiGuru || {}),
-        [selectedTanggal]: recordsToSave,
+        [selectedTanggal]: mergedRecordsToSave,
       };
 
       const updatedAppData = addAuditLog(
@@ -714,6 +813,36 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
               <span>{isSaving ? 'Menyimpan...' : isDirty ? 'Simpan Perubahan *' : 'Simpan Absen'}</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Bilah Status Rotasi Shift Pekan Ini */}
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900 border border-blue-200/80 dark:border-blue-900/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-slate-900 dark:text-white text-xs sm:text-sm">
+                Jadwal Rotasi Shift Pekan Ini ({formattedPeriodRange})
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                Otomatis Disesuaikan
+              </span>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 mt-0.5 text-xs">
+              <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 1 (Kelas X &amp; XI):</span>{' '}
+              <span className={`font-black ${k1Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                {k1Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
+              </span>
+              {' '}• <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 2 (Kelas XII):</span>{' '}
+              <span className={`font-black ${k2Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                {k2Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
+              </span>
+              . Daftar guru di bawah hanya memuat jadwal giliran aktif pekan ini (jadwal shift tidak aktif otomatis dikecualikan).
+            </p>
+          </div>
         </div>
       </div>
 
@@ -1077,7 +1206,7 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
             }
             return true;
           }).map((grp) => {
-            const groupTeachers = displayedTeachers.filter((st) => st.shift === grp.shift);
+            const groupTeachers = displayedTeachers.filter((st) => st.shift === grp.shift && st.kelompok === grp.kelompok);
             const Icon = grp.icon;
 
             return (

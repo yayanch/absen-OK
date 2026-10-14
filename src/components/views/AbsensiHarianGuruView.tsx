@@ -34,7 +34,8 @@ import {
   formatDateIndo,
   getIndonesianDayName,
   determineKelasKelompok,
-  cleanMapelName
+  cleanMapelName,
+  normalizeWeeklyShiftPeriods
 } from '../../utils/helpers';
 import { PageHeader } from '../common/UIComponents';
 
@@ -182,11 +183,42 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
   const todayStr = useMemo(() => getTodayString(), []);
   const [selectedTanggal, setSelectedTanggal] = useState<string>(todayStr);
 
-  // 2. STATE: Active Shift (defaults to Shift Pagi Kelas X & XI)
-  const [activeShiftId, setActiveShiftId] = useState<ShiftOptionId>('pagi_k1');
+  // Active Weekly Shift Period for selectedTanggal
+  const activeShiftPeriod = useMemo(() => {
+    const rawPeriods = appData.shiftConfig?.periods;
+    const periods = normalizeWeeklyShiftPeriods(rawPeriods);
+    const targetDateStr = selectedTanggal ? selectedTanggal.slice(0, 10) : getTodayString();
+    const matched = periods.find((p) => {
+      const sStr = p.startDate.slice(0, 10);
+      const eStr = p.endDate.slice(0, 10);
+      return targetDateStr >= sStr && targetDateStr <= eStr;
+    });
+    return matched || periods[0];
+  }, [appData.shiftConfig?.periods, selectedTanggal]);
+
+  const k1Type = (activeShiftPeriod?.kelompok1Type || 'pagi').toLowerCase() as 'pagi' | 'siang';
+  const k2Type = (activeShiftPeriod?.kelompok2Type || 'siang').toLowerCase() as 'pagi' | 'siang';
+
+  // 2. STATE: Active Shift (defaults according to active weekly rotation)
+  const availableShiftOptions = useMemo(() => {
+    const activeK1Id = k1Type === 'pagi' ? 'pagi_k1' : 'siang_k1';
+    const activeK2Id = k2Type === 'pagi' ? 'pagi_k2' : 'siang_k2';
+    return SHIFT_OPTIONS.filter((s) => s.id === activeK1Id || s.id === activeK2Id);
+  }, [k1Type, k2Type]);
+
+  const defaultShiftId = useMemo<ShiftOptionId>(() => {
+    return (k1Type === 'pagi' ? 'pagi_k1' : (k2Type === 'pagi' ? 'pagi_k2' : 'siang_k1')) as ShiftOptionId;
+  }, [k1Type, k2Type]);
+
+  const [activeShiftId, setActiveShiftId] = useState<ShiftOptionId>(defaultShiftId);
+
+  useEffect(() => {
+    setActiveShiftId(defaultShiftId);
+  }, [defaultShiftId]);
+
   const activeShift = useMemo(() => {
-    return SHIFT_OPTIONS.find((s) => s.id === activeShiftId) || SHIFT_OPTIONS[0];
-  }, [activeShiftId]);
+    return availableShiftOptions.find((s) => s.id === activeShiftId) || availableShiftOptions[0] || SHIFT_OPTIONS[0];
+  }, [availableShiftOptions, activeShiftId]);
 
   // 3. STATE: Active Day Tab (defaults to today's weekday if Mon-Fri, else 'Senin')
   const initialDayName = useMemo<HariKerja>(() => {
@@ -261,7 +293,11 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
         const kelompok = determineKelasKelompok(kelasNama);
         if (kelompok !== activeShift.kelompok) return false;
 
+        // Rotation rule: Schedule shift must match current week's active rotation for this group
+        const activeGroupShift = (kelompok === 1 ? k1Type : k2Type).toLowerCase();
         const itemShift = (j.shift || 'Pagi').toLowerCase();
+        if (itemShift !== activeGroupShift) return false;
+
         return itemShift === activeShift.shift.toLowerCase();
       });
 
@@ -278,7 +314,7 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
     });
 
     return stats;
-  }, [appData.jadwalMengajar, appData.kelas, activeShift]);
+  }, [appData.jadwalMengajar, appData.kelas, activeShift, k1Type, k2Type]);
 
   // List of teachers teaching on activeShift and activeDay
   const scheduledTeachers = useMemo<ScheduledTeacherItem[]>(() => {
@@ -294,8 +330,12 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
       const kelompok = determineKelasKelompok(kelasNama);
       if (kelompok !== activeShift.kelompok) return false;
 
-      // 3. Shift match ('Pagi' vs 'Siang')
+      // Rotation rule: Strictly match current week's active rotation
+      const activeGroupShift = (kelompok === 1 ? k1Type : k2Type).toLowerCase();
       const itemShift = (j.shift || 'Pagi').toLowerCase();
+      if (itemShift !== activeGroupShift) return false;
+
+      // 3. Shift match ('Pagi' vs 'Siang')
       if (itemShift !== activeShift.shift.toLowerCase()) return false;
 
       return true;
@@ -365,7 +405,7 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
 
     // Sort alphabetically by teacher name
     return Array.from(teacherMap.values()).sort((a, b) => a.guruNama.localeCompare(b.guruNama, 'id-ID'));
-  }, [appData.jadwalMengajar, appData.kelas, activeDay, activeShift, teachersProfileMap]);
+  }, [appData.jadwalMengajar, appData.kelas, activeDay, activeShift, teachersProfileMap, k1Type, k2Type]);
 
   // Filtered teachers by search query and status filter
   const filteredTeachers = useMemo(() => {
@@ -547,9 +587,19 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
         (item) => item && (item.status || item.jamMasuk || item.catatan)
       );
 
+      const existingList: GuruPresensiItem[] = appData.presensiGuru?.[selectedTanggal] || [];
+      const updatedKeys = new Set(
+        currentList.map((c) => `${(c.guruUsername || c.guruNama || c.guruId || '').toLowerCase()}__${(c.shift || 'Pagi').toLowerCase()}__${c.kelompok || 1}`)
+      );
+      const preservedList = existingList.filter((item) => {
+        const key = `${(item.guruUsername || item.guruNama || item.guruId || '').toLowerCase()}__${(item.shift || 'Pagi').toLowerCase()}__${item.kelompok || 1}`;
+        return !updatedKeys.has(key);
+      });
+      const mergedList = [...preservedList, ...currentList];
+
       const nextPresensiGuru: Record<string, GuruPresensiItem[]> = {
         ...(appData.presensiGuru || {}),
-        [selectedTanggal]: currentList,
+        [selectedTanggal]: mergedList,
       };
 
       const updatedAppData: AppData = {
@@ -699,9 +749,9 @@ export const AbsensiHarianGuruView: React.FC<AbsensiHarianGuruViewProps> = ({
             </span>
           </div>
 
-          {/* 4 Shift Pills (Exact styling matching provided UI image) */}
+          {/* Shift Pills conforming to active rotation */}
           <div className="bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-200/70 dark:border-slate-700/70 shadow-2xs">
-            {SHIFT_OPTIONS.map((opt) => {
+            {availableShiftOptions.map((opt) => {
               const Icon = opt.icon;
               const isActive = activeShiftId === opt.id;
               return (
