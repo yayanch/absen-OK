@@ -161,6 +161,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     iconName: 'Calendar',
   },
   {
+    id: 'proyeksi_jadwal_guru',
+    label: 'Proyeksi Monitor Jadwal',
+    shortDesc: 'Tampilan jadwal mengajar guru per shift per jam untuk layar monitor/proyektor TV',
+    category: 'master',
+    iconName: 'Tv',
+  },
+  {
     id: 'jadwal_minggu_ini',
     label: 'Jadwal Mengajar Minggu Ini',
     shortDesc: 'Tampilan kalender jadwal mengajar aktif minggu berjalan',

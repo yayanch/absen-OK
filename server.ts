@@ -12,6 +12,15 @@ import compression from "compression";
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+// Global process error safety to prevent Cloud Run crashes on unhandled async rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("⚠️ [Server Warning] Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("⚠️ [Server Error] Uncaught Exception:", err);
+});
+
 // ==========================================
 // SERVER RESOURCE & TELEMETRY MONITORING
 // ==========================================
@@ -6182,48 +6191,63 @@ app.delete("/api/backup/snapshot/:id", (req, res) => {
   }
 });
 
+function serveStaticProduction(distPath: string) {
+  app.use(express.static(distPath));
+  app.get("*", (req, res, next) => {
+    if (req.originalUrl.startsWith("/api/")) {
+      return next();
+    }
+    const indexPath = path.join(distPath, "index.html");
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      const buildIndexPath = path.join(process.cwd(), "build", "index.html");
+      if (fs.existsSync(buildIndexPath)) {
+        res.sendFile(buildIndexPath);
+      } else {
+        res.status(404).send("Application build in progress, please refresh in a few seconds.");
+      }
+    }
+  });
+}
+
 // Vite middleware for development or static serving for production
 async function startServer() {
   try {
-    const isProduction = process.env.NODE_ENV === "production";
+    const distPath = path.join(process.cwd(), "dist");
+    const hasDistBuild = fs.existsSync(path.join(distPath, "index.html")) || fs.existsSync(path.join(process.cwd(), "build", "index.html"));
+    const isProduction = process.env.NODE_ENV === "production" || hasDistBuild;
 
     if (!isProduction) {
-      const { createServer: createViteServer } = await import("vite");
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
+      try {
+        const { createServer: createViteServer } = await import("vite");
+        const vite = await createViteServer({
+          server: { middlewareMode: true },
+          appType: "spa",
+        });
+        app.use(vite.middlewares);
 
-      app.get("*", async (req, res, next) => {
-        if (req.originalUrl.startsWith("/api/")) {
-          return next();
-        }
-        try {
-          let template = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf-8");
-          template = await vite.transformIndexHtml(req.originalUrl, template);
-          res.status(200).set({ "Content-Type": "text/html" }).end(template);
-        } catch (e: any) {
-          if (vite) {
-            vite.ssrFixStacktrace(e);
+        app.get("*", async (req, res, next) => {
+          if (req.originalUrl.startsWith("/api/")) {
+            return next();
           }
-          next(e);
-        }
-      });
+          try {
+            let template = fs.readFileSync(path.resolve(process.cwd(), "index.html"), "utf-8");
+            template = await vite.transformIndexHtml(req.originalUrl, template);
+            res.status(200).set({ "Content-Type": "text/html" }).end(template);
+          } catch (e: any) {
+            if (vite) {
+              vite.ssrFixStacktrace(e);
+            }
+            next(e);
+          }
+        });
+      } catch (viteErr) {
+        console.warn("⚠️ Vite middleware unavailable, falling back to static production serving:", viteErr);
+        serveStaticProduction(distPath);
+      }
     } else {
-      const distPath = path.join(process.cwd(), "dist");
-      app.use(express.static(distPath));
-      app.get("*", (req, res, next) => {
-        if (req.originalUrl.startsWith("/api/")) {
-          return next();
-        }
-        const indexPath = path.join(distPath, "index.html");
-        if (fs.existsSync(indexPath)) {
-          res.sendFile(indexPath);
-        } else {
-          res.status(404).send("Application build in progress, please refresh in a few seconds.");
-        }
-      });
+      serveStaticProduction(distPath);
     }
 
     const dbConfig = loadSavedServerConfig();

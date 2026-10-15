@@ -152,9 +152,9 @@ Hasil build akan berada di folder `dist/`:
 
 Jalankan server aplikasi di background menggunakan PM2. Anda dapat memilih salah satu dari dua cara berikut:
 
-### Opsi A: Menjalankan Hasil Bundle Produksi (Rekomendasi)
+### Opsi A: Menjalankan Hasil Bundle Produksi (1 Proses - Rekomendasi)
 ```bash
-NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah"
+NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah" -i 1 --exec-mode fork
 ```
 
 ### Opsi B: Menjalankan Langsung via TSX
@@ -162,16 +162,16 @@ NODE_ENV=production PORT=3000 pm2 start dist/server.cjs --name "presensi-sekolah
 NODE_ENV=production PORT=3000 pm2 start "npx tsx server.ts" --name "presensi-sekolah"
 ```
 
-### Opsi C: Menggunakan File `ecosystem.config.cjs`
-Buat file `ecosystem.config.cjs`:
+### Opsi C: Menggunakan File `ecosystem.config.cjs` (1 Proses)
+Aplikasi sudah dilengkapi file `ecosystem.config.cjs` yang dikonfigurasi untuk **1 proses saja (`instances: 1`, `exec_mode: 'fork'`)**:
 ```javascript
 module.exports = {
   apps: [
     {
       name: 'presensi-sekolah',
       script: './dist/server.cjs',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: 1,
+      exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
         PORT: 3000

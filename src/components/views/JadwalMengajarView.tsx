@@ -39,7 +39,8 @@ import {
   Layers,
   Table2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Tv
 } from 'lucide-react';
 import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
@@ -2244,6 +2245,21 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               </span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavigateView) onNavigateView('proyeksi_jadwal_guru');
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm"
+            title="Luncurkan Mode Proyeksi Layar TV / Monitor"
+          >
+            <Tv className="w-4 h-4 text-cyan-300 animate-pulse" />
+            <span>Proyeksi Monitor TV</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full font-black bg-white/20 text-white">
+              Monitor
+            </span>
+          </button>
         </div>
 
         <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">

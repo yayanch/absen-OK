@@ -136,6 +136,7 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
       'master_mapel',
       'mapel_kelas_guru',
       'jadwal_mengajar',
+      'proyeksi_jadwal_guru',
       'jadwal_minggu_ini',
       'jadwal_shift',
       'master_kelas',

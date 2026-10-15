@@ -670,6 +670,7 @@ export interface AppData {
   violationTemplates?: ViolationTemplate[];
   chatMessages?: ChatMessage[];
   enableLiveChat?: boolean;
+  _isRestore?: boolean;
   chatContactSettings?: ChatContactSettings;
   customRoles?: CustomRole[];
   rolePermissions?: RoleMenuPermission[];
@@ -929,6 +930,7 @@ export type ViewType =
   | 'master_kelas'
   | 'master_siswa'
   | 'jadwal_mengajar'
+  | 'proyeksi_jadwal_guru'
   | 'jadwal_minggu_ini'
   | 'pengaturan_sekolah'
   | 'pengaturan_tema'

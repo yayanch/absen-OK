@@ -53299,9 +53299,8 @@ async function generateQrDataUrl(tokenObj) {
     return "";
   }
 }
-var MYSQL_CONFIG_FILE = path.join(process.cwd(), "mysql_config.json");
-var MYSQL_CONFIG_FILE_TMP = "/tmp/mysql_config.json";
 var APP_DATA_CACHE_FILE = path.join(process.cwd(), "app_data_cache.json");
+var APP_DATA_CACHE_BAK_FILE = path.join(process.cwd(), "app_data_cache.json.bak");
 var APP_DATA_CACHE_FILE_TMP = "/tmp/app_data_cache.json";
 var activePool = null;
 var currentPoolKey = null;
@@ -53344,16 +53343,6 @@ function loadSavedServerConfig() {
         source: "env"
       };
     }
-    if (fs.existsSync(MYSQL_CONFIG_FILE)) {
-      const content = fs.readFileSync(MYSQL_CONFIG_FILE, "utf-8");
-      const parsed = JSON.parse(content);
-      if (parsed && parsed.host) return { ...parsed, isEnv: false, source: "file" };
-    }
-    if (fs.existsSync(MYSQL_CONFIG_FILE_TMP)) {
-      const content = fs.readFileSync(MYSQL_CONFIG_FILE_TMP, "utf-8");
-      const parsed = JSON.parse(content);
-      if (parsed && parsed.host) return { ...parsed, isEnv: false, source: "file" };
-    }
   } catch (e) {
   }
   return null;
@@ -53383,15 +53372,41 @@ function resolveMySQLConfig(incoming) {
   if (envConfig) return envConfig;
   return loadSavedServerConfig();
 }
+function updateEnvFile(config) {
+  try {
+    const envPath = path.join(process.cwd(), ".env");
+    let existingContent = "";
+    if (fs.existsSync(envPath)) {
+      existingContent = fs.readFileSync(envPath, "utf-8");
+    }
+    const setEnvVar = (content, key, value) => {
+      const regex = new RegExp(`^${key}=.*$`, "m");
+      const newLine = `${key}="${value}"`;
+      if (regex.test(content)) {
+        return content.replace(regex, newLine);
+      } else {
+        return content.trim() ? `${content.trim()}
+${newLine}
+` : `${newLine}
+`;
+      }
+    };
+    let updated = existingContent;
+    if (config.host) updated = setEnvVar(updated, "DB_HOST", String(config.host).trim());
+    if (config.port) updated = setEnvVar(updated, "DB_PORT", String(config.port || "3306").trim());
+    if (config.user) updated = setEnvVar(updated, "DB_USER", String(config.user).trim());
+    if (config.password !== void 0) updated = setEnvVar(updated, "DB_PASSWORD", String(config.password));
+    if (config.database) updated = setEnvVar(updated, "DB_NAME", String(config.database).trim());
+    fs.writeFileSync(envPath, updated, "utf-8");
+    import_dotenv.default.config({ override: true });
+  } catch (e) {
+    console.error("[Env Update Error]", e);
+  }
+}
 function saveServerConfig(config) {
   try {
     if (config && config.host && config.database && config.user) {
-      const content = JSON.stringify(config, null, 2);
-      fs.writeFileSync(MYSQL_CONFIG_FILE, content);
-      try {
-        fs.writeFileSync(MYSQL_CONFIG_FILE_TMP, content);
-      } catch (e) {
-      }
+      updateEnvFile(config);
     }
   } catch (e) {
   }
@@ -53438,22 +53453,37 @@ function normalizeWeeklyShiftPeriods(rawPeriods) {
   return result;
 }
 function loadSavedAppDataCache() {
-  try {
-    let parsed = null;
-    if (fs.existsSync(APP_DATA_CACHE_FILE)) {
-      const content = fs.readFileSync(APP_DATA_CACHE_FILE, "utf-8");
-      parsed = JSON.parse(content);
-    } else if (fs.existsSync(APP_DATA_CACHE_FILE_TMP)) {
-      const content = fs.readFileSync(APP_DATA_CACHE_FILE_TMP, "utf-8");
-      parsed = JSON.parse(content);
+  const tryLoad = (filePath) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, "utf-8");
+        if (content && content.trim().length > 2) {
+          const parsed2 = JSON.parse(content);
+          if (parsed2 && typeof parsed2 === "object") return parsed2;
+        }
+      }
+    } catch (e) {
+      console.warn(`[Cache Read Warning] Failed parsing ${filePath}:`, e);
     }
-    if (parsed && parsed.shiftConfig && Array.isArray(parsed.shiftConfig.periods)) {
-      parsed.shiftConfig.periods = normalizeWeeklyShiftPeriods(parsed.shiftConfig.periods);
+    return null;
+  };
+  let parsed = tryLoad(APP_DATA_CACHE_FILE);
+  if (!parsed) {
+    parsed = tryLoad(APP_DATA_CACHE_BAK_FILE);
+    if (parsed) {
+      console.info("[Cache Recovery] Successfully restored from backup file app_data_cache.json.bak");
     }
-    return parsed;
-  } catch (e) {
   }
-  return null;
+  if (!parsed) {
+    parsed = tryLoad(APP_DATA_CACHE_FILE_TMP);
+    if (parsed) {
+      console.info("[Cache Recovery] Successfully restored from /tmp/app_data_cache.json");
+    }
+  }
+  if (parsed && parsed.shiftConfig && Array.isArray(parsed.shiftConfig.periods)) {
+    parsed.shiftConfig.periods = normalizeWeeklyShiftPeriods(parsed.shiftConfig.periods);
+  }
+  return parsed;
 }
 var appDataSaveTimeout = null;
 var backgroundPersistTimeout = null;
@@ -53565,7 +53595,8 @@ function mergeSiswaServer(existingList = [], incomingList = [], deletedIds = [])
 function mergeJadwalMengajarServer(existingList = [], incomingList = [], deletedIds = []) {
   if (!Array.isArray(existingList)) existingList = [];
   if (!Array.isArray(incomingList)) incomingList = [];
-  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
+  const activeIds = new Set(incomingList.map((j) => String(j.id)));
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)).filter((id) => !activeIds.has(id)));
   if (existingList.length === 0 && incomingList.length === 0) return [];
   const filteredExisting = existingList.filter((j) => j && j.id && !deletedSet.has(String(j.id)));
   const filteredIncoming = incomingList.filter((j) => j && j.id && !deletedSet.has(String(j.id)));
@@ -53594,33 +53625,73 @@ function mergePresensiServer(existingMap = {}, incomingMap = {}) {
   }
   return sanitizeAndDeduplicatePresensiMap(merged);
 }
-function saveAppDataCache(data) {
+function saveAppDataCache(data, isRestore = false) {
   if (!data || typeof data !== "object") return;
-  const deletedSiswaSet = /* @__PURE__ */ new Set([
+  const isRestoration = Boolean(isRestore || data._isRestore);
+  if (isRestoration) {
+    if (inMemoryAppDataCache) {
+      inMemoryAppDataCache.deletedJadwalIds = [];
+      inMemoryAppDataCache.deletedGmkIds = [];
+      inMemoryAppDataCache.deletedSiswaIds = [];
+      inMemoryAppDataCache.deletedPelanggaranIds = [];
+      inMemoryAppDataCache.deletedHomeVisitIds = [];
+    }
+    data.deletedJadwalIds = Array.isArray(data.deletedJadwalIds) ? data.deletedJadwalIds : [];
+    data.deletedGmkIds = Array.isArray(data.deletedGmkIds) ? data.deletedGmkIds : [];
+    data.deletedSiswaIds = Array.isArray(data.deletedSiswaIds) ? data.deletedSiswaIds : [];
+    data.deletedPelanggaranIds = Array.isArray(data.deletedPelanggaranIds) ? data.deletedPelanggaranIds : [];
+    data.deletedHomeVisitIds = Array.isArray(data.deletedHomeVisitIds) ? data.deletedHomeVisitIds : [];
+  }
+  if (Array.isArray(data.jadwalMengajar) && data.jadwalMengajar.length > 0) {
+    const activeJadwalIdSet = new Set(data.jadwalMengajar.map((j) => String(j.id)));
+    data.deletedJadwalIds = (data.deletedJadwalIds || []).filter((id) => !activeJadwalIdSet.has(id));
+    if (inMemoryAppDataCache?.deletedJadwalIds) {
+      inMemoryAppDataCache.deletedJadwalIds = inMemoryAppDataCache.deletedJadwalIds.filter((id) => !activeJadwalIdSet.has(id));
+    }
+  }
+  if (Array.isArray(data.guruMapelKelas) && data.guruMapelKelas.length > 0) {
+    const activeGmkIdSet = new Set(data.guruMapelKelas.map((g) => String(g.id)));
+    data.deletedGmkIds = (data.deletedGmkIds || []).filter((id) => !activeGmkIdSet.has(id));
+    if (inMemoryAppDataCache?.deletedGmkIds) {
+      inMemoryAppDataCache.deletedGmkIds = inMemoryAppDataCache.deletedGmkIds.filter((id) => !activeGmkIdSet.has(id));
+    }
+  }
+  if (Array.isArray(data.siswa) && data.siswa.length > 0) {
+    const activeSiswaIdSet = new Set(data.siswa.map((s) => String(s.id)));
+    data.deletedSiswaIds = (data.deletedSiswaIds || []).filter((id) => !activeSiswaIdSet.has(id));
+    if (inMemoryAppDataCache?.deletedSiswaIds) {
+      inMemoryAppDataCache.deletedSiswaIds = inMemoryAppDataCache.deletedSiswaIds.filter((id) => !activeSiswaIdSet.has(id));
+    }
+  }
+  const deletedSiswaSet = isRestoration ? new Set(data.deletedSiswaIds || []) : /* @__PURE__ */ new Set([
     ...inMemoryAppDataCache?.deletedSiswaIds || [],
     ...data.deletedSiswaIds || []
   ]);
   const allDeletedSiswa = Array.from(deletedSiswaSet);
   data.deletedSiswaIds = allDeletedSiswa;
-  const deletedJadwalSet = /* @__PURE__ */ new Set([
+  const deletedJadwalSet = isRestoration ? new Set(data.deletedJadwalIds || []) : /* @__PURE__ */ new Set([
     ...inMemoryAppDataCache?.deletedJadwalIds || [],
     ...data.deletedJadwalIds || []
   ]);
   const allDeletedJadwal = Array.from(deletedJadwalSet);
   data.deletedJadwalIds = allDeletedJadwal;
-  const deletedGmkSet = /* @__PURE__ */ new Set([
+  const deletedGmkSet = isRestoration ? new Set(data.deletedGmkIds || []) : /* @__PURE__ */ new Set([
     ...inMemoryAppDataCache?.deletedGmkIds || [],
     ...data.deletedGmkIds || []
   ]);
   const allDeletedGmk = Array.from(deletedGmkSet);
   data.deletedGmkIds = allDeletedGmk;
   if (inMemoryAppDataCache) {
-    if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
+    if (isRestoration) {
+      data.siswa = Array.isArray(data.siswa) ? data.siswa : inMemoryAppDataCache.siswa || [];
+    } else if (Array.isArray(inMemoryAppDataCache.siswa) && Array.isArray(data.siswa)) {
       data.siswa = mergeSiswaServer(inMemoryAppDataCache.siswa, data.siswa, allDeletedSiswa);
     } else if (Array.isArray(inMemoryAppDataCache.siswa) && (!Array.isArray(data.siswa) || data.siswa.length === 0)) {
       data.siswa = inMemoryAppDataCache.siswa.filter((s) => s && s.id && !deletedSiswaSet.has(String(s.id)));
     }
-    if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && Array.isArray(data.jadwalMengajar)) {
+    if (isRestoration) {
+      data.jadwalMengajar = Array.isArray(data.jadwalMengajar) ? data.jadwalMengajar : [];
+    } else if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && Array.isArray(data.jadwalMengajar)) {
       data.jadwalMengajar = mergeJadwalMengajarServer(inMemoryAppDataCache.jadwalMengajar, data.jadwalMengajar, allDeletedJadwal);
     } else if (Array.isArray(inMemoryAppDataCache.jadwalMengajar) && (!Array.isArray(data.jadwalMengajar) || data.jadwalMengajar.length === 0)) {
       data.jadwalMengajar = inMemoryAppDataCache.jadwalMengajar.filter((j) => j && j.id && !deletedJadwalSet.has(String(j.id)));
@@ -53630,31 +53701,38 @@ function saveAppDataCache(data) {
     } else if (inMemoryAppDataCache.presensi && !data.presensi) {
       data.presensi = inMemoryAppDataCache.presensi;
     }
-    const isIncomingDemoClasses = Array.isArray(data.kelas) && data.kelas.length <= 4 && data.kelas.some((k) => k.id === "KEL_1" || k.nama === "XII RPL 1");
-    if (Array.isArray(inMemoryAppDataCache.kelas) && inMemoryAppDataCache.kelas.length > 4 && isIncomingDemoClasses) {
-      data.kelas = inMemoryAppDataCache.kelas;
-    } else if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
-      data.kelas = inMemoryAppDataCache.kelas;
+    if (!isRestoration) {
+      const isIncomingDemoClasses = Array.isArray(data.kelas) && data.kelas.length <= 4 && data.kelas.some((k) => k.id === "KEL_1" || k.nama === "XII RPL 1");
+      if (Array.isArray(inMemoryAppDataCache.kelas) && inMemoryAppDataCache.kelas.length > 4 && isIncomingDemoClasses) {
+        data.kelas = inMemoryAppDataCache.kelas;
+      } else if (Array.isArray(inMemoryAppDataCache.kelas) && (!Array.isArray(data.kelas) || data.kelas.length === 0)) {
+        data.kelas = inMemoryAppDataCache.kelas;
+      }
+      const isIncomingDemoWali = Array.isArray(data.waliKelas) && data.waliKelas.length <= 10 && data.waliKelas.some((w) => w.id === "WAL_1" || w.nama === "Budi Santoso, S.Kom");
+      if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 10 && isIncomingDemoWali) {
+        data.waliKelas = inMemoryAppDataCache.waliKelas;
+      } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
+        data.waliKelas = inMemoryAppDataCache.waliKelas;
+      }
+      const isIncomingDemoJurusan = Array.isArray(data.jurusan) && data.jurusan.length <= 4 && data.jurusan.some((j) => j.id === "JUR_1" || j.kode === "RPL");
+      if (Array.isArray(inMemoryAppDataCache.jurusan) && inMemoryAppDataCache.jurusan.length > 4 && isIncomingDemoJurusan) {
+        data.jurusan = inMemoryAppDataCache.jurusan;
+      } else if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
+        data.jurusan = inMemoryAppDataCache.jurusan;
+      }
     }
-    const isIncomingDemoWali = Array.isArray(data.waliKelas) && data.waliKelas.length <= 10 && data.waliKelas.some((w) => w.id === "WAL_1" || w.nama === "Budi Santoso, S.Kom");
-    if (Array.isArray(inMemoryAppDataCache.waliKelas) && inMemoryAppDataCache.waliKelas.length > 10 && isIncomingDemoWali) {
-      data.waliKelas = inMemoryAppDataCache.waliKelas;
-    } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
-      data.waliKelas = inMemoryAppDataCache.waliKelas;
-    }
-    const isIncomingDemoJurusan = Array.isArray(data.jurusan) && data.jurusan.length <= 4 && data.jurusan.some((j) => j.id === "JUR_1" || j.kode === "RPL");
-    if (Array.isArray(inMemoryAppDataCache.jurusan) && inMemoryAppDataCache.jurusan.length > 4 && isIncomingDemoJurusan) {
-      data.jurusan = inMemoryAppDataCache.jurusan;
-    } else if (Array.isArray(inMemoryAppDataCache.jurusan) && (!Array.isArray(data.jurusan) || data.jurusan.length === 0)) {
-      data.jurusan = inMemoryAppDataCache.jurusan;
-    }
-    if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
-      data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
-    }
-    if (Array.isArray(data.guruMapelKelas)) {
-      data.guruMapelKelas = data.guruMapelKelas.filter((g) => g && g.id && !deletedGmkSet.has(String(g.id)));
-    } else if (Array.isArray(inMemoryAppDataCache.guruMapelKelas)) {
-      data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas.filter((g) => g && g.id && !deletedGmkSet.has(String(g.id)));
+    if (isRestoration) {
+      data.guruMapelKelas = Array.isArray(data.guruMapelKelas) ? data.guruMapelKelas : [];
+      data.mataPelajaran = Array.isArray(data.mataPelajaran) ? data.mataPelajaran : [];
+    } else {
+      if (Array.isArray(data.guruMapelKelas)) {
+        data.guruMapelKelas = data.guruMapelKelas.filter((g) => g && g.id && !deletedGmkSet.has(String(g.id)));
+      } else if (Array.isArray(inMemoryAppDataCache.guruMapelKelas)) {
+        data.guruMapelKelas = inMemoryAppDataCache.guruMapelKelas.filter((g) => g && g.id && !deletedGmkSet.has(String(g.id)));
+      }
+      if (Array.isArray(inMemoryAppDataCache.mataPelajaran) && inMemoryAppDataCache.mataPelajaran.length > 0 && (!Array.isArray(data.mataPelajaran) || data.mataPelajaran.length === 0)) {
+        data.mataPelajaran = inMemoryAppDataCache.mataPelajaran;
+      }
     }
     if (Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0 && (!Array.isArray(data.presensiMengajarGuru) || data.presensiMengajarGuru.length === 0)) {
       data.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
@@ -53705,8 +53783,15 @@ function saveAppDataCache(data) {
     if (Array.isArray(inMemoryAppDataCache.userLoginLogs) && inMemoryAppDataCache.userLoginLogs.length > 0 && (!Array.isArray(data.userLoginLogs) || data.userLoginLogs.length === 0)) {
       data.userLoginLogs = inMemoryAppDataCache.userLoginLogs;
     }
-    if (Array.isArray(inMemoryAppDataCache.presensiGuru) && Object.keys(inMemoryAppDataCache.presensiGuru).length > 0 && (!data.presensiGuru || Object.keys(data.presensiGuru).length === 0)) {
-      data.presensiGuru = inMemoryAppDataCache.presensiGuru;
+    if (inMemoryAppDataCache.presensiGuru && typeof inMemoryAppDataCache.presensiGuru === "object" && Object.keys(inMemoryAppDataCache.presensiGuru).length > 0) {
+      if (!data.presensiGuru || typeof data.presensiGuru !== "object" || Object.keys(data.presensiGuru).length === 0) {
+        data.presensiGuru = inMemoryAppDataCache.presensiGuru;
+      } else {
+        data.presensiGuru = {
+          ...inMemoryAppDataCache.presensiGuru,
+          ...data.presensiGuru
+        };
+      }
     }
     if (Array.isArray(inMemoryAppDataCache.homeVisits) && inMemoryAppDataCache.homeVisits.length > 0 && (!Array.isArray(data.homeVisits) || data.homeVisits.length === 0)) {
       data.homeVisits = inMemoryAppDataCache.homeVisits;
@@ -53893,7 +53978,13 @@ async function performMySQLSave(config, appData, ignoreCooldown = false) {
     );
     if (appData.sekolah) {
       const s = appData.sekolah;
+      try {
+        await db.execute(`ALTER TABLE sekolah_config ADD COLUMN login_config LONGTEXT;`);
+      } catch (e) {
+      }
       const loginConfigObj = {
+        ...s,
+        // Preserve all school config properties including all login background/card customization fields
         headerTitle: s.headerTitle || "",
         headerSubtitle: s.headerSubtitle || "",
         loginAnnouncementModal: Boolean(s.loginAnnouncementModal),
@@ -53904,14 +53995,37 @@ async function performMySQLSave(config, appData, ignoreCooldown = false) {
         loginCustomLinksTitle: s.loginCustomLinksTitle || "",
         loginCustomLinks: s.loginCustomLinks || [],
         loginBgType: s.loginBgType || "gradient",
+        loginBgImage: s.loginBgImage || "",
+        loginBgGradient: s.loginBgGradient || "",
+        loginBgPattern: s.loginBgPattern || "",
+        loginBgColor: s.loginBgColor || "",
         loginBgOverlayOpacity: s.loginBgOverlayOpacity ?? 0,
         loginBgOpacity: s.loginBgOpacity ?? 100,
         bgImageOpacity: s.bgImageOpacity ?? 100,
         loginBgBlur: s.loginBgBlur || "none",
         loginBgFit: s.loginBgFit || "cover",
         loginBgOverlayColor: s.loginBgOverlayColor || "#000000",
+        loginContrastMode: s.loginContrastMode || "auto",
+        loginCardTheme: s.loginCardTheme || "glass",
         loginCardOpacity: s.loginCardOpacity ?? 95,
         loginCardBlur: s.loginCardBlur || "md",
+        loginCardLayout: s.loginCardLayout || "centered",
+        loginCardMaxWidth: s.loginCardMaxWidth || "md",
+        loginCardRounded: s.loginCardRounded || "2xl",
+        loginCardShadow: s.loginCardShadow || "2xl",
+        loginCardBorder: s.loginCardBorder || "subtle",
+        loginCardShowLogo: s.loginCardShowLogo !== false,
+        loginCardLogoAlign: s.loginCardLogoAlign || "center",
+        loginCardLogoSize: s.loginCardLogoSize || "md",
+        loginCardShowSchoolName: s.loginCardShowSchoolName !== false,
+        loginCardShowSubtitle: s.loginCardShowSubtitle !== false,
+        loginCardShowAcademicYear: s.loginCardShowAcademicYear !== false,
+        loginCardWelcomeTitle: s.loginCardWelcomeTitle || "",
+        loginCardWelcomeSubtext: s.loginCardWelcomeSubtext || "",
+        loginCardInputStyle: s.loginCardInputStyle || "modern",
+        loginCardInputRounded: s.loginCardInputRounded || "xl",
+        loginCardButtonAccent: s.loginCardButtonAccent || "blue",
+        loginCardButtonRounded: s.loginCardButtonRounded || "xl",
         loginLeftShowPanel: s.loginLeftShowPanel !== false,
         loginLeftBadgeText: s.loginLeftBadgeText || "",
         loginLeftTitlePrefix: s.loginLeftTitlePrefix || "",
@@ -53921,6 +54035,10 @@ async function performMySQLSave(config, appData, ignoreCooldown = false) {
         loginLeftFeature1Subtitle: s.loginLeftFeature1Subtitle || "",
         loginLeftFeature2Title: s.loginLeftFeature2Title || "",
         loginLeftFeature2Subtitle: s.loginLeftFeature2Subtitle || "",
+        browserTitle: s.browserTitle || "",
+        enableRunningText: Boolean(s.enableRunningText),
+        runningTextAnnouncement: s.runningTextAnnouncement || "",
+        runningTextSpeed: s.runningTextSpeed || "medium",
         footerTeks: s.footerTeks || "",
         footerSubTeks: s.footerSubTeks || "",
         maintenanceMode: Boolean(s.maintenanceMode),
@@ -54172,6 +54290,8 @@ async function performMySQLSave(config, appData, ignoreCooldown = false) {
       `).catch(() => {
       });
       const addColumnQueries = [
+        "ALTER TABLE siswa ADD COLUMN status VARCHAR(50) DEFAULT 'aktif';",
+        "ALTER TABLE siswa ADD COLUMN surat_non_aktif_bukti LONGTEXT;",
         "ALTER TABLE siswa ADD COLUMN username VARCHAR(100);",
         "ALTER TABLE siswa ADD COLUMN password VARCHAR(255);",
         "ALTER TABLE siswa ADD COLUMN foto LONGTEXT;",
@@ -54702,6 +54822,57 @@ async function performMySQLSave(config, appData, ignoreCooldown = false) {
           batchVals
         ).catch(() => {
         });
+      }
+    }
+    if (appData.presensiGuru && typeof appData.presensiGuru === "object") {
+      const allGuruPresensi = [];
+      for (const [tgl, list] of Object.entries(appData.presensiGuru)) {
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (item && item.id && (item.guruId || item.guruNama)) {
+              allGuruPresensi.push({ ...item, tanggal: tgl });
+            }
+          }
+        }
+      }
+      if (allGuruPresensi.length > 0) {
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < allGuruPresensi.length; i += CHUNK_SIZE) {
+          const chunk = allGuruPresensi.slice(i, i + CHUNK_SIZE);
+          const batchVals = [];
+          const phs = [];
+          for (const p of chunk) {
+            phs.push("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            batchVals.push(
+              p.id,
+              p.tanggal,
+              p.guruId || p.guruUsername || p.guruNama,
+              p.guruUsername || "",
+              p.guruNama || "",
+              p.guruNip || "",
+              p.hari || "",
+              p.shift || "Pagi",
+              p.status || "H",
+              p.jamMasuk || "",
+              p.jamPulang || "",
+              p.catatan || "",
+              p.jadwalHariIni || "",
+              p.sumberPresensi || "Manual"
+            );
+          }
+          await db.execute(
+            `INSERT INTO presensi_guru (id, tanggal, guru_id, guru_username, guru_nama, guru_nip, hari, shift, status, jam_masuk, jam_pulang, catatan, jadwal_hari_ini, sumber_presensi)
+             VALUES ${phs.join(", ")}
+             ON DUPLICATE KEY UPDATE
+               guru_id=VALUES(guru_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama),
+               guru_nip=VALUES(guru_nip), hari=VALUES(hari), shift=VALUES(shift), status=VALUES(status),
+               jam_masuk=VALUES(jam_masuk), jam_pulang=VALUES(jam_pulang), catatan=VALUES(catatan),
+               jadwal_hari_ini=VALUES(jadwal_hari_ini), sumber_presensi=VALUES(sumber_presensi);`,
+            batchVals
+          ).catch((e) => {
+            console.warn("[Sync Presensi Guru Warning]", e?.message || e);
+          });
+        }
       }
     }
     if (appData.shiftConfig) {
@@ -55236,6 +55407,7 @@ async function performMySQLLoad(config) {
     const [siRows] = await db.execute(`SELECT * FROM security_incidents ORDER BY timestamp DESC;`).catch(() => [[]]);
     const [blRows] = await db.execute(`SELECT * FROM blocked_ips;`).catch(() => [[]]);
     const [userLoginRows] = await db.execute(`SELECT * FROM user_login_logs ORDER BY timestamp DESC LIMIT 500;`).catch(() => [[]]);
+    const [presensiGuruRows] = await db.execute(`SELECT * FROM presensi_guru ORDER BY tanggal DESC;`).catch(() => [[]]);
     if (!appData) {
       appData = {};
     }
@@ -55373,7 +55545,8 @@ async function performMySQLLoad(config) {
           nama: s.nama || prev.nama || "",
           gender: s.gender || prev.gender || "L",
           kelasId: s.kelas_id || prev.kelasId || "",
-          status: s.status || prev.status || "aktif",
+          status: s.status && String(s.status).trim() ? s.status : prev.status || "aktif",
+          suratNonAktifBukti: s.surat_non_aktif_bukti || prev.suratNonAktifBukti || "",
           noWa: s.no_wa !== null && s.no_wa !== void 0 ? s.no_wa : prev.noWa || "",
           namaOrangTua: s.nama_orang_tua !== null && s.nama_orang_tua !== void 0 ? s.nama_orang_tua : prev.namaOrangTua || "",
           noWaOrangTua: s.no_wa_orang_tua !== null && s.no_wa_orang_tua !== void 0 ? s.no_wa_orang_tua : prev.noWaOrangTua || "",
@@ -55560,6 +55733,35 @@ async function performMySQLLoad(config) {
       });
     } else if (inMemoryAppDataCache?.presensiMengajarGuru && Array.isArray(inMemoryAppDataCache.presensiMengajarGuru) && inMemoryAppDataCache.presensiMengajarGuru.length > 0) {
       appData.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru;
+    }
+    if (Array.isArray(presensiGuruRows) && presensiGuruRows.length > 0) {
+      const pgMap = {};
+      for (const row of presensiGuruRows) {
+        const tgl = row.tanggal instanceof Date ? row.tanggal.toISOString().slice(0, 10) : String(row.tanggal || "").slice(0, 10);
+        if (!tgl) continue;
+        if (!pgMap[tgl]) pgMap[tgl] = [];
+        pgMap[tgl].push({
+          id: row.id,
+          tanggal: tgl,
+          guruId: row.guru_id,
+          guruUsername: row.guru_username || "",
+          guruNama: row.guru_nama,
+          guruNip: row.guru_nip || "",
+          hari: row.hari,
+          shift: row.shift || "Pagi",
+          status: row.status,
+          jamMasuk: row.jam_masuk || "",
+          jamPulang: row.jam_pulang || "",
+          catatan: row.catatan || "",
+          jadwalHariIni: row.jadwal_hari_ini || "",
+          sumberPresensi: row.sumber_presensi || "Manual",
+          isOverridden: Boolean(row.is_overridden),
+          overriddenBy: row.overridden_by || ""
+        });
+      }
+      appData.presensiGuru = pgMap;
+    } else if (inMemoryAppDataCache?.presensiGuru && typeof inMemoryAppDataCache.presensiGuru === "object") {
+      appData.presensiGuru = inMemoryAppDataCache.presensiGuru;
     }
     if (shiftSettingsRows && shiftSettingsRows.length > 0) {
       const ss = shiftSettingsRows[0];
@@ -56576,6 +56778,45 @@ app.post("/api/mysql/reload-env", async (req, res) => {
     res.status(500).json({ success: false, message: e?.message || "Gagal memuat ulang environment .env" });
   }
 });
+app.post("/api/mysql/save-env", async (req, res) => {
+  try {
+    const { host, port, user, password, database } = req.body;
+    if (!host || !user || !database) {
+      return res.status(400).json({ success: false, message: "Host, User, dan Database wajib diisi." });
+    }
+    const config = {
+      host: String(host).trim(),
+      port: String(port || "3306").trim(),
+      user: String(user).trim(),
+      password: password !== void 0 ? String(password) : "",
+      database: String(database).trim()
+    };
+    updateEnvFile(config);
+    saveServerConfig(config);
+    let connectionOk = false;
+    let errorDetail = "";
+    try {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        const conn = await pool.getConnection();
+        await conn.ping();
+        conn.release();
+        connectionOk = true;
+      }
+    } catch (dbErr) {
+      errorDetail = dbErr?.message || String(dbErr);
+    }
+    res.json({
+      success: true,
+      message: connectionOk ? `Konfigurasi berhasil disimpan ke file .env dan terhubung ke MySQL (${config.host}:${config.port}/${config.database})!` : `Konfigurasi disimpan ke file .env (${config.host}:${config.port}/${config.database}), namun koneksi belum aktif: ${errorDetail}`,
+      config,
+      isEnv: true,
+      connectionOk
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e?.message || "Gagal menyimpan ke file .env" });
+  }
+});
 app.get("/api/global-state", async (req, res) => {
   const currentEtag = `"v${appDataVersion}"`;
   res.setHeader("ETag", currentEtag);
@@ -56587,7 +56828,7 @@ app.get("/api/global-state", async (req, res) => {
   const queryPort = req.query.port || req.headers["x-mysql-port"] || "3306";
   let config = loadSavedServerConfig();
   if (!config && queryHost && queryDb && queryUser) {
-    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort };
+    config = { host: queryHost, database: queryDb, user: queryUser, password: queryPass || "", port: queryPort, isEnv: false, source: "query" };
     saveServerConfig(config);
   }
   const force = req.query.force === "true";
@@ -56964,8 +57205,10 @@ app.post("/api/mysql/test", async (req, res) => {
           login_config LONGTEXT
         );
       `);
-      await db.execute(`ALTER TABLE sekolah_config ADD COLUMN IF NOT EXISTS login_config LONGTEXT;`).catch(() => {
-      });
+      try {
+        await db.execute(`ALTER TABLE sekolah_config ADD COLUMN login_config LONGTEXT;`);
+      } catch (e) {
+      }
       await db.execute(`
         CREATE TABLE IF NOT EXISTS admin_account (
           id INT PRIMARY KEY,
@@ -57885,13 +58128,16 @@ app.post("/api/backup/restore", async (req, res) => {
     return res.status(400).json({ success: false, message: "Data backup tidak valid atau kosong." });
   }
   let incoming = backupData.data || backupData.appData || backupData;
-  const hasSchoolOrStudents = incoming.sekolah || Array.isArray(incoming.siswa) || Array.isArray(incoming.kelas) || incoming.presensi && typeof incoming.presensi === "object";
+  const hasSchoolOrStudents = incoming.sekolah || Array.isArray(incoming.siswa) || Array.isArray(incoming.kelas) || incoming.presensi && typeof incoming.presensi === "object" || Array.isArray(incoming.jadwalMengajar) || Array.isArray(incoming.matriksMengajar);
   if (!hasSchoolOrStudents) {
     return res.status(400).json({
       success: false,
-      message: "Format file cadangan tidak dikenali. File harus memiliki data sekolah, kelas, siswa, atau presensi."
+      message: "Format file cadangan tidak dikenali. File harus memiliki data sekolah, kelas, siswa, presensi, atau jadwal pelajaran."
     });
   }
+  const incomingJadwal = Array.isArray(incoming.jadwalMengajar) ? incoming.jadwalMengajar : Array.isArray(incoming.matriksMengajar) ? incoming.matriksMengajar : Array.isArray(incoming.jadwal) ? incoming.jadwal : Array.isArray(incoming.jadwalPelajaran) ? incoming.jadwalPelajaran : [];
+  const incomingGmk = Array.isArray(incoming.guruMapelKelas) ? incoming.guruMapelKelas : Array.isArray(incoming.pembagianTugas) ? incoming.pembagianTugas : [];
+  const incomingMapel = Array.isArray(incoming.mataPelajaran) ? incoming.mataPelajaran : Array.isArray(incoming.mapel) ? incoming.mapel : [];
   let baseData = inMemoryAppDataCache || loadSavedAppDataCache() || {};
   let targetData = {};
   if (mode === "presensi_only") {
@@ -57926,9 +58172,24 @@ app.post("/api/backup/restore", async (req, res) => {
         ...incoming.presensi || {}
       }),
       shiftConfig: incoming.shiftConfig || baseData.shiftConfig,
-      jadwalMengajar: incoming.jadwalMengajar || baseData.jadwalMengajar,
+      jadwalMengajar: mergeArrays(baseData.jadwalMengajar, incomingJadwal, "id"),
+      mataPelajaran: mergeArrays(baseData.mataPelajaran, incomingMapel, "id"),
+      guruMapelKelas: mergeArrays(baseData.guruMapelKelas, incomingGmk, "id"),
+      presensiMengajarGuru: Array.isArray(incoming.presensiMengajarGuru) ? incoming.presensiMengajarGuru : baseData.presensiMengajarGuru || [],
+      presensiGuru: { ...baseData.presensiGuru || {}, ...incoming.presensiGuru || {} },
+      hariLibur: mergeArrays(baseData.hariLibur, incoming.hariLibur, "id"),
+      pengumuman: mergeArrays(baseData.pengumuman, incoming.pengumuman, "id"),
+      ekstrakurikuler: mergeArrays(baseData.ekstrakurikuler, incoming.ekstrakurikuler, "id"),
+      anggotaEkskul: mergeArrays(baseData.anggotaEkskul, incoming.anggotaEkskul, "id"),
+      presensiEkskul: { ...baseData.presensiEkskul || {}, ...incoming.presensiEkskul || {} },
+      petugasPiket: Array.isArray(incoming.petugasPiket) ? incoming.petugasPiket : baseData.petugasPiket || [],
+      catatanPiketHarian: mergeArrays(baseData.catatanPiketHarian, incoming.catatanPiketHarian, "id"),
       chatMessages: Array.isArray(incoming.chatMessages) ? incoming.chatMessages : baseData.chatMessages,
-      backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig
+      backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig,
+      deletedJadwalIds: [],
+      deletedGmkIds: [],
+      deletedSiswaIds: [],
+      _isRestore: true
     };
   } else {
     targetData = {
@@ -57944,11 +58205,33 @@ app.post("/api/backup/restore", async (req, res) => {
       homeVisits: Array.isArray(incoming.homeVisits) ? incoming.homeVisits : [],
       violationTemplates: Array.isArray(incoming.violationTemplates) ? incoming.violationTemplates : baseData.violationTemplates || [],
       shiftConfig: incoming.shiftConfig || baseData.shiftConfig,
-      jadwalMengajar: incoming.jadwalMengajar || baseData.jadwalMengajar,
+      jadwalMengajar: incomingJadwal.length > 0 ? incomingJadwal : Array.isArray(incoming.jadwalMengajar) ? incoming.jadwalMengajar : baseData.jadwalMengajar || [],
+      mataPelajaran: incomingMapel.length > 0 ? incomingMapel : Array.isArray(incoming.mataPelajaran) ? incoming.mataPelajaran : baseData.mataPelajaran || [],
+      guruMapelKelas: incomingGmk.length > 0 ? incomingGmk : Array.isArray(incoming.guruMapelKelas) ? incoming.guruMapelKelas : baseData.guruMapelKelas || [],
+      presensiMengajarGuru: Array.isArray(incoming.presensiMengajarGuru) ? incoming.presensiMengajarGuru : baseData.presensiMengajarGuru || [],
+      presensiGuru: incoming.presensiGuru || baseData.presensiGuru || {},
+      hariLibur: Array.isArray(incoming.hariLibur) ? incoming.hariLibur : baseData.hariLibur || [],
+      pengumuman: Array.isArray(incoming.pengumuman) ? incoming.pengumuman : baseData.pengumuman || [],
+      ekstrakurikuler: Array.isArray(incoming.ekstrakurikuler) ? incoming.ekstrakurikuler : baseData.ekstrakurikuler || [],
+      anggotaEkskul: Array.isArray(incoming.anggotaEkskul) ? incoming.anggotaEkskul : baseData.anggotaEkskul || [],
+      presensiEkskul: incoming.presensiEkskul || baseData.presensiEkskul || {},
+      petugasPiket: Array.isArray(incoming.petugasPiket) ? incoming.petugasPiket : baseData.petugasPiket || [],
+      catatanPiketHarian: Array.isArray(incoming.catatanPiketHarian) ? incoming.catatanPiketHarian : baseData.catatanPiketHarian || [],
+      rolePermissions: Array.isArray(incoming.rolePermissions) ? incoming.rolePermissions : baseData.rolePermissions || [],
+      whatsappGateway: incoming.whatsappGateway || baseData.whatsappGateway,
+      whatsappLogs: Array.isArray(incoming.whatsappLogs) ? incoming.whatsappLogs : baseData.whatsappLogs || [],
+      securityIncidents: Array.isArray(incoming.securityIncidents) ? incoming.securityIncidents : baseData.securityIncidents || [],
+      blockedIps: Array.isArray(incoming.blockedIps) ? incoming.blockedIps : baseData.blockedIps || [],
       chatMessages: Array.isArray(incoming.chatMessages) ? incoming.chatMessages : baseData.chatMessages || [],
       auditLogs: Array.isArray(incoming.auditLogs) ? incoming.auditLogs : baseData.auditLogs || [],
       securityConfig: incoming.securityConfig || baseData.securityConfig,
-      backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig
+      backupConfig: incoming.backupConfig || baseData.backupConfig || activeBackupConfig,
+      deletedJadwalIds: [],
+      deletedGmkIds: [],
+      deletedSiswaIds: [],
+      deletedPelanggaranIds: [],
+      deletedHomeVisitIds: [],
+      _isRestore: true
     };
   }
   const { dateStr, timeStr } = getIndonesianDateTime();
@@ -57957,12 +58240,19 @@ app.post("/api/backup/restore", async (req, res) => {
     waktu: `${dateStr} ${timeStr}`,
     role: "admin",
     namaUser: "Administrator Utama",
-    aksi: `RESTORE_DATABASE: Pemulihan database sistem mode [${mode}] berhasil`,
+    aksi: `RESTORE_DATABASE: Pemulihan database sistem mode [${mode}] berhasil (${(targetData.jadwalMengajar || []).length} Jadwal/Matriks)`,
     ip: req.ip || "127.0.0.1"
   };
   if (!Array.isArray(targetData.auditLogs)) targetData.auditLogs = [];
   targetData.auditLogs.unshift(restoreLog);
-  saveAppDataCache(targetData);
+  if (inMemoryAppDataCache) {
+    inMemoryAppDataCache.deletedJadwalIds = [];
+    inMemoryAppDataCache.deletedGmkIds = [];
+    inMemoryAppDataCache.deletedSiswaIds = [];
+    inMemoryAppDataCache.deletedPelanggaranIds = [];
+    inMemoryAppDataCache.deletedHomeVisitIds = [];
+  }
+  saveAppDataCache(targetData, true);
   lastMySQLSyncTime = Date.now();
   queueAppDataPersist({ immediateMySQL: true });
   const presensiStats = countPresensiEntries(targetData.presensi);
@@ -57976,6 +58266,8 @@ app.post("/api/backup/restore", async (req, res) => {
       totalKelas: (targetData.kelas || []).length,
       totalJurusan: (targetData.jurusan || []).length,
       totalWaliKelas: (targetData.waliKelas || []).length,
+      totalJadwal: (targetData.jadwalMengajar || []).length,
+      totalMapel: (targetData.mataPelajaran || []).length,
       totalPresensiHari: presensiStats.datesCount,
       totalPresensiEntri: presensiStats.recordsCount,
       totalPelanggaran: (targetData.pelanggaran || []).length,
@@ -58046,9 +58338,8 @@ app.get("/api/backup/snapshot/:id/download", (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-app.post("/api/backup/snapshot/restore", (req, res) => {
+var handleRestoreSnapshotFile = (snapshotId, req, res) => {
   try {
-    const { snapshotId } = req.body;
     if (!snapshotId) {
       return res.status(400).json({ success: false, message: "ID Snapshot tidak valid." });
     }
@@ -58058,19 +58349,32 @@ app.post("/api/backup/snapshot/restore", (req, res) => {
     }
     const content = fs.readFileSync(snapshotFile, "utf-8");
     const parsed = JSON.parse(content);
-    const restoredData = parsed.data || parsed;
-    saveAppDataCache(restoredData);
+    const restoredData = parsed.data || parsed.appData || parsed;
+    restoredData._isRestore = true;
+    restoredData.deletedJadwalIds = [];
+    restoredData.deletedGmkIds = [];
+    restoredData.deletedSiswaIds = [];
+    saveAppDataCache(restoredData, true);
     lastMySQLSyncTime = Date.now();
     queueAppDataPersist({ immediateMySQL: true });
     res.json({
       success: true,
-      message: `Database berhasil dipulihkan dari snapshot server [${parsed.metadata?.note || snapshotId}]!`,
+      message: `Database berhasil dipulihkan dari snapshot server [${parsed.metadata?.note || parsed._backupMetadata?.note || snapshotId}]!`,
       appData: restoredData,
+      restoredData,
       version: appDataVersion
     });
   } catch (err) {
     res.status(500).json({ success: false, message: `Gagal memulihkan snapshot: ${err.message}` });
   }
+};
+app.post("/api/backup/snapshot/restore", (req, res) => {
+  const snapshotId = req.body?.snapshotId || req.body?.id;
+  handleRestoreSnapshotFile(snapshotId, req, res);
+});
+app.post("/api/backup/restore-snapshot/:id", (req, res) => {
+  const snapshotId = req.params.id;
+  handleRestoreSnapshotFile(snapshotId, req, res);
 });
 app.delete("/api/backup/snapshot/:id", (req, res) => {
   try {

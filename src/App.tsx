@@ -69,6 +69,7 @@ import { OfflineView } from './components/views/OfflineView';
 const PortalMuridView = React.lazy(() => import('./components/views/PortalMuridView').then(m => ({ default: m.PortalMuridView })));
 const JadwalShiftView = React.lazy(() => import('./components/views/JadwalShiftView').then(m => ({ default: m.JadwalShiftView })));
 const JadwalMengajarView = React.lazy(() => import('./components/views/JadwalMengajarView').then(m => ({ default: m.JadwalMengajarView })));
+const ProyeksiJadwalGuruView = React.lazy(() => import('./components/views/ProyeksiJadwalGuruView').then(m => ({ default: m.ProyeksiJadwalGuruView })));
 const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
 const AbsenHarianGuruTab = React.lazy(() => import('./components/views/AbsenHarianGuruTab').then(m => ({ default: m.AbsenHarianGuruTab })));
 const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
@@ -1669,6 +1670,15 @@ export default function App() {
                 onConfirmModal={openConfirmModal}
                 onShowToast={showToast}
                 onNavigateView={handleNavigate}
+              />
+            )}
+
+            {currentView === 'proyeksi_jadwal_guru' && (
+              <ProyeksiJadwalGuruView
+                appData={appData}
+                currentUser={currentUser}
+                onNavigateView={handleNavigate}
+                onShowToast={showToast}
               />
             )}
 
