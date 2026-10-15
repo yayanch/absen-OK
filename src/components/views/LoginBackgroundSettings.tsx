@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   Image as ImageIcon,
   Upload,
@@ -13,31 +13,22 @@ import {
   SlidersHorizontal,
   FileImage,
   Link,
-  ShieldCheck,
-  School,
-  Sun,
-  Moon,
-  Trash2,
   Type,
-  FileText,
   Smartphone,
   MessageSquare,
-  CheckCircle2,
-  Tag,
-  Info,
   Globe,
   Phone,
   BookOpen,
-  HelpCircle,
-  ExternalLink,
-  Mail,
-  ArrowUp,
-  ArrowDown,
-  Plus,
-  Edit,
   ChevronDown,
-  ChevronUp,
   X,
+  Plus,
+  Tag,
+  Sun,
+  Moon,
+  School,
+  Mail,
+  Shield,
+  Edit,
 } from 'lucide-react';
 import { AppData, SekolahConfig, LoginCustomLink } from '../../types';
 import {
@@ -69,7 +60,6 @@ interface LoginBackgroundSettingsProps {
 }
 
 type SettingsTab = 'left_panel' | 'container_card' | 'background' | 'custom_links';
-type BgTypeTab = 'default' | 'image' | 'gradient' | 'pattern' | 'color';
 
 export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = ({
   appData,
@@ -83,168 +73,97 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   // Tab State
   const [activeTab, setActiveTab] = useState<SettingsTab>('left_panel');
 
-  // Background Form states
-  const [bgType, setBgType] = useState<BgTypeTab>(
-    (sekolah.loginBgType as BgTypeTab) || (sekolah.loginBgImage ? 'image' : 'default')
+  // =========================================================
+  // 2-LAYER BACKGROUND FORM STATES
+  // =========================================================
+  // Lapisan 1: Wallpaper / Background Image
+  const [enableWallpaper, setEnableWallpaper] = useState<boolean>(
+    sekolah.loginBgEnableWallpaper ??
+      (sekolah.loginBgType === 'image' || Boolean(sekolah.loginBgImage) || sekolah.loginBgType === 'two_layer' || sekolah.loginBgType === 'default' || sekolah.loginBgType === undefined)
   );
-  const [bgImage, setBgImage] = useState<string>(sekolah.loginBgImage || '');
+  const [imageSourceTab, setImageSourceTab] = useState<'preset' | 'upload' | 'url'>('preset');
+  const [bgImage, setBgImage] = useState<string>(
+    sekolah.loginBgImage || (LOGIN_IMAGE_PRESETS.length > 0 ? LOGIN_IMAGE_PRESETS[0].imageUrl : '')
+  );
+  const [wallpaperFit, setWallpaperFit] = useState<'cover' | 'contain' | 'tile'>(
+    sekolah.loginBgWallpaperFit || sekolah.loginBgFit || 'cover'
+  );
+  const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(
+    sekolah.loginBgWallpaperOpacity ?? (sekolah.bgImageOpacity ?? (typeof sekolah.loginBgOpacity === 'number' ? Math.round(sekolah.loginBgOpacity * 100) : 85))
+  );
+  const [wallpaperBlur, setWallpaperBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl'>(
+    sekolah.loginBgWallpaperBlur || sekolah.loginBgBlur || 'none'
+  );
+  const [wallpaperFilter, setWallpaperFilter] = useState<'none' | 'grayscale' | 'darken_30' | 'darken_50' | 'sepia'>(
+    sekolah.loginBgWallpaperFilter || 'none'
+  );
+
+  // Lapisan 2: Warna Fill / Pola dasar
+  const [enableFill, setEnableFill] = useState<boolean>(
+    sekolah.loginBgEnableFill ??
+      (sekolah.loginBgType === 'color' || sekolah.loginBgType === 'gradient' || sekolah.loginBgType === 'pattern' || sekolah.loginBgType === 'two_layer' || sekolah.loginBgType === 'default' || sekolah.loginBgType === undefined)
+  );
+  const [fillType, setFillType] = useState<'solid' | 'gradient' | 'pattern'>(
+    sekolah.loginBgFillType || (sekolah.loginBgType === 'color' ? 'solid' : sekolah.loginBgType === 'pattern' ? 'pattern' : 'gradient')
+  );
+  const [bgColor, setBgColor] = useState<string>(sekolah.loginBgFillColor || sekolah.loginBgColor || '#1e3a8a');
   const [bgGradient, setBgGradient] = useState<string>(
-    sekolah.loginBgGradient || LOGIN_GRADIENT_PRESETS[0].gradient
+    sekolah.loginBgFillGradient || sekolah.loginBgGradient || LOGIN_GRADIENT_PRESETS[0].gradient
   );
   const [bgPattern, setBgPattern] = useState<string>(
-    sekolah.loginBgPattern || LOGIN_PATTERN_PRESETS[0].id
+    sekolah.loginBgFillPattern || sekolah.loginBgPattern || LOGIN_PATTERN_PRESETS[0].id
   );
-  const [bgColor, setBgColor] = useState<string>(sekolah.loginBgColor || '#1e3a8a');
-  const [bgOpacity, setBgOpacity] = useState<number>(
-    sekolah.bgImageOpacity ?? (typeof sekolah.loginBgOpacity === 'number' ? Math.round(sekolah.loginBgOpacity * 100) : 100)
-  );
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(
-    sekolah.loginBgOverlayOpacity ?? 35
-  );
-  const [blurLevel, setBlurLevel] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl'>(
-    sekolah.loginBgBlur || 'none'
-  );
-  const [bgFit, setBgFit] = useState<'cover' | 'contain' | 'tile'>(
-    sekolah.loginBgFit || 'cover'
-  );
-  const [overlayColor, setOverlayColor] = useState<string>(
-    sekolah.loginBgOverlayColor || '#020617'
-  );
-  const [contrastMode, setContrastMode] = useState<'auto' | 'dark' | 'light'>(
-    sekolah.loginContrastMode || 'auto'
-  );
-  const [cardTheme, setCardTheme] = useState<'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto'>(
-    sekolah.loginCardTheme || 'white'
-  );
-  const [cardOpacity, setCardOpacity] = useState<number>(
-    sekolah.loginCardOpacity ?? 100
-  );
-  const [cardBlur, setCardBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(
-    sekolah.loginCardBlur || '2xl'
-  );
+  const [fillOpacity, setFillOpacity] = useState<number>(sekolah.loginBgFillOpacity ?? 100);
 
-  // Luminance & Dark/Light Detection for Live Preview
-  const [detectedLuminance, setDetectedLuminance] = useState<number | null>(null);
+  // Penggabungan Blend Mode & Overlay Tint
+  const [blendMode, setBlendMode] = useState<
+    'normal' | 'multiply' | 'overlay' | 'screen' | 'soft-light' | 'hard-light' | 'darken' | 'lighten' | 'color-dodge'
+  >(sekolah.loginBgBlendMode || 'normal');
+  const [overlayColor, setOverlayColor] = useState<string>(sekolah.loginBgOverlayColor || '#020617');
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(sekolah.loginBgOverlayOpacity ?? 35);
 
-  React.useEffect(() => {
-    if (bgType === 'image' && bgImage) {
-      let isCancelled = false;
-      sampleImageLuminance(bgImage).then((lum) => {
-        if (!isCancelled) setDetectedLuminance(lum);
-      });
-      return () => { isCancelled = true; };
-    } else {
-      setDetectedLuminance(null);
-    }
-  }, [bgType, bgImage]);
+  // Card & Contrast States
+  const [contrastMode, setContrastMode] = useState<'auto' | 'dark' | 'light'>(sekolah.loginContrastMode || 'auto');
+  const [cardTheme, setCardTheme] = useState<'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto'>(sekolah.loginCardTheme || 'white');
+  const [cardOpacity, setCardOpacity] = useState<number>(sekolah.loginCardOpacity ?? 100);
+  const [cardBlur, setCardBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(sekolah.loginCardBlur || '2xl');
 
-  const liveDetectedDark = React.useMemo(() => {
-    if (contrastMode === 'dark') return { isDark: true, luminance: 40 };
-    if (contrastMode === 'light') return { isDark: false, luminance: 210 };
-
-    const overlayRgb = parseColorToRgb(overlayColor) || { r: 2, g: 6, b: 23 };
-    const overlayAlpha = (overlayOpacity ?? 35) / 100;
-    let baseRgb: RGB = { r: 240, g: 242, b: 245 };
-
-    if (bgType === 'color' && bgColor) {
-      baseRgb = parseColorToRgb(bgColor) || { r: 30, g: 41, b: 59 };
-    } else if (bgType === 'gradient' && bgGradient) {
-      baseRgb = parseGradientAverageRgb(bgGradient);
-    } else if (bgType === 'pattern' && bgPattern) {
-      const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
-      baseRgb = parseColorToRgb(pat.bgBase) || { r: 15, g: 23, b: 42 };
-    } else if (bgType === 'image') {
-      const rawLum = detectedLuminance !== null ? detectedLuminance : 40;
-      baseRgb = { r: rawLum, g: rawLum, b: rawLum };
-    }
-
-    const effectiveRgb = blendRgb(baseRgb, overlayRgb, overlayAlpha);
-    const lum = Math.round(calculateLuminance(effectiveRgb));
-    return { isDark: lum < 135, luminance: lum };
-  }, [contrastMode, bgType, bgColor, bgGradient, bgPattern, detectedLuminance, overlayColor, overlayOpacity]);
-
-  // Container Card Form States
-  const [cardLayout, setCardLayout] = useState<'center' | 'left' | 'right'>(
-    sekolah.loginCardLayout || 'right'
-  );
-  const [cardMaxWidth, setCardMaxWidth] = useState<'compact' | 'standard' | 'wide' | 'large'>(
-    sekolah.loginCardMaxWidth || 'standard'
-  );
-  const [cardRounded, setCardRounded] = useState<'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill'>(
-    sekolah.loginCardRounded || '2xl'
-  );
-  const [cardShadow, setCardShadow] = useState<'none' | 'soft' | 'medium' | 'glow' | 'neon'>(
-    sekolah.loginCardShadow || 'medium'
-  );
-  const [cardBorder, setCardBorder] = useState<'none' | 'subtle' | 'gradient' | 'glass' | 'accent'>(
-    sekolah.loginCardBorder || 'glass'
-  );
-  const [cardShowLogo, setCardShowLogo] = useState<boolean>(
-    sekolah.loginCardShowLogo !== false
-  );
-  const [cardLogoAlign, setCardLogoAlign] = useState<'left' | 'center' | 'right'>(
-    sekolah.loginCardLogoAlign || 'center'
-  );
-  const [cardLogoSize, setCardLogoSize] = useState<'sm' | 'md' | 'lg'>(
-    sekolah.loginCardLogoSize || 'md'
-  );
-  const [cardShowSchoolName, setCardShowSchoolName] = useState<boolean>(
-    sekolah.loginCardShowSchoolName !== false
-  );
-  const [cardShowSubtitle, setCardShowSubtitle] = useState<boolean>(
-    sekolah.loginCardShowSubtitle !== false
-  );
-  const [cardShowAcademicYear, setCardShowAcademicYear] = useState<boolean>(
-    sekolah.loginCardShowAcademicYear !== false
-  );
-  const [cardWelcomeTitle, setCardWelcomeTitle] = useState<string>(
-    sekolah.loginCardWelcomeTitle || 'Sistem Absensi Siswa'
-  );
-  const [cardWelcomeSubtext, setCardWelcomeSubtext] = useState<string>(
-    sekolah.loginCardWelcomeSubtext || 'Masuk dengan Username / NISN / NIP Anda'
-  );
-  const [cardInputStyle, setCardInputStyle] = useState<'outlined' | 'filled' | 'underlined'>(
-    sekolah.loginCardInputStyle || 'outlined'
-  );
-  const [cardInputRounded, setCardInputRounded] = useState<'lg' | 'xl' | 'full'>(
-    sekolah.loginCardInputRounded || 'xl'
-  );
+  // Container Card Customizations
+  const [cardLayout, setCardLayout] = useState<'center' | 'left' | 'right'>(sekolah.loginCardLayout || 'right');
+  const [cardMaxWidth, setCardMaxWidth] = useState<'compact' | 'standard' | 'wide' | 'large'>(sekolah.loginCardMaxWidth || 'standard');
+  const [cardRounded, setCardRounded] = useState<'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill'>(sekolah.loginCardRounded || '2xl');
+  const [cardShadow, setCardShadow] = useState<'none' | 'soft' | 'medium' | 'glow' | 'neon'>(sekolah.loginCardShadow || 'medium');
+  const [cardBorder, setCardBorder] = useState<'none' | 'subtle' | 'gradient' | 'glass' | 'accent'>(sekolah.loginCardBorder || 'glass');
+  const [cardShowLogo, setCardShowLogo] = useState<boolean>(sekolah.loginCardShowLogo !== false);
+  const [cardLogoAlign, setCardLogoAlign] = useState<'left' | 'center' | 'right'>(sekolah.loginCardLogoAlign || 'center');
+  const [cardLogoSize, setCardLogoSize] = useState<'sm' | 'md' | 'lg'>(sekolah.loginCardLogoSize || 'md');
+  const [cardShowSchoolName, setCardShowSchoolName] = useState<boolean>(sekolah.loginCardShowSchoolName !== false);
+  const [cardShowSubtitle, setCardShowSubtitle] = useState<boolean>(sekolah.loginCardShowSubtitle !== false);
+  const [cardShowAcademicYear, setCardShowAcademicYear] = useState<boolean>(sekolah.loginCardShowAcademicYear !== false);
+  const [cardWelcomeTitle, setCardWelcomeTitle] = useState<string>(sekolah.loginCardWelcomeTitle || 'Sistem Absensi Siswa');
+  const [cardWelcomeSubtext, setCardWelcomeSubtext] = useState<string>(sekolah.loginCardWelcomeSubtext || 'Masuk dengan Username / NISN / NIP Anda');
+  const [cardInputStyle, setCardInputStyle] = useState<'outlined' | 'filled' | 'underlined'>(sekolah.loginCardInputStyle || 'outlined');
+  const [cardInputRounded, setCardInputRounded] = useState<'lg' | 'xl' | 'full'>(sekolah.loginCardInputRounded || 'xl');
   const [cardButtonAccent, setCardButtonAccent] = useState<'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate' | 'neutral'>(
     sekolah.loginCardButtonAccent || 'blue'
   );
-  const [cardButtonRounded, setCardButtonRounded] = useState<'lg' | 'xl' | 'full'>(
-    sekolah.loginCardButtonRounded || 'xl'
-  );
+  const [cardButtonRounded, setCardButtonRounded] = useState<'lg' | 'xl' | 'full'>(sekolah.loginCardButtonRounded || 'xl');
 
   // Left Panel Text States
-  const [loginLeftShowPanel, setLoginLeftShowPanel] = useState<boolean>(
-    sekolah.loginLeftShowPanel !== false
-  );
+  const [loginLeftShowPanel, setLoginLeftShowPanel] = useState<boolean>(sekolah.loginLeftShowPanel !== false);
   const [loginLeftBadgeText, setLoginLeftBadgeText] = useState<string>(
     sekolah.loginLeftBadgeText || `Portal Kehadiran Terpadu ${sekolah.nama || 'SMK Negeri 6 Garut'}`
   );
-  const [loginLeftTitlePrefix, setLoginLeftTitlePrefix] = useState<string>(
-    sekolah.loginLeftTitlePrefix || 'Sistem Presensi'
-  );
-  const [loginLeftTitleHighlight, setLoginLeftTitleHighlight] = useState<string>(
-    sekolah.loginLeftTitleHighlight || 'Digital & OTP'
-  );
+  const [loginLeftTitlePrefix, setLoginLeftTitlePrefix] = useState<string>(sekolah.loginLeftTitlePrefix || 'Sistem Presensi');
+  const [loginLeftTitleHighlight, setLoginLeftTitleHighlight] = useState<string>(sekolah.loginLeftTitleHighlight || 'Digital & OTP');
   const [loginLeftDescription, setLoginLeftDescription] = useState<string>(
     sekolah.loginLeftDescription ||
       'Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.'
   );
-  const [loginLeftFeature1Title, setLoginLeftFeature1Title] = useState<string>(
-    sekolah.loginLeftFeature1Title || 'Presensi Digital'
-  );
-  const [loginLeftFeature1Subtitle, setLoginLeftFeature1Subtitle] = useState<string>(
-    sekolah.loginLeftFeature1Subtitle || 'Cepat, Praktis & Akurat'
-  );
-  const [loginLeftFeature2Title, setLoginLeftFeature2Title] = useState<string>(
-    sekolah.loginLeftFeature2Title || 'OTP WhatsApp'
-  );
-  const [loginLeftFeature2Subtitle, setLoginLeftFeature2Subtitle] = useState<string>(
-    sekolah.loginLeftFeature2Subtitle || 'Verifikasi Cepat & Aman'
-  );
+  const [loginLeftFeature1Title, setLoginLeftFeature1Title] = useState<string>(sekolah.loginLeftFeature1Title || 'Presensi Digital');
+  const [loginLeftFeature1Subtitle, setLoginLeftFeature1Subtitle] = useState<string>(sekolah.loginLeftFeature1Subtitle || 'Cepat, Praktis & Akurat');
+  const [loginLeftFeature2Title, setLoginLeftFeature2Title] = useState<string>(sekolah.loginLeftFeature2Title || 'OTP WhatsApp');
+  const [loginLeftFeature2Subtitle, setLoginLeftFeature2Subtitle] = useState<string>(sekolah.loginLeftFeature2Subtitle || 'Verifikasi Cepat & Aman');
 
   // Custom Links state
   const defaultCustomLinksList: LoginCustomLink[] = [
@@ -283,9 +202,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [customLinksDisplayMode, setCustomLinksDisplayMode] = useState<'dropdown' | 'inline'>(
     sekolah.loginCustomLinksDisplayMode || 'dropdown'
   );
-  const [customLinksTitle, setCustomLinksTitle] = useState<string>(
-    sekolah.loginCustomLinksTitle || 'Tautan Cepat & Bantuan'
-  );
+  const [customLinksTitle, setCustomLinksTitle] = useState<string>(sekolah.loginCustomLinksTitle || 'Tautan Cepat & Bantuan');
 
   // Link Form state
   const [isEditingLink, setIsEditingLink] = useState(false);
@@ -295,27 +212,122 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [linkFormUrl, setLinkFormUrl] = useState('');
   const [linkFormIcon, setLinkFormIcon] = useState<any>('Globe');
   const [linkFormOpenNewTab, setLinkFormOpenNewTab] = useState(true);
-  const [previewDropdownOpen, setPreviewDropdownOpen] = useState(false);
 
-  // Handlers for Custom Links
-  const handleOpenAddLink = () => {
-    setEditingLinkId(null);
-    setLinkFormLabel('');
-    setLinkFormDescription('');
-    setLinkFormUrl('');
-    setLinkFormIcon('Globe');
-    setLinkFormOpenNewTab(true);
-    setIsEditingLink(true);
+  // Upload/URL states
+  const [customUrlInput, setCustomUrlInput] = useState<string>('');
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Luminance & Dark/Light Detection
+  const [detectedLuminance, setDetectedLuminance] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (enableWallpaper && bgImage) {
+      let isCancelled = false;
+      sampleImageLuminance(bgImage).then((lum) => {
+        if (!isCancelled) setDetectedLuminance(lum);
+      });
+      return () => {
+        isCancelled = true;
+      };
+    } else {
+      setDetectedLuminance(null);
+    }
+  }, [enableWallpaper, bgImage]);
+
+  const liveDetectedDark = useMemo(() => {
+    if (contrastMode === 'dark') return { isDark: true, luminance: 40 };
+    if (contrastMode === 'light') return { isDark: false, luminance: 210 };
+
+    const overlayRgb = parseColorToRgb(overlayColor) || { r: 2, g: 6, b: 23 };
+    const overlayAlpha = (overlayOpacity ?? 35) / 100;
+    let baseRgb: RGB = { r: 240, g: 242, b: 245 };
+
+    if (enableFill) {
+      if (fillType === 'solid' && bgColor) {
+        baseRgb = parseColorToRgb(bgColor) || { r: 30, g: 41, b: 59 };
+      } else if (fillType === 'gradient' && bgGradient) {
+        baseRgb = parseGradientAverageRgb(bgGradient);
+      } else if (fillType === 'pattern' && bgPattern) {
+        const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
+        baseRgb = parseColorToRgb(pat.bgBase) || { r: 15, g: 23, b: 42 };
+      }
+    } else if (enableWallpaper) {
+      const rawLum = detectedLuminance !== null ? detectedLuminance : 40;
+      baseRgb = { r: rawLum, g: rawLum, b: rawLum };
+    }
+
+    const effectiveRgb = blendRgb(baseRgb, overlayRgb, overlayAlpha);
+    const lum = Math.round(calculateLuminance(effectiveRgb));
+    return { isDark: lum < 135, luminance: lum };
+  }, [contrastMode, enableFill, fillType, bgColor, bgGradient, bgPattern, enableWallpaper, detectedLuminance, overlayColor, overlayOpacity]);
+
+  // Handlers for File Upload
+  const handleProcessFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      onShowToast('File harus berupa gambar (JPG, PNG, WebP, dll).', 'warning');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      onShowToast('Ukuran file terlalu besar (Maksimal 10MB).', 'warning');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const compressed = await compressBase64Image(file, 2560, 0.9, false);
+      if (compressed) {
+        setBgImage(compressed);
+        setEnableWallpaper(true);
+        onShowToast('Foto background berhasil dimuat dalam resolusi tinggi!', 'success');
+      } else {
+        onShowToast('Gagal memproses file gambar.', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      onShowToast('Terjadi kesalahan saat memproses gambar.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
-  const handleOpenEditLink = (link: LoginCustomLink) => {
-    setEditingLinkId(link.id);
-    setLinkFormLabel(link.label);
-    setLinkFormDescription(link.description || '');
-    setLinkFormUrl(link.url);
-    setLinkFormIcon(link.iconName || 'Globe');
-    setLinkFormOpenNewTab(link.openInNewTab !== false);
-    setIsEditingLink(true);
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleProcessFile(e.target.files[0]);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleProcessFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleApplyUrl = () => {
+    if (!customUrlInput.trim()) {
+      onShowToast('Silakan masukkan tautan URL gambar yang valid.', 'warning');
+      return;
+    }
+    setBgImage(customUrlInput.trim());
+    setEnableWallpaper(true);
+    onShowToast('URL Background berhasil diterapkan!', 'success');
+  };
+
+  // Custom Links Handlers
+  const handleAddPresetLink = (preset: { label: string; description?: string; url: string; iconName: any }) => {
+    const newLink: LoginCustomLink = {
+      id: `LNK_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      label: preset.label,
+      description: preset.description,
+      url: preset.url,
+      iconName: preset.iconName,
+      openInNewTab: preset.url !== '#',
+    };
+    setCustomLinks((prev) => [...prev, newLink]);
+    onShowToast(`Preset "${preset.label}" berhasil ditambahkan!`, 'success');
   };
 
   const handleSaveLink = () => {
@@ -363,107 +375,14 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
   const handleDeleteLink = (id: string, label: string) => {
     if (onConfirmModal) {
-      onConfirmModal(
-        'Hapus Tautan Kustom',
-        `Apakah Anda yakin ingin menghapus tautan "${label}" dari halaman login?`,
-        'danger',
-        () => {
-          setCustomLinks((prev) => prev.filter((item) => item.id !== id));
-          onShowToast(`Tautan "${label}" berhasil dihapus.`, 'info');
-        }
-      );
+      onConfirmModal('Hapus Tautan Kustom', `Apakah Anda yakin ingin menghapus tautan "${label}" dari halaman login?`, 'danger', () => {
+        setCustomLinks((prev) => prev.filter((item) => item.id !== id));
+        onShowToast(`Tautan "${label}" berhasil dihapus.`, 'info');
+      });
     } else {
       setCustomLinks((prev) => prev.filter((item) => item.id !== id));
       onShowToast(`Tautan "${label}" berhasil dihapus.`, 'info');
     }
-  };
-
-  const handleMoveLink = (index: number, direction: 'up' | 'down') => {
-    if (
-      (direction === 'up' && index === 0) ||
-      (direction === 'down' && index === customLinks.length - 1)
-    ) {
-      return;
-    }
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    const updated = [...customLinks];
-    const temp = updated[index];
-    updated[index] = updated[targetIndex];
-    updated[targetIndex] = temp;
-    setCustomLinks(updated);
-  };
-
-  const handleAddPresetLink = (preset: { label: string; description?: string; url: string; iconName: any }) => {
-    const newLink: LoginCustomLink = {
-      id: `LNK_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      label: preset.label,
-      description: preset.description,
-      url: preset.url,
-      iconName: preset.iconName,
-      openInNewTab: preset.url !== '#',
-    };
-    setCustomLinks((prev) => [...prev, newLink]);
-    onShowToast(`Preset "${preset.label}" berhasil ditambahkan!`, 'success');
-  };
-
-  // Upload/URL Sub-tabs for Image
-  const [imageSourceTab, setImageSourceTab] = useState<'preset' | 'upload' | 'url'>('preset');
-  const [customUrlInput, setCustomUrlInput] = useState<string>('');
-  const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Handle File Upload & Base64 Compression
-  const handleProcessFile = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      onShowToast('File harus berupa gambar (JPG, PNG, WebP, dll).', 'warning');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      onShowToast('Ukuran file terlalu besar (Maksimal 10MB).', 'warning');
-      return;
-    }
-
-    try {
-      setIsUploading(true);
-      const compressed = await compressBase64Image(file, 2560, 0.90, false);
-      if (compressed) {
-        setBgImage(compressed);
-        setBgType('image');
-        onShowToast('Foto background berhasil dimuat dalam resolusi tinggi!', 'success');
-      } else {
-        onShowToast('Gagal memproses file gambar.', 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      onShowToast('Terjadi kesalahan saat memproses gambar.', 'error');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleProcessFile(e.target.files[0]);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleProcessFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleApplyUrl = () => {
-    if (!customUrlInput.trim()) {
-      onShowToast('Silakan masukkan tautan URL gambar yang valid.', 'warning');
-      return;
-    }
-    setBgImage(customUrlInput.trim());
-    setBgType('image');
-    onShowToast('URL Background berhasil diterapkan!', 'success');
   };
 
   // Quick Preset Text Template Application
@@ -474,7 +393,9 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         setLoginLeftBadgeText(`Portal Kehadiran Terpadu ${schoolName}`);
         setLoginLeftTitlePrefix('Sistem Presensi');
         setLoginLeftTitleHighlight('Digital & OTP');
-        setLoginLeftDescription('Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.');
+        setLoginLeftDescription(
+          'Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.'
+        );
         setLoginLeftFeature1Title('Presensi Digital');
         setLoginLeftFeature1Subtitle('Cepat, Praktis & Akurat');
         setLoginLeftFeature2Title('OTP WhatsApp');
@@ -529,22 +450,40 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
     const updatedSekolah: SekolahConfig = {
       ...baseSekolah,
-      loginBgType: bgType,
-      loginBgImage: bgType === 'image' ? bgImage : undefined,
-      loginBgGradient: bgType === 'gradient' ? bgGradient : undefined,
-      loginBgPattern: bgType === 'pattern' ? bgPattern : undefined,
-      loginBgColor: bgType === 'color' ? bgColor : undefined,
+      // Backward compatibility fields
+      loginBgType: 'two_layer',
+      loginBgImage: enableWallpaper ? bgImage : undefined,
+      loginBgGradient: bgGradient,
+      loginBgPattern: bgPattern,
+      loginBgColor: bgColor,
       loginBgOverlayOpacity: overlayOpacity,
-      loginBgOpacity: Number((bgOpacity / 100).toFixed(2)),
-      bgImageOpacity: bgOpacity,
-      loginBgBlur: blurLevel,
-      loginBgFit: bgFit,
+      loginBgOpacity: Number((wallpaperOpacity / 100).toFixed(2)),
+      bgImageOpacity: wallpaperOpacity,
+      loginBgBlur: wallpaperBlur,
+      loginBgFit: wallpaperFit,
       loginBgOverlayColor: overlayColor,
+
+      // 2-Layer Background Explicit Configurations
+      loginBgEnableWallpaper: enableWallpaper,
+      loginBgWallpaperFit: wallpaperFit,
+      loginBgWallpaperOpacity: wallpaperOpacity,
+      loginBgWallpaperBlur: wallpaperBlur,
+      loginBgWallpaperFilter: wallpaperFilter,
+
+      loginBgEnableFill: enableFill,
+      loginBgFillType: fillType,
+      loginBgFillColor: bgColor,
+      loginBgFillGradient: bgGradient,
+      loginBgFillPattern: bgPattern,
+      loginBgFillOpacity: fillOpacity,
+
+      loginBgBlendMode: blendMode,
+
+      // Card & Panel Configs
       loginContrastMode: contrastMode,
       loginCardTheme: cardTheme,
       loginCardOpacity: cardOpacity,
       loginCardBlur: cardBlur,
-      // Container Card Customizations
       loginCardLayout: cardLayout,
       loginCardMaxWidth: cardMaxWidth,
       loginCardRounded: cardRounded,
@@ -584,27 +523,37 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     updatedAppData = addAuditLog(
       updatedAppData,
       'Pengaturan Tampilan Login',
-      `Memperbarui kustomisasi halaman login (Teks panel kiri, tautan kustom mode ${customLinksDisplayMode}, & background tipe: ${bgType}).`
+      `Memperbarui kustomisasi latar belakang 2 lapisan (Wallpaper: ${enableWallpaper ? 'Aktif' : 'Nonaktif'}, Warna Fill: ${
+        enableFill ? fillType : 'Nonaktif'
+      }, Blend Mode: ${blendMode}).`
     );
 
     onUpdateAppData(updatedAppData);
-    onShowToast('Pengaturan Halaman Login berhasil disimpan!', 'success');
+    onShowToast('Pengaturan Latar Belakang 2 Lapisan Halaman Login berhasil disimpan!', 'success');
   };
 
   // Reset to default
   const handleResetToDefault = () => {
     const doReset = () => {
-      setBgType('default');
-      setBgImage('');
+      setEnableWallpaper(true);
+      setBgImage(LOGIN_IMAGE_PRESETS[0].imageUrl);
+      setWallpaperFit('cover');
+      setWallpaperOpacity(85);
+      setWallpaperBlur('none');
+      setWallpaperFilter('none');
+
+      setEnableFill(true);
+      setFillType('gradient');
+      setBgColor('#1e3a8a');
       setBgGradient(LOGIN_GRADIENT_PRESETS[0].gradient);
       setBgPattern(LOGIN_PATTERN_PRESETS[0].id);
-      setBgColor('#1e3a8a');
-      setBgOpacity(100);
-      setOverlayOpacity(35);
-      setBlurLevel('none');
-      setBgFit('cover');
+      setFillOpacity(100);
+
+      setBlendMode('normal');
       setOverlayColor('#020617');
-      setCardOpacity(60);
+      setOverlayOpacity(35);
+
+      setCardOpacity(65);
       setCardBlur('2xl');
       setCardLayout('right');
       setCardMaxWidth('standard');
@@ -612,19 +561,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setCardShadow('medium');
       setCardBorder('glass');
       setCardShowLogo(true);
-      setCardLogoAlign('center');
-      setCardLogoSize('md');
-      setCardShowSchoolName(true);
-      setCardShowSubtitle(true);
-      setCardShowAcademicYear(true);
-      setCardWelcomeTitle('Sistem Absensi Siswa');
-      setCardWelcomeSubtext('Masuk dengan Username / NISN / NIP Anda');
-      setCardInputStyle('outlined');
-      setCardInputRounded('xl');
-      setCardButtonAccent('blue');
-      setCardButtonRounded('xl');
 
-      // Reset text & custom links
       setCustomLinks(defaultCustomLinksList);
       setCustomLinksDisplayMode('dropdown');
       setCustomLinksTitle('Tautan Cepat & Bantuan');
@@ -632,62 +569,18 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setLoginLeftBadgeText(`Portal Kehadiran Terpadu ${sekolah.nama || 'SMK Negeri 6 Garut'}`);
       setLoginLeftTitlePrefix('Sistem Presensi');
       setLoginLeftTitleHighlight('Digital & OTP');
-      setLoginLeftDescription('Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.');
-      setLoginLeftFeature1Title('Presensi Digital');
-      setLoginLeftFeature1Subtitle('Cepat, Praktis & Akurat');
-      setLoginLeftFeature2Title('OTP WhatsApp');
-      setLoginLeftFeature2Subtitle('Verifikasi Cepat & Aman');
-
-      const baseSekolah: SekolahConfig = appData.sekolah || {
-        nama: 'SMKN 6 GARUT',
-        alamat: '',
-        tahunAjaran: '2026/2027',
-        tanggalMulai: '2026-07-15',
-        logo: '',
-      };
-
-      const updatedSekolah: SekolahConfig = {
-        ...baseSekolah,
-        loginBgType: 'default',
-        loginBgImage: undefined,
-        loginBgGradient: undefined,
-        loginBgPattern: undefined,
-        loginBgColor: undefined,
-        loginBgOverlayOpacity: 35,
-        loginBgOpacity: 0.65,
-        loginBgBlur: 'none',
-        loginBgFit: 'cover',
-        loginBgOverlayColor: '#020617',
-        loginCardOpacity: 60,
-        loginCardBlur: '2xl',
-        loginLeftShowPanel: true,
-        loginLeftBadgeText: undefined,
-        loginLeftTitlePrefix: undefined,
-        loginLeftTitleHighlight: undefined,
-        loginLeftDescription: undefined,
-        loginLeftFeature1Title: undefined,
-        loginLeftFeature1Subtitle: undefined,
-        loginLeftFeature2Title: undefined,
-        loginLeftFeature2Subtitle: undefined,
-        loginCustomLinks: defaultCustomLinksList,
-        loginCustomLinksDisplayMode: 'dropdown',
-        loginCustomLinksTitle: 'Tautan Cepat & Bantuan',
-      };
-
-      const updatedAppData = addAuditLog(
-        { ...appData, sekolah: updatedSekolah },
-        'Reset Tampilan Login',
-        'Mengembalikan tampilan latar belakang & teks halaman login ke tema bawaan resmi.'
+      setLoginLeftDescription(
+        'Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.'
       );
 
-      onUpdateAppData(updatedAppData);
-      onShowToast('Tampilan & Teks Login berhasil dikembalikan ke bawaan!', 'info');
+      handleSave();
+      onShowToast('Tampilan login berhasil dikembalikan ke pengaturan 2 lapisan default!', 'info');
     };
 
     if (onConfirmModal) {
       onConfirmModal(
         'Kembalikan Pengaturan Login ke Bawaan?',
-        'Teks panel kiri dan latar belakang halaman login akan dikembalikan ke teks resmi bawaan.',
+        'Pengaturan latar belakang 2 lapisan dan teks halaman login akan dikembalikan ke tema resmi bawaan.',
         'info',
         doReset
       );
@@ -696,51 +589,39 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     }
   };
 
-  // Helper to get preview style
-  const getPreviewBackgroundStyle = (): React.CSSProperties => {
-    let base: React.CSSProperties = {};
-    if (bgType === 'image' && bgImage) {
-      base = {
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: bgFit === 'tile' ? 'auto' : bgFit,
-        backgroundRepeat: bgFit === 'tile' ? 'repeat' : 'no-repeat',
-        backgroundPosition: 'center center',
-      };
-    } else if (bgType === 'gradient') {
-      base = {
-        background: bgGradient,
-      };
-    } else if (bgType === 'pattern') {
+  // Helpers for CSS styles
+  const getFillStyleCSS = (): React.CSSProperties => {
+    if (fillType === 'solid') {
+      return { backgroundColor: bgColor };
+    }
+    if (fillType === 'gradient') {
+      return { background: bgGradient };
+    }
+    if (fillType === 'pattern') {
       const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
-      base = {
+      return {
         backgroundColor: pat.bgBase,
         backgroundImage: pat.svgPattern,
         backgroundSize: '24px 24px',
       };
-    } else if (bgType === 'color') {
-      base = {
-        backgroundColor: bgColor,
-      };
-    } else {
-      base = {
-        background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)',
-      };
     }
-
-    return {
-      ...base,
-      opacity: bgOpacity / 100,
-    };
+    return { background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)' };
   };
 
-  const getBlurFilter = () => {
-    switch (blurLevel) {
-      case 'sm': return 'blur(4px)';
-      case 'md': return 'blur(8px)';
-      case 'lg': return 'blur(16px)';
-      case 'xl': return 'blur(24px)';
-      default: return 'none';
-    }
+  const getWallpaperFilterCSS = (filter: string, blur: string) => {
+    let blurPx = '0px';
+    if (blur === 'sm') blurPx = '4px';
+    if (blur === 'md') blurPx = '8px';
+    if (blur === 'lg') blurPx = '16px';
+    if (blur === 'xl') blurPx = '24px';
+
+    let filterStr = `blur(${blurPx})`;
+    if (filter === 'grayscale') filterStr += ' grayscale(100%)';
+    if (filter === 'darken_30') filterStr += ' brightness(70%)';
+    if (filter === 'darken_50') filterStr += ' brightness(50%)';
+    if (filter === 'sepia') filterStr += ' sepia(60%)';
+
+    return filterStr;
   };
 
   return (
@@ -748,15 +629,18 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       {/* Header Info with Actions */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shadow-xs">
-            <Type className="w-5 h-5" />
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-500/20">
+            <Layers className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-black text-slate-900 dark:text-white">
-              Pengaturan Tampilan & Teks Halaman Login
+            <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <span>Pengaturan Latar Belakang Login 2 Lapisan</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                Wallpapers + Fill Color
+              </span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Kustomisasi teks judul, deskripsi, poin fitur, branding panel kiri, serta latar belakang halaman login.
+              Kustomisasi 2 lapisan terpisah (Lapisan 1: Wallpaper & Foto, Lapisan 2: Warna Fill & Pola) dengan blend mode dan efek overlay.
             </p>
           </div>
         </div>
@@ -783,7 +667,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         )}
       </div>
 
-      {/* TABS SELECTOR: PANEL TEKS KIRI vs CONTAINER LOGIN vs LATAR BELAKANG vs TAUTAN KUSTOM */}
+      {/* TABS SELECTOR */}
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 max-w-3xl">
         <button
           type="button"
@@ -812,14 +696,14 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         <button
           type="button"
           onClick={() => setActiveTab('background')}
-          className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'background'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <ImageIcon className="w-4 h-4" />
-          <span>Latar Belakang</span>
+          <Layers className="w-4 h-4 text-blue-500" />
+          <span>Latar Belakang (2 Lapisan)</span>
         </button>
         <button
           type="button"
@@ -843,18 +727,18 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
         {/* Left Side: Controls (7 Cols) */}
         <div className="lg:col-span-7 space-y-6">
           {/* ========================================================= */}
-          {/* TAB 1: KUSTOMISASI TEKS PANEL KIRI                       */}
+          {/* TAB 1: TEKS PANEL KIRI                                    */}
           {/* ========================================================= */}
           {activeTab === 'left_panel' && (
             <div className="space-y-5">
-              {/* Card 0: Toggle Show/Hide Left Panel */}
+              {/* Toggle Panel Kiri */}
               <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between gap-4">
                 <div>
                   <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
                     Status Tampilan Panel Kiri
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Tampilkan panel branding dan teks deskripsi di sisi kiri layar login (desktop/tablet).
+                    Tampilkan panel branding dan teks deskripsi di sisi kiri layar login.
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -868,7 +752,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </label>
               </div>
 
-              {/* Card 1: Pilihan Cepat Template Teks */}
+              {/* Presets Template Teks */}
               <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
@@ -913,278 +797,61 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </div>
               </div>
 
-              {/* Card 2: Badge / Tag Header Atas */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
-                <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                  Teks Label / Badge Atas
-                </label>
-                <input
-                  type="text"
-                  value={loginLeftBadgeText}
-                  onChange={(e) => setLoginLeftBadgeText(e.target.value)}
-                  placeholder="Contoh: Portal Kehadiran Terpadu SMK NEGERI 6 GARUT"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-[11px] text-slate-400">
-                  Label pill berbentuk kapsul di bagian paling atas dengan indikator titik biru berkedip.
-                </p>
-              </div>
-
-              {/* Card 3: Judul Utama & Highlight Gradasi */}
+              {/* Form Teks Panel */}
               <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                  Judul Utama Halaman Login
-                </h4>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                    Badge / Tagline Atas
+                  </label>
+                  <input
+                    type="text"
+                    value={loginLeftBadgeText}
+                    onChange={(e) => setLoginLeftBadgeText(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Awalan Judul (Warna Putih/Solid)
-                    </label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Awalan Judul</label>
                     <input
                       type="text"
                       value={loginLeftTitlePrefix}
                       onChange={(e) => setLoginLeftTitlePrefix(e.target.value)}
-                      placeholder="Contoh: Sistem Presensi"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Judul Highlight (Efek Warna Gradasi)
-                    </label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Highlight (Gradasi)</label>
                     <input
                       type="text"
                       value={loginLeftTitleHighlight}
                       onChange={(e) => setLoginLeftTitleHighlight(e.target.value)}
-                      placeholder="Contoh: Digital & OTP"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
-                <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60 dark:border-blue-800/40 text-xs text-blue-900 dark:text-blue-300 font-medium flex items-center gap-2">
-                  <span className="font-bold">Pratinjau Judul:</span>
-                  <span>{loginLeftTitlePrefix || 'Sistem Presensi'}</span>
-                  <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-cyan-500">
-                    {loginLeftTitleHighlight || 'Digital & OTP'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 4: Paragraf Deskripsi & Informasi */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
-                <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                  Paragraf Deskripsi / Informasi Sekolah
-                </label>
-                <textarea
-                  rows={3}
-                  value={loginLeftDescription}
-                  onChange={(e) => setLoginLeftDescription(e.target.value)}
-                  placeholder="Masukkan kalimat pengantar atau deskripsi sistem presensi sekolah..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
-                />
-                <p className="text-[11px] text-slate-400">
-                  Teks ini menjelaskan fungsi dan kemudahan portal presensi bagi warga sekolah.
-                </p>
-              </div>
-
-              {/* Card 5: Poin Fitur & Keunggulan (2 Kolom) */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                  Poin Fitur & Keunggulan (Bagian Bawah)
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Fitur 1 */}
-                  <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/70 space-y-2.5">
-                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      <Smartphone className="w-4 h-4" />
-                      <span>Poin Fitur 1</span>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Judul Fitur 1</label>
-                      <input
-                        type="text"
-                        value={loginLeftFeature1Title}
-                        onChange={(e) => setLoginLeftFeature1Title(e.target.value)}
-                        placeholder="Contoh: Presensi Digital"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Subjudul / Keterangan</label>
-                      <input
-                        type="text"
-                        value={loginLeftFeature1Subtitle}
-                        onChange={(e) => setLoginLeftFeature1Subtitle(e.target.value)}
-                        placeholder="Contoh: Cepat, Praktis & Akurat"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Fitur 2 */}
-                  <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/70 space-y-2.5">
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400">
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Poin Fitur 2</span>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Judul Fitur 2</label>
-                      <input
-                        type="text"
-                        value={loginLeftFeature2Title}
-                        onChange={(e) => setLoginLeftFeature2Title(e.target.value)}
-                        placeholder="Contoh: OTP WhatsApp"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Subjudul / Keterangan</label>
-                      <input
-                        type="text"
-                        value={loginLeftFeature2Subtitle}
-                        onChange={(e) => setLoginLeftFeature2Subtitle(e.target.value)}
-                        placeholder="Contoh: Verifikasi Cepat & Aman"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                    Paragraf Deskripsi Sistem
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={loginLeftDescription}
+                    onChange={(e) => setLoginLeftDescription(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
+                  />
                 </div>
               </div>
             </div>
           )}
 
           {/* ========================================================= */}
-          {/* TAB 2: KUSTOMISASI CONTAINER & KARTU LOGIN                 */}
+          {/* TAB 2: CONTAINER KARTU LOGIN                              */}
           {/* ========================================================= */}
           {activeTab === 'container_card' && (
             <div className="space-y-6">
-              {/* Card 1: Preset Instant Container Login */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                    <span>Pilihan Preset Gaya Container Instant</span>
-                  </h4>
-                  <span className="text-[10px] font-bold text-slate-400">1 Klik Terapkan</span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCardLayout('right');
-                      setCardMaxWidth('standard');
-                      setCardRounded('3xl');
-                      setCardShadow('medium');
-                      setCardBorder('glass');
-                      setCardOpacity(65);
-                      setCardBlur('2xl');
-                      setCardInputStyle('outlined');
-                      setCardInputRounded('xl');
-                      setCardButtonAccent('blue');
-                      setCardButtonRounded('xl');
-                      onShowToast('Preset Glassmorphism Modern diterapkan!', 'success');
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
-                  >
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">✨ Glassmorphism</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Efek kaca transparan & blur modern</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCardLayout('center');
-                      setCardMaxWidth('standard');
-                      setCardRounded('xl');
-                      setCardShadow('soft');
-                      setCardBorder('subtle');
-                      setCardOpacity(95);
-                      setCardBlur('sm');
-                      setCardInputStyle('outlined');
-                      setCardInputRounded('lg');
-                      setCardButtonAccent('slate');
-                      setCardButtonRounded('lg');
-                      onShowToast('Preset Clean Minimalist diterapkan!', 'success');
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
-                  >
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">💎 Clean Minimalist</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Tampilan bersih, padat, & profesional</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCardLayout('center');
-                      setCardMaxWidth('wide');
-                      setCardRounded('2xl');
-                      setCardShadow('neon');
-                      setCardBorder('accent');
-                      setCardOpacity(85);
-                      setCardBlur('xl');
-                      setCardInputStyle('filled');
-                      setCardInputRounded('xl');
-                      setCardButtonAccent('emerald');
-                      setCardButtonRounded('xl');
-                      onShowToast('Preset Floating Neon diterapkan!', 'success');
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
-                  >
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">⚡ Floating Neon</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Glow cyan/emerald futuristik</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCardLayout('right');
-                      setCardMaxWidth('compact');
-                      setCardRounded('full_pill');
-                      setCardShadow('glow');
-                      setCardBorder('glass');
-                      setCardOpacity(75);
-                      setCardBlur('2xl');
-                      setCardInputStyle('outlined');
-                      setCardInputRounded('full');
-                      setCardButtonAccent('violet');
-                      setCardButtonRounded('full');
-                      onShowToast('Preset Pill Compact diterapkan!', 'success');
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
-                  >
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">💊 Pill Curves</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Sudut melengkung penuh (pill shape)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCardLayout('right');
-                      setCardMaxWidth('large');
-                      setCardRounded('2xl');
-                      setCardShadow('medium');
-                      setCardBorder('gradient');
-                      setCardOpacity(90);
-                      setCardBlur('lg');
-                      setCardInputStyle('outlined');
-                      setCardInputRounded('xl');
-                      setCardButtonAccent('amber');
-                      setCardButtonRounded('xl');
-                      onShowToast('Preset Wide Executive diterapkan!', 'success');
-                    }}
-                    className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/40 text-left transition cursor-pointer flex flex-col gap-1"
-                  >
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">🌟 Wide Executive</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Form ekstra luas dengan border gradasi</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Card 2: Tata Letak & Ukuran Lebar Container */}
               <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
                   <SlidersHorizontal className="w-4 h-4 text-blue-600" />
@@ -1192,11 +859,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Posisi Alignment */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Posisi Horisontal Container
-                    </label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Posisi Container</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { id: 'left', label: 'Kiri' },
@@ -1219,17 +883,14 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                     </div>
                   </div>
 
-                  {/* Lebar Maksimal Container */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Lebar Maksimal Form Container
-                    </label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Lebar Maksimal</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { id: 'compact', label: 'Ringkas (380px)' },
-                        { id: 'standard', label: 'Standar (448px)' },
-                        { id: 'wide', label: 'Lebar (512px)' },
-                        { id: 'large', label: 'Ekstra (576px)' },
+                        { id: 'compact', label: 'Ringkas' },
+                        { id: 'standard', label: 'Standar' },
+                        { id: 'wide', label: 'Lebar' },
+                        { id: 'large', label: 'Ekstra' },
                       ].map((item) => (
                         <button
                           key={item.id}
@@ -1249,7 +910,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </div>
               </div>
 
-              {/* Card 3: Bentuk & Efek Visual Kartu Form */}
+              {/* Bentuk & Efek Kaca Form */}
               <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
                   <Palette className="w-4 h-4 text-purple-600" />
@@ -1257,18 +918,15 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </h4>
 
                 <div className="space-y-4">
-                  {/* Sudut Lengkungan (Rounded Corners) */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Kelengkungan Sudut Kartu (Rounded Corners)
-                    </label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sudut Lengkungan (Rounded)</label>
                     <div className="grid grid-cols-5 gap-2">
                       {[
-                        { id: 'none', label: 'Kotak (0px)' },
-                        { id: 'lg', label: 'Halus (16px)' },
-                        { id: 'xl', label: 'Sedang (24px)' },
-                        { id: '2xl', label: 'Lengkung (32px)' },
-                        { id: 'full_pill', label: 'Pill (40px)' },
+                        { id: 'none', label: 'Kotak' },
+                        { id: 'lg', label: 'Halus' },
+                        { id: 'xl', label: 'Sedang' },
+                        { id: '2xl', label: 'Lengkung' },
+                        { id: 'full_pill', label: 'Pill' },
                       ].map((item) => (
                         <button
                           key={item.id}
@@ -1286,18 +944,15 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                     </div>
                   </div>
 
-                  {/* Efek Bayangan & Glow */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Efek Bayangan (Shadow & Glow Effect)
-                    </label>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Efek Bayangan (Shadow & Glow)</label>
                     <div className="grid grid-cols-5 gap-2">
                       {[
                         { id: 'none', label: 'Tanpa' },
                         { id: 'soft', label: 'Halus' },
                         { id: 'medium', label: 'Sedang' },
-                        { id: 'glow', label: 'Glow Indigo' },
-                        { id: 'neon', label: 'Neon Cyan' },
+                        { id: 'glow', label: 'Glow' },
+                        { id: 'neon', label: 'Neon' },
                       ].map((item) => (
                         <button
                           key={item.id}
@@ -1314,383 +969,99 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                       ))}
                     </div>
                   </div>
-
-                  {/* Gaya Border / Bingkai */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Gaya Bingkai (Border Style)
-                    </label>
-                    <div className="grid grid-cols-5 gap-2">
-                      {[
-                        { id: 'none', label: 'Tanpa' },
-                        { id: 'subtle', label: 'Tipis' },
-                        { id: 'glass', label: 'Kaca White' },
-                        { id: 'gradient', label: 'Gradasi' },
-                        { id: 'accent', label: 'Accent Solid' },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setCardBorder(item.id as any)}
-                          className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
-                            cardBorder === item.id
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Transparansi Kartu & Blur Slider */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/80 dark:border-slate-800">
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span>Transparansi Kartu ({cardOpacity}%)</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="5"
-                        value={cardOpacity}
-                        onChange={(e) => setCardOpacity(Number(e.target.value))}
-                        className="w-full accent-blue-600 cursor-pointer"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span>Efek Blur Background (Glass Blur)</span>
-                        <span className="text-[10px] uppercase font-mono bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">
-                          {cardBlur}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-6 gap-1">
-                        {['none', 'sm', 'md', 'lg', 'xl', '2xl'].map((b) => (
-                          <button
-                            key={b}
-                            type="button"
-                            onClick={() => setCardBlur(b as any)}
-                            className={`py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer text-center ${
-                              cardBlur === b
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            {b === 'none' ? '0' : b}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 4: Header Kartu & Pengaturan Elemen */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                  <School className="w-4 h-4 text-emerald-600" />
-                  <span>Elemen Branding Header Kartu</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Toggle Logo */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Tampilkan Logo</span>
-                      <p className="text-[10px] text-slate-400">Logo sekolah di header</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cardShowLogo}
-                      onChange={(e) => setCardShowLogo(e.target.checked)}
-                      className="w-4 h-4 accent-blue-600 cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Toggle Nama Sekolah */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Nama Sekolah</span>
-                      <p className="text-[10px] text-slate-400">Teks nama sekolah di atas</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cardShowSchoolName}
-                      onChange={(e) => setCardShowSchoolName(e.target.checked)}
-                      className="w-4 h-4 accent-blue-600 cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Toggle Academic Year */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Thn Ajaran & Sem</span>
-                      <p className="text-[10px] text-slate-400">Status semester di kartu</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cardShowAcademicYear}
-                      onChange={(e) => setCardShowAcademicYear(e.target.checked)}
-                      className="w-4 h-4 accent-blue-600 cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Ukuran & Posisi Logo */}
-                {cardShowLogo && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/80 dark:border-slate-800">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Posisi Alignment Logo</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { id: 'left', label: 'Kiri' },
-                          { id: 'center', label: 'Tengah' },
-                          { id: 'right', label: 'Kanan' },
-                        ].map((a) => (
-                          <button
-                            key={a.id}
-                            type="button"
-                            onClick={() => setCardLogoAlign(a.id as any)}
-                            className={`py-1.5 text-xs font-bold rounded-xl border cursor-pointer ${
-                              cardLogoAlign === a.id
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            {a.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Ukuran Logo</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { id: 'sm', label: 'Kecil (48px)' },
-                          { id: 'md', label: 'Sedang (64px)' },
-                          { id: 'lg', label: 'Besar (80px)' },
-                        ].map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setCardLogoSize(s.id as any)}
-                            className={`py-1.5 text-[11px] font-bold rounded-xl border cursor-pointer ${
-                              cardLogoSize === s.id
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Custom Welcome Titles */}
-                <div className="space-y-3 pt-2 border-t border-slate-200/80 dark:border-slate-800">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Judul Pesan Sambutan / Sub-Header Kustom
-                    </label>
-                    <input
-                      type="text"
-                      value={cardWelcomeTitle}
-                      onChange={(e) => setCardWelcomeTitle(e.target.value)}
-                      placeholder="Contoh: Sistem Absensi Siswa"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 5: Gaya Input & Tombol Submit */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                  <Edit className="w-4 h-4 text-indigo-600" />
-                  <span>Gaya Isian Form & Tombol Masuk</span>
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Input Style */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Varian Gaya Kolom Input
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'outlined', label: 'Outlined' },
-                        { id: 'filled', label: 'Filled Soft' },
-                        { id: 'underlined', label: 'Underlined' },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setCardInputStyle(item.id as any)}
-                          className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
-                            cardInputStyle === item.id
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Button Accent Color */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Warna Akses Tombol Submit
-                    </label>
-                    <div className="grid grid-cols-6 gap-1.5">
-                      {[
-                        { id: 'blue', color: 'bg-blue-600', label: 'Biru' },
-                        { id: 'emerald', color: 'bg-emerald-600', label: 'Hijau' },
-                        { id: 'violet', color: 'bg-indigo-600', label: 'Ungu' },
-                        { id: 'amber', color: 'bg-amber-600', label: 'Kuning' },
-                        { id: 'rose', color: 'bg-rose-600', label: 'Merah' },
-                        { id: 'slate', color: 'bg-zinc-900', label: 'Gelap' },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setCardButtonAccent(item.id as any)}
-                          title={item.label}
-                          className={`h-9 rounded-xl ${item.color} transition cursor-pointer flex items-center justify-center text-white font-bold border-2 ${
-                            cardButtonAccent === item.id
-                              ? 'border-white ring-2 ring-blue-500 scale-105 shadow-md'
-                              : 'border-transparent opacity-80 hover:opacity-100'
-                          }`}
-                        >
-                          {cardButtonAccent === item.id && <Check className="w-4 h-4" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {/* ========================================================= */}
-          {/* TAB 3: KUSTOMISASI LATAR BELAKANG                         */}
+          {/* TAB 3: LATAR BELAKANG 2 LAPISAN (WALLPAPERS + WARNA FILL)  */}
           {/* ========================================================= */}
           {activeTab === 'background' && (
             <div className="space-y-6">
-              {/* TIPE LATAR BELAKANG SELECTOR */}
-              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-blue-500" />
-                  <span>Pilih Jenis Latar Belakang (Style Type)</span>
-                </h4>
+              {/* CARD 0: CONTROL STATUS 2 LAPISAN */}
+              <div className="bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-900 p-6 rounded-3xl text-white border border-blue-800/60 shadow-lg space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">Sistem Background 2 Lapisan</h4>
+                      <p className="text-xs text-blue-200/80">Kombinasikan Wallpapers & Foto dengan Warna Fill / Gradasi</p>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-black bg-blue-500 text-white shadow-xs">
+                    {enableWallpaper && enableFill
+                      ? '✨ 2 Lapisan Aktif'
+                      : enableWallpaper
+                      ? '🖼️ Wallpaper Saja'
+                      : enableFill
+                      ? '🎨 Warna Fill Saja'
+                      : '⚪ Default Minimal'}
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setBgType('default')}
-                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      bgType === 'default'
-                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {/* Toggle Lapisan 1: Wallpaper */}
+                  <div
+                    onClick={() => setEnableWallpaper(!enableWallpaper)}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                      enableWallpaper
+                        ? 'bg-blue-600/30 border-blue-400 text-white ring-2 ring-blue-400/30'
+                        : 'bg-slate-900/60 border-slate-700/80 text-slate-400 hover:border-slate-600'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <Sparkles className="w-4 h-4 text-blue-600" />
-                      {bgType === 'default' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    <div className="flex items-center gap-2.5">
+                      <ImageIcon className={`w-4 h-4 ${enableWallpaper ? 'text-blue-300' : 'text-slate-500'}`} />
+                      <div>
+                        <span className="block text-xs font-bold">Lapisan 1: Wallpaper / Foto</span>
+                        <span className="block text-[10px] opacity-80">Gedung sekolah, preset & upload</span>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold mt-1">Bawaan Sistem</span>
-                    <span className="text-[10px] text-slate-400">Ambient aura glow & grid</span>
-                  </button>
+                    <div
+                      className={`w-5 h-5 rounded-md border flex items-center justify-center ${
+                        enableWallpaper ? 'bg-blue-500 border-blue-400 text-white' : 'border-slate-600'
+                      }`}
+                    >
+                      {enableWallpaper && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBgType('image');
-                      if (!bgImage && LOGIN_IMAGE_PRESETS.length > 0) {
-                        setBgImage(LOGIN_IMAGE_PRESETS[0].imageUrl);
-                      }
-                    }}
-                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      bgType === 'image'
-                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
+                  {/* Toggle Lapisan 2: Warna Fill */}
+                  <div
+                    onClick={() => setEnableFill(!enableFill)}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                      enableFill
+                        ? 'bg-purple-600/30 border-purple-400 text-white ring-2 ring-purple-400/30'
+                        : 'bg-slate-900/60 border-slate-700/80 text-slate-400 hover:border-slate-600'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <FileImage className="w-4 h-4 text-emerald-600" />
-                      {bgType === 'image' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                    <div className="flex items-center gap-2.5">
+                      <Palette className={`w-4 h-4 ${enableFill ? 'text-purple-300' : 'text-slate-500'}`} />
+                      <div>
+                        <span className="block text-xs font-bold">Lapisan 2: Warna Fill & Pola</span>
+                        <span className="block text-[10px] opacity-80">Solid color, gradasi & pattern</span>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold mt-1">Foto / Gambar</span>
-                    <span className="text-[10px] text-slate-400">Foto gedung atau upload</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgType('gradient')}
-                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      bgType === 'gradient'
-                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <Palette className="w-4 h-4 text-purple-600" />
-                      {bgType === 'gradient' && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                    <div
+                      className={`w-5 h-5 rounded-md border flex items-center justify-center ${
+                        enableFill ? 'bg-purple-500 border-purple-400 text-white' : 'border-slate-600'
+                      }`}
+                    >
+                      {enableFill && <Check className="w-3.5 h-3.5" />}
                     </div>
-                    <span className="text-xs font-bold mt-1">Gradasi Warna</span>
-                    <span className="text-[10px] text-slate-400">Preset gradasi modern</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgType('pattern')}
-                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      bgType === 'pattern'
-                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <Sliders className="w-4 h-4 text-amber-600" />
-                      {bgType === 'pattern' && <Check className="w-3.5 h-3.5 text-amber-600" />}
-                    </div>
-                    <span className="text-xs font-bold mt-1">Pola Geometris</span>
-                    <span className="text-[10px] text-slate-400">Pattern grid / dot / wave</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgType('color')}
-                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col gap-1 ${
-                      bgType === 'color'
-                        ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="w-4 h-4 rounded-full border border-slate-300" style={{ backgroundColor: bgColor }} />
-                      {bgType === 'color' && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                    </div>
-                    <span className="text-xs font-bold mt-1">Warna Polos</span>
-                    <span className="text-[10px] text-slate-400">Solid color pilihan</span>
-                  </button>
+                  </div>
                 </div>
               </div>
 
-              {/* IMAGE SELECTION PANEL */}
-              {bgType === 'image' && (
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+              {/* CARD LAPISAN 1: WALLPAPER / GAMBAR */}
+              {enableWallpaper && (
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
                   <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                      Pilihan Sumber Gambar Foto
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-blue-600" />
+                      <span>Lapisan 1: Pilihan Wallpaper / Gambar</span>
                     </h4>
                     <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                       <button
@@ -1763,7 +1134,10 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
                   {imageSourceTab === 'upload' && (
                     <div
-                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragging(true);
+                      }}
                       onDragLeave={() => setIsDragging(false)}
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
@@ -1773,22 +1147,14 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                           : 'border-slate-300 dark:border-slate-700 hover:border-blue-400 bg-slate-50/50 dark:bg-slate-800/30'
                       }`}
                     >
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileInputChange}
-                        accept="image/*"
-                        className="hidden"
-                      />
+                      <input type="file" ref={fileInputRef} onChange={handleFileInputChange} accept="image/*" className="hidden" />
                       <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 mx-auto flex items-center justify-center mb-3 shadow-xs">
                         <Upload className="w-6 h-6" />
                       </div>
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                        {isUploading ? 'Memproses dan Mengompresi Foto...' : 'Klik atau Tarik Foto Gedung Sekolah ke Sini'}
+                        {isUploading ? 'Memproses Foto...' : 'Klik atau Tarik Foto Gedung Sekolah ke Sini'}
                       </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Format JPG, PNG, atau WebP (Maksimal 10MB)
-                      </p>
+                      <p className="text-xs text-slate-400 mt-1">Format JPG, PNG, atau WebP (Maksimal 10MB)</p>
                     </div>
                   )}
 
@@ -1810,910 +1176,452 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                       </button>
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* GRADIENT PRESETS */}
-              {bgType === 'gradient' && (
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                    Pilihan Preset Gradasi
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {LOGIN_GRADIENT_PRESETS.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => setBgGradient(item.gradient)}
-                        className={`p-3 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between h-24 ${
-                          bgGradient === item.gradient
-                            ? 'border-blue-600 ring-4 ring-blue-500/20 shadow-md'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                        }`}
-                        style={{ background: item.gradient }}
-                      >
-                        <div className="flex justify-end">
-                          {bgGradient === item.gradient && (
-                            <div className="w-5 h-5 rounded-full bg-white text-blue-600 flex items-center justify-center shadow-md">
-                              <Check className="w-3 h-3" />
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-white text-xs font-bold drop-shadow-sm">{item.name}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* PATTERN PRESETS */}
-              {bgType === 'pattern' && (
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                    Pilihan Pola Geometris
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {LOGIN_PATTERN_PRESETS.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => setBgPattern(item.id)}
-                        className={`p-3 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between h-24 ${
-                          bgPattern === item.id
-                            ? 'border-blue-600 ring-4 ring-blue-500/20 shadow-md'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                        }`}
-                        style={{
-                          backgroundColor: item.bgBase,
-                          backgroundImage: item.svgPattern,
-                          backgroundSize: '20px 20px',
-                        }}
-                      >
-                        <div className="flex justify-end">
-                          {bgPattern === item.id && (
-                            <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md">
-                              <Check className="w-3 h-3" />
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-white text-xs font-bold drop-shadow-sm bg-black/40 px-2 py-0.5 rounded-md w-fit">
-                          {item.name}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* SOLID COLOR */}
-              {bgType === 'color' && (
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                    Pilih Warna Polos
-                  </h4>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={bgColor}
-                      onChange={(e) => setBgColor(e.target.value)}
-                      className="w-12 h-12 rounded-xl cursor-pointer border border-slate-200"
-                    />
-                    <input
-                      type="text"
-                      value={bgColor}
-                      onChange={(e) => setBgColor(e.target.value)}
-                      className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs uppercase font-bold"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* OVERLAY & CARD GLASSMORPHISM */}
-              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                    <SlidersHorizontal className="w-4 h-4 text-blue-500" />
-                    <span>Pengaturan Transparansi, Blur & Efek Kaca</span>
-                  </h4>
-                  <span className="text-[10px] font-bold text-slate-400">Live Adjustment</span>
-                </div>
-
-                <div className="space-y-4">
-                  {/* 1. Transparansi / Opasitas Latar Background */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2.5">
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <span className="flex items-center gap-1.5">
-                        <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Transparansi / Opasitas Background Latar</span>
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold">
-                        {bgOpacity}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={bgOpacity}
-                      onChange={(e) => setBgOpacity(parseInt(e.target.value, 10))}
-                      className="w-full accent-blue-600 cursor-pointer"
-                    />
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>0% (Transparan Penuh)</span>
-                      <div className="flex items-center gap-1.5">
-                        {[25, 50, 75, 100].map((pct) => (
-                          <button
-                            key={pct}
-                            type="button"
-                            onClick={() => setBgOpacity(pct)}
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition cursor-pointer ${
-                              bgOpacity === pct
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300'
-                            }`}
-                          >
-                            {pct}%
-                          </button>
-                        ))}
-                      </div>
-                      <span>100% (Pekat Solid)</span>
-                    </div>
-                  </div>
-
-                  {/* 2. Tingkat Blur Background Login (PENGATURAN BLUR BACKGROUND) */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-3">
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <span className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <span>Tingkat Blur Background Latar (Login)</span>
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold">
-                        {blurLevel === 'none' && '0px (Tanpa Blur / Jernih)'}
-                        {blurLevel === 'sm' && '4px (Blur Ringan)'}
-                        {blurLevel === 'md' && '8px (Blur Sedang)'}
-                        {blurLevel === 'lg' && '16px (Blur Kuat)'}
-                        {blurLevel === 'xl' && '24px (Blur Ekstra Kuat)'}
-                      </span>
-                    </div>
-
-                    {/* Presets Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                      {[
-                        { id: 'none', label: 'Tanpa Blur', px: '0px', desc: 'Tajam & Jernih' },
-                        { id: 'sm', label: 'Ringan', px: '4px', desc: 'Sentuhan Halus' },
-                        { id: 'md', label: 'Sedang', px: '8px', desc: 'Seimbang' },
-                        { id: 'lg', label: 'Kuat', px: '16px', desc: 'Fokus Form' },
-                        { id: 'xl', label: 'Ekstra', px: '24px', desc: 'Frosted Glass' },
-                      ].map((item) => {
-                        const isSelected = blurLevel === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setBlurLevel(item.id as 'none' | 'sm' | 'md' | 'lg' | 'xl')}
-                            className={`p-2.5 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
-                              isSelected
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              <span className="text-[11px] font-bold">{item.label}</span>
-                              <span
-                                className={`text-[9px] font-mono font-semibold px-1 py-0.5 rounded ${
-                                  isSelected
-                                    ? 'bg-blue-700 text-blue-100'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                                }`}
-                              >
-                                {item.px}
-                              </span>
-                            </div>
-                            <span
-                              className={`text-[9px] mt-1 ${
-                                isSelected ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'
+                  {/* Fit, Opasitas Wallpaper, Blur & Filter Wallpaper */}
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Fit Mode */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Mode Ukuran Wallpaper (Fit)</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'cover', label: 'Cover (Penuh)' },
+                            { id: 'contain', label: 'Contain' },
+                            { id: 'tile', label: 'Tile (Ulang)' },
+                          ].map((f) => (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => setWallpaperFit(f.id as any)}
+                              className={`py-2 px-2 text-[11px] font-bold rounded-xl border cursor-pointer ${
+                                wallpaperFit === f.id
+                                  ? 'bg-blue-600 text-white border-blue-600'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                               }`}
                             >
-                              {item.desc}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Interactive Slider */}
-                    <div className="space-y-1 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold shrink-0">
-                          Geser Slider:
-                        </span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="4"
-                          step="1"
-                          value={
-                            blurLevel === 'none' ? 0 :
-                            blurLevel === 'sm' ? 1 :
-                            blurLevel === 'md' ? 2 :
-                            blurLevel === 'lg' ? 3 : 4
-                          }
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            const map: ('none' | 'sm' | 'md' | 'lg' | 'xl')[] = ['none', 'sm', 'md', 'lg', 'xl'];
-                            setBlurLevel(map[val]);
-                          }}
-                          className="w-full accent-blue-600 cursor-pointer"
-                        />
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex justify-between text-[9px] text-slate-400 px-0.5 font-mono">
-                        <span>0px (Jernih)</span>
-                        <span>4px</span>
-                        <span>8px (Standar)</span>
-                        <span>16px</span>
-                        <span>24px (Maksimal)</span>
+
+                      {/* Filter Gambar */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Efek Filter Wallpaper</label>
+                        <select
+                          value={wallpaperFilter}
+                          onChange={(e) => setWallpaperFilter(e.target.value as any)}
+                          className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="none">Normal (Warna Asli Foto)</option>
+                          <option value="darken_30">Darken (Redup 30%)</option>
+                          <option value="darken_50">Darken Deep (Redup 50%)</option>
+                          <option value="grayscale">Grayscale (Hitam Putih Monokrom)</option>
+                          <option value="sepia">Sepia (Nuansa Klasik)</option>
+                        </select>
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
-                      * Memberikan efek bokeh pada foto latar atau gradasi agar kartu form login lebih kontras dan mudah dibaca.
-                    </p>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* 3. Kegelapan Overlay Tint */}
+                    {/* Slider Opasitas Wallpaper */}
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-                      <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span>Kegelapan Tint Overlay</span>
-                        <span className="text-blue-600 font-mono font-bold">{overlayOpacity}%</span>
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <span>Opasitas / Transparansi Wallpaper</span>
+                        <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-mono text-xs font-bold">
+                          {wallpaperOpacity}%
+                        </span>
                       </div>
                       <input
                         type="range"
                         min="0"
-                        max="90"
-                        value={overlayOpacity}
-                        onChange={(e) => setOverlayOpacity(parseInt(e.target.value, 10))}
-                        className="w-full accent-blue-600 cursor-pointer"
-                      />
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>0% (Terang Asli)</span>
-                        <span>90% (Sangat Gelap)</span>
-                      </div>
-                    </div>
-
-                    {/* 4. Opasitas Kaca Form Login */}
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
-                      <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span>Opasitas Kaca Kartu Login</span>
-                        <span className="text-blue-600 font-mono font-bold">{cardOpacity}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="10"
                         max="100"
-                        value={cardOpacity}
-                        onChange={(e) => setCardOpacity(parseInt(e.target.value, 10))}
+                        value={wallpaperOpacity}
+                        onChange={(e) => setWallpaperOpacity(parseInt(e.target.value, 10))}
                         className="w-full accent-blue-600 cursor-pointer"
                       />
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>10% (Kaca Tipis)</span>
-                        <span>100% (Solid Putih/Gelap)</span>
-                      </div>
                     </div>
 
-                    {/* 5. Blur Kaca Kartu Form Login */}
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2 sm:col-span-2">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span className="flex items-center gap-1.5">
-                          <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                          <span>Efek Blur Kaca Kartu Login (Glassmorphism Blur)</span>
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold">
-                          {cardBlur === 'none' && 'Tanpa Blur'}
-                          {cardBlur === 'sm' && 'Ringan (sm)'}
-                          {cardBlur === 'md' && 'Sedang (md)'}
-                          {cardBlur === 'lg' && 'Kuat (lg)'}
-                          {cardBlur === 'xl' && 'Ekstra (xl)'}
-                          {cardBlur === '2xl' && 'Maksimal (2xl)'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {/* Tingkat Blur Wallpaper */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tingkat Blur Wallpaper</label>
+                      <div className="grid grid-cols-5 gap-2">
                         {[
-                          { id: 'none', label: 'Tanpa' },
-                          { id: 'sm', label: 'Halus' },
-                          { id: 'md', label: 'Sedang' },
-                          { id: 'lg', label: 'Kuat' },
-                          { id: 'xl', label: 'Ekstra' },
-                          { id: '2xl', label: 'Maksimal' },
-                        ].map((item) => (
+                          { id: 'none', label: '0px (Tajam)' },
+                          { id: 'sm', label: '4px' },
+                          { id: 'md', label: '8px' },
+                          { id: 'lg', label: '16px' },
+                          { id: 'xl', label: '24px' },
+                        ].map((b) => (
                           <button
-                            key={item.id}
+                            key={b.id}
                             type="button"
-                            onClick={() => setCardBlur(item.id as 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl')}
-                            className={`py-1.5 px-2 rounded-xl text-center text-xs font-bold transition cursor-pointer border ${
-                              cardBlur === item.id
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            onClick={() => setWallpaperBlur(b.id as any)}
+                            className={`py-2 px-1 text-[11px] font-bold rounded-xl border cursor-pointer ${
+                              wallpaperBlur === b.id
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                             }`}
                           >
-                            {item.label}
+                            {b.label}
                           </button>
                         ))}
                       </div>
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* CARD DETEKSI GELAP / TERANG & MODE KONTRAS */}
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                        <Sun className="w-4 h-4 text-amber-500" />
-                        <span>Deteksi Gelap & Terang Latar Belakang (Luminance Auto-Detection)</span>
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Sistem mengukur kecerahan (*luminance*) gambar/warna latar secara otomatis untuk menyesuaikan keterbacaan teks dan kontras kartu login.
-                      </p>
-                    </div>
+              {/* CARD LAPISAN 2: WARNA FILL & POLA */}
+              {enableFill && (
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-purple-600" />
+                      <span>Lapisan 2: Pilihan Warna Fill & Pola Dasar</span>
+                    </h4>
 
-                    {/* Live Status Badge */}
-                    <div className={`px-3 py-1.5 rounded-2xl border text-xs font-bold flex items-center gap-2 shrink-0 ${
-                      liveDetectedDark.isDark
-                        ? 'bg-slate-950 text-amber-300 border-slate-800 shadow-md'
-                        : 'bg-amber-50 text-amber-900 border-amber-200'
-                    }`}>
-                      {liveDetectedDark.isDark ? (
-                        <>
-                          <Moon className="w-4 h-4 text-amber-400 animate-pulse" />
-                          <span>Terdeteksi Gelap ({liveDetectedDark.luminance}/255)</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sun className="w-4 h-4 text-amber-600 animate-spin" style={{ animationDuration: '10s' }} />
-                          <span>Terdeteksi Terang ({liveDetectedDark.luminance}/255)</span>
-                        </>
-                      )}
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setFillType('solid')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          fillType === 'solid' ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-xs' : 'text-slate-500'
+                        }`}
+                      >
+                        Warna Polos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFillType('gradient')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          fillType === 'gradient' ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-xs' : 'text-slate-500'
+                        }`}
+                      >
+                        Gradasi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFillType('pattern')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          fillType === 'pattern' ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-xs' : 'text-slate-500'
+                        }`}
+                      >
+                        Pola Geometris
+                      </button>
                     </div>
                   </div>
 
-                  {/* Contrast Mode Radio Options */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setContrastMode('auto')}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
-                        contrastMode === 'auto'
-                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-bold">
-                          <Sparkles className="w-4 h-4 text-blue-600" />
-                          <span>Otomatis Cerdas (Auto)</span>
-                        </div>
-                        {contrastMode === 'auto' && <Check className="w-4 h-4 text-blue-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                        Menyesuaikan kontras teks & kartu secara dinamis berdasarkan hasil deteksi nilai kecerahan latar.
-                      </p>
-                    </button>
+                  {/* Solid Color Picker */}
+                  {fillType === 'solid' && (
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={bgColor}
+                        onChange={(e) => setBgColor(e.target.value)}
+                        className="w-12 h-12 rounded-xl cursor-pointer border border-slate-200"
+                      />
+                      <input
+                        type="text"
+                        value={bgColor}
+                        onChange={(e) => setBgColor(e.target.value)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs uppercase font-bold"
+                      />
+                    </div>
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={() => setContrastMode('dark')}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
-                        contrastMode === 'dark'
-                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-bold">
-                          <Moon className="w-4 h-4 text-indigo-500" />
-                          <span>Paksa Gelap (Dark Mode)</span>
+                  {/* Gradient Presets */}
+                  {fillType === 'gradient' && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {LOGIN_GRADIENT_PRESETS.map((item) => (
+                        <div
+                          key={item.id}
+                          onClick={() => setBgGradient(item.gradient)}
+                          className={`p-3 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between h-24 ${
+                            bgGradient === item.gradient
+                              ? 'border-purple-600 ring-4 ring-purple-500/20 shadow-md'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                          }`}
+                          style={{ background: item.gradient }}
+                        >
+                          <div className="flex justify-end">
+                            {bgGradient === item.gradient && (
+                              <div className="w-5 h-5 rounded-full bg-white text-purple-600 flex items-center justify-center shadow-md">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-white text-xs font-bold drop-shadow-sm">{item.name}</p>
                         </div>
-                        {contrastMode === 'dark' && <Check className="w-4 h-4 text-blue-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                        Selalu gunakan teks terang/putih & kartu login bertema malam/kaca gelap.
-                      </p>
-                    </button>
+                      ))}
+                    </div>
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={() => setContrastMode('light')}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition cursor-pointer flex flex-col justify-between gap-2 ${
-                        contrastMode === 'light'
-                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 ring-2 ring-blue-500/20'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100 text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-bold">
-                          <Sun className="w-4 h-4 text-amber-500" />
-                          <span>Paksa Terang (Light Mode)</span>
+                  {/* Pattern Presets */}
+                  {fillType === 'pattern' && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {LOGIN_PATTERN_PRESETS.map((item) => (
+                        <div
+                          key={item.id}
+                          onClick={() => setBgPattern(item.id)}
+                          className={`p-3 rounded-2xl border-2 cursor-pointer transition flex flex-col justify-between h-24 ${
+                            bgPattern === item.id
+                              ? 'border-purple-600 ring-4 ring-purple-500/20 shadow-md'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                          }`}
+                          style={{
+                            backgroundColor: item.bgBase,
+                            backgroundImage: item.svgPattern,
+                            backgroundSize: '20px 20px',
+                          }}
+                        >
+                          <div className="flex justify-end">
+                            {bgPattern === item.id && (
+                              <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-md">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-white text-xs font-bold drop-shadow-sm bg-black/40 px-2 py-0.5 rounded-md w-fit">
+                            {item.name}
+                          </p>
                         </div>
-                        {contrastMode === 'light' && <Check className="w-4 h-4 text-blue-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                        Selalu gunakan teks gelap/slate & kartu login latar terang bersih.
-                      </p>
-                    </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* CARD BLEND MODE & OVERLAY TINT */}
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+                  <span>Penggabungan Blend Mode & Overlay Tint</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Mix Blend Mode */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Blend Mode (Penggabungan Wallpaper & Fill)
+                    </label>
+                    <select
+                      value={blendMode}
+                      onChange={(e) => setBlendMode(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="normal">Normal (Biasa - Wallpaper di Atas Fill)</option>
+                      <option value="multiply">Multiply (Pekat / Tergelap)</option>
+                      <option value="overlay">Overlay (Kontras Tinggi)</option>
+                      <option value="screen">Screen (Cerah / Terang)</option>
+                      <option value="soft-light">Soft Light (Cahaya Lembung Halus)</option>
+                      <option value="hard-light">Hard Light (Cahaya Tajam)</option>
+                      <option value="darken">Darken (Nuansa Gelap)</option>
+                      <option value="color-dodge">Color Dodge (Efek Kilau Gambar)</option>
+                    </select>
                   </div>
+
+                  {/* Color Overlay Tint */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Warna Penutup (Overlay Tint)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={overlayColor}
+                        onChange={(e) => setOverlayColor(e.target.value)}
+                        className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200"
+                      />
+                      <input
+                        type="text"
+                        value={overlayColor}
+                        onChange={(e) => setOverlayColor(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs uppercase font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Opasitas Overlay Tint */}
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                  <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <span>Opasitas Overlay Penutup</span>
+                    <span className="text-blue-600 font-mono font-bold">{overlayOpacity}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="90"
+                    value={overlayOpacity}
+                    onChange={(e) => setOverlayOpacity(parseInt(e.target.value, 10))}
+                    className="w-full accent-blue-600 cursor-pointer"
+                  />
                 </div>
               </div>
             </div>
           )}
 
           {/* ========================================================= */}
-          {/* TAB 3: KUSTOMISASI TAUTAN KUSTOM / LINK HALAMAN LOGIN     */}
+          {/* TAB 4: TAUTAN KUSTOM                                      */}
           {/* ========================================================= */}
           {activeTab === 'custom_links' && (
             <div className="space-y-6">
-              {/* Card 1: Model Tampilan (Dropdown vs Inline) & Judul */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                      <Link className="w-4 h-4 text-blue-600" />
-                      <span>Model Tampilan Tautan Login</span>
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Pilih format bagaimana tautan dan link bantuan ditampilkan pada kartu login.
-                    </p>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                    {customLinks.length} Tautan Aktif
-                  </span>
-                </div>
-
-                {/* Model Selector Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    onClick={() => setCustomLinksDisplayMode('dropdown')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                      customLinksDisplayMode === 'dropdown'
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-4 ring-blue-500/15 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-xs font-black text-blue-600 dark:text-blue-400">
-                        <ChevronDown className="w-4 h-4" />
-                        <span>Model Dropdown (Rekomendasi)</span>
-                      </div>
-                      {customLinksDisplayMode === 'dropdown' && (
-                        <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                          <Check className="w-3 h-3" />
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Satu tombol dropdown elegan dengan popover menu. Sangat rapi, hemat ruang layar, dan mendukung banyak tautan dengan deskripsi detail.
-                    </p>
-                  </div>
-
-                  <div
-                    onClick={() => setCustomLinksDisplayMode('inline')}
-                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                      customLinksDisplayMode === 'inline'
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-4 ring-blue-500/15 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200">
-                        <Tag className="w-4 h-4" />
-                        <span>Model Deretan Tombol (Inline Badges)</span>
-                      </div>
-                      {customLinksDisplayMode === 'inline' && (
-                        <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                          <Check className="w-3 h-3" />
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                      Tautan ditampilkan mendatar dalam bentuk pill badges berdampingan di bawah form login. Cocok jika tautan berjumlah sedikit (1–3 link).
-                    </p>
-                  </div>
-                </div>
-
-                {/* Judul Dropdown Field */}
-                {customLinksDisplayMode === 'dropdown' && (
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Label / Judul Tombol Dropdown
-                    </label>
-                    <input
-                      type="text"
-                      value={customLinksTitle}
-                      onChange={(e) => setCustomLinksTitle(e.target.value)}
-                      placeholder="Contoh: Tautan Cepat & Bantuan"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      Teks ini akan muncul pada tombol menu dropdown di halaman login.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Card 2: Preset Tautan Cepat */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                    <span>Preset Tautan Populer Sekolah</span>
+                    <Link className="w-4 h-4 text-blue-600" />
+                    <span>Kelola Tautan Kustom & Link Bantuan</span>
                   </h4>
-                  <span className="text-[10px] text-slate-400 font-medium">Klik untuk menambahkan</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingLinkId(null);
+                      setLinkFormLabel('');
+                      setLinkFormDescription('');
+                      setLinkFormUrl('');
+                      setLinkFormIcon('Globe');
+                      setLinkFormOpenNewTab(true);
+                      setIsEditingLink(true);
+                    }}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Tautan</span>
+                  </button>
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddPresetLink({
-                        label: 'Website Sekolah Resmi',
-                        description: `Portal informasi utama ${sekolah.nama || 'SMKN 6 Garut'}`,
-                        url: 'https://smkn6garut.sch.id',
-                        iconName: 'Globe',
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:hover:bg-blue-900 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800 transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>+ Website Sekolah</span>
-                  </button>
+                <div className="space-y-2">
+                  {customLinks.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                          <Globe className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="block text-xs font-bold text-slate-800 dark:text-slate-200">{item.label}</span>
+                          <span className="block text-[10px] text-slate-400 font-mono truncate max-w-xs">{item.url}</span>
+                        </div>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddPresetLink({
-                        label: 'Pusat Bantuan WhatsApp',
-                        description: 'Layanan konsultasi & kendala presensi',
-                        url: 'https://wa.me/6281234567890',
-                        iconName: 'Phone',
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:hover:bg-emerald-900 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800 transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    <span>+ WhatsApp Admin</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddPresetLink({
-                        label: 'Panduan & Tata Tertib Siswa',
-                        description: 'Petunjuk cara absensi & aturan sekolah',
-                        url: '#',
-                        iconName: 'BookOpen',
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:hover:bg-amber-900 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800 transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>+ Panduan Siswa</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddPresetLink({
-                        label: 'Portal PPDB Online',
-                        description: 'Pendaftaran Peserta Didik Baru',
-                        url: 'https://ppdb.jabarprov.go.id',
-                        iconName: 'School',
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-cyan-50 hover:bg-cyan-100 text-cyan-700 dark:bg-cyan-950/70 dark:hover:bg-cyan-900 dark:text-cyan-300 border border-cyan-200/60 dark:border-cyan-800 transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <School className="w-3.5 h-3.5" />
-                    <span>+ Portal PPDB</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddPresetLink({
-                        label: 'E-Learning / LMS Sekolah',
-                        description: 'Platform materi & pembelajaran digital',
-                        url: 'https://elearning.sekolah.id',
-                        iconName: 'Sparkles',
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:hover:bg-purple-900 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800 transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>+ E-Learning</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddPresetLink({
-                        label: 'Email Layanan Informasi',
-                        description: 'Surat elektronik resmi tata usaha',
-                        url: 'mailto:info@smkn6garut.sch.id',
-                        iconName: 'Mail',
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:hover:bg-rose-900 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800 transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    <span>+ Email Sekolah</span>
-                  </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingLinkId(item.id);
+                            setLinkFormLabel(item.label);
+                            setLinkFormDescription(item.description || '');
+                            setLinkFormUrl(item.url);
+                            setLinkFormIcon(item.iconName || 'Globe');
+                            setLinkFormOpenNewTab(item.openInNewTab !== false);
+                            setIsEditingLink(true);
+                          }}
+                          className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLink(item.id, item.label)}
+                          className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-600 dark:text-rose-400 rounded-lg transition"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Card 3: Form Tambah / Edit Tautan */}
+              {/* Form Tambah/Edit Link */}
               {isEditingLink && (
-                <div className="bg-blue-50/50 dark:bg-blue-950/20 p-5 sm:p-6 rounded-3xl border-2 border-blue-400 dark:border-blue-700 shadow-md space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-blue-50/50 dark:bg-blue-950/20 p-5 sm:p-6 rounded-3xl border-2 border-blue-400 dark:border-blue-700 shadow-md space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-blue-600" />
-                      <span>{editingLinkId ? 'Edit Tautan Kustom' : 'Tambah Tautan Kustom Baru'}</span>
+                    <h4 className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider">
+                      {editingLinkId ? 'Edit Tautan' : 'Tambah Tautan Baru'}
                     </h4>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingLink(false)}
-                      className="p-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-300 transition"
-                    >
+                    <button type="button" onClick={() => setIsEditingLink(false)} className="text-slate-400 hover:text-slate-600">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Label / Nama Tautan <span className="text-rose-500">*</span>
-                      </label>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Label Tautan</label>
                       <input
                         type="text"
                         value={linkFormLabel}
                         onChange={(e) => setLinkFormLabel(e.target.value)}
-                        placeholder="Contoh: Website Resmi Sekolah"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Website Sekolah"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
                       />
                     </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Ikon Tautan
-                      </label>
-                      <select
-                        value={linkFormIcon}
-                        onChange={(e) => setLinkFormIcon(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Globe">🌐 Globe (Website / Portal)</option>
-                        <option value="Phone">💬 WhatsApp / Telepon</option>
-                        <option value="BookOpen">📖 BookOpen (Buku / Panduan)</option>
-                        <option value="School">🏫 School (Sekolah / PPDB)</option>
-                        <option value="HelpCircle">❓ HelpCircle (Pusat Bantuan)</option>
-                        <option value="FileText">📄 FileText (Dokumen / Regulasi)</option>
-                        <option value="Mail">📧 Mail (Email Kontak)</option>
-                        <option value="Sparkles">✨ Sparkles (E-Learning / Fitur Baru)</option>
-                        <option value="Shield">🛡️ Shield (Keamanan / Privasi)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Alamat URL / Tautan Tujuan <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={linkFormUrl}
-                      onChange={(e) => setLinkFormUrl(e.target.value)}
-                      placeholder="Contoh: https://smkn6garut.sch.id atau wa.me/628123456789 atau #"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[10px] text-slate-400">
-                      Gunakan <code className="text-blue-500 font-bold">#</code> jika tautan ingin memicu pop-up pengumuman sekolah langsung.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Deskripsi Singkat (Opsional)
-                    </label>
-                    <input
-                      type="text"
-                      value={linkFormDescription}
-                      onChange={(e) => setLinkFormDescription(e.target.value)}
-                      placeholder="Contoh: Kunjungi portal resmi untuk info kegiatan dan PPDB"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">URL Alamat</label>
                       <input
-                        type="checkbox"
-                        checked={linkFormOpenNewTab}
-                        onChange={(e) => setLinkFormOpenNewTab(e.target.checked)}
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                        type="text"
+                        value={linkFormUrl}
+                        onChange={(e) => setLinkFormUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold"
                       />
-                      <span>Buka tautan di Tab Baru (Target _blank)</span>
-                    </label>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingLink(false)}
-                        className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs transition cursor-pointer"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveLink}
-                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/25 transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Simpan Tautan</span>
-                      </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveLink}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold"
+                    >
+                      Simpan Tautan
+                    </button>
                   </div>
                 </div>
               )}
-
-              {/* Card 4: Daftar Tautan Kustom yang Aktif */}
-              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                      Daftar Tautan Halaman Login ({customLinks.length})
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Urutkan atau edit tautan yang ditampilkan pada form login.
-                    </p>
-                  </div>
-
-                  {!isEditingLink && (
-                    <button
-                      type="button"
-                      onClick={handleOpenAddLink}
-                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/25 transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Tambah Tautan</span>
-                    </button>
-                  )}
-                </div>
-
-                {customLinks.length === 0 ? (
-                  <div className="text-center py-8 px-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
-                    <Globe className="w-8 h-8 text-slate-400 mx-auto" />
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Belum ada tautan kustom yang ditambahkan
-                    </p>
-                    <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                      Gunakan tombol "Tambah Tautan" di atas atau pilih salah satu preset populer.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {customLinks.map((link, idx) => {
-                      const renderIconPreview = (name?: string) => {
-                        switch (name) {
-                          case 'Phone': return <Phone className="w-4 h-4 text-emerald-500" />;
-                          case 'BookOpen': return <BookOpen className="w-4 h-4 text-amber-500" />;
-                          case 'School': return <School className="w-4 h-4 text-cyan-500" />;
-                          case 'HelpCircle': return <HelpCircle className="w-4 h-4 text-purple-500" />;
-                          case 'FileText': return <FileText className="w-4 h-4 text-indigo-500" />;
-                          case 'Mail': return <Mail className="w-4 h-4 text-rose-500" />;
-                          case 'Sparkles': return <Sparkles className="w-4 h-4 text-amber-400" />;
-                          case 'Shield': return <ShieldCheck className="w-4 h-4 text-emerald-500" />;
-                          default: return <Globe className="w-4 h-4 text-blue-500" />;
-                        }
-                      };
-
-                      return (
-                        <div
-                          key={link.id}
-                          className="p-3 sm:p-3.5 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/70 flex items-center justify-between gap-3 hover:border-blue-400 transition"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 shadow-2xs shrink-0">
-                              {renderIconPreview(link.iconName)}
-                            </div>
-                            <div className="min-w-0 text-left">
-                              <div className="flex items-center gap-2">
-                                <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                                  {link.label}
-                                </p>
-                                {link.openInNewTab !== false && (
-                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold shrink-0">
-                                    Tab Baru
-                                  </span>
-                                )}
-                              </div>
-                              {link.description && (
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                  {link.description}
-                                </p>
-                              )}
-                              <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono truncate mt-0.5">
-                                {link.url}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              disabled={idx === 0}
-                              onClick={() => handleMoveLink(idx, 'up')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30 cursor-pointer"
-                              title="Pindahkan Ke Atas"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === customLinks.length - 1}
-                              onClick={() => handleMoveLink(idx, 'down')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-30 cursor-pointer"
-                              title="Pindahkan Ke Bawah"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditLink(link)}
-                              className="p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 cursor-pointer"
-                              title="Edit Tautan"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLink(link.id, link.label)}
-                              className="p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 cursor-pointer"
-                              title="Hapus Tautan"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             </div>
           )}
         </div>
 
         {/* Right Side: Interactive Live Preview (5 Cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 sticky top-6">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                <Eye className="w-4 h-4 text-blue-600" />
-                <span>Pratinjau Langsung (Live Preview)</span>
-              </h4>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                Real-time
+        <div className="lg:col-span-5">
+          <div className="sticky top-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col h-[580px] text-white">
+            <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between text-xs font-bold text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 text-blue-400" />
+                <span>Live Preview Tampilan Login</span>
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">
+                {liveDetectedDark.isDark ? 'Dark Theme' : 'Light Theme'}
               </span>
             </div>
 
-            {/* Mock Screen Wrapper */}
-            <div className="relative rounded-2xl overflow-hidden border border-slate-300 dark:border-slate-700 shadow-inner h-[520px] flex flex-col justify-between">
-              {/* Background Layer with chosen styles & filters */}
-              <div
-                className="absolute inset-0 transition-all duration-300"
-                style={{
-                  ...getPreviewBackgroundStyle(),
-                  filter: getBlurFilter(),
-                  transform: blurLevel !== 'none' ? 'scale(1.05)' : 'none',
-                }}
-              />
+            {/* PREVIEW CONTAINER CANVAS WITH 2 LAYERS */}
+            <div className="relative flex-1 w-full overflow-hidden flex items-center justify-center p-4">
+              {/* LAPISAN 2: WARNA FILL & POLA (BASE LAYER) */}
+              {enableFill && (
+                <div
+                  className="absolute inset-0 transition-all duration-300"
+                  style={{
+                    ...getFillStyleCSS(),
+                    opacity: fillOpacity / 100,
+                  }}
+                />
+              )}
 
-              {/* Tint Overlay Layer */}
+              {/* LAPISAN 1: WALLPAPER / FOTO (TOP LAYER WITH BLEND MODE) */}
+              {enableWallpaper && bgImage && (
+                <div
+                  className="absolute inset-0 transition-all duration-300 bg-no-repeat bg-center"
+                  style={{
+                    backgroundImage: `url(${bgImage})`,
+                    backgroundSize: wallpaperFit === 'tile' ? 'auto' : wallpaperFit,
+                    backgroundRepeat: wallpaperFit === 'tile' ? 'repeat' : 'no-repeat',
+                    opacity: wallpaperOpacity / 100,
+                    filter: getWallpaperFilterCSS(wallpaperFilter, wallpaperBlur),
+                    mixBlendMode: blendMode,
+                    transform: wallpaperBlur !== 'none' ? 'scale(1.05)' : 'none',
+                  }}
+                />
+              )}
+
+              {/* OVERLAY TINT */}
               <div
                 className="absolute inset-0 transition-opacity duration-200 pointer-events-none"
                 style={{
@@ -2722,182 +1630,31 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 }}
               />
 
-              {/* Mock Header */}
-              <div className="relative z-10 p-3 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-white/70 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border border-white/50 dark:border-slate-700/60 backdrop-blur-md flex items-center justify-center font-bold text-[10px]">
-                    <School className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-[11px] text-white leading-none drop-shadow-xs">
-                      {sekolah.nama || 'SMKN 6 GARUT'}
-                    </p>
-                    <p className="text-[9px] text-slate-300 leading-none mt-0.5">
-                      Portal Presensi Siswa Digital
-                    </p>
-                  </div>
+              {/* PREVIEW CARD FORM */}
+              <div
+                className={`relative z-10 w-full max-w-xs p-5 rounded-2xl shadow-xl border transition-all text-center space-y-3 ${
+                  liveDetectedDark.isDark ? 'bg-slate-900/90 text-white border-slate-700' : 'bg-white/95 text-slate-900 border-slate-200'
+                }`}
+                style={{
+                  backdropFilter: cardBlur !== 'none' ? `blur(${cardBlur === 'sm' ? 4 : cardBlur === 'md' ? 8 : 16}px)` : 'none',
+                  opacity: cardOpacity / 100,
+                }}
+              >
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white mx-auto flex items-center justify-center shadow-md">
+                  <School className="w-5 h-5" />
                 </div>
-                <span className="text-[9px] font-mono font-bold bg-white/20 text-white px-1.5 py-0.5 rounded-md backdrop-blur-md">
-                  TA 2026/2027
-                </span>
-              </div>
-
-              {/* Mock Content Body: Left Text + Right Login Card */}
-              <div className="relative z-10 px-3.5 py-2 my-auto grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                {/* Simulated Left Panel */}
-                {loginLeftShowPanel && (
-                  <div className="hidden md:flex md:col-span-7 flex-col space-y-2 text-left pr-2 text-white">
-                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/15 text-[9px] font-bold w-fit border border-white/20 backdrop-blur-xs">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-                      <span className="truncate max-w-[150px]">{loginLeftBadgeText}</span>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-black leading-tight">
-                        {loginLeftTitlePrefix}{' '}
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-cyan-300">
-                          {loginLeftTitleHighlight}
-                        </span>
-                      </h3>
-                      <p className="text-[10px] text-slate-200 mt-1 line-clamp-2 leading-relaxed opacity-90">
-                        {loginLeftDescription}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1 text-[9px]">
-                      <div className="flex items-center gap-1.5 bg-white/10 px-2 py-1 rounded-lg border border-white/15">
-                        <Smartphone className="w-3 h-3 text-emerald-300" />
-                        <span className="font-bold truncate max-w-[70px]">{loginLeftFeature1Title}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-white/10 px-2 py-1 rounded-lg border border-white/15">
-                        <MessageSquare className="w-3 h-3 text-blue-300" />
-                        <span className="font-bold truncate max-w-[70px]">{loginLeftFeature2Title}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Simulated Right Card */}
-                <div className={`${loginLeftShowPanel ? 'md:col-span-5' : 'col-span-12'} flex justify-center`}>
-                  <div
-                    className={`w-full max-w-[220px] rounded-2xl p-3 shadow-xl border space-y-2 transition-all ${
-                      cardBlur === 'none'
-                        ? 'backdrop-blur-none'
-                        : cardBlur === 'sm'
-                        ? 'backdrop-blur-xs'
-                        : cardBlur === 'md'
-                        ? 'backdrop-blur-sm'
-                        : cardBlur === 'lg'
-                        ? 'backdrop-blur-md'
-                        : 'backdrop-blur-xl'
-                    }`}
-                    style={{
-                      backgroundColor: `rgba(255, 255, 255, ${cardOpacity / 100})`,
-                      borderColor: `rgba(255, 255, 255, ${Math.min(0.9, (cardOpacity / 100) * 0.6 + 0.2)})`,
-                    }}
-                  >
-                    <div className="text-center space-y-0.5">
-                      <div className="w-6 h-6 rounded-xl bg-blue-600 text-white mx-auto flex items-center justify-center font-bold text-xs shadow-sm">
-                        <School className="w-3.5 h-3.5" />
-                      </div>
-                      <p className="text-[10px] font-black text-slate-900 truncate">
-                        {sekolah.nama || 'SMKN 6 GARUT'}
-                      </p>
-                      <p className="text-[8px] font-semibold text-blue-600">
-                        Sistem Absensi Siswa
-                      </p>
-                    </div>
-
-                    <div className="space-y-1 pt-0.5">
-                      <div className="h-5 bg-slate-100/90 rounded-md border border-slate-200/80 flex items-center px-1.5 text-[8px] text-slate-600 font-medium">
-                        Username / NISN
-                      </div>
-                      <div className="h-5 bg-slate-100/90 rounded-md border border-slate-200/80 flex items-center px-1.5 text-[8px] text-slate-600 font-medium">
-                        ••••••••
-                      </div>
-                      <div className="h-5 bg-blue-600 rounded-md flex items-center justify-center text-white text-[9px] font-black shadow-sm">
-                        Masuk ke Sistem
-                      </div>
-                    </div>
-
-                    {/* LIVE PREVIEW: CUSTOM LINKS (DROPDOWN OR INLINE) */}
-                    {customLinks.length > 0 && (
-                      <div className="pt-1.5 border-t border-slate-200/60 relative">
-                        {customLinksDisplayMode === 'dropdown' ? (
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => setPreviewDropdownOpen(!previewDropdownOpen)}
-                              className="w-full py-1 px-1.5 rounded-lg text-[9px] font-bold bg-white/90 hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-between gap-1 shadow-2xs cursor-pointer"
-                            >
-                              <div className="flex items-center gap-1 truncate">
-                                <Link className="w-2.5 h-2.5 text-blue-600 shrink-0" />
-                                <span className="truncate">{customLinksTitle || 'Tautan Cepat & Bantuan'}</span>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <span className="px-1 py-0.2 rounded text-[8px] bg-slate-100 text-slate-600 font-bold">
-                                  {customLinks.length}
-                                </span>
-                                <ChevronDown className={`w-2.5 h-2.5 transition-transform ${previewDropdownOpen ? 'rotate-180' : ''}`} />
-                              </div>
-                            </button>
-
-                            {/* Dropdown Popover Preview */}
-                            {previewDropdownOpen && (
-                              <div className="absolute left-0 right-0 bottom-full mb-1 z-50 rounded-xl border border-slate-200 bg-white/98 shadow-xl p-1 text-[8px] space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
-                                <div className="px-1.5 py-0.5 text-[8px] font-bold text-slate-800 border-b border-slate-100 flex items-center justify-between">
-                                  <span>{customLinksTitle || 'Tautan Cepat & Bantuan'}</span>
-                                  <X className="w-2.5 h-2.5 cursor-pointer text-slate-400" onClick={() => setPreviewDropdownOpen(false)} />
-                                </div>
-                                <div className="max-h-28 overflow-y-auto space-y-0.5 pt-0.5">
-                                  {customLinks.map((l) => (
-                                    <div key={l.id} className="p-1 rounded-md hover:bg-slate-100 flex items-center gap-1 text-slate-700">
-                                      <Globe className="w-2.5 h-2.5 text-blue-500 shrink-0" />
-                                      <span className="truncate font-semibold">{l.label}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap items-center justify-center gap-1">
-                            {customLinks.map((l) => (
-                              <span
-                                key={l.id}
-                                className="px-1.5 py-0.5 rounded-md text-[8px] font-bold bg-white/90 border border-slate-200 text-slate-700 flex items-center gap-1 shadow-2xs"
-                              >
-                                <Globe className="w-2 h-2 text-blue-500" />
-                                <span className="truncate max-w-[70px]">{l.label}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <h5 className="text-xs font-black uppercase tracking-wider">{sekolah.nama || 'SMK Negeri 6 Garut'}</h5>
+                  <p className="text-[10px] opacity-70 mt-0.5">{cardWelcomeTitle}</p>
                 </div>
-              </div>
 
-              {/* Mock Footer */}
-              <div className="relative z-10 mt-3 pt-2 border-t border-white/20 p-1.5 text-center text-[9px] text-white/80 font-medium">
-                © {new Date().getFullYear()} {sekolah.nama || 'SMKN 6 Garut'}. Sistem Presensi Sekolah.
+                <div className="space-y-2 pt-1 text-left">
+                  <div className="p-2 rounded-lg border text-[11px] bg-slate-100/50 dark:bg-slate-800/50 font-mono">Username / NISN</div>
+                  <div className="p-2 rounded-lg border text-[11px] bg-slate-100/50 dark:bg-slate-800/50 font-mono">••••••••</div>
+                  <div className="p-2 rounded-lg bg-blue-600 text-white text-xs font-bold text-center shadow-xs">Masuk ke Sistem</div>
+                </div>
               </div>
             </div>
-
-            <p className="text-[11px] text-slate-400 text-center">
-              Perubahan teks dan gaya langsung tersinkronisasi pada pratinjau di atas.
-            </p>
-
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={() => handleSave()}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Simpan Seluruh Pengaturan Login</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

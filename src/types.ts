@@ -53,9 +53,14 @@ export interface SekolahConfig {
   bgImage?: string;
   bgImageOpacity?: number;
   bgImageBlendMode?: string;
+
+  namaDinas?: string;
+  namaDinasDetail?: string;
+
+  // Background Halaman Login (Legacy & 2-Layer System)
   loginBgImage?: string;
   loginBgOpacity?: number;
-  loginBgType?: 'default' | 'image' | 'gradient' | 'pattern' | 'color';
+  loginBgType?: 'default' | 'image' | 'gradient' | 'pattern' | 'color' | 'two_layer';
   loginBgBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   loginBgGradient?: string;
   loginBgPattern?: string;
@@ -63,11 +68,27 @@ export interface SekolahConfig {
   loginBgOverlayColor?: string;
   loginBgOverlayOpacity?: number;
   loginBgFit?: 'cover' | 'contain' | 'tile';
-  loginCardOpacity?: number; // 0 - 100 (%)
+
+  // Config 2 Lapisan Latar Belakang Login (Lapisan 1 Wallpaper + Lapisan 2 Warna Fill)
+  loginBgEnableWallpaper?: boolean;
+  loginBgWallpaperFit?: 'cover' | 'contain' | 'tile';
+  loginBgWallpaperOpacity?: number;
+  loginBgWallpaperBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
+  loginBgWallpaperFilter?: 'none' | 'grayscale' | 'darken_30' | 'darken_50' | 'sepia';
+
+  loginBgEnableFill?: boolean;
+  loginBgFillType?: 'solid' | 'gradient' | 'pattern';
+  loginBgFillColor?: string;
+  loginBgFillGradient?: string;
+  loginBgFillPattern?: string;
+  loginBgFillOpacity?: number;
+
+  loginBgBlendMode?: 'normal' | 'multiply' | 'overlay' | 'screen' | 'soft-light' | 'hard-light' | 'darken' | 'lighten' | 'color-dodge';
+
+  loginCardOpacity?: number;
   loginCardBlur?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   loginCardStyle?: LoginCardStyleOption | string;
-  namaDinas?: string;
-  namaDinasDetail?: string;
+
   // Pengaturan Kustomisasi Container / Kartu Form Login
   loginCardTheme?: 'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto';
   loginCardLayout?: 'center' | 'left' | 'right';

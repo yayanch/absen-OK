@@ -55,7 +55,11 @@ import {
 import { AppData, LockedAccount, SekolahConfig, SecurityIncident, UserSession, PengumumanSekolah, Siswa } from '../types';
 import { getIndonesianDayName, isTeacherTeachingToday, formatDateIndo } from '../utils/helpers';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
-import { LOGIN_PATTERN_PRESETS } from '../data/loginBackgroundPresets';
+import {
+  LOGIN_IMAGE_PRESETS,
+  LOGIN_GRADIENT_PRESETS,
+  LOGIN_PATTERN_PRESETS,
+} from '../data/loginBackgroundPresets';
 import {
   DEFAULT_SECURITY_CONFIG,
   checkAccountLockStatus,
@@ -938,39 +942,71 @@ export const LoginView: React.FC<LoginViewProps> = ({
     executeLoginProcess(username, password);
   };
 
-  // Custom Background Configuration from Sekolah Config
-  const bgType = sekolah.loginBgType || (sekolah.loginBgImage ? 'image' : 'default');
-  const bgImage = sekolah.loginBgImage;
-  const bgGradient = sekolah.loginBgGradient;
-  const bgPattern = sekolah.loginBgPattern;
-  const bgColor = sekolah.loginBgColor;
-  const blurLevel = sekolah.loginBgBlur || 'none';
-  const bgFit = sekolah.loginBgFit || 'cover';
-  const bgOpacity = typeof sekolah.bgImageOpacity === 'number'
-    ? sekolah.bgImageOpacity / 100
-    : (typeof sekolah.loginBgOpacity === 'number' && sekolah.loginBgOpacity <= 1 ? sekolah.loginBgOpacity : 1);
+  // 2-Layer Background Customization Logic
+  const enableWallpaper = sekolah.loginBgEnableWallpaper ?? (
+    sekolah.loginBgType === 'image' || Boolean(sekolah.loginBgImage) || sekolah.loginBgType === 'two_layer' || sekolah.loginBgType === 'default' || sekolah.loginBgType === undefined
+  );
+  const enableFill = sekolah.loginBgEnableFill ?? (
+    sekolah.loginBgType === 'color' || sekolah.loginBgType === 'gradient' || sekolah.loginBgType === 'pattern' || sekolah.loginBgType === 'two_layer' || sekolah.loginBgType === 'default' || sekolah.loginBgType === undefined
+  );
+
+  const bgImage = sekolah.loginBgImage || (LOGIN_IMAGE_PRESETS.length > 0 ? LOGIN_IMAGE_PRESETS[0].imageUrl : '');
+  const wallpaperFit = sekolah.loginBgWallpaperFit || sekolah.loginBgFit || 'cover';
+  const wallpaperOpacity = (sekolah.loginBgWallpaperOpacity ?? (sekolah.bgImageOpacity ?? (typeof sekolah.loginBgOpacity === 'number' ? Math.round(sekolah.loginBgOpacity * 100) : 85))) / 100;
+  const wallpaperBlur = sekolah.loginBgWallpaperBlur || sekolah.loginBgBlur || 'none';
+  const wallpaperFilter = sekolah.loginBgWallpaperFilter || 'none';
+
+  const fillType = sekolah.loginBgFillType || (sekolah.loginBgType === 'color' ? 'solid' : sekolah.loginBgType === 'pattern' ? 'pattern' : 'gradient');
+  const bgColor = sekolah.loginBgFillColor || sekolah.loginBgColor || '#1e3a8a';
+  const bgGradient = sekolah.loginBgFillGradient || sekolah.loginBgGradient || LOGIN_GRADIENT_PRESETS[0].gradient;
+  const bgPattern = sekolah.loginBgFillPattern || sekolah.loginBgPattern || LOGIN_PATTERN_PRESETS[0].id;
+  const fillOpacity = (sekolah.loginBgFillOpacity ?? 100) / 100;
+
+  const blendMode = sekolah.loginBgBlendMode || 'normal';
   const overlayOpacity = sekolah.loginBgOverlayOpacity ?? 35;
   const overlayColor = sekolah.loginBgOverlayColor || (isDarkMode ? '#020617' : '#0f172a');
   const cardOpacity = sekolah.loginCardOpacity ?? 100;
   const cardBlur = sekolah.loginCardBlur || '2xl';
 
-  const getCardBlurClass = () => {
-    switch (cardBlur) {
-      case 'none': return 'backdrop-blur-none';
-      case 'sm': return 'backdrop-blur-sm';
-      case 'md': return 'backdrop-blur-md';
-      case 'lg': return 'backdrop-blur-lg';
-      case 'xl': return 'backdrop-blur-xl';
-      case '2xl':
-      default: return 'backdrop-blur-2xl';
-    }
+  const getWallpaperFilterCSS = (filter: string, blur: string) => {
+    let blurPx = '0px';
+    if (blur === 'sm') blurPx = '4px';
+    if (blur === 'md') blurPx = '8px';
+    if (blur === 'lg') blurPx = '16px';
+    if (blur === 'xl') blurPx = '24px';
+
+    let filterStr = `blur(${blurPx})`;
+    if (filter === 'grayscale') filterStr += ' grayscale(100%)';
+    if (filter === 'darken_30') filterStr += ' brightness(70%)';
+    if (filter === 'darken_50') filterStr += ' brightness(50%)';
+    if (filter === 'sepia') filterStr += ' sepia(60%)';
+
+    return filterStr;
   };
 
-  // Track sample image luminance if an image background is loaded
+  const getFillBackgroundStyle = (): React.CSSProperties => {
+    if (fillType === 'solid') {
+      return { backgroundColor: bgColor };
+    }
+    if (fillType === 'gradient') {
+      return { background: bgGradient };
+    }
+    if (fillType === 'pattern') {
+      const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
+      return {
+        backgroundColor: pat.bgBase,
+        backgroundImage: pat.svgPattern,
+        backgroundSize: '24px 24px',
+      };
+    }
+    return { background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%)' };
+  };
+
+  // Track sample image luminance if wallpaper background is active
   const [imageLuminance, setImageLuminance] = useState<number | null>(null);
 
   useEffect(() => {
-    if (bgType === 'image' && bgImage) {
+    if (enableWallpaper && bgImage) {
       let isCancelled = false;
       sampleImageLuminance(bgImage).then((lum) => {
         if (!isCancelled) {
@@ -983,36 +1019,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
     } else {
       setImageLuminance(null);
     }
-  }, [bgType, bgImage]);
-
-  const isCustomBgActive = bgType !== 'default' && (
-    (bgType === 'image' && !!bgImage) ||
-    (bgType === 'gradient' && !!bgGradient) ||
-    (bgType === 'pattern' && !!bgPattern) ||
-    (bgType === 'color' && !!bgColor)
-  );
+  }, [enableWallpaper, bgImage]);
 
   const isBackgroundDark = useMemo(() => {
     if (sekolah.loginContrastMode === 'dark') return true;
     if (sekolah.loginContrastMode === 'light') return false;
-
-    if (!isCustomBgActive) {
-      return isDarkMode;
-    }
 
     const overlayRgb = parseColorToRgb(overlayColor) || (isDarkMode ? { r: 2, g: 6, b: 23 } : { r: 15, g: 23, b: 42 });
     const overlayAlpha = (overlayOpacity ?? 35) / 100;
 
     let baseRgb: RGB = { r: 240, g: 242, b: 245 };
 
-    if (bgType === 'color' && bgColor) {
-      baseRgb = parseColorToRgb(bgColor) || { r: 30, g: 41, b: 59 };
-    } else if (bgType === 'gradient' && bgGradient) {
-      baseRgb = parseGradientAverageRgb(bgGradient);
-    } else if (bgType === 'pattern' && bgPattern) {
-      const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
-      baseRgb = parseColorToRgb(pat.bgBase) || { r: 15, g: 23, b: 42 };
-    } else if (bgType === 'image') {
+    if (enableFill) {
+      if (fillType === 'solid' && bgColor) {
+        baseRgb = parseColorToRgb(bgColor) || { r: 30, g: 41, b: 59 };
+      } else if (fillType === 'gradient' && bgGradient) {
+        baseRgb = parseGradientAverageRgb(bgGradient);
+      } else if (fillType === 'pattern' && bgPattern) {
+        const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
+        baseRgb = parseColorToRgb(pat.bgBase) || { r: 15, g: 23, b: 42 };
+      }
+    } else if (enableWallpaper) {
       const rawLum = imageLuminance !== null ? imageLuminance : (isDarkMode ? 40 : 180);
       baseRgb = { r: rawLum, g: rawLum, b: rawLum };
     }
@@ -1021,7 +1048,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const effectiveLuminance = calculateLuminance(effectiveRgb);
 
     return effectiveLuminance < 135;
-  }, [sekolah.loginContrastMode, isCustomBgActive, isDarkMode, bgType, bgColor, bgGradient, bgPattern, imageLuminance, overlayColor, overlayOpacity]);
+  }, [sekolah.loginContrastMode, isDarkMode, enableFill, fillType, bgColor, bgGradient, bgPattern, enableWallpaper, imageLuminance, overlayColor, overlayOpacity]);
 
   const darkTheme = isBackgroundDark || isDarkMode;
 
@@ -1048,43 +1075,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
   }, [sekolah.loginCardTheme, cardOpacity, darkTheme, isBackgroundDark]);
 
   const getBlurFilter = () => {
-    switch (blurLevel) {
-      case 'sm': return 'blur(4px)';
-      case 'md': return 'blur(8px)';
-      case 'lg': return 'blur(16px)';
-      case 'xl': return 'blur(24px)';
-      default: return 'none';
+    switch (wallpaperBlur) {
+      case 'sm': return 'backdrop-blur-sm';
+      case 'md': return 'backdrop-blur-md';
+      case 'lg': return 'backdrop-blur-lg';
+      case 'xl': return 'backdrop-blur-xl';
+      default: return 'backdrop-blur-none';
     }
-  };
-
-  const getCustomBackgroundStyle = (): React.CSSProperties => {
-    if (bgType === 'image' && bgImage) {
-      return {
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: bgFit === 'tile' ? 'auto' : bgFit,
-        backgroundRepeat: bgFit === 'tile' ? 'repeat' : 'no-repeat',
-        backgroundPosition: 'center center',
-      };
-    }
-    if (bgType === 'gradient' && bgGradient) {
-      return {
-        background: bgGradient,
-      };
-    }
-    if (bgType === 'pattern' && bgPattern) {
-      const pat = LOGIN_PATTERN_PRESETS.find((p) => p.id === bgPattern) || LOGIN_PATTERN_PRESETS[0];
-      return {
-        backgroundColor: pat.bgBase,
-        backgroundImage: pat.svgPattern,
-        backgroundSize: '24px 24px',
-      };
-    }
-    if (bgType === 'color' && bgColor) {
-      return {
-        backgroundColor: bgColor,
-      };
-    }
-    return {};
   };
 
   // Dynamic Container Card Helper Classes
@@ -1274,61 +1271,61 @@ export const LoginView: React.FC<LoginViewProps> = ({
           : 'bg-gradient-to-br from-slate-100 via-zinc-50 to-slate-200 text-slate-900'
       }`}
     >
-      {/* Dynamic Background Customization */}
-      {isCustomBgActive ? (
-        <>
+      {/* Dynamic 2-Layer Background Customization */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* LAPISAN 2: WARNA FILL & POLA (BASE LAYER) */}
+        {enableFill && (
           <div
-            className="absolute inset-0 transition-all duration-300 pointer-events-none bg-no-repeat bg-center"
+            className="absolute inset-0 transition-all duration-300"
             style={{
-              ...getCustomBackgroundStyle(),
-              opacity: bgOpacity,
-              filter: getBlurFilter(),
-              transform: blurLevel !== 'none' ? 'scale(1.05)' : 'none',
+              ...getFillBackgroundStyle(),
+              opacity: fillOpacity,
+            }}
+          />
+        )}
+
+        {/* LAPISAN 1: WALLPAPER / FOTO (TOP LAYER WITH BLEND MODE) */}
+        {enableWallpaper && bgImage && (
+          <div
+            className="absolute inset-0 transition-all duration-300 bg-no-repeat bg-center"
+            style={{
+              backgroundImage: `url(${bgImage})`,
+              backgroundSize: wallpaperFit === 'tile' ? 'auto' : wallpaperFit,
+              backgroundRepeat: wallpaperFit === 'tile' ? 'repeat' : 'no-repeat',
+              opacity: wallpaperOpacity,
+              filter: getWallpaperFilterCSS(wallpaperFilter, wallpaperBlur),
+              mixBlendMode: blendMode as any,
+              transform: wallpaperBlur !== 'none' ? 'scale(1.05)' : 'none',
               imageRendering: 'auto',
               WebkitBackfaceVisibility: 'hidden',
               backfaceVisibility: 'hidden',
             }}
           />
-          <div
-            className="absolute inset-0 transition-opacity duration-200 pointer-events-none"
-            style={{
-              backgroundColor: overlayColor,
-              opacity: overlayOpacity / 100,
-            }}
-          />
-        </>
-      ) : (
-        isDarkMode ? (
-          <>
-            <div className="absolute inset-0 bg-radial from-slate-900/60 via-zinc-950 to-black pointer-events-none" />
-            <div className="absolute -top-32 left-1/4 w-[750px] h-[500px] bg-gradient-to-br from-blue-600/20 via-indigo-600/15 to-transparent rounded-full blur-[120px] pointer-events-none animate-pulse duration-[8000ms]" />
-            <div className="absolute bottom-[-100px] right-[-50px] w-[650px] h-[450px] bg-gradient-to-tr from-indigo-700/20 via-purple-600/15 to-cyan-500/10 rounded-full blur-[130px] pointer-events-none" />
-            <div className="absolute top-1/2 -left-32 w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[140px] pointer-events-none" />
-            <div
-              className="absolute inset-0 opacity-[0.035] pointer-events-none"
-              style={{
-                backgroundImage: `radial-gradient(#38bdf8 1px, transparent 1px)`,
-                backgroundSize: '28px 28px',
-              }}
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.45)_100%)] pointer-events-none" />
-          </>
-        ) : (
-          <>
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-sky-50/50 to-indigo-50/40 pointer-events-none" />
-            <div className="absolute -top-32 left-1/3 w-[850px] h-[500px] bg-gradient-to-br from-blue-400/15 via-indigo-300/10 to-transparent rounded-full blur-[110px] pointer-events-none" />
-            <div className="absolute bottom-[-80px] right-[-40px] w-[600px] h-[450px] bg-gradient-to-tl from-sky-400/15 via-cyan-300/10 to-transparent rounded-full blur-[120px] pointer-events-none" />
-            <div className="absolute top-1/3 -left-20 w-[450px] h-[450px] bg-indigo-400/10 rounded-full blur-[100px] pointer-events-none" />
-            <div
-              className="absolute inset-0 opacity-[0.04] pointer-events-none"
-              style={{
-                backgroundImage: `radial-gradient(#0284c7 1px, transparent 1px)`,
-                backgroundSize: '28px 28px',
-              }}
-            />
-          </>
-        )
-      )}
+        )}
+
+        {/* OVERLAY TINT FOR TEXT CONTRAST */}
+        <div
+          className="absolute inset-0 transition-opacity duration-200 pointer-events-none"
+          style={{
+            backgroundColor: overlayColor,
+            opacity: overlayOpacity / 100,
+          }}
+        />
+
+        {/* DEFAULT AMBIENT HALO GLOW IF NEITHER LAYER IS CUSTOMIZED */}
+        {!enableFill && !enableWallpaper && (
+          isDarkMode ? (
+            <>
+              <div className="absolute inset-0 bg-radial from-slate-900/60 via-zinc-950 to-black pointer-events-none" />
+              <div className="absolute -top-32 left-1/4 w-[750px] h-[500px] bg-gradient-to-br from-blue-600/20 via-indigo-600/15 to-transparent rounded-full blur-[120px] pointer-events-none animate-pulse duration-[8000ms]" />
+            </>
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-sky-50/50 to-indigo-50/40 pointer-events-none" />
+            </>
+          )
+        )}
+      </div>
 
       {/* FLOATING TOP NAVIGATION: ANNOUNCEMENTS, LIVE CLOCK, FULLSCREEN & THEME */}
       <header className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-5 z-30 flex items-center justify-between gap-2 pointer-events-none">
