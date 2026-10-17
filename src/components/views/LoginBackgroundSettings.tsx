@@ -152,6 +152,16 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     sekolah.loginCardButtonAccent || 'blue'
   );
   const [cardButtonRounded, setCardButtonRounded] = useState<'lg' | 'xl' | 'full'>(sekolah.loginCardButtonRounded || 'xl');
+  const [cardSchoolNameCustom, setCardSchoolNameCustom] = useState<string>(sekolah.loginCardSchoolNameCustom || '');
+  const [cardUsernameLabel, setCardUsernameLabel] = useState<string>(sekolah.loginCardUsernameLabel || 'Username / NIP / NISN');
+  const [cardUsernamePlaceholder, setCardUsernamePlaceholder] = useState<string>(sekolah.loginCardUsernamePlaceholder || '');
+  const [cardPasswordLabel, setCardPasswordLabel] = useState<string>(sekolah.loginCardPasswordLabel || 'Password');
+  const [cardPasswordPlaceholder, setCardPasswordPlaceholder] = useState<string>(sekolah.loginCardPasswordPlaceholder || '');
+  const [cardRememberMeText, setCardRememberMeText] = useState<string>(sekolah.loginCardRememberMeText || 'Ingat saya');
+  const [cardButtonText, setCardButtonText] = useState<string>(sekolah.loginCardButtonText || 'Masuk ke Sistem');
+  const [cardButtonLoadingText, setCardButtonLoadingText] = useState<string>(sekolah.loginCardButtonLoadingText || 'Memverifikasi Akun...');
+  const [cardFooterNote, setCardFooterNote] = useState<string>(sekolah.loginCardFooterNote || '');
+  const [cardFooterNoteLink, setCardFooterNoteLink] = useState<string>(sekolah.loginCardFooterNoteLink || '');
 
   // Left Panel Text States
   const [loginLeftShowPanel, setLoginLeftShowPanel] = useState<boolean>(sekolah.loginLeftShowPanel !== false);
@@ -513,6 +523,16 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginCardShowAcademicYear: cardShowAcademicYear,
       loginCardWelcomeTitle: cardWelcomeTitle,
       loginCardWelcomeSubtext: cardWelcomeSubtext,
+      loginCardSchoolNameCustom: cardSchoolNameCustom,
+      loginCardUsernameLabel: cardUsernameLabel,
+      loginCardUsernamePlaceholder: cardUsernamePlaceholder,
+      loginCardPasswordLabel: cardPasswordLabel,
+      loginCardPasswordPlaceholder: cardPasswordPlaceholder,
+      loginCardRememberMeText: cardRememberMeText,
+      loginCardButtonText: cardButtonText,
+      loginCardButtonLoadingText: cardButtonLoadingText,
+      loginCardFooterNote: cardFooterNote,
+      loginCardFooterNoteLink: cardFooterNoteLink,
       loginCardInputStyle: cardInputStyle,
       loginCardInputRounded: cardInputRounded,
       loginCardButtonAccent: cardButtonAccent,

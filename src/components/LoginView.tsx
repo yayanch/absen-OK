@@ -1574,7 +1574,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           isCardDark ? 'text-zinc-300' : 'text-slate-700'
                         }`}
                       >
-                        {sekolah.nama || 'SMK NEGERI 6 GARUT'}
+                        {sekolah.loginCardSchoolNameCustom || sekolah.nama || 'SMK NEGERI 6 GARUT'}
                       </h1>
                     )}
                     <p
@@ -1584,6 +1584,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     >
                       {sekolah.loginCardWelcomeTitle || sekolah.nama || 'Sistem Absensi Siswa'}
                     </p>
+                    {sekolah.loginCardWelcomeSubtext && (
+                      <p
+                        className={`text-xs sm:text-sm font-medium mt-1 leading-relaxed ${
+                          isCardDark ? 'text-zinc-300' : 'text-slate-600'
+                        }`}
+                      >
+                        {sekolah.loginCardWelcomeSubtext}
+                      </p>
+                    )}
                   </div>
 
                   {sekolah.loginCardShowAcademicYear !== false && (
@@ -1629,7 +1638,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       isCardDark ? 'text-zinc-200' : 'text-slate-900'
                     }`}
                   >
-                    Username / NIP / NISN
+                    {sekolah.loginCardUsernameLabel || 'Username / NIP / NISN'}
                   </label>
                   <div className="relative">
                     <div
@@ -1645,7 +1654,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       required
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder={roleInfo.placeholder}
+                      placeholder={sekolah.loginCardUsernamePlaceholder || roleInfo.placeholder}
                       className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
                     />
                   </div>
@@ -1657,7 +1666,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       isCardDark ? 'text-zinc-200' : 'text-slate-900'
                     }`}
                   >
-                    Password
+                    {sekolah.loginCardPasswordLabel || 'Password'}
                   </label>
                   <div className="relative">
                     <div
@@ -1672,7 +1681,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Masukkan password akun Anda"
+                      placeholder={sekolah.loginCardPasswordPlaceholder || 'Masukkan password akun Anda'}
                       className={`w-full pl-10 sm:pl-10.5 pr-11 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
                     />
                     <button
@@ -1706,7 +1715,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                             : 'bg-white border-slate-400'
                         }`}
                       />
-                      <span className={`text-xs font-bold ${isCardDark ? 'text-zinc-300' : 'text-slate-800'}`}>Ingat saya</span>
+                      <span className={`text-xs font-bold ${isCardDark ? 'text-zinc-300' : 'text-slate-800'}`}>
+                        {sekolah.loginCardRememberMeText || 'Ingat saya'}
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -1719,15 +1730,37 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   {isLoggingIn ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Memverifikasi Akun...</span>
+                      <span>{sekolah.loginCardButtonLoadingText || 'Memverifikasi Akun...'}</span>
                     </>
                   ) : (
                     <>
-                      <span>Masuk ke Sistem</span>
+                      <span>{sekolah.loginCardButtonText || 'Masuk ke Sistem'}</span>
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </button>
+
+                {/* Optional Footer Note on Card */}
+                {sekolah.loginCardFooterNote && (
+                  <div className="pt-1 text-center">
+                    {sekolah.loginCardFooterNoteLink ? (
+                      <a
+                        href={sekolah.loginCardFooterNoteLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`text-xs font-semibold hover:underline inline-flex items-center gap-1 transition-colors ${
+                          isCardDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                        }`}
+                      >
+                        <span>{sekolah.loginCardFooterNote}</span>
+                      </a>
+                    ) : (
+                      <p className={`text-xs font-medium leading-relaxed ${isCardDark ? 'text-zinc-400' : 'text-slate-500'}`}>
+                        {sekolah.loginCardFooterNote}
+                      </p>
+                    )}
+                  </div>
+                )}
               </form>
 
               {/* Account Lock Notification Alert if any */}

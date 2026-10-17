@@ -104,6 +104,16 @@ export interface SekolahConfig {
   loginCardShowAcademicYear?: boolean;
   loginCardWelcomeTitle?: string;
   loginCardWelcomeSubtext?: string;
+  loginCardSchoolNameCustom?: string;
+  loginCardUsernameLabel?: string;
+  loginCardUsernamePlaceholder?: string;
+  loginCardPasswordLabel?: string;
+  loginCardPasswordPlaceholder?: string;
+  loginCardRememberMeText?: string;
+  loginCardButtonText?: string;
+  loginCardButtonLoadingText?: string;
+  loginCardFooterNote?: string;
+  loginCardFooterNoteLink?: string;
   loginCardInputStyle?: 'outlined' | 'filled' | 'underlined';
   loginCardInputRounded?: 'lg' | 'xl' | 'full';
   loginCardButtonAccent?: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate' | 'neutral';
