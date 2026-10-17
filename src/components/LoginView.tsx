@@ -1416,6 +1416,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
             {/* Main Hero Title & Description */}
             <div className="space-y-2">
+              <h1
+                className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-tight drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
+                  isBackgroundDark
+                    ? 'from-blue-400 via-indigo-300 to-cyan-400'
+                    : 'from-blue-600 via-indigo-600 to-cyan-600'
+                }`}
+              >
+                {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
+              </h1>
               <span
                 className={`block font-bold tracking-tight leading-snug drop-shadow-sm ${
                   sekolah.loginLeftTitlePrefixSize === 'xs'
@@ -1429,15 +1438,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
               >
                 {sekolah.loginLeftTitlePrefix || 'Sistem Absensi'}
               </span>
-              <h1
-                className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-tight drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
-                  isBackgroundDark
-                    ? 'from-blue-400 via-indigo-300 to-cyan-400'
-                    : 'from-blue-600 via-indigo-600 to-cyan-600'
-                }`}
-              >
-                {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
-              </h1>
               <p
                 className={`text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs ${
                   isBackgroundDark ? 'text-zinc-300' : 'text-zinc-700'

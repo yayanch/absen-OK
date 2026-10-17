@@ -818,7 +818,26 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Awalan Judul</label>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Highlight (Gradasi - Baris Atas)</label>
+                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                        Baris Atas
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={loginLeftTitleHighlight}
+                      onChange={(e) => setLoginLeftTitleHighlight(e.target.value)}
+                      placeholder="Contoh: Digital & Terpadu"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-1 leading-snug">
+                      Teks utama dengan efek gradasi warna modern yang ditampilkan di baris atas.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Awalan / Sub-Judul (Baris Bawah)</label>
                       <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
                         Muat 1 Baris
                       </span>
@@ -857,19 +876,6 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                         ))}
                       </div>
                     </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Highlight (Gradasi)</label>
-                    <input
-                      type="text"
-                      value={loginLeftTitleHighlight}
-                      onChange={(e) => setLoginLeftTitleHighlight(e.target.value)}
-                      placeholder="Contoh: Digital & Terpadu"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-1 leading-snug">
-                      Teks utama dengan efek gradasi warna modern yang ditampilkan di bawah teks awalan.
-                    </p>
                   </div>
                 </div>
 
