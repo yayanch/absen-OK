@@ -326,8 +326,6 @@ export const DEMO_DATASET: AppData = {
     logo: DEFAULT_TOGA_LOGO,
     namaKepalaSekolah: "Drs. H. Mulyadi, M.Pd.",
     nipKepalaSekolah: "197205101998031004",
-    headerTitle: "Sistem Informasi Presensi Digital",
-    headerSubtitle: "SMKN 6 Garut",
     footerTeks: "© 2026 SMKN 6 Garut. Sistem Presensi & Manajemen Sekolah.",
     footerSubTeks: "Dikembangkan untuk efisiensi dan transparansi rekap kehadiran.",
     appVersion: "v2.5.0",

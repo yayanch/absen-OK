@@ -159,9 +159,7 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
       ? sekolah.footerSubTeks
       : 'Absensi Siswa & Rekap Kehadiran'
   );
-  const [headerTitle, setHeaderTitle] = useState(sekolah.headerTitle || 'Absensi Siswa');
-  const [headerSubtitle, setHeaderSubtitle] = useState(sekolah.headerSubtitle || 'SMKN 6 GARUT');
-  const [browserTitle, setBrowserTitle] = useState(sekolah.browserTitle || '');
+
 
   // Offline & Synchronization Settings State
   const [enableOfflineMode, setEnableOfflineMode] = useState<boolean>(sekolah.enableOfflineMode !== false);
@@ -236,9 +234,7 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
         ? s.footerSubTeks
         : 'Absensi Siswa & Rekap Kehadiran'
     );
-    setHeaderTitle(s.headerTitle || 'Absensi Siswa');
-    setHeaderSubtitle(s.headerSubtitle || 'SMKN 6 GARUT');
-    setBrowserTitle(s.browserTitle || '');
+
     setEnableRunningText(s.enableRunningText ?? true);
     setRunningTextAnnouncement(
       s.runningTextAnnouncement ||
@@ -351,9 +347,7 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
       footerSubTeks: footerSubTeks.trim(),
       appVersion: appVersion.trim(),
       showAppVersion,
-      headerTitle: headerTitle.trim(),
-      headerSubtitle: headerSubtitle.trim(),
-      browserTitle: browserTitle.trim(),
+
       enableRunningText,
       runningTextAnnouncement: runningTextAnnouncement.trim(),
       runningTextSpeed,
@@ -1642,54 +1636,24 @@ export const PengaturanSekolahView: React.FC<PengaturanSekolahViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'tampilan_header' && (
         <form onSubmit={(e) => handleSaveSettings(e, 'Pengaturan Header, Sidebar & Footer berhasil disimpan!')} className="space-y-6">
-          {/* Header & Sidebar Customization */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+          {/* Unified App Name Info Card */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
             <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
                 <Building className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Kustomisasi Judul Header Sidebar &amp; Tab Web</h3>
-                <p className="text-xs text-slate-500">Atur judul utama, sub-judul sidebar, serta teks judul di tab peramban browser.</p>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Keseragaman Nama Aplikasi &amp; Identitas Header</h3>
+                <p className="text-xs text-slate-500">Nama aplikasi kini menggunakan satu pengaturan terpusat dari Nama Resmi Sekolah (Tab Identitas).</p>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-100 dark:border-blue-900/50 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Judul Header Sidebar (Brand Title)</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={headerTitle}
-                  onChange={(e) => setHeaderTitle(e.target.value)}
-                  placeholder="Misal: Absensi Siswa"
-                  className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Sub-judul Header Sidebar (Brand Subtitle)</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={headerSubtitle}
-                  onChange={(e) => setHeaderSubtitle(e.target.value)}
-                  placeholder="Misal: SMKN 6 GARUT"
-                  className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Judul Tab Browser (Browser Tab Title)</label>
-                <input
-                  type="text"
-                  disabled={readOnly}
-                  value={browserTitle}
-                  onChange={(e) => setBrowserTitle(e.target.value)}
-                  placeholder="Misal: SMKN 6 GARUT - Absensi Siswa"
-                  className="w-full py-2.5 px-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Teks yang akan tampil di tab jendela peramban web pengguna.</p>
+                <p className="font-bold">Nama Aplikasi Terpusat</p>
+                <p className="mt-0.5 leading-relaxed">
+                  Semua elemen antarmuka (Header Sidebar, Judul Tab Browser, Halaman Login, dan Footer) secara otomatis dan seragam menggunakan <strong>Nama Resmi Sekolah</strong> yang diatur pada tab <em>Identitas &amp; Profil Instansi</em>. Pengaturan terpisah telah dihapus untuk memastikan keseragaman nama aplikasi secara konsisten.
+                </p>
               </div>
             </div>
           </div>

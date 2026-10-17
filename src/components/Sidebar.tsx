@@ -377,8 +377,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               {isOpen && (
                 <div className="min-w-0">
-                  <h1 className="font-bold text-xs text-white truncate tracking-tight group-hover:text-blue-100 transition-colors">{sekolah.headerTitle || sekolah.nama || 'Absensi Siswa'}</h1>
-                  <p className="text-[10px] text-white/80 font-medium truncate">{sekolah.headerSubtitle || sekolah.alamat || 'SMKN 6 GARUT'}</p>
+                  <h1 className="font-bold text-xs text-white truncate tracking-tight group-hover:text-blue-100 transition-colors">{sekolah.nama || 'Sistem Presensi Digital'}</h1>
+                  <p className="text-[10px] text-white/80 font-medium truncate">{sekolah.alamat || 'SMKN 6 GARUT'}</p>
                 </div>
               )}
             </button>

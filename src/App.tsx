@@ -956,12 +956,12 @@ export default function App() {
       link.removeAttribute('href');
     }
 
-    if (appData.sekolah?.browserTitle) {
-      document.title = appData.sekolah.browserTitle;
-    } else if (appData.sekolah?.nama) {
-      document.title = `${appData.sekolah.nama} - Absensi Siswa`;
+    if (appData.sekolah?.nama) {
+      document.title = `${appData.sekolah.nama} - Presensi Digital`;
+    } else {
+      document.title = 'Sistem Presensi Digital';
     }
-  }, [appData.sekolah?.favicon, appData.sekolah?.logo, appData.sekolah?.nama, appData.sekolah?.browserTitle]);
+  }, [appData.sekolah?.favicon, appData.sekolah?.logo, appData.sekolah?.nama]);
 
   const toggleTheme = () => {
     setIsDarkMode((prev) => !prev);

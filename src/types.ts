@@ -111,6 +111,7 @@ export interface SekolahConfig {
   loginContrastMode?: 'auto' | 'dark' | 'light';
   loginLeftBadgeText?: string;
   loginLeftTitlePrefix?: string;
+  loginLeftTitlePrefixSize?: 'xs' | 'sm' | 'md' | 'lg';
   loginLeftTitleHighlight?: string;
   loginLeftDescription?: string;
   loginLeftFeature1Title?: string;
@@ -124,9 +125,6 @@ export interface SekolahConfig {
   showAppVersion?: boolean;
   showFooter?: boolean;
   enableLiveChat?: boolean;
-  headerTitle?: string;
-  headerSubtitle?: string;
-  browserTitle?: string;
   
   // Pengumuman & Running Text Config
   enableRunningText?: boolean;

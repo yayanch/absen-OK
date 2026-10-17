@@ -1415,22 +1415,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
 
             {/* Main Hero Title & Description */}
-            <div className="space-y-3.5">
+            <div className="space-y-2">
+              <span
+                className={`block font-bold tracking-tight leading-snug drop-shadow-sm ${
+                  sekolah.loginLeftTitlePrefixSize === 'xs'
+                    ? 'text-sm sm:text-base lg:text-lg'
+                    : sekolah.loginLeftTitlePrefixSize === 'md'
+                    ? 'text-lg sm:text-xl lg:text-2xl'
+                    : sekolah.loginLeftTitlePrefixSize === 'lg'
+                    ? 'text-xl sm:text-2xl lg:text-3xl'
+                    : 'text-base sm:text-lg lg:text-xl xl:text-2xl'
+                } ${isBackgroundDark ? 'text-zinc-200' : 'text-zinc-800'}`}
+              >
+                {sekolah.loginLeftTitlePrefix || 'Sistem Absensi'}
+              </span>
               <h1
-                className={`text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-tight drop-shadow-sm ${
-                  isBackgroundDark ? 'text-white' : 'text-zinc-950'
+                className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-tight drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
+                  isBackgroundDark
+                    ? 'from-blue-400 via-indigo-300 to-cyan-400'
+                    : 'from-blue-600 via-indigo-600 to-cyan-600'
                 }`}
               >
-                {sekolah.loginLeftTitlePrefix || 'Sistem Absensi'}{' '}
-                <span
-                  className={`text-transparent bg-clip-text bg-gradient-to-r ${
-                    isBackgroundDark
-                      ? 'from-blue-400 via-indigo-300 to-cyan-400'
-                      : 'from-blue-600 via-indigo-600 to-cyan-600'
-                  }`}
-                >
-                  {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
-                </span>
+                {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
               </h1>
               <p
                 className={`text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs ${
@@ -1551,7 +1557,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         isCardDark ? 'text-white' : 'text-slate-950'
                       }`}
                     >
-                      {sekolah.loginCardWelcomeTitle || sekolah.headerSubtitle || 'Sistem Absensi Siswa'}
+                      {sekolah.loginCardWelcomeTitle || sekolah.nama || 'Sistem Absensi Siswa'}
                     </p>
                   </div>
 

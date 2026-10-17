@@ -155,6 +155,9 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     sekolah.loginLeftBadgeText || `Portal Kehadiran Terpadu ${sekolah.nama || 'SMK Negeri 6 Garut'}`
   );
   const [loginLeftTitlePrefix, setLoginLeftTitlePrefix] = useState<string>(sekolah.loginLeftTitlePrefix || 'Sistem Presensi');
+  const [loginLeftTitlePrefixSize, setLoginLeftTitlePrefixSize] = useState<'xs' | 'sm' | 'md' | 'lg'>(
+    sekolah.loginLeftTitlePrefixSize || 'sm'
+  );
   const [loginLeftTitleHighlight, setLoginLeftTitleHighlight] = useState<string>(sekolah.loginLeftTitleHighlight || 'Digital & OTP');
   const [loginLeftDescription, setLoginLeftDescription] = useState<string>(
     sekolah.loginLeftDescription ||
@@ -504,6 +507,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginLeftShowPanel,
       loginLeftBadgeText,
       loginLeftTitlePrefix,
+      loginLeftTitlePrefixSize,
       loginLeftTitleHighlight,
       loginLeftDescription,
       loginLeftFeature1Title,
@@ -813,13 +817,46 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Awalan Judul</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Awalan Judul</label>
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
+                        Muat 1 Baris
+                      </span>
+                    </div>
                     <input
                       type="text"
                       value={loginLeftTitlePrefix}
                       onChange={(e) => setLoginLeftTitlePrefix(e.target.value)}
+                      placeholder="Contoh: Sistem Terpadu Siswa dan Guru"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    {/* Size Selector for Awalan Judul */}
+                    <div className="pt-1.5 space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                        Ukuran Teks Awalan (Agar Rapi 1 Baris):
+                      </label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { id: 'xs', label: 'Ekstra Kecil' },
+                          { id: 'sm', label: 'Kompak (Default)' },
+                          { id: 'md', label: 'Sedang' },
+                          { id: 'lg', label: 'Besar' },
+                        ].map((sz) => (
+                          <button
+                            key={sz.id}
+                            type="button"
+                            onClick={() => setLoginLeftTitlePrefixSize(sz.id as any)}
+                            className={`px-1.5 py-1 rounded-lg text-[10px] font-bold text-center transition cursor-pointer border ${
+                              loginLeftTitlePrefixSize === sz.id
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {sz.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Highlight (Gradasi)</label>
@@ -827,8 +864,12 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                       type="text"
                       value={loginLeftTitleHighlight}
                       onChange={(e) => setLoginLeftTitleHighlight(e.target.value)}
+                      placeholder="Contoh: Digital & Terpadu"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-1 leading-snug">
+                      Teks utama dengan efek gradasi warna modern yang ditampilkan di bawah teks awalan.
+                    </p>
                   </div>
                 </div>
 
