@@ -1417,15 +1417,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Main Hero Title & Description */}
             <div>
               <div className="space-y-0.5 sm:space-y-1">
-                <h1
-                  className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-none drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
-                    isBackgroundDark
-                      ? 'from-blue-400 via-indigo-300 to-cyan-400'
-                      : 'from-blue-600 via-indigo-600 to-cyan-600'
-                  }`}
-                >
-                  {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1
+                    className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-none drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
+                      isBackgroundDark
+                        ? 'from-blue-400 via-indigo-300 to-cyan-400'
+                        : 'from-blue-600 via-indigo-600 to-cyan-600'
+                    }`}
+                  >
+                    {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
+                  </h1>
+                  {sekolah.loginLeftTitleLogo && (
+                    <img
+                      src={sekolah.loginLeftTitleLogo}
+                      alt="Logo"
+                      className="h-10 sm:h-12 lg:h-14 w-auto object-contain"
+                    />
+                  )}
+                </div>
                 <span
                   className={`block font-bold tracking-tight leading-tight drop-shadow-sm ${
                     sekolah.loginLeftTitlePrefixSize === 'xs'
@@ -1569,13 +1578,36 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                   <div>
                     {sekolah.loginCardShowSchoolName !== false && (
-                      <h1
-                        className={`text-xs sm:text-sm font-bold tracking-normal uppercase ${
-                          isCardDark ? 'text-zinc-300' : 'text-slate-700'
-                        }`}
-                      >
-                        {sekolah.loginCardSchoolNameCustom || sekolah.nama || 'SMK NEGERI 6 GARUT'}
-                      </h1>
+                      <div className="mb-0.5">
+                        <span
+                          style={sekolah.loginCardSchoolNameColor?.trim() ? { color: sekolah.loginCardSchoolNameColor } : undefined}
+                          className={`inline-block font-bold drop-shadow-xs ${
+                            sekolah.loginCardSchoolNameSize === 'xs'
+                              ? 'text-[10px] sm:text-xs'
+                              : sekolah.loginCardSchoolNameSize === 'base'
+                              ? 'text-sm sm:text-base'
+                              : sekolah.loginCardSchoolNameSize === 'lg'
+                              ? 'text-base sm:text-lg font-black'
+                              : 'text-xs sm:text-sm'
+                          } ${
+                            sekolah.loginCardSchoolNameStyle === 'badge'
+                              ? 'px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 font-extrabold'
+                              : sekolah.loginCardSchoolNameStyle === 'normal'
+                              ? 'tracking-normal'
+                              : 'uppercase tracking-wider font-extrabold'
+                          } ${
+                            sekolah.loginCardSchoolNameColor?.trim()
+                              ? ''
+                              : sekolah.loginCardSchoolNameStyle === 'badge'
+                              ? ''
+                              : isCardDark
+                              ? 'text-zinc-300'
+                              : 'text-slate-700'
+                          }`}
+                        >
+                          {sekolah.loginCardSchoolNameCustom || sekolah.nama || 'SMK NEGERI 6 GARUT'}
+                        </span>
+                      </div>
                     )}
                     <p
                       className={`text-xl sm:text-2xl font-black tracking-tight mt-0.5 ${

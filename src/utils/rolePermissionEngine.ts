@@ -52,6 +52,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     iconName: 'ClipboardCheck',
   },
   {
+    id: 'presensi_kbm_guru',
+    label: 'Absen Mengajar Guru (KBM)',
+    shortDesc: 'Pencatatan absensi kelas siswa saat jam mengajar guru beserta jurnal materi ajar & tabel log KBM',
+    category: 'presensi',
+    iconName: 'BookOpenCheck',
+  },
+  {
     id: 'absen_harian_guru',
     label: 'Absen Harian Guru',
     shortDesc: 'Presensi kehadiran harian guru mengajar terintegrasi jadwal KBM dan switcher Shift & Kelompok',
@@ -419,6 +426,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'presensi_kbm_guru',
       'broadcast_wa',
       'rekap_pengisian_kelas',
       'rekap_harian',
@@ -454,6 +462,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'presensi_kbm_guru',
       'absen_harian_guru',
       'master_guru',
       'master_mapel',
@@ -479,6 +488,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'presensi_kbm_guru',
       'broadcast_wa',
       'rekap_pengisian_kelas',
       'rekap_harian',
@@ -511,6 +521,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_input',
+      'presensi_kbm_guru',
       'absen_harian_guru',
       'broadcast_wa',
       'mapel_kelas_guru',

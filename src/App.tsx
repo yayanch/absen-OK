@@ -72,6 +72,7 @@ const JadwalMengajarView = React.lazy(() => import('./components/views/JadwalMen
 const ProyeksiJadwalGuruView = React.lazy(() => import('./components/views/ProyeksiJadwalGuruView').then(m => ({ default: m.ProyeksiJadwalGuruView })));
 const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
 const AbsenHarianGuruTab = React.lazy(() => import('./components/views/AbsenHarianGuruTab').then(m => ({ default: m.AbsenHarianGuruTab })));
+const PresensiKbmGuruView = React.lazy(() => import('./components/views/PresensiKbmGuruView').then(m => ({ default: m.PresensiKbmGuruView })));
 const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
 const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
 const IntrusionDetectionView = React.lazy(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
@@ -1512,6 +1513,20 @@ export default function App() {
                 onShowToast={showToast}
                 onConfirmModal={openConfirmModal}
                 onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
+              />
+            )}
+
+            {currentView === 'presensi_kbm_guru' && (
+              <PresensiKbmGuruView
+                appData={appData}
+                currentUser={currentUser}
+                readOnly={false}
+                onUpdateAppData={handleUpdateAppData}
+                onOpenModal={openGeneralModal}
+                onCloseModal={closeGeneralModal}
+                onConfirmModal={openConfirmModal}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
               />
             )}
 

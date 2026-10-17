@@ -110,7 +110,7 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
     visible: true,
     isAccordion: false,
     description: 'Pencatatan kehadiran harian siswa & guru, tulis broadcast WA, dan alokasi mapel guru',
-    menuIds: ['presensi_input', 'absen_harian_guru', 'broadcast_wa', 'mapel_kelas_guru']
+    menuIds: ['presensi_input', 'presensi_kbm_guru', 'absen_harian_guru', 'broadcast_wa', 'mapel_kelas_guru']
   },
   {
     id: 'laporan',
@@ -259,8 +259,18 @@ export function getNavigationLayout(appData?: AppData): NavigationLayoutConfig {
     laporanSec.menuIds.unshift('rekap_pengisian_kelas');
   }
 
-  // Ensure absen_harian_guru is in the 'presensi' section
+  // Ensure presensi_kbm_guru is in the 'presensi' section
   const presensiSec = clonedSections.find((s) => s.id === 'presensi');
+  if (presensiSec && !presensiSec.menuIds.includes('presensi_kbm_guru')) {
+    const inputIdx = presensiSec.menuIds.indexOf('presensi_input');
+    if (inputIdx !== -1) {
+      presensiSec.menuIds.splice(inputIdx + 1, 0, 'presensi_kbm_guru');
+    } else {
+      presensiSec.menuIds.unshift('presensi_kbm_guru');
+    }
+  }
+
+  // Ensure absen_harian_guru is in the 'presensi' section
   if (presensiSec && !presensiSec.menuIds.includes('absen_harian_guru')) {
     const inputIdx = presensiSec.menuIds.indexOf('presensi_input');
     if (inputIdx !== -1) {

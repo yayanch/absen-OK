@@ -399,22 +399,34 @@ CREATE TABLE IF NOT EXISTS guru_mapel_kelas (
 -- 16. Tabel Jurnal & Presensi Mengajar Guru di Kelas
 CREATE TABLE IF NOT EXISTS presensi_mengajar_guru (
   id VARCHAR(100) PRIMARY KEY,
+  jadwal_id VARCHAR(100),
+  guru_username VARCHAR(100) NOT NULL,
+  guru_nama VARCHAR(255) NOT NULL,
   tanggal DATE NOT NULL,
   hari VARCHAR(50) NOT NULL,
-  jam_ke VARCHAR(50),
-  guru_id VARCHAR(100) NOT NULL,
-  guru_nama VARCHAR(255) NOT NULL,
   kelas_id VARCHAR(100) NOT NULL,
   kelas_nama VARCHAR(100) NOT NULL,
-  kode_mapel VARCHAR(100),
-  nama_mapel VARCHAR(255) NOT NULL,
-  materi_pembelajaran TEXT,
-  status_kehadiran VARCHAR(50) DEFAULT 'Hadir',
-  keterangan TEXT,
+  mata_pelajaran VARCHAR(255) NOT NULL,
+  materi_ajar TEXT,
+  jam_pelajaran VARCHAR(100),
+  catatan_guru TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_pmg_tanggal (tanggal),
-  INDEX idx_pmg_guru (guru_id),
+  INDEX idx_pmg_guru (guru_username),
   INDEX idx_pmg_kelas (kelas_id)
+);
+
+-- 16b. Tabel Rincian Presensi Siswa Per Sesi KBM
+CREATE TABLE IF NOT EXISTS presensi_mengajar_guru_detail (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  presensi_mengajar_id VARCHAR(100) NOT NULL,
+  siswa_id VARCHAR(100) NOT NULL,
+  siswa_nama VARCHAR(255) NOT NULL,
+  status_kbm ENUM('H', 'S', 'I', 'A', 'T', 'K', 'D', '') DEFAULT 'H',
+  catatan VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pmgd_parent (presensi_mengajar_id),
+  INDEX idx_pmgd_siswa (siswa_id)
 );
 
 -- 17. Tabel Hari Libur & Kalender Akademik

@@ -105,6 +105,9 @@ export interface SekolahConfig {
   loginCardWelcomeTitle?: string;
   loginCardWelcomeSubtext?: string;
   loginCardSchoolNameCustom?: string;
+  loginCardSchoolNameSize?: 'xs' | 'sm' | 'base' | 'lg';
+  loginCardSchoolNameStyle?: 'uppercase_bold' | 'normal' | 'badge';
+  loginCardSchoolNameColor?: string;
   loginCardUsernameLabel?: string;
   loginCardUsernamePlaceholder?: string;
   loginCardPasswordLabel?: string;
@@ -123,6 +126,7 @@ export interface SekolahConfig {
   loginLeftTitlePrefix?: string;
   loginLeftTitlePrefixSize?: 'xs' | 'sm' | 'md' | 'lg';
   loginLeftTitleHighlight?: string;
+  loginLeftTitleLogo?: string;
   loginLeftDescription?: string;
   loginLeftDescriptionAlign?: 'left' | 'center' | 'right' | 'justify';
   loginLeftDescriptionColor?: string;
@@ -943,6 +947,7 @@ export type ViewType =
   | 'kartu_pelajar'
   | 'rekap_siswa'
   | 'presensi_input'
+  | 'presensi_kbm_guru'
   | 'absen_harian_guru'
   | 'home_visit'
   | 'catatan_pelanggaran'
