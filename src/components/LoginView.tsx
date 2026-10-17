@@ -1442,7 +1442,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
               <p
                 style={sekolah.loginLeftDescriptionColor?.trim() ? { color: sekolah.loginLeftDescriptionColor } : undefined}
-                className={`mt-5 sm:mt-6 text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs whitespace-pre-line ${
+                className={`mt-5 sm:mt-6 max-w-xl font-medium leading-relaxed drop-shadow-xs whitespace-pre-line ${
+                  sekolah.loginLeftDescriptionSize === 'xs'
+                    ? 'text-xs sm:text-sm'
+                    : sekolah.loginLeftDescriptionSize === 'sm'
+                    ? 'text-sm sm:text-base'
+                    : sekolah.loginLeftDescriptionSize === 'lg'
+                    ? 'text-lg sm:text-xl'
+                    : sekolah.loginLeftDescriptionSize === 'xl'
+                    ? 'text-xl sm:text-2xl'
+                    : 'text-base sm:text-lg'
+                } ${
                   sekolah.loginLeftDescriptionAlign === 'center'
                     ? 'text-center'
                     : sekolah.loginLeftDescriptionAlign === 'right'

@@ -173,6 +173,9 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [loginLeftDescriptionColor, setLoginLeftDescriptionColor] = useState<string>(
     sekolah.loginLeftDescriptionColor || ''
   );
+  const [loginLeftDescriptionSize, setLoginLeftDescriptionSize] = useState<'xs' | 'sm' | 'base' | 'lg' | 'xl'>(
+    sekolah.loginLeftDescriptionSize || 'base'
+  );
   const [loginLeftFeature1Title, setLoginLeftFeature1Title] = useState<string>(sekolah.loginLeftFeature1Title || 'Presensi Digital');
   const [loginLeftFeature1Subtitle, setLoginLeftFeature1Subtitle] = useState<string>(sekolah.loginLeftFeature1Subtitle || 'Cepat, Praktis & Akurat');
   const [loginLeftFeature2Title, setLoginLeftFeature2Title] = useState<string>(sekolah.loginLeftFeature2Title || 'OTP WhatsApp');
@@ -522,6 +525,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginLeftDescription,
       loginLeftDescriptionAlign,
       loginLeftDescriptionColor,
+      loginLeftDescriptionSize,
       loginLeftFeature1Title,
       loginLeftFeature1Subtitle,
       loginLeftFeature2Title,
@@ -930,104 +934,149 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                     </div>
                   </div>
 
-                  {/* Alignment & Color Options Bar */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700/80">
-                    {/* Text Alignment */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                        <span>Posisi Baris Teks:</span>
-                      </label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {[
-                          { id: 'left', label: 'Kiri', icon: AlignLeft },
-                          { id: 'center', label: 'Tengah', icon: AlignCenter },
-                          { id: 'right', label: 'Kanan', icon: AlignRight },
-                          { id: 'justify', label: 'Rata', icon: AlignJustify },
-                        ].map((alignItem) => {
-                          const IconComp = alignItem.icon;
-                          const isSelected = loginLeftDescriptionAlign === alignItem.id;
-                          return (
+                  {/* Alignment, Font Size & Color Options Bar */}
+                  <div className="space-y-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Text Alignment */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                          <span>Posisi Baris Teks:</span>
+                        </label>
+                        <div className="grid grid-cols-4 gap-1">
+                          {[
+                            { id: 'left', label: 'Kiri', icon: AlignLeft },
+                            { id: 'center', label: 'Tengah', icon: AlignCenter },
+                            { id: 'right', label: 'Kanan', icon: AlignRight },
+                            { id: 'justify', label: 'Rata', icon: AlignJustify },
+                          ].map((alignItem) => {
+                            const IconComp = alignItem.icon;
+                            const isSelected = loginLeftDescriptionAlign === alignItem.id;
+                            return (
+                              <button
+                                key={alignItem.id}
+                                type="button"
+                                onClick={() => setLoginLeftDescriptionAlign(alignItem.id as any)}
+                                className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                <IconComp className="w-3.5 h-3.5" />
+                                <span>{alignItem.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Font Color Picker */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                            <Palette className="w-3 h-3 text-blue-500" />
+                            <span>Warna Font:</span>
+                          </label>
+                          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                            {loginLeftDescriptionColor ? loginLeftDescriptionColor.toUpperCase() : 'Otomatis'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Auto (Theme contrast) */}
+                          <button
+                            type="button"
+                            onClick={() => setLoginLeftDescriptionColor('')}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
+                              !loginLeftDescriptionColor
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            Otomatis
+                          </button>
+                          {/* Preset Swatches */}
+                          {[
+                            { color: '#ffffff', title: 'Putih' },
+                            { color: '#e2e8f0', title: 'Abu Terang' },
+                            { color: '#94a3b8', title: 'Abu Lembut' },
+                            { color: '#67e8f9', title: 'Cyan Neon' },
+                            { color: '#93c5fd', title: 'Biru Muda' },
+                            { color: '#86efac', title: 'Hijau Muda' },
+                            { color: '#fde047', title: 'Kuning Amber' },
+                            { color: '#f472b6', title: 'Merah Muda' },
+                          ].map((swatch) => (
                             <button
-                              key={alignItem.id}
+                              key={swatch.color}
                               type="button"
-                              onClick={() => setLoginLeftDescriptionAlign(alignItem.id as any)}
-                              className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
-                                isSelected
-                                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              title={swatch.title}
+                              onClick={() => setLoginLeftDescriptionColor(swatch.color)}
+                              style={{ backgroundColor: swatch.color }}
+                              className={`w-5 h-5 rounded-full border transition cursor-pointer shadow-xs ${
+                                loginLeftDescriptionColor.toLowerCase() === swatch.color.toLowerCase()
+                                  ? 'ring-2 ring-blue-500 ring-offset-2 scale-110 border-blue-500'
+                                  : 'border-slate-300 dark:border-slate-600 hover:scale-105'
                               }`}
+                            />
+                          ))}
+                          {/* Custom Color Input */}
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="color"
+                              value={loginLeftDescriptionColor || '#e2e8f0'}
+                              onChange={(e) => setLoginLeftDescriptionColor(e.target.value)}
+                              className="w-6 h-6 rounded-full cursor-pointer opacity-0 absolute inset-0"
+                            />
+                            <div
+                              className="w-6 h-6 rounded-lg border border-dashed border-slate-400 dark:border-slate-500 flex items-center justify-center text-[10px] font-bold text-slate-500 hover:border-blue-500 hover:text-blue-500"
+                              title="Pilih Warna Khusus (Color Picker)"
                             >
-                              <IconComp className="w-3.5 h-3.5" />
-                              <span>{alignItem.label}</span>
-                            </button>
-                          );
-                        })}
+                              +
+                            </div>
+                          </label>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Font Color Picker */}
-                    <div className="space-y-1.5">
+                    {/* Font Size Selector */}
+                    <div className="pt-2.5 border-t border-slate-200/70 dark:border-slate-700/70 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                          <Palette className="w-3 h-3 text-blue-500" />
-                          <span>Warna Font:</span>
+                          <Type className="w-3 h-3 text-blue-500" />
+                          <span>Ukuran Font Deskripsi:</span>
                         </label>
-                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                          {loginLeftDescriptionColor ? loginLeftDescriptionColor.toUpperCase() : 'Otomatis'}
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
+                          {loginLeftDescriptionSize === 'xs'
+                            ? 'Ekstra Kecil (XS - 12px)'
+                            : loginLeftDescriptionSize === 'sm'
+                            ? 'Kompak (SM - 14px)'
+                            : loginLeftDescriptionSize === 'lg'
+                            ? 'Besar (LG - 18px)'
+                            : loginLeftDescriptionSize === 'xl'
+                            ? 'Ekstra Besar (XL - 20px)'
+                            : 'Standar (Base - 16px)'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Auto (Theme contrast) */}
-                        <button
-                          type="button"
-                          onClick={() => setLoginLeftDescriptionColor('')}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
-                            !loginLeftDescriptionColor
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          Otomatis
-                        </button>
-                        {/* Preset Swatches */}
+                      <div className="grid grid-cols-5 gap-1.5">
                         {[
-                          { color: '#ffffff', title: 'Putih' },
-                          { color: '#e2e8f0', title: 'Abu Terang' },
-                          { color: '#94a3b8', title: 'Abu Lembut' },
-                          { color: '#67e8f9', title: 'Cyan Neon' },
-                          { color: '#93c5fd', title: 'Biru Muda' },
-                          { color: '#86efac', title: 'Hijau Muda' },
-                          { color: '#fde047', title: 'Kuning Amber' },
-                          { color: '#f472b6', title: 'Merah Muda' },
-                        ].map((swatch) => (
+                          { id: 'xs', label: 'XS (12px)' },
+                          { id: 'sm', label: 'SM (14px)' },
+                          { id: 'base', label: 'Standar' },
+                          { id: 'lg', label: 'LG (18px)' },
+                          { id: 'xl', label: 'XL (20px)' },
+                        ].map((sz) => (
                           <button
-                            key={swatch.color}
+                            key={sz.id}
                             type="button"
-                            title={swatch.title}
-                            onClick={() => setLoginLeftDescriptionColor(swatch.color)}
-                            style={{ backgroundColor: swatch.color }}
-                            className={`w-5 h-5 rounded-full border transition cursor-pointer shadow-xs ${
-                              loginLeftDescriptionColor.toLowerCase() === swatch.color.toLowerCase()
-                                ? 'ring-2 ring-blue-500 ring-offset-2 scale-110 border-blue-500'
-                                : 'border-slate-300 dark:border-slate-600 hover:scale-105'
+                            onClick={() => setLoginLeftDescriptionSize(sz.id as any)}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${
+                              loginLeftDescriptionSize === sz.id
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                             }`}
-                          />
-                        ))}
-                        {/* Custom Color Input */}
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="color"
-                            value={loginLeftDescriptionColor || '#e2e8f0'}
-                            onChange={(e) => setLoginLeftDescriptionColor(e.target.value)}
-                            className="w-6 h-6 rounded-full cursor-pointer opacity-0 absolute inset-0"
-                          />
-                          <div
-                            className="w-6 h-6 rounded-lg border border-dashed border-slate-400 dark:border-slate-500 flex items-center justify-center text-[10px] font-bold text-slate-500 hover:border-blue-500 hover:text-blue-500"
-                            title="Pilih Warna Khusus (Color Picker)"
                           >
-                            +
-                          </div>
-                        </label>
+                            {sz.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1046,15 +1095,27 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       <span className="flex items-center gap-1.5">
                         <Eye className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Pratinjau Format & Warna Paragraf Deskripsi:</span>
+                        <span>Pratinjau Format, Ukuran & Warna Paragraf Deskripsi:</span>
                       </span>
-                      <span className="text-slate-400 font-mono">
-                        {loginLeftDescriptionAlign.toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[10px]">
+                        <span>{loginLeftDescriptionAlign.toUpperCase()}</span>
+                        <span>·</span>
+                        <span className="uppercase">{loginLeftDescriptionSize}</span>
+                      </div>
                     </div>
                     <p
                       style={loginLeftDescriptionColor ? { color: loginLeftDescriptionColor } : undefined}
-                      className={`text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line drop-shadow-xs ${
+                      className={`font-medium leading-relaxed whitespace-pre-line drop-shadow-xs transition-all ${
+                        loginLeftDescriptionSize === 'xs'
+                          ? 'text-[11px]'
+                          : loginLeftDescriptionSize === 'sm'
+                          ? 'text-xs'
+                          : loginLeftDescriptionSize === 'lg'
+                          ? 'text-base'
+                          : loginLeftDescriptionSize === 'xl'
+                          ? 'text-lg font-semibold'
+                          : 'text-sm'
+                      } ${
                         loginLeftDescriptionAlign === 'center'
                           ? 'text-center'
                           : loginLeftDescriptionAlign === 'right'
