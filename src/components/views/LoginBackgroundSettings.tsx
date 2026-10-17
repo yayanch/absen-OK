@@ -1277,6 +1277,230 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                   </div>
                 </div>
               </div>
+              {/* Kustomisasi Teks & Pesan Kartu Login */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                    <Type className="w-4 h-4 text-blue-600" />
+                    <span>Kustomisasi Teks & Pesan Kartu Login</span>
+                  </h4>
+                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-full border border-blue-200 dark:border-blue-800">
+                    Bisa Diubah Bebas
+                  </span>
+                </div>
+
+                {/* Quick Presets for Card Texts */}
+                <div className="space-y-2 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block">
+                    Template Teks Kartu Cepat:
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCardWelcomeTitle('Sistem Absensi Siswa');
+                        setCardWelcomeSubtext('Silakan masukkan akun Anda untuk melanjutkan');
+                        setCardUsernameLabel('Username / NIP / NISN');
+                        setCardPasswordLabel('Password');
+                        setCardButtonText('Masuk ke Sistem');
+                        onShowToast('Preset Teks Standar diterapkan!', 'info');
+                      }}
+                      className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:border-blue-300 transition text-center cursor-pointer"
+                    >
+                      Standar Sekolah
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCardWelcomeTitle('Portal Presensi Terpadu');
+                        setCardWelcomeSubtext('Pencatatan Kehadiran KBM Real-time');
+                        setCardUsernameLabel('Nomor Induk / Username');
+                        setCardPasswordLabel('Kata Sandi');
+                        setCardButtonText('Masuk Sekarang');
+                        onShowToast('Preset Teks Presensi Terpadu diterapkan!', 'info');
+                      }}
+                      className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:border-blue-300 transition text-center cursor-pointer"
+                    >
+                      Presensi Terpadu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCardWelcomeTitle('Aplikasi Kehadiran Digital');
+                        setCardWelcomeSubtext('Akses Portal Guru, Siswa & Wali Kelas');
+                        setCardUsernameLabel('Username / NISN / NIP');
+                        setCardPasswordLabel('Password');
+                        setCardButtonText('Mulai Presensi');
+                        onShowToast('Preset Teks Aplikasi Digital diterapkan!', 'info');
+                      }}
+                      className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:border-blue-300 transition text-center cursor-pointer"
+                    >
+                      Aplikasi Digital
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCardWelcomeTitle('Autentikasi Pengguna');
+                        setCardWelcomeSubtext('Sistem Informasi Manajemen Sekolah');
+                        setCardUsernameLabel('ID Pengguna / Email');
+                        setCardPasswordLabel('Kata Sandi');
+                        setCardButtonText('Lanjutkan Masuk');
+                        onShowToast('Preset Teks Autentikasi diterapkan!', 'info');
+                      }}
+                      className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:border-blue-300 transition text-center cursor-pointer"
+                    >
+                      Formal & Ringkas
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Judul Selamat Datang */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Utama Kartu</label>
+                    <input
+                      type="text"
+                      value={cardWelcomeTitle}
+                      onChange={(e) => setCardWelcomeTitle(e.target.value)}
+                      placeholder="Contoh: Sistem Absensi Siswa"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Sub-teks Keterangan */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sub-teks Keterangan Kartu</label>
+                    <input
+                      type="text"
+                      value={cardWelcomeSubtext}
+                      onChange={(e) => setCardWelcomeSubtext(e.target.value)}
+                      placeholder="Contoh: Silakan masuk ke akun Anda untuk melanjutkan"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Custom Teks Nama Sekolah di Kartu */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Teks Header Sekolah di Kartu</label>
+                    <input
+                      type="text"
+                      value={cardSchoolNameCustom}
+                      onChange={(e) => setCardSchoolNameCustom(e.target.value)}
+                      placeholder={`Default: ${sekolah.nama || 'SMK NEGERI 6 GARUT'}`}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[10px] text-slate-400">Kosongkan jika ingin menggunakan nama sekolah utama sistem.</p>
+                  </div>
+
+                  {/* Teks Centang "Ingat Saya" */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Teks Centang "Ingat Saya"</label>
+                    <input
+                      type="text"
+                      value={cardRememberMeText}
+                      onChange={(e) => setCardRememberMeText(e.target.value)}
+                      placeholder="Contoh: Ingat saya"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Label Username */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Label Input Username</label>
+                    <input
+                      type="text"
+                      value={cardUsernameLabel}
+                      onChange={(e) => setCardUsernameLabel(e.target.value)}
+                      placeholder="Contoh: Username / NIP / NISN"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Placeholder Username */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Placeholder Input Username</label>
+                    <input
+                      type="text"
+                      value={cardUsernamePlaceholder}
+                      onChange={(e) => setCardUsernamePlaceholder(e.target.value)}
+                      placeholder="Contoh: Ketik Username, NIP, atau NISN Anda"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Label Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Label Input Password</label>
+                    <input
+                      type="text"
+                      value={cardPasswordLabel}
+                      onChange={(e) => setCardPasswordLabel(e.target.value)}
+                      placeholder="Contoh: Password"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Placeholder Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Placeholder Input Password</label>
+                    <input
+                      type="text"
+                      value={cardPasswordPlaceholder}
+                      onChange={(e) => setCardPasswordPlaceholder(e.target.value)}
+                      placeholder="Contoh: Masukkan password akun Anda"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Teks Tombol Masuk */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Teks Tombol Masuk (Submit)</label>
+                    <input
+                      type="text"
+                      value={cardButtonText}
+                      onChange={(e) => setCardButtonText(e.target.value)}
+                      placeholder="Contoh: Masuk ke Sistem"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Teks Tombol Loading */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Teks Tombol saat Loading</label>
+                    <input
+                      type="text"
+                      value={cardButtonLoadingText}
+                      onChange={(e) => setCardButtonLoadingText(e.target.value)}
+                      placeholder="Contoh: Memverifikasi Akun..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Catatan Bantuan Bawah Card */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Catatan Bantuan Bawah Kartu</label>
+                    <input
+                      type="text"
+                      value={cardFooterNote}
+                      onChange={(e) => setCardFooterNote(e.target.value)}
+                      placeholder="Contoh: Lupa password? Hubungi Admin Sekolah"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Link Bantuan Bawah Card */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tautan/Link Bantuan (Opsional)</label>
+                    <input
+                      type="text"
+                      value={cardFooterNoteLink}
+                      onChange={(e) => setCardFooterNoteLink(e.target.value)}
+                      placeholder="Contoh: https://wa.me/6281234567890"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1950,14 +2174,32 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                   <School className="w-5 h-5" />
                 </div>
                 <div>
-                  <h5 className="text-xs font-black uppercase tracking-wider">{sekolah.nama || 'SMK Negeri 6 Garut'}</h5>
-                  <p className="text-[10px] opacity-70 mt-0.5">{cardWelcomeTitle}</p>
+                  <h5 className="text-xs font-black uppercase tracking-wider">{cardSchoolNameCustom || sekolah.nama || 'SMK NEGERI 6 GARUT'}</h5>
+                  <p className="text-[11px] font-bold mt-0.5">{cardWelcomeTitle || 'Sistem Absensi Siswa'}</p>
+                  {cardWelcomeSubtext && (
+                    <p className="text-[9.5px] opacity-70 mt-0.5 leading-snug">{cardWelcomeSubtext}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2 pt-1 text-left">
-                  <div className="p-2 rounded-lg border text-[11px] bg-slate-100/50 dark:bg-slate-800/50 font-mono">Username / NISN</div>
-                  <div className="p-2 rounded-lg border text-[11px] bg-slate-100/50 dark:bg-slate-800/50 font-mono">••••••••</div>
-                  <div className="p-2 rounded-lg bg-blue-600 text-white text-xs font-bold text-center shadow-xs">Masuk ke Sistem</div>
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] font-extrabold uppercase opacity-70 block">{cardUsernameLabel || 'Username / NIP / NISN'}</span>
+                    <div className="p-2 rounded-lg border text-[10px] bg-slate-100/50 dark:bg-slate-800/50 font-medium opacity-60">
+                      {cardUsernamePlaceholder || 'Ketik Username...'}
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] font-extrabold uppercase opacity-70 block">{cardPasswordLabel || 'Password'}</span>
+                    <div className="p-2 rounded-lg border text-[10px] bg-slate-100/50 dark:bg-slate-800/50 font-medium opacity-60">
+                      ••••••••
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold text-center shadow-xs">
+                    {cardButtonText || 'Masuk ke Sistem'}
+                  </div>
+                  {cardFooterNote && (
+                    <p className="text-[9.5px] text-center opacity-70 pt-0.5 leading-snug">{cardFooterNote}</p>
+                  )}
                 </div>
               </div>
             </div>
