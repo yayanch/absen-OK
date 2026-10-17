@@ -1415,7 +1415,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
 
             {/* Main Hero Title & Description */}
-            <div className="space-y-3">
+            <div>
               <div className="space-y-0.5 sm:space-y-1">
                 <h1
                   className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-none drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
@@ -1431,20 +1431,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     sekolah.loginLeftTitlePrefixSize === 'xs'
                       ? 'text-sm sm:text-base lg:text-lg'
                       : sekolah.loginLeftTitlePrefixSize === 'md'
-                    ? 'text-lg sm:text-xl lg:text-2xl'
-                    : sekolah.loginLeftTitlePrefixSize === 'lg'
-                    ? 'text-xl sm:text-2xl lg:text-3xl'
-                    : 'text-base sm:text-lg lg:text-xl xl:text-2xl'
-                } ${isBackgroundDark ? 'text-zinc-200' : 'text-zinc-800'}`}
+                      ? 'text-lg sm:text-xl lg:text-2xl'
+                      : sekolah.loginLeftTitlePrefixSize === 'lg'
+                      ? 'text-xl sm:text-2xl lg:text-3xl'
+                      : 'text-base sm:text-lg lg:text-xl xl:text-2xl'
+                  } ${isBackgroundDark ? 'text-zinc-200' : 'text-zinc-800'}`}
+                >
+                  {sekolah.loginLeftTitlePrefix || 'Sistem Absensi'}
+                </span>
+              </div>
+              <p
+                className={`mt-5 sm:mt-6 text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs ${
+                  isBackgroundDark ? 'text-zinc-300' : 'text-zinc-700'
+                }`}
               >
-                {sekolah.loginLeftTitlePrefix || 'Sistem Absensi'}
-              </span>
-            </div>
-            <p
-              className={`text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs ${
-                isBackgroundDark ? 'text-zinc-300' : 'text-zinc-700'
-              }`}
-            >
                 {sekolah.loginLeftDescription ||
                   'Platform presensi sekolah cerdas dengan verifikasi NISN, validasi kehadiran real-time, proteksi Kunci 1 HP 1 Siswa (Device Binding), dan integrasi notifikasi otomatis ke WhatsApp orang tua.'}
               </p>
