@@ -183,6 +183,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   );
   const [loginLeftTitleHighlight, setLoginLeftTitleHighlight] = useState<string>(sekolah.loginLeftTitleHighlight || 'Digital & OTP');
   const [loginLeftTitleLogo, setLoginLeftTitleLogo] = useState<string>(sekolah.loginLeftTitleLogo || '');
+  const [loginLeftTitleLogoSize, setLoginLeftTitleLogoSize] = useState<'sm' | 'md' | 'lg'>(sekolah.loginLeftTitleLogoSize || 'md');
+  const [loginLeftTitleSpacing, setLoginLeftTitleSpacing] = useState<'sm' | 'md' | 'lg'>(sekolah.loginLeftTitleSpacing || 'md');
   const [loginLeftDescription, setLoginLeftDescription] = useState<string>(
     sekolah.loginLeftDescription ||
       'Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.'
@@ -254,6 +256,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Luminance & Dark/Light Detection
   const [detectedLuminance, setDetectedLuminance] = useState<number | null>(null);
@@ -556,6 +559,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginLeftTitlePrefixSize,
       loginLeftTitleHighlight,
       loginLeftTitleLogo,
+      loginLeftTitleLogoSize,
+      loginLeftTitleSpacing,
       loginLeftDescription,
       loginLeftDescriptionAlign,
       loginLeftDescriptionColor,
@@ -623,6 +628,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setLoginLeftBadgeText(`Portal Kehadiran Terpadu ${sekolah.nama || 'SMK Negeri 6 Garut'}`);
       setLoginLeftTitlePrefix('Sistem Presensi');
       setLoginLeftTitleHighlight('Digital & OTP');
+      setLoginLeftTitleLogo('');
       setLoginLeftDescription(
         'Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.'
       );
@@ -865,7 +871,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-6">
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Highlight (Gradasi - Baris Atas)</label>
@@ -885,18 +891,53 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                     </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Logo Samping Highlight (URL)</label>
-                    <input
-                      type="text"
-                      value={loginLeftTitleLogo}
-                      onChange={(e) => setLoginLeftTitleLogo(e.target.value)}
-                      placeholder="Contoh: https://example.com/logo.png"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-1 leading-snug">
-                      URL gambar logo yang akan ditampilkan di samping judul highlight.
-                    </p>
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Logo Samping Highlight</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={loginLeftTitleLogo}
+                          onChange={(e) => setLoginLeftTitleLogo(e.target.value)}
+                          placeholder="URL atau upload logo..."
+                          className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => logoInputRef.current?.click()}
+                          className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
+                        >
+                          <Upload className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Ukuran Logo</label>
+                        <select
+                          value={loginLeftTitleLogoSize}
+                          onChange={(e) => setLoginLeftTitleLogoSize(e.target.value as any)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                        >
+                          <option value="sm">Kecil (SM)</option>
+                          <option value="md">Sedang (MD)</option>
+                          <option value="lg">Besar (LG)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Jarak (Gap)</label>
+                        <select
+                          value={loginLeftTitleSpacing}
+                          onChange={(e) => setLoginLeftTitleSpacing(e.target.value as any)}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                        >
+                          <option value="sm">Rapat (SM)</option>
+                          <option value="md">Sedang (MD)</option>
+                          <option value="lg">Lebar (LG)</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">

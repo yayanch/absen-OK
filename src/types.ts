@@ -127,6 +127,8 @@ export interface SekolahConfig {
   loginLeftTitlePrefixSize?: 'xs' | 'sm' | 'md' | 'lg';
   loginLeftTitleHighlight?: string;
   loginLeftTitleLogo?: string;
+  loginLeftTitleLogoSize?: 'sm' | 'md' | 'lg';
+  loginLeftTitleSpacing?: 'sm' | 'md' | 'lg';
   loginLeftDescription?: string;
   loginLeftDescriptionAlign?: 'left' | 'center' | 'right' | 'justify';
   loginLeftDescriptionColor?: string;

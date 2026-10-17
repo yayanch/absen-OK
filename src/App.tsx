@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Trigger build rebuild
 import { MessageSquare, Lock, ShieldAlert, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
