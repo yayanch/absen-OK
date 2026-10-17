@@ -1441,8 +1441,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </span>
               </div>
               <p
-                className={`mt-5 sm:mt-6 text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs ${
-                  isBackgroundDark ? 'text-zinc-300' : 'text-zinc-700'
+                style={sekolah.loginLeftDescriptionColor?.trim() ? { color: sekolah.loginLeftDescriptionColor } : undefined}
+                className={`mt-5 sm:mt-6 text-base lg:text-lg max-w-xl font-medium leading-relaxed drop-shadow-xs whitespace-pre-line ${
+                  sekolah.loginLeftDescriptionAlign === 'center'
+                    ? 'text-center'
+                    : sekolah.loginLeftDescriptionAlign === 'right'
+                    ? 'text-right'
+                    : sekolah.loginLeftDescriptionAlign === 'justify'
+                    ? 'text-justify'
+                    : 'text-left'
+                } ${
+                  sekolah.loginLeftDescriptionColor?.trim()
+                    ? ''
+                    : isBackgroundDark
+                    ? 'text-zinc-300'
+                    : 'text-zinc-700'
                 }`}
               >
                 {sekolah.loginLeftDescription ||

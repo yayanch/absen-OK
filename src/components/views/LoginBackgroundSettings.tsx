@@ -29,6 +29,10 @@ import {
   Mail,
   Shield,
   Edit,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
 } from 'lucide-react';
 import { AppData, SekolahConfig, LoginCustomLink } from '../../types';
 import {
@@ -162,6 +166,12 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [loginLeftDescription, setLoginLeftDescription] = useState<string>(
     sekolah.loginLeftDescription ||
       'Platform manajemen presensi siswa digital real-time dengan verifikasi NISN + OTP WhatsApp, proteksi Kunci 1 HP 1 Siswa (*Device Binding*), dan rekapitulasi kehadiran instan.'
+  );
+  const [loginLeftDescriptionAlign, setLoginLeftDescriptionAlign] = useState<'left' | 'center' | 'right' | 'justify'>(
+    sekolah.loginLeftDescriptionAlign || 'left'
+  );
+  const [loginLeftDescriptionColor, setLoginLeftDescriptionColor] = useState<string>(
+    sekolah.loginLeftDescriptionColor || ''
   );
   const [loginLeftFeature1Title, setLoginLeftFeature1Title] = useState<string>(sekolah.loginLeftFeature1Title || 'Presensi Digital');
   const [loginLeftFeature1Subtitle, setLoginLeftFeature1Subtitle] = useState<string>(sekolah.loginLeftFeature1Subtitle || 'Cepat, Praktis & Akurat');
@@ -510,6 +520,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginLeftTitlePrefixSize,
       loginLeftTitleHighlight,
       loginLeftDescription,
+      loginLeftDescriptionAlign,
+      loginLeftDescriptionColor,
       loginLeftFeature1Title,
       loginLeftFeature1Subtitle,
       loginLeftFeature2Title,
@@ -879,16 +891,182 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-                    Paragraf Deskripsi Sistem
-                  </label>
+                <div className="space-y-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+                          Paragraf Deskripsi Sistem
+                        </label>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                          Mendukung Multi-Baris
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-0.5">
+                        Tekan Enter untuk membuat baris baru. Format baris dan poin akan ditampilkan persis di halaman login.
+                      </p>
+                    </div>
+
+                    {/* Quick Helper Tools */}
+                    <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginLeftDescription((prev) => (prev ? `${prev}\n• ` : '• '));
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1"
+                      >
+                        <span>+ Poin (•)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginLeftDescription((prev) => (prev ? `${prev} *teks tebal*` : '*teks tebal*'));
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                      >
+                        *Tebal*
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Alignment & Color Options Bar */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+                    {/* Text Alignment */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                        <span>Posisi Baris Teks:</span>
+                      </label>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { id: 'left', label: 'Kiri', icon: AlignLeft },
+                          { id: 'center', label: 'Tengah', icon: AlignCenter },
+                          { id: 'right', label: 'Kanan', icon: AlignRight },
+                          { id: 'justify', label: 'Rata', icon: AlignJustify },
+                        ].map((alignItem) => {
+                          const IconComp = alignItem.icon;
+                          const isSelected = loginLeftDescriptionAlign === alignItem.id;
+                          return (
+                            <button
+                              key={alignItem.id}
+                              type="button"
+                              onClick={() => setLoginLeftDescriptionAlign(alignItem.id as any)}
+                              className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer border ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <IconComp className="w-3.5 h-3.5" />
+                              <span>{alignItem.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Font Color Picker */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                          <Palette className="w-3 h-3 text-blue-500" />
+                          <span>Warna Font:</span>
+                        </label>
+                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                          {loginLeftDescriptionColor ? loginLeftDescriptionColor.toUpperCase() : 'Otomatis'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Auto (Theme contrast) */}
+                        <button
+                          type="button"
+                          onClick={() => setLoginLeftDescriptionColor('')}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
+                            !loginLeftDescriptionColor
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          Otomatis
+                        </button>
+                        {/* Preset Swatches */}
+                        {[
+                          { color: '#ffffff', title: 'Putih' },
+                          { color: '#e2e8f0', title: 'Abu Terang' },
+                          { color: '#94a3b8', title: 'Abu Lembut' },
+                          { color: '#67e8f9', title: 'Cyan Neon' },
+                          { color: '#93c5fd', title: 'Biru Muda' },
+                          { color: '#86efac', title: 'Hijau Muda' },
+                          { color: '#fde047', title: 'Kuning Amber' },
+                          { color: '#f472b6', title: 'Merah Muda' },
+                        ].map((swatch) => (
+                          <button
+                            key={swatch.color}
+                            type="button"
+                            title={swatch.title}
+                            onClick={() => setLoginLeftDescriptionColor(swatch.color)}
+                            style={{ backgroundColor: swatch.color }}
+                            className={`w-5 h-5 rounded-full border transition cursor-pointer shadow-xs ${
+                              loginLeftDescriptionColor.toLowerCase() === swatch.color.toLowerCase()
+                                ? 'ring-2 ring-blue-500 ring-offset-2 scale-110 border-blue-500'
+                                : 'border-slate-300 dark:border-slate-600 hover:scale-105'
+                            }`}
+                          />
+                        ))}
+                        {/* Custom Color Input */}
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="color"
+                            value={loginLeftDescriptionColor || '#e2e8f0'}
+                            onChange={(e) => setLoginLeftDescriptionColor(e.target.value)}
+                            className="w-6 h-6 rounded-full cursor-pointer opacity-0 absolute inset-0"
+                          />
+                          <div
+                            className="w-6 h-6 rounded-lg border border-dashed border-slate-400 dark:border-slate-500 flex items-center justify-center text-[10px] font-bold text-slate-500 hover:border-blue-500 hover:text-blue-500"
+                            title="Pilih Warna Khusus (Color Picker)"
+                          >
+                            +
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Textarea Input */}
                   <textarea
-                    rows={3}
+                    rows={5}
                     value={loginLeftDescription}
                     onChange={(e) => setLoginLeftDescription(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
+                    placeholder={'Fitur:\n• Absensi Siswa Manual dan QR\n• Pencatatan Kasus dan Home Visit\n• Pencatatan Kegiatan Ekstrakulikuler'}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed font-sans"
                   />
+
+                  {/* Live Mini Preview Box */}
+                  <div className="rounded-2xl p-4 bg-slate-950 text-slate-200 border border-slate-800 shadow-inner">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <span className="flex items-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Pratinjau Format & Warna Paragraf Deskripsi:</span>
+                      </span>
+                      <span className="text-slate-400 font-mono">
+                        {loginLeftDescriptionAlign.toUpperCase()}
+                      </span>
+                    </div>
+                    <p
+                      style={loginLeftDescriptionColor ? { color: loginLeftDescriptionColor } : undefined}
+                      className={`text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-line drop-shadow-xs ${
+                        loginLeftDescriptionAlign === 'center'
+                          ? 'text-center'
+                          : loginLeftDescriptionAlign === 'right'
+                          ? 'text-right'
+                          : loginLeftDescriptionAlign === 'justify'
+                          ? 'text-justify'
+                          : 'text-left'
+                      } ${!loginLeftDescriptionColor ? 'text-zinc-300' : ''}`}
+                    >
+                      {loginLeftDescription || 'Deskripsi sistem akan ditampilkan di sini sesuai format baris dan warna.'}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
