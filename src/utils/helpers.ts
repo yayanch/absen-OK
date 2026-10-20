@@ -8,6 +8,33 @@ import {
 
 export { getTodayString };
 
+// Helper to parse jamKe string (e.g. "1 - 3" or "1,2,3") to numbers array
+export function parseJamKeList(jamKeStr?: string, existingList?: number[]): number[] {
+  if (existingList && existingList.length > 0) {
+    return Array.from(new Set(existingList)).sort((a, b) => a - b);
+  }
+  if (!jamKeStr) return [];
+  const clean = jamKeStr.trim();
+  const rangeMatch = clean.match(/^(\d+)\s*[-–s.d]+\s*(\d+)$/i);
+  if (rangeMatch) {
+    const start = parseInt(rangeMatch[1], 10);
+    const end = parseInt(rangeMatch[2], 10);
+    const list: number[] = [];
+    for (let i = Math.min(start, end); i <= Math.max(start, end); i++) {
+      if (i >= 1 && i <= 10) list.push(i);
+    }
+    return list;
+  }
+  // Comma or space separated
+  const numbers = clean.match(/\d+/g);
+  if (numbers) {
+    return Array.from(
+      new Set(numbers.map((n) => parseInt(n, 10)).filter((n) => n >= 1 && n <= 10))
+    ).sort((a, b) => a - b);
+  }
+  return [];
+}
+
 export function mergeJadwalMengajar(
   localList: JadwalMengajarGuru[] = [],
   serverList: JadwalMengajarGuru[] = [],
@@ -16,12 +43,7 @@ export function mergeJadwalMengajar(
   if (!Array.isArray(localList)) localList = [];
   if (!Array.isArray(serverList)) serverList = [];
 
-  // Active schedules present in localList or serverList cannot be deleted by stale tombstones
-  const activeIds = new Set([
-    ...localList.map((j) => String(j?.id)).filter(Boolean),
-    ...serverList.map((j) => String(j?.id)).filter(Boolean),
-  ]);
-  const deletedSet = new Set((deletedIds || []).map((id) => String(id)).filter((id) => !activeIds.has(id)));
+  const deletedSet = new Set((deletedIds || []).map((id) => String(id)));
 
   if (localList.length === 0 && serverList.length === 0) return [];
 
@@ -30,7 +52,7 @@ export function mergeJadwalMengajar(
 
   const map = new Map<string, JadwalMengajarGuru>();
 
-  // 1. Seed existing
+  // 1. Seed existing from server
   for (const s of filteredServer) {
     if (s && s.id && !deletedSet.has(String(s.id))) {
       map.set(String(s.id), { ...s });
@@ -44,7 +66,21 @@ export function mergeJadwalMengajar(
     }
   }
 
-  return Array.from(map.values()).filter((j) => !deletedSet.has(String(j.id)));
+  // 3. Deduplicate exact duplicate entries (same class, day, shift, teacher/mapel, and exact jam list)
+  const deduped: JadwalMengajarGuru[] = [];
+  const seenIdentical = new Set<string>();
+
+  for (const j of map.values()) {
+    if (deletedSet.has(String(j.id))) continue;
+    const jamStr = parseJamKeList(j.jamKe, j.jamKeList).sort((a, b) => a - b).join(',');
+    const identKey = `${j.kelasId || j.kelasNama}_${j.hari}_${j.shift || 'Pagi'}_${String(j.mataPelajaran).toLowerCase().trim()}_${jamStr}`;
+    if (!seenIdentical.has(identKey)) {
+      seenIdentical.add(identKey);
+      deduped.push(j);
+    }
+  }
+
+  return deduped;
 }
 
 export function mergeChatMessages(

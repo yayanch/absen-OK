@@ -425,8 +425,7 @@ export default function App() {
               const rawDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
               const allDeletedSiswa = rawDeletedSiswa.filter((id) => !activeSiswaSet.has(id));
 
-              const rawDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
-              const allDeletedJadwal = rawDeletedJadwal.filter((id) => !activeJadwalSet.has(id));
+              const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
 
               const rawDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(data.appData.deletedGmkIds || [])]));
               const allDeletedGmk = rawDeletedGmk.filter((id) => !activeGmkSet.has(id));

@@ -46,7 +46,7 @@ import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajar
 import { PageHeader } from '../common/UIComponents';
 import { Pagination } from '../Pagination';
 import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
-import { addAuditLog, cleanMapelName, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
+import { addAuditLog, cleanMapelName, commitAppDataToServer, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
 import { DEFAULT_MATA_PELAJARAN } from '../../data/initialData';
 import { AbsenHarianGuruTab } from './AbsenHarianGuruTab';
 import { isMenuAllowed } from '../../utils/rolePermissionEngine';
@@ -1428,6 +1428,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           `Menghapus jadwal ${item.mataPelajaran} (${item.kelasNama} - ${item.guruNama}) pada ${item.hari} Shift ${item.shift || 'Pagi'}`
         );
         onUpdateAppData(updatedAppData);
+        commitAppDataToServer(updatedAppData).catch(() => {});
         onShowToast(`Jadwal ${item.mataPelajaran} berhasil dihapus.`, 'success');
       }
     );
@@ -1448,9 +1449,34 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           `Menghapus seluruh ${allJadwalList.length} jadwal pelajaran tiap kelas.`
         );
         onUpdateAppData(updatedAppData);
+        commitAppDataToServer(updatedAppData).catch(() => {});
         onShowToast('Seluruh jadwal pelajaran berhasil dikosongkan.', 'success');
       }
     );
+  };
+
+  // Resolve slot conflict immediately: keep selected schedule, remove conflicting schedules
+  const handleResolveSlotConflict = (conflictingList: JadwalMengajarGuru[], keepItem: JadwalMengajarGuru) => {
+    if (readOnly) return;
+    const toRemoveIds = conflictingList
+      .filter((j) => j.id !== keepItem.id)
+      .map((j) => String(j.id));
+    if (toRemoveIds.length === 0) return;
+
+    const nextList = allJadwalList.filter((j) => !toRemoveIds.includes(String(j.id)));
+    const updatedDeletedIds = Array.from(
+      new Set([...(appData.deletedJadwalIds || []), ...toRemoveIds])
+    );
+
+    const updatedAppData = addAuditLog(
+      { ...appData, jadwalMengajar: nextList, deletedJadwalIds: updatedDeletedIds },
+      'Selesaikan Bentrok Jadwal',
+      `Menghapus ${toRemoveIds.length} jadwal duplikat/tumpang tindih untuk mempertahankan ${keepItem.mataPelajaran} (${keepItem.kelasNama})`
+    );
+
+    onUpdateAppData(updatedAppData);
+    commitAppDataToServer(updatedAppData).catch(() => {});
+    onShowToast(`Berhasil mempertahankan jadwal dan menghapus ${toRemoveIds.length} jadwal duplikat!`, 'success');
   };
 
   // Clean duplicate overlapping schedules handler (Robust Slot-Level Anti-Overlap)
@@ -1508,12 +1534,20 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
       `Ditemukan ${conflictCount} konflik tumpang tindih pada jam pelajaran. Apakah Anda ingin membersihkan dan merapikan seluruh jadwal yang bentrok secara otomatis?`,
       'emerald',
       () => {
+        const removedIds = allJadwalList
+          .filter((j) => !cleanedList.some((c) => c.id === j.id))
+          .map((j) => String(j.id));
+        const updatedDeletedIds = Array.from(
+          new Set([...(appData.deletedJadwalIds || []), ...removedIds])
+        );
+
         const updatedAppData = addAuditLog(
-          { ...appData, jadwalMengajar: cleanedList },
+          { ...appData, jadwalMengajar: cleanedList, deletedJadwalIds: updatedDeletedIds },
           'Bersihkan Jadwal Tumpang Tindih',
           `Membersihkan dan merapikan ${conflictCount} konflik tumpang tindih jam pelajaran.`
         );
         onUpdateAppData(updatedAppData);
+        commitAppDataToServer(updatedAppData).catch(() => {});
         onShowToast(`Berhasil membersihkan jadwal tumpang tindih!`, 'success');
       }
     );
@@ -4041,11 +4075,24 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                           const isPembiasaan = activeMatrixOption.shift === 'Pagi' && hari === 'Jumat' && (jamNum === 1 || jamNum === 2);
 
                           // Find all schedules on this day covering this jamNum and matching shift
-                          const matchedSchedules = matrixSchedules.filter((item) => {
+                          const rawMatchedSchedules = matrixSchedules.filter((item) => {
                             if (item.hari !== hari) return false;
                             const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
                             return itemJamList.includes(jamNum);
                           });
+
+                          // Visually consolidate exact duplicate entries for this cell (same subject, same class, same teacher)
+                          const matchedSchedules: JadwalMengajarGuru[] = [];
+                          const seenInCell = new Set<string>();
+                          for (const item of rawMatchedSchedules) {
+                            const key = `${item.kelasId || item.kelasNama}_${item.hari}_${item.shift || 'Pagi'}_${String(item.mataPelajaran).toLowerCase().trim()}_${item.guruUsername || item.guruNama}`;
+                            if (!seenInCell.has(key)) {
+                              seenInCell.add(key);
+                              matchedSchedules.push(item);
+                            }
+                          }
+
+                          const hasRawDuplicates = rawMatchedSchedules.length > matchedSchedules.length;
 
                           return (
                             <td
@@ -4070,8 +4117,37 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                       }`}
                                     >
                                       {matchedSchedules.length > 1 && sIdx === 0 && (
-                                        <div className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200 mb-0.5">
-                                          <span>Tumpang Tindih ({matchedSchedules.length} Jadwal)</span>
+                                        <div className="flex items-center justify-between gap-1 p-1 rounded-md bg-amber-200/90 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100 mb-1">
+                                          <span className="text-[9px] font-black flex items-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 text-amber-700 shrink-0" />
+                                            <span>Tumpang Tindih ({matchedSchedules.length} Jadwal)</span>
+                                          </span>
+                                          {!readOnly && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleResolveSlotConflict(rawMatchedSchedules, matchedSchedule)}
+                                              className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold shadow-2xs transition cursor-pointer"
+                                              title="Pertahankan jadwal ini dan hapus jadwal bentrok lainnya"
+                                            >
+                                              Pertahankan Ini
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                      {hasRawDuplicates && matchedSchedules.length === 1 && sIdx === 0 && !readOnly && (
+                                        <div className="flex items-center justify-between gap-1 p-1 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300/80 mb-1">
+                                          <span className="text-[9px] font-bold flex items-center gap-1">
+                                            <Sparkles className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                                            <span>{rawMatchedSchedules.length} Duplikat Bersatu</span>
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleResolveSlotConflict(rawMatchedSchedules, matchedSchedule)}
+                                            className="px-1.5 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white text-[8.5px] font-bold shadow-2xs transition cursor-pointer"
+                                            title="Hapus data duplikat yang berulang di database"
+                                          >
+                                            Bersihkan
+                                          </button>
                                         </div>
                                       )}
                                       {isUpacara && (
@@ -4145,6 +4221,21 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                           </div>
                                         )}
                                       </div>
+
+                                      {matchedSchedules.length > 1 && !readOnly && (
+                                        <div className="pt-1 mt-1 border-t border-amber-200/80 dark:border-amber-800/80 flex items-center justify-between">
+                                          <span className="text-[9px] font-bold text-amber-800 dark:text-amber-300">Pilihan #{sIdx + 1}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleResolveSlotConflict(rawMatchedSchedules, matchedSchedule)}
+                                            className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[8.5px] font-bold shadow-2xs transition cursor-pointer flex items-center gap-1"
+                                            title="Pilih jadwal ini dan hapus jadwal bentrok lainnya"
+                                          >
+                                            <CheckCircle2 className="w-2.5 h-2.5" />
+                                            <span>Pilih Ini</span>
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
