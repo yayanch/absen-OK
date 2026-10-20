@@ -1453,41 +1453,68 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     );
   };
 
-  // Clean duplicate overlapping schedules handler
+  // Clean duplicate overlapping schedules handler (Robust Slot-Level Anti-Overlap)
   const handleCleanDuplicates = () => {
     if (readOnly || allJadwalList.length === 0) return;
-    const seen = new Set<string>();
-    const cleanedList: JadwalMengajarGuru[] = [];
-    let removedCount = 0;
 
+    const cleanedList: JadwalMengajarGuru[] = [];
+    let conflictCount = 0;
+
+    // Group by class + hari + shift
+    const map = new Map<string, JadwalMengajarGuru[]>();
     for (const j of allJadwalList) {
-      const jamList = parseJamKeList(j.jamKe, j.jamKeList).sort((a, b) => a - b).join(',');
-      const key = `${j.kelasId || j.kelasNama}_${j.hari}_${j.shift || 'Pagi'}_${j.mataPelajaran.toLowerCase().trim()}_${jamList}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        cleanedList.push(j);
-      } else {
-        removedCount++;
+      const kelasKey = j.kelasId || j.kelasNama || 'unknown';
+      const hariKey = j.hari || 'Senin';
+      const shiftKey = j.shift || 'Pagi';
+      const groupKey = `${kelasKey}_${hariKey}_${shiftKey}`;
+      if (!map.has(groupKey)) map.set(groupKey, []);
+      map.get(groupKey)!.push({ ...j });
+    }
+
+    for (const [groupKey, items] of map.entries()) {
+      const activeSlots = new Set<number>();
+      for (const item of items) {
+        const currentJamList = parseJamKeList(item.jamKe, item.jamKeList);
+        const nonConflictingJam = currentJamList.filter((jam) => !activeSlots.has(jam));
+
+        if (nonConflictingJam.length === 0) {
+          // Entire item conflicts / overlaps with earlier items -> skip (remove)
+          conflictCount++;
+        } else {
+          if (nonConflictingJam.length < currentJamList.length) {
+            conflictCount++;
+          }
+          // Mark these jams as taken
+          nonConflictingJam.forEach((jam) => activeSlots.add(jam));
+
+          // Rebuild item with non-conflicting jam list
+          const sortedJam = [...nonConflictingJam].sort((a, b) => a - b);
+          cleanedList.push({
+            ...item,
+            jamKeList: sortedJam,
+            jamKe: formatJamKeDisplay(sortedJam),
+          });
+        }
       }
     }
 
-    if (removedCount === 0) {
-      onShowToast('Tidak ditemukan jadwal tumpang tindih / duplikat yang perlu dibersihkan.', 'info');
+    if (conflictCount === 0) {
+      onShowToast('Tidak ditemukan jadwal tumpang tindih / bentrok jam yang perlu dibersihkan.', 'info');
       return;
     }
 
     onConfirmModal(
-      'Bersihkan Jadwal Tumpang Tindih',
-      `Ditemukan ${removedCount} entri jadwal ganda/tumpang tindih yang identik. Apakah Anda ingin membersihkan dan menghapus jadwal duplikat tersebut secara otomatis?`,
+      'Bersihkan Jadwal Tumpang Tindih & Bentrok Jam',
+      `Ditemukan ${conflictCount} konflik tumpang tindih pada jam pelajaran. Apakah Anda ingin membersihkan dan merapikan seluruh jadwal yang bentrok secara otomatis?`,
       'emerald',
       () => {
         const updatedAppData = addAuditLog(
           { ...appData, jadwalMengajar: cleanedList },
           'Bersihkan Jadwal Tumpang Tindih',
-          `Membersihkan ${removedCount} entri jadwal ganda/tumpang tindih yang identik.`
+          `Membersihkan dan merapikan ${conflictCount} konflik tumpang tindih jam pelajaran.`
         );
         onUpdateAppData(updatedAppData);
-        onShowToast(`Berhasil membersihkan ${removedCount} jadwal tumpang tindih!`, 'success');
+        onShowToast(`Berhasil membersihkan jadwal tumpang tindih!`, 'success');
       }
     );
   };
