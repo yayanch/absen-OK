@@ -1,14 +1,13 @@
 module.exports = {
   apps: [
     {
-      name: 'presensi-sekolah',
-      script: './dist/server.cjs',
-      instances: 1,
-      exec_mode: 'fork',
+      name: 'siduru-app',
+      script: 'npm',
+      args: 'start',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
-      }
-    }
-  ]
+        PORT: 3000,
+      },
+    },
+  ],
 };

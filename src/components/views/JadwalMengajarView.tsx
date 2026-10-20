@@ -1453,6 +1453,45 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     );
   };
 
+  // Clean duplicate overlapping schedules handler
+  const handleCleanDuplicates = () => {
+    if (readOnly || allJadwalList.length === 0) return;
+    const seen = new Set<string>();
+    const cleanedList: JadwalMengajarGuru[] = [];
+    let removedCount = 0;
+
+    for (const j of allJadwalList) {
+      const jamList = parseJamKeList(j.jamKe, j.jamKeList).sort((a, b) => a - b).join(',');
+      const key = `${j.kelasId || j.kelasNama}_${j.hari}_${j.shift || 'Pagi'}_${j.mataPelajaran.toLowerCase().trim()}_${jamList}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        cleanedList.push(j);
+      } else {
+        removedCount++;
+      }
+    }
+
+    if (removedCount === 0) {
+      onShowToast('Tidak ditemukan jadwal tumpang tindih / duplikat yang perlu dibersihkan.', 'info');
+      return;
+    }
+
+    onConfirmModal(
+      'Bersihkan Jadwal Tumpang Tindih',
+      `Ditemukan ${removedCount} entri jadwal ganda/tumpang tindih yang identik. Apakah Anda ingin membersihkan dan menghapus jadwal duplikat tersebut secara otomatis?`,
+      'emerald',
+      () => {
+        const updatedAppData = addAuditLog(
+          { ...appData, jadwalMengajar: cleanedList },
+          'Bersihkan Jadwal Tumpang Tindih',
+          `Membersihkan ${removedCount} entri jadwal ganda/tumpang tindih yang identik.`
+        );
+        onUpdateAppData(updatedAppData);
+        onShowToast(`Berhasil membersihkan ${removedCount} jadwal tumpang tindih!`, 'success');
+      }
+    );
+  };
+
   /* =========================================================================
      SMART ANTI-BENTROK (CONFLICT DETECTION) REALTIME
      Checks for collisions on the SAME Day, SAME Shift, SAME Kelompok, and Overlapping Jam Ke (1-10)
@@ -2175,6 +2214,19 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               <Printer className="w-3.5 h-3.5 text-white" />
               <span>Cetak</span>
             </button>
+
+            {/* Bersihkan Tumpang Tindih */}
+            {!readOnly && allJadwalList.length > 0 && (
+              <button
+                type="button"
+                onClick={handleCleanDuplicates}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 transition cursor-pointer"
+                title="Bersihkan Jadwal Ganda / Tumpang Tindih Otomatis"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
+                <span>Bersihkan Tumpang Tindih</span>
+              </button>
+            )}
 
             {/* Kosongkan */}
             {!readOnly && allJadwalList.length > 0 && (
