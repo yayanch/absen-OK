@@ -337,6 +337,26 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     }
   };
 
+  const handleLogoFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        onShowToast('File logo harus berupa gambar (PNG, JPG, dll).', 'warning');
+        return;
+      }
+      try {
+        const compressed = await compressBase64Image(file, 800, 0.85, true);
+        if (compressed) {
+          setLoginLeftTitleLogo(compressed);
+          saveWithUpdates({ loginLeftTitleLogo: compressed });
+          onShowToast('Logo samping berhasil diupload & diterapkan!', 'success');
+        }
+      } catch (err) {
+        onShowToast('Gagal memproses file logo.', 'error');
+      }
+    }
+  };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
@@ -886,6 +906,13 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Logo Samping Highlight</label>
                       <div className="flex gap-2">
+                        <input
+                          type="file"
+                          ref={logoInputRef}
+                          onChange={handleLogoFileInputChange}
+                          accept="image/*"
+                          className="hidden"
+                        />
                         <input
                           type="text"
                           value={loginLeftTitleLogo}

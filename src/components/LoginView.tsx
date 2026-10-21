@@ -1420,6 +1420,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <div className={`flex items-center ${
                   sekolah.loginLeftTitleSpacing === 'sm' ? 'gap-1.5' : sekolah.loginLeftTitleSpacing === 'lg' ? 'gap-6' : 'gap-3'
                 }`}>
+                  {sekolah.loginLeftTitleLogo && (
+                    <img
+                      src={sekolah.loginLeftTitleLogo}
+                      alt="Logo"
+                      className={`${
+                        sekolah.loginLeftTitleLogoSize === 'sm' ? 'h-8 sm:h-10' : sekolah.loginLeftTitleLogoSize === 'lg' ? 'h-14 sm:h-20' : 'h-10 sm:h-14'
+                      } w-auto object-contain shrink-0`}
+                    />
+                  )}
                   <h1
                     className={`text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-none drop-shadow-sm text-transparent bg-clip-text bg-gradient-to-r ${
                       isBackgroundDark
@@ -1429,15 +1438,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   >
                     {sekolah.loginLeftTitleHighlight || 'Digital & Terpadu'}
                   </h1>
-                  {sekolah.loginLeftTitleLogo && (
-                    <img
-                      src={sekolah.loginLeftTitleLogo}
-                      alt="Logo"
-                      className={`${
-                        sekolah.loginLeftTitleLogoSize === 'sm' ? 'h-8 sm:h-10' : sekolah.loginLeftTitleLogoSize === 'lg' ? 'h-14 sm:h-20' : 'h-10 sm:h-14'
-                      } w-auto object-contain`}
-                    />
-                  )}
                 </div>
                 <span
                   className={`block font-bold tracking-tight leading-tight drop-shadow-sm ${
