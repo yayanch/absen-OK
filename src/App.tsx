@@ -72,6 +72,7 @@ const JadwalMengajarView = React.lazy(() => import('./components/views/JadwalMen
 const ProyeksiJadwalGuruView = React.lazy(() => import('./components/views/ProyeksiJadwalGuruView').then(m => ({ default: m.ProyeksiJadwalGuruView })));
 const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
 const AbsenHarianGuruTab = React.lazy(() => import('./components/views/AbsenHarianGuruTab').then(m => ({ default: m.AbsenHarianGuruTab })));
+const RekapAbsensiPribadiGuruView = React.lazy(() => import('./components/views/RekapAbsensiPribadiGuruView').then(m => ({ default: m.RekapAbsensiPribadiGuruView })));
 const PresensiKbmGuruView = React.lazy(() => import('./components/views/PresensiKbmGuruView').then(m => ({ default: m.PresensiKbmGuruView })));
 const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
 const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
@@ -1706,6 +1707,16 @@ export default function App() {
                 }}
                 onNavigateView={handleNavigate}
                 onShowToast={showToast}
+              />
+            )}
+
+            {currentView === 'rekap_absensi_pribadi_guru' && (
+              <RekapAbsensiPribadiGuruView
+                appData={appData}
+                currentUser={currentUser}
+                onUpdateAppData={handleUpdateAppData}
+                onShowToast={showToast}
+                onNavigateView={handleNavigate}
               />
             )}
 

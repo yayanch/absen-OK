@@ -985,6 +985,7 @@ export type ViewType =
   | 'integrasi_mysql'
   | 'database_traffic'
   | 'cetak_kartu_qr'
+  | 'rekap_absensi_pribadi_guru'
   | 'hari_libur'
   | 'jadwal_shift'
   | 'audit_logs'

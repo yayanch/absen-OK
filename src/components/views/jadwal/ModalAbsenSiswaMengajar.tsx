@@ -83,14 +83,14 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
     Record<string, { status: 'H' | 'S' | 'I' | 'A' | ''; catatan: string }>
   >({});
 
-  // Inisialisasi status siswa dari existing sesi atau default Hadir
+  // Inisialisasi status siswa dari existing sesi atau default kosong (tidak ada yang terpilih)
   useEffect(() => {
     const initMap: Record<string, { status: 'H' | 'S' | 'I' | 'A' | ''; catatan: string }> = {};
 
     if (existingSesi && Array.isArray(existingSesi.presensiSiswa) && existingSesi.presensiSiswa.length > 0) {
       existingSesi.presensiSiswa.forEach((item) => {
-        const st = (item.status as any) || 'H';
-        const cleanSt = ['H', 'S', 'I', 'A'].includes(st) ? st : 'H';
+        const st = (item.status as any) || '';
+        const cleanSt = ['H', 'S', 'I', 'A'].includes(st) ? st : '';
         initMap[item.siswaId] = {
           status: cleanSt,
           catatan: item.catatan || '',
@@ -99,13 +99,13 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
       // Fallback for any missing students
       siswaListKelas.forEach((s) => {
         if (!initMap[s.id]) {
-          initMap[s.id] = { status: 'H', catatan: '' };
+          initMap[s.id] = { status: '', catatan: '' };
         }
       });
     } else {
-      // Default: semua diset Hadir agar memudahkan guru
+      // Default: tidak ada yang terpilih (kosong)
       siswaListKelas.forEach((s) => {
-        initMap[s.id] = { status: 'H', catatan: '' };
+        initMap[s.id] = { status: '', catatan: '' };
       });
     }
 
@@ -186,7 +186,7 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
     setPresensiMap((prev) => ({
       ...prev,
       [siswaId]: {
-        status: prev[siswaId]?.status || 'H',
+        status: prev[siswaId]?.status || '',
         catatan,
       },
     }));
@@ -209,12 +209,12 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
     setIsSaving(true);
     try {
       const presensiSiswaArray: SiswaPresensiSesiGuru[] = siswaListKelas.map((s) => {
-        const item = presensiMap[s.id] || { status: 'H', catatan: '' };
+        const item = presensiMap[s.id] || { status: '', catatan: '' };
         return {
           siswaId: s.id,
           siswaNama: s.nama,
           nisn: s.nisn || '',
-          status: (item.status as any) || 'H',
+          status: (item.status as any) || '',
           catatan: item.catatan || '',
         };
       });
@@ -453,7 +453,7 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
                   </tr>
                 ) : (
                   filteredSiswa.map((siswa, idx) => {
-                    const currentItem = presensiMap[siswa.id] || { status: 'H', catatan: '' };
+                    const currentItem = presensiMap[siswa.id] || { status: '', catatan: '' };
                     const currentStatus = currentItem.status;
 
                     return (

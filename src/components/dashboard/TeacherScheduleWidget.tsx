@@ -194,12 +194,21 @@ export const TeacherScheduleWidget: React.FC<TeacherScheduleWidgetProps> = ({
             Daftar sesi mengajar &amp; status pengisian presensi kelas
           </p>
         </div>
-        <button
-          onClick={() => onNavigateView("jadwal_mengajar")}
-          className="text-xs font-bold text-theme-primary hover:underline flex items-center gap-1 cursor-pointer"
-        >
-          Lihat Matriks Jadwal <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => onNavigateView("rekap_absensi_pribadi_guru")}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:text-indigo-300 dark:hover:bg-indigo-900/80 border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Rekap Absensi Saya</span>
+          </button>
+          <button
+            onClick={() => onNavigateView("jadwal_mengajar")}
+            className="text-xs font-bold text-theme-primary hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            Lihat Matriks Jadwal <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {teacherClasses.length === 0 ? (

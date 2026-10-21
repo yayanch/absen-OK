@@ -365,13 +365,13 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
       const existingStudentLog = existing?.presensiSiswa?.find((ps) => ps.siswaId === s.id);
       if (existingStudentLog) {
         initialMap[s.id] = {
-          status: existingStudentLog.status || 'H',
+          status: existingStudentLog.status || '',
           catatan: existingStudentLog.catatan || ''
         };
       } else {
         // Fallback to main daily attendance if present
         const mainItem = mainPresensiList.find((p) => p.siswaId === s.id);
-        let defaultStatus: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | '' = 'H';
+        let defaultStatus: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | '' = '';
 
         if (mainItem?.status) {
           if (['H', 'S', 'I', 'A', 'T', 'K', 'D'].includes(mainItem.status)) {
@@ -502,7 +502,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     const siswaInKelas = (appData.siswa || []).filter((s) => s.kelasId === firstKelas?.id && s.status !== 'tidak_aktif');
     const initialMap: Record<string, { status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | ''; catatan: string }> = {};
     siswaInKelas.forEach((s) => {
-      initialMap[s.id] = { status: 'H', catatan: '' };
+      initialMap[s.id] = { status: '', catatan: '' };
     });
     setPresensiSiswaMap(initialMap);
 
@@ -515,7 +515,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     const siswaInKelas = (appData.siswa || []).filter((s) => s.kelasId === newKelasId && s.status !== 'tidak_aktif');
     const initialMap: Record<string, { status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | ''; catatan: string }> = {};
     siswaInKelas.forEach((s) => {
-      initialMap[s.id] = { status: 'H', catatan: '' };
+      initialMap[s.id] = { status: '', catatan: '' };
     });
     setPresensiSiswaMap(initialMap);
   };

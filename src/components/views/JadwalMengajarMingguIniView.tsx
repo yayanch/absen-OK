@@ -359,6 +359,16 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
 
             <button
               type="button"
+              onClick={() => onNavigateView('rekap_absensi_pribadi_guru')}
+              className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-bold flex items-center gap-1.5 border border-amber-400/30 transition cursor-pointer"
+              title="Lihat Rekap Absensi Pribadi Guru"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>Rekap Absensi Saya</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => onNavigateView('mapel_kelas_guru')}
               className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 text-xs font-bold flex items-center gap-1.5 border border-emerald-400/30 transition cursor-pointer"
             >

@@ -26,7 +26,9 @@ import {
   Layers,
   Table2,
   CheckCheck,
-  Sparkles
+  Sparkles,
+  GraduationCap,
+  Award,
 } from 'lucide-react';
 import { AppData, UserSession, GuruPresensiItem } from '../../types';
 import {
@@ -39,7 +41,8 @@ import {
   isWeekend,
   generateWeeklyShiftSchedules,
   normalizeWeeklyShiftPeriods,
-  isNonTeacherAccount
+  isNonTeacherAccount,
+  calculateDailyAttendanceStats,
 } from '../../utils/helpers';
 import {
   MATRIX_SHIFT_OPTIONS,
@@ -94,6 +97,82 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
   // Selected Date state (defaults to today)
   const [selectedTanggal, setSelectedTanggal] = useState<string>(getTodayString());
   const [activeShiftOption, setActiveShiftOption] = useState<'semua' | 'pagi' | 'siang' | MatrixShiftOptionId>(initialShiftOption);
+  // Sub Tab: 'guru' (Presensi Guru) or 'siswa' (Rekap Kehadiran Siswa Hari Ini)
+  const [activeSubTab, setActiveSubTab] = useState<'guru' | 'siswa'>('guru');
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [studentStatusFilter, setStudentStatusFilter] = useState<'semua' | 'sudah' | 'belum'>('semua');
+
+  // Student Attendance Overall Stats for selectedTanggal
+  const studentOverallStats = useMemo(() => {
+    return calculateDailyAttendanceStats(appData, selectedTanggal);
+  }, [appData, selectedTanggal]);
+
+  // Per-Class Student Attendance Breakdown for selectedTanggal
+  const perClassStudentStats = useMemo(() => {
+    const classes = appData.kelas || [];
+    return classes.map((k) => {
+      const classStudents = (appData.siswa || []).filter(
+        (s) => s.kelasId === k.id && s.status !== 'tidak_aktif' && (s as any).status !== 'nonaktif'
+      );
+      const totalSiswa = classStudents.length;
+      const pKey = `${selectedTanggal}_${k.id}`;
+      const pRecords = appData.presensi ? appData.presensi[pKey] : undefined;
+      const isFilled = Boolean(pRecords && Array.isArray(pRecords) && pRecords.length > 0);
+
+      let hadir = 0;
+      let sakit = 0;
+      let izin = 0;
+      let alpa = 0;
+      let terlambat = 0;
+
+      if (isFilled && Array.isArray(pRecords)) {
+        pRecords.forEach((r) => {
+          const status = (r.status || '').toUpperCase();
+          if (status === 'H') hadir++;
+          else if (status === 'S') sakit++;
+          else if (status === 'I') izin++;
+          else if (status === 'A') alpa++;
+          else if (status === 'T') terlambat++;
+        });
+      }
+
+      const totalHadirEffective = hadir + terlambat;
+      const rate = totalSiswa > 0 ? Math.round((totalHadirEffective / totalSiswa) * 100) : 0;
+      const wali = (appData.waliKelas || []).find((w) => w.id === k.waliKelasId);
+
+      return {
+        kelasId: k.id,
+        kelasNama: k.nama,
+        waliNama: wali?.nama || 'Belum Ditentukan',
+        totalSiswa,
+        isFilled,
+        hadir,
+        sakit,
+        izin,
+        alpa,
+        terlambat,
+        rate,
+      };
+    }).sort((a, b) => a.kelasNama.localeCompare(b.kelasNama, 'id-ID', { numeric: true }));
+  }, [appData.kelas, appData.siswa, appData.presensi, appData.waliKelas, selectedTanggal]);
+
+  // Filtered Per-Class Student Stats
+  const filteredPerClassStudentStats = useMemo(() => {
+    return perClassStudentStats.filter((item) => {
+      if (studentStatusFilter === 'sudah' && !item.isFilled) return false;
+      if (studentStatusFilter === 'belum' && item.isFilled) return false;
+
+      if (studentSearchTerm.trim()) {
+        const q = studentSearchTerm.toLowerCase().trim();
+        const matchKelas = item.kelasNama.toLowerCase().includes(q);
+        const matchWali = item.waliNama.toLowerCase().includes(q);
+        if (!matchKelas && !matchWali) return false;
+      }
+
+      return true;
+    });
+  }, [perClassStudentStats, studentStatusFilter, studentSearchTerm]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('semua');
   const [layoutMode, setLayoutMode] = useState<'grouped' | 'flat'>('grouped');
@@ -816,35 +895,331 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
         </div>
       </div>
 
-      {/* Bilah Status Rotasi Shift Pekan Ini */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900 border border-blue-200/80 dark:border-blue-900/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-slate-900 dark:text-white text-xs sm:text-sm">
-                Jadwal Rotasi Shift Pekan Ini ({formattedPeriodRange})
-              </span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                Otomatis Disesuaikan
-              </span>
-            </div>
-            <p className="text-slate-600 dark:text-slate-300 mt-0.5 text-xs">
-              <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 1 (Kelas X &amp; XI):</span>{' '}
-              <span className={`font-black ${k1Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
-                {k1Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
-              </span>
-              {' '}• <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 2 (Kelas XII):</span>{' '}
-              <span className={`font-black ${k2Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
-                {k2Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
-              </span>
-              . Daftar guru di bawah hanya memuat jadwal giliran aktif pekan ini (jadwal shift tidak aktif otomatis dikecualikan).
-            </p>
-          </div>
+      {/* 2. SUB-NAVIGATION BAR: ABSEN GURU VS REKAP KEHADIRAN SISWA */}
+      <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl sm:rounded-2xl border border-slate-200/70 dark:border-slate-700/70 flex-1">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('guru')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+              activeSubTab === 'guru'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+            }`}
+          >
+            <UserCheck className="w-4 h-4 shrink-0" />
+            <span>Absen Harian Guru ({scheduledTeachers.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('siswa')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+              activeSubTab === 'siswa'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+            }`}
+          >
+            <GraduationCap className="w-4.5 h-4.5 shrink-0 text-amber-300" />
+            <span>Rekap Kehadiran Siswa Hari Ini</span>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                activeSubTab === 'siswa'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+              }`}
+            >
+              {studentOverallStats.attendanceRateFormatted}
+            </span>
+          </button>
         </div>
       </div>
+
+      {/* BRANCH A: REKAP KEHADIRAN SISWA HARI INI */}
+      {activeSubTab === 'siswa' ? (
+        <div className="space-y-5 animate-in fade-in duration-300">
+          {/* Header Banner Rekap Siswa */}
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-700 rounded-2xl md:rounded-3xl p-5 md:p-6 text-white shadow-md space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xs">
+                  <GraduationCap className="w-5 h-5 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide">
+                    Rekap Kehadiran Siswa Tanggal {formatDateIndo(selectedTanggal)}
+                  </h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">
+                    Ringkasan agregat persentase kehadiran &amp; status pengisian presensi siswa seluruh kelas hari ini
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-xs font-bold">
+                <Calendar className="w-4 h-4 text-amber-300" />
+                <span>Hari {dayName}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 7 KPI Stat Cards Kehadiran Siswa */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
+            <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Siswa</div>
+              <div className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-1">
+                {studentOverallStats.totalSiswa}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Siswa Aktif</div>
+            </div>
+
+            <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Hadir (H)</div>
+              <div className="text-xl sm:text-2xl font-black text-emerald-800 dark:text-emerald-200 mt-1">
+                {studentOverallStats.hadirCount}
+              </div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">Tepat Waktu</div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/50 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Terlambat (T)</div>
+              <div className="text-xl sm:text-2xl font-black text-amber-800 dark:text-amber-200 mt-1">
+                {studentOverallStats.kesianganCount}
+              </div>
+              <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">Kesiangan</div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/30 p-3.5 rounded-2xl border border-blue-200 dark:border-blue-800/50 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Sakit (S)</div>
+              <div className="text-xl sm:text-2xl font-black text-blue-800 dark:text-blue-200 mt-1">
+                {studentOverallStats.sakitCount}
+              </div>
+              <div className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">Surat Dokter</div>
+            </div>
+
+            <div className="bg-purple-50 dark:bg-purple-950/30 p-3.5 rounded-2xl border border-purple-200 dark:border-purple-800/50 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">Izin (I)</div>
+              <div className="text-xl sm:text-2xl font-black text-purple-800 dark:text-purple-200 mt-1">
+                {studentOverallStats.izinCount}
+              </div>
+              <div className="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">Surat Orang Tua</div>
+            </div>
+
+            <div className="bg-rose-50 dark:bg-rose-950/30 p-3.5 rounded-2xl border border-rose-200 dark:border-rose-800/50 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">Alpa (A)</div>
+              <div className="text-xl sm:text-2xl font-black text-rose-800 dark:text-rose-200 mt-1">
+                {studentOverallStats.alpaCount}
+              </div>
+              <div className="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5">Tanpa Berita</div>
+            </div>
+
+            <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-2xs">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-100">% Kehadiran</div>
+              <div className="text-xl sm:text-2xl font-black text-white mt-1">
+                {studentOverallStats.attendanceRateFormatted}
+              </div>
+              <div className="text-[10px] text-emerald-100 mt-0.5">Tingkat Kehadiran</div>
+            </div>
+          </div>
+
+          {/* Controls Bar: Search & Status Filter */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={studentSearchTerm}
+                onChange={(e) => setStudentSearchTerm(e.target.value)}
+                placeholder="Cari nama kelas atau wali kelas..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+              />
+              {studentSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setStudentSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={studentStatusFilter}
+                onChange={(e) => setStudentStatusFilter(e.target.value as any)}
+                className="py-2 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+              >
+                <option value="semua">Semua Kelas ({perClassStudentStats.length})</option>
+                <option value="sudah">Sudah Diisi ({perClassStudentStats.filter((c) => c.isFilled).length})</option>
+                <option value="belum">Belum Diisi ({perClassStudentStats.filter((c) => !c.isFilled).length})</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Grid Cards Rekap Kehadiran Siswa Per Kelas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPerClassStudentStats.map((cStats) => (
+              <div
+                key={cStats.kelasId}
+                className={`bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl p-5 border shadow-xs transition-all flex flex-col justify-between space-y-4 ${
+                  cStats.isFilled
+                    ? 'border-emerald-200 dark:border-emerald-900/60 hover:border-emerald-400'
+                    : 'border-slate-200/80 dark:border-slate-800 hover:border-amber-400'
+                }`}
+              >
+                <div className="space-y-3">
+                  {/* Card Header: Class Name & Fill Badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-black text-base text-slate-900 dark:text-white">
+                        {cStats.kelasNama}
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Wali Kelas: <span className="font-semibold text-slate-700 dark:text-slate-300">{cStats.waliNama}</span>
+                      </p>
+                    </div>
+                    {cStats.isFilled ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Sudah Diisi
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                        <AlertCircle className="w-3 h-3 text-amber-600" />
+                        Belum Diisi
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Attendance Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-500 dark:text-slate-400">Tingkat Kehadiran</span>
+                      <span className={cStats.rate >= 90 ? 'text-emerald-600' : cStats.rate >= 75 ? 'text-amber-600' : 'text-rose-600'}>
+                        {cStats.rate}% ({cStats.hadir + cStats.terlambat}/{cStats.totalSiswa} Siswa)
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          cStats.rate >= 90
+                            ? 'bg-emerald-500'
+                            : cStats.rate >= 75
+                            ? 'bg-amber-500'
+                            : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.min(cStats.rate, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Status Pills Breakdown */}
+                  <div className="grid grid-cols-5 gap-1.5 text-center text-[11px] pt-1">
+                    <div className="bg-emerald-50 dark:bg-emerald-950/40 p-1.5 rounded-xl border border-emerald-200/60 dark:border-emerald-800/60">
+                      <div className="font-bold text-emerald-800 dark:text-emerald-300">H</div>
+                      <div className="font-black text-emerald-900 dark:text-emerald-200">{cStats.hadir}</div>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-950/40 p-1.5 rounded-xl border border-amber-200/60 dark:border-amber-800/60">
+                      <div className="font-bold text-amber-800 dark:text-amber-300">T</div>
+                      <div className="font-black text-amber-900 dark:text-amber-200">{cStats.terlambat}</div>
+                    </div>
+                    <div className="bg-blue-50 dark:bg-blue-950/40 p-1.5 rounded-xl border border-blue-200/60 dark:border-blue-800/60">
+                      <div className="font-bold text-blue-800 dark:text-blue-300">S</div>
+                      <div className="font-black text-blue-900 dark:text-blue-200">{cStats.sakit}</div>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-950/40 p-1.5 rounded-xl border border-purple-200/60 dark:border-purple-800/60">
+                      <div className="font-bold text-purple-800 dark:text-purple-300">I</div>
+                      <div className="font-black text-purple-900 dark:text-purple-200">{cStats.izin}</div>
+                    </div>
+                    <div className="bg-rose-50 dark:bg-rose-950/40 p-1.5 rounded-xl border border-rose-200/60 dark:border-rose-800/60">
+                      <div className="font-bold text-rose-800 dark:text-rose-300">A</div>
+                      <div className="font-black text-rose-900 dark:text-rose-200">{cStats.alpa}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 mt-3">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    Total {cStats.totalSiswa} Siswa
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onBackToTable) {
+                        onBackToTable();
+                      }
+                    }}
+                    className="text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Detail Presensi</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* BRANCH B: ABSEN HARIAN GURU & JADWAL (EXISTING VIEW) */
+        <div className="space-y-5 animate-in fade-in duration-300">
+          {/* Quick Banner Summary Kehadiran Siswa Hari Ini */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-200 dark:border-emerald-900/60 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
+                <GraduationCap className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  Ringkasan Kehadiran Siswa Hari Ini ({formatDateIndo(selectedTanggal)}):
+                </span>
+                <span className="ml-2 font-black text-emerald-600 dark:text-emerald-400">
+                  {studentOverallStats.attendanceRateFormatted} Kehadiran
+                </span>
+                <span className="text-slate-500 dark:text-slate-400 ml-2">
+                  (H: {studentOverallStats.hadirCount} • T: {studentOverallStats.kesianganCount} • S: {studentOverallStats.sakitCount} • I: {studentOverallStats.izinCount} • A: {studentOverallStats.alpaCount})
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('siswa')}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1 cursor-pointer shrink-0"
+            >
+              <span>Lihat Rekap Siswa</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Bilah Status Rotasi Shift Pekan Ini */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900 border border-blue-200/80 dark:border-blue-900/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-black text-slate-900 dark:text-white text-xs sm:text-sm">
+                    Jadwal Rotasi Shift Pekan Ini ({formattedPeriodRange})
+                  </span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    Otomatis Disesuaikan
+                  </span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 mt-0.5 text-xs">
+                  <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 1 (Kelas X &amp; XI):</span>{' '}
+                  <span className={`font-black ${k1Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                    {k1Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
+                  </span>
+                  {' '}• <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 2 (Kelas XII):</span>{' '}
+                  <span className={`font-black ${k2Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                    {k2Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
+                  </span>
+                  . Daftar guru di bawah hanya memuat jadwal giliran aktif pekan ini (jadwal shift tidak aktif otomatis dikecualikan).
+                </p>
+              </div>
+            </div>
+          </div>
 
       {/* Weekend Notice */}
       {isWeekendSelected && (
@@ -1653,6 +2028,8 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
           </div>
         </div>
       )}
+    </div>
+  )}
 
       {/* 6. TEACHER DETAIL MODAL (KELAS, MAPEL, JADWAL & PRESENSI) */}
       {detailTeacher && (

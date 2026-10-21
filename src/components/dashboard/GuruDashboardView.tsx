@@ -3,6 +3,7 @@ import { Calendar } from "lucide-react";
 import { AppData, UserSession, ViewType } from "../../types";
 import { formatDateIndo } from "../../utils/helpers";
 import { TeacherScheduleWidget } from "./TeacherScheduleWidget";
+import { GuruQuickCardsWidget } from "./GuruQuickCardsWidget";
 import { PageHeader } from "../common/UIComponents";
 
 interface GuruDashboardViewProps {
@@ -35,7 +36,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       <PageHeader
         icon={Calendar}
         title={`Selamat Datang, ${currentUser.data.nama}`}
-        description="Jadwal mengajar dan pengisian presensi kelas yang Anda ajar hari ini."
+        description="Akses cepat layanan mengajar, presensi harian, dan administrasi kelas Anda hari ini."
         badge={formatDateIndo(selectedDate)}
         actions={
           <input
@@ -45,6 +46,15 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
             className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
           />
         }
+      />
+
+      {/* Kartu Cepat Guru (Quick Action Cards) */}
+      <GuruQuickCardsWidget
+        appData={appData}
+        currentUser={currentUser}
+        selectedDate={selectedDate}
+        onNavigateView={onNavigateView}
+        onNavigateToInput={onNavigateToInput}
       />
 
       {/* Widget Utama Guru: Jadwal Mengajar Hari Ini */}
