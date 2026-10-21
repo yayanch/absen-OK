@@ -22,11 +22,13 @@ import {
   CalendarDays,
   LayoutGrid,
   Table as TableIcon,
+  UserCheck,
 } from 'lucide-react';
-import { AppData, UserSession, ViewType } from '../../types';
-import { cleanMapelName, normalizeWeeklyShiftPeriods, getTodayString } from '../../utils/helpers';
+import { AppData, UserSession, ViewType, AbsensiMengajarGuruItem, JadwalMengajarGuru } from '../../types';
+import { cleanMapelName, normalizeWeeklyShiftPeriods, getTodayString, addAuditLog, commitAppDataToServer } from '../../utils/helpers';
 import { HARI_SENIN_JUMAT, parseJamKeList, determineKelasKelompok, getJamPelajaranTime } from './JadwalMengajarView';
 import { PageHeader } from '../common/UIComponents';
+import { ModalAbsenSiswaMengajar } from './jadwal/ModalAbsenSiswaMengajar';
 
 interface JadwalMengajarMingguIniViewProps {
   appData: AppData;
@@ -34,6 +36,7 @@ interface JadwalMengajarMingguIniViewProps {
   onNavigateToInput: (kelasId?: string) => void;
   onNavigateView: (view: ViewType) => void;
   onShowToast?: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
+  onUpdateAppData?: (updated: AppData) => void;
 }
 
 export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewProps> = ({
@@ -42,6 +45,7 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
   onNavigateToInput,
   onNavigateView,
   onShowToast,
+  onUpdateAppData,
 }) => {
   // Current active day tab (Senin - Jumat)
   const [activeDay, setActiveDay] = useState<string>(() => {
@@ -51,6 +55,62 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
   });
 
   const [viewMode, setViewMode] = useState<'day' | 'all'>('day');
+
+  // Modal Absensi Siswa Kelas Mengajar Guru (Jurnal KBM Mandiri)
+  const [isAbsenSiswaModalOpen, setIsAbsenSiswaModalOpen] = useState(false);
+  const [selectedJadwalForAbsen, setSelectedJadwalForAbsen] = useState<JadwalMengajarGuru | null>(null);
+  const [selectedExistingSesi, setSelectedExistingSesi] = useState<AbsensiMengajarGuruItem | null>(null);
+
+  const todayDateStr = useMemo(() => getTodayString(), []);
+
+  const handleOpenAbsenSiswa = (jadwal: any) => {
+    setSelectedJadwalForAbsen(jadwal);
+    const existing = (appData.presensiMengajarGuru || []).find(
+      (p) => p.jadwalId === jadwal.id && p.tanggal === todayDateStr
+    );
+    setSelectedExistingSesi(existing || null);
+    setIsAbsenSiswaModalOpen(true);
+  };
+
+  const handleSaveSesiMengajar = async (sesi: AbsensiMengajarGuruItem) => {
+    try {
+      const res = await fetch('/api/presensi-mengajar/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sesi }),
+      });
+      const data = await res.json();
+      if (data.success && data.sesi) {
+        const existingList = appData.presensiMengajarGuru || [];
+        const updatedList = existingList.some((s) => s.id === data.sesi.id)
+          ? existingList.map((s) => (s.id === data.sesi.id ? data.sesi : s))
+          : [data.sesi, ...existingList];
+
+        const updatedAppData = addAuditLog(
+          { ...appData, presensiMengajarGuru: updatedList },
+          'Absensi Kelas Mengajar',
+          `Guru ${data.sesi.guruNama} mengabsen kelas ${data.sesi.kelasNama} (${data.sesi.mataPelajaran})`
+        );
+        if (onUpdateAppData) onUpdateAppData(updatedAppData);
+        return;
+      }
+    } catch (e) {
+      console.warn('API save error, saving locally to appData', e);
+    }
+
+    const existingList = appData.presensiMengajarGuru || [];
+    const updatedList = existingList.some((s) => s.id === sesi.id)
+      ? existingList.map((s) => (s.id === sesi.id ? sesi : s))
+      : [sesi, ...existingList];
+
+    const updatedAppData = addAuditLog(
+      { ...appData, presensiMengajarGuru: updatedList },
+      'Absensi Kelas Mengajar',
+      `Guru ${sesi.guruNama} mengabsen kelas ${sesi.kelasNama} (${sesi.mataPelajaran})`
+    );
+    if (onUpdateAppData) onUpdateAppData(updatedAppData);
+    commitAppDataToServer(updatedAppData).catch(() => {});
+  };
 
   // Times configuration
   const pagiTime = appData.shiftConfig?.pagiTime || '06.30 - 12.00';
@@ -710,14 +770,26 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
 
                   {/* Actions Bottom Bar */}
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToInput(item.kelasId)}
-                      className="px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer"
-                    >
-                      <ClipboardCheck className="w-4 h-4" />
-                      <span>Presensi Kelas</span>
-                    </button>
+                    {(() => {
+                      const todaySesi = (appData.presensiMengajarGuru || []).find(
+                        (p) => p.jadwalId === item.id && p.tanggal === todayDateStr
+                      );
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAbsenSiswa(item)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-2xs ${
+                            todaySesi
+                              ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          }`}
+                          title={todaySesi ? 'Edit Absensi Siswa Kelas Hari Ini' : 'Buka Lembar Absen Kelas'}
+                        >
+                          <UserCheck className="w-4 h-4" />
+                          <span>{todaySesi ? 'Sudah Absen' : 'Absen Kelas'}</span>
+                        </button>
+                      );
+                    })()}
 
                     <button
                       type="button"
@@ -802,13 +874,26 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
                         {item.jpCount} JP
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => onNavigateToInput(item.kelasId)}
-                          className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-100 transition cursor-pointer"
-                        >
-                          Presensi
-                        </button>
+                        {(() => {
+                          const todaySesi = (appData.presensiMengajarGuru || []).find(
+                            (p) => p.jadwalId === item.id && p.tanggal === todayDateStr
+                          );
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAbsenSiswa(item)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ml-auto ${
+                                todaySesi
+                                  ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                              }`}
+                              title={todaySesi ? 'Edit Absensi Siswa Kelas Hari Ini' : 'Buka Lembar Absen Kelas'}
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>{todaySesi ? 'Sudah Absen' : 'Absen Kelas'}</span>
+                            </button>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))
@@ -818,6 +903,22 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
           </div>
         </div>
       )}
+
+      {/* Modal Absensi Siswa Kelas Mengajar Guru (Jurnal KBM Mandiri) */}
+      <ModalAbsenSiswaMengajar
+        isOpen={isAbsenSiswaModalOpen}
+        onClose={() => {
+          setIsAbsenSiswaModalOpen(false);
+          setSelectedJadwalForAbsen(null);
+          setSelectedExistingSesi(null);
+        }}
+        jadwal={selectedJadwalForAbsen}
+        appData={appData}
+        currentUser={currentUser}
+        onSave={handleSaveSesiMengajar}
+        onShowToast={onShowToast}
+        existingSesi={selectedExistingSesi}
+      />
     </div>
   );
 };

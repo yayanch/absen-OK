@@ -499,6 +499,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             recentLogs={recentLogs}
             onNavigateToInput={onNavigateToInput}
             onNavigateView={onNavigateView}
+            onUpdateAppData={onUpdateAppData}
+            onShowToast={onShowToast}
           />
         );
     }

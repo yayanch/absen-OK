@@ -66,14 +66,19 @@ export function mergeJadwalMengajar(
     }
   }
 
-  // 3. Deduplicate exact duplicate entries (same class, day, shift, teacher/mapel, and exact jam list)
+  // 3. Deduplicate exact duplicate entries (normalized class, day, shift, teacher/mapel, and jam list)
   const deduped: JadwalMengajarGuru[] = [];
   const seenIdentical = new Set<string>();
 
   for (const j of map.values()) {
     if (deletedSet.has(String(j.id))) continue;
     const jamStr = parseJamKeList(j.jamKe, j.jamKeList).sort((a, b) => a - b).join(',');
-    const identKey = `${j.kelasId || j.kelasNama}_${j.hari}_${j.shift || 'Pagi'}_${String(j.mataPelajaran).toLowerCase().trim()}_${jamStr}`;
+    const cName = String(j.kelasNama || j.kelasId || '').trim().toLowerCase();
+    const mapel = String(j.mataPelajaran || '').trim().toLowerCase();
+    const guru = String(j.guruNama || j.guruUsername || '').trim().toLowerCase();
+    const hari = String(j.hari || 'senin').trim().toLowerCase();
+    const shift = (String(j.shift || 'pagi').toLowerCase() === 'siang') ? 'siang' : 'pagi';
+    const identKey = `${cName}_${hari}_${shift}_${mapel}_${guru}_${jamStr}`;
     if (!seenIdentical.has(identKey)) {
       seenIdentical.add(identKey);
       deduped.push(j);

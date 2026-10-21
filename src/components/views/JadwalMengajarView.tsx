@@ -40,15 +40,18 @@ import {
   Table2,
   ChevronDown,
   ChevronUp,
-  Tv
+  Tv,
+  FileText
 } from 'lucide-react';
-import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem } from '../../types';
+import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem, AbsensiMengajarGuruItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
 import { Pagination } from '../Pagination';
 import { SearchableSelect, SearchableOption } from '../common/SearchableSelect';
-import { addAuditLog, cleanMapelName, commitAppDataToServer, determineKelasKelompok, extractKelasTingkat } from '../../utils/helpers';
+import { addAuditLog, cleanMapelName, commitAppDataToServer, determineKelasKelompok, extractKelasTingkat, getTodayString } from '../../utils/helpers';
 import { DEFAULT_MATA_PELAJARAN } from '../../data/initialData';
 import { AbsenHarianGuruTab } from './AbsenHarianGuruTab';
+import { ModalAbsenSiswaMengajar } from './jadwal/ModalAbsenSiswaMengajar';
+import { RiwayatPresensiMengajarTab } from './jadwal/RiwayatPresensiMengajarTab';
 import { isMenuAllowed } from '../../utils/rolePermissionEngine';
 
 export { determineKelasKelompok, extractKelasTingkat };
@@ -293,10 +296,20 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active Main Tab: 'matriks' (Grid Jadwal Mingguan) vs 'tabel' (Daftar & Kelola) vs 'absen_guru' (Absen Harian Guru)
-  const [activeTab, setActiveTab] = useState<'matriks' | 'tabel' | 'absen_guru'>('matriks');
+  // Active Main Tab: 'matriks' | 'tabel' | 'absen_guru' | 'riwayat_absen_mengajar'
+  const [activeTab, setActiveTab] = useState<'matriks' | 'tabel' | 'absen_guru' | 'riwayat_absen_mengajar'>('matriks');
   // Modal state untuk formulir input/edit jadwal (hanya muncul saat klik "+ Isi" pada matriks atau edit)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+
+  // Modal Absensi Siswa Kelas Mengajar Guru (Jurnal KBM Mandiri)
+  const [isAbsenSiswaModalOpen, setIsAbsenSiswaModalOpen] = useState(false);
+  const [selectedJadwalForAbsen, setSelectedJadwalForAbsen] = useState<JadwalMengajarGuru | null>(null);
+  const [selectedExistingSesi, setSelectedExistingSesi] = useState<AbsensiMengajarGuruItem | null>(null);
+
+  // Solusi Tumpang Tindih & Bentrok Jam State
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictResolutionLoading, setConflictResolutionLoading] = useState(false);
+  const [matrixSlotViewMode, setMatrixSlotViewMode] = useState<'clean' | 'sideBySide' | 'expanded'>('clean');
 
   // Copy-Paste Clipboard State untuk Matriks Mengajar
   const [copiedSchedule, setCopiedSchedule] = useState<{
@@ -1479,6 +1492,211 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     onShowToast(`Berhasil mempertahankan jadwal dan menghapus ${toRemoveIds.length} jadwal duplikat!`, 'success');
   };
 
+  /* =========================================================================
+     ABSENSI SISWA KELAS MENGAJAR GURU (MANDIRI & TERPISAH)
+     ========================================================================= */
+  const todayDateStr = getTodayString();
+
+  const getSesiForJadwalToday = useCallback(
+    (jadwalId: string, tanggalStr: string = todayDateStr) => {
+      return (appData.presensiMengajarGuru || []).find(
+        (p) => p.jadwalId === jadwalId && p.tanggal === tanggalStr
+      );
+    },
+    [appData.presensiMengajarGuru, todayDateStr]
+  );
+
+  const handleOpenAbsenSiswa = (jadwal: JadwalMengajarGuru, targetDate: string = todayDateStr) => {
+    setSelectedJadwalForAbsen(jadwal);
+    const existing = (appData.presensiMengajarGuru || []).find(
+      (p) => p.jadwalId === jadwal.id && p.tanggal === targetDate
+    );
+    setSelectedExistingSesi(existing || null);
+    setIsAbsenSiswaModalOpen(true);
+  };
+
+  const handleOpenAbsenFromSesi = (sesi: AbsensiMengajarGuruItem) => {
+    const matchedJadwal = allJadwalList.find((j) => j.id === sesi.jadwalId) || {
+      id: sesi.jadwalId || 'JADWAL_UNKNOWN',
+      guruUsername: sesi.guruUsername,
+      guruNama: sesi.guruNama,
+      hari: sesi.hari as any,
+      shift: 'Pagi',
+      kelasId: sesi.kelasId,
+      kelasNama: sesi.kelasNama,
+      mataPelajaran: sesi.mataPelajaran,
+      jamKe: sesi.jamPelajaran || 'Jam KBM',
+      jamKeList: [],
+    };
+    setSelectedJadwalForAbsen(matchedJadwal as any);
+    setSelectedExistingSesi(sesi);
+    setIsAbsenSiswaModalOpen(true);
+  };
+
+  const handleSaveSesiMengajar = async (sesi: AbsensiMengajarGuruItem) => {
+    try {
+      const res = await fetch('/api/presensi-mengajar/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sesi }),
+      });
+      const data = await res.json();
+      if (data.success && data.sesi) {
+        const existingList = appData.presensiMengajarGuru || [];
+        const updatedList = existingList.some((s) => s.id === data.sesi.id)
+          ? existingList.map((s) => (s.id === data.sesi.id ? data.sesi : s))
+          : [data.sesi, ...existingList];
+
+        const updatedAppData = addAuditLog(
+          { ...appData, presensiMengajarGuru: updatedList },
+          'Absensi Kelas Mengajar',
+          `Guru ${data.sesi.guruNama} mengabsen kelas ${data.sesi.kelasNama} (${data.sesi.mataPelajaran})`
+        );
+        onUpdateAppData(updatedAppData);
+        return;
+      }
+    } catch (e) {
+      console.warn('API save error, saving locally to appData', e);
+    }
+
+    // Local fallback
+    const existingList = appData.presensiMengajarGuru || [];
+    const updatedList = existingList.some((s) => s.id === sesi.id)
+      ? existingList.map((s) => (s.id === sesi.id ? sesi : s))
+      : [sesi, ...existingList];
+
+    const updatedAppData = addAuditLog(
+      { ...appData, presensiMengajarGuru: updatedList },
+      'Absensi Kelas Mengajar',
+      `Guru ${sesi.guruNama} mengabsen kelas ${sesi.kelasNama} (${sesi.mataPelajaran})`
+    );
+    onUpdateAppData(updatedAppData);
+    commitAppDataToServer(updatedAppData).catch(() => {});
+  };
+
+  const handleDeleteSesiMengajar = async (sesiId: string) => {
+    onConfirmModal(
+      'Hapus Rekaman Presensi Mengajar',
+      'Apakah Anda yakin ingin menghapus rekaman sesi presensi mengajar ini?',
+      'danger',
+      async () => {
+        try {
+          await fetch('/api/presensi-mengajar/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: sesiId }),
+          });
+        } catch (e) {}
+
+        const updatedList = (appData.presensiMengajarGuru || []).filter((s) => s.id !== sesiId);
+        const updatedAppData = addAuditLog(
+          { ...appData, presensiMengajarGuru: updatedList },
+          'Hapus Presensi Sesi Mengajar',
+          `Menghapus rekaman sesi presensi mengajar ${sesiId}`
+        );
+        onUpdateAppData(updatedAppData);
+        commitAppDataToServer(updatedAppData).catch(() => {});
+        onShowToast('Sesi presensi mengajar berhasil dihapus!', 'success');
+      }
+    );
+  };
+
+  // Realtime Conflict & Overlap Statistics across all schedules
+  const conflictStats = useMemo(() => {
+    const byGroup = new Map<string, JadwalMengajarGuru[]>();
+    for (const j of allJadwalList) {
+      const cName = String(j.kelasNama || kelasList.find((k) => k.id === j.kelasId)?.nama || j.kelasId || 'Kelas').trim().toUpperCase();
+      const hari = String(j.hari || 'Senin').trim().toUpperCase();
+      const shift = (String(j.shift || 'Pagi').toLowerCase() === 'siang') ? 'SIANG' : 'PAGI';
+      const key = `${cName} | ${hari} | ${shift}`;
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key)!.push(j);
+    }
+
+    const conflictsList: Array<{
+      groupKey: string;
+      className: string;
+      hari: string;
+      shift: string;
+      jam: number;
+      schedules: JadwalMengajarGuru[];
+    }> = [];
+
+    for (const [groupKey, items] of byGroup.entries()) {
+      const [cName, hari, shift] = groupKey.split(' | ');
+      const jamSlots: Record<number, JadwalMengajarGuru[]> = {};
+      for (const item of items) {
+        const jams = parseJamKeList(item.jamKe, item.jamKeList);
+        for (const jam of jams) {
+          if (!jamSlots[jam]) jamSlots[jam] = [];
+          jamSlots[jam].push(item);
+        }
+      }
+      for (const [jamStr, sList] of Object.entries(jamSlots)) {
+        if (sList.length > 1) {
+          conflictsList.push({
+            groupKey,
+            className: cName,
+            hari,
+            shift,
+            jam: Number(jamStr),
+            schedules: sList,
+          });
+        }
+      }
+    }
+
+    const groupedConflicts = new Map<string, Array<{ jam: number; schedules: JadwalMengajarGuru[] }>>();
+    conflictsList.forEach((c) => {
+      if (!groupedConflicts.has(c.groupKey)) groupedConflicts.set(c.groupKey, []);
+      groupedConflicts.get(c.groupKey)!.push({ jam: c.jam, schedules: c.schedules });
+    });
+
+    return {
+      totalConflicts: conflictsList.length,
+      conflictingGroupsCount: groupedConflicts.size,
+      groupedConflicts,
+      conflictsList,
+    };
+  }, [allJadwalList, kelasList]);
+
+  // Server-Authoritative Hard Conflict Resolution Handler
+  const handleServerResolveConflicts = async (mode: 'smart_trim' | 'shift_free' | 'keep_first') => {
+    if (readOnly) return;
+    setConflictResolutionLoading(true);
+    try {
+      const res = await fetch('/api/jadwal-mengajar/resolve-conflicts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const result = await res.json();
+      if (result.success && Array.isArray(result.jadwalMengajar)) {
+        const updatedAppData = addAuditLog(
+          {
+            ...appData,
+            jadwalMengajar: result.jadwalMengajar,
+            deletedJadwalIds: Array.from(new Set([...(appData.deletedJadwalIds || []), ...(result.removedIds || [])])),
+          },
+          'Solusi Bentrok Jadwal Server',
+          result.message || 'Menyelesaikan konflik jadwal tumpang tindih'
+        );
+        onUpdateAppData(updatedAppData);
+        onShowToast(result.message || 'Konflik jadwal berhasil diselesaikan!', 'success');
+        setIsConflictModalOpen(false);
+        return;
+      }
+    } catch (err: any) {
+      console.warn('Gagal menghubungi endpoint server resolusi konflik, menggunakan fallback lokal:', err);
+    } finally {
+      setConflictResolutionLoading(false);
+    }
+
+    // Client-side fallback if server endpoint was unreachable
+    handleCleanDuplicates();
+    setIsConflictModalOpen(false);
+  };
+
   // Clean duplicate overlapping schedules handler (Robust Slot-Level Anti-Overlap)
   const handleCleanDuplicates = () => {
     if (readOnly || allJadwalList.length === 0) return;
@@ -1486,18 +1704,18 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
     const cleanedList: JadwalMengajarGuru[] = [];
     let conflictCount = 0;
 
-    // Group by class + hari + shift
+    // Group by class + hari + shift (normalized)
     const map = new Map<string, JadwalMengajarGuru[]>();
     for (const j of allJadwalList) {
-      const kelasKey = j.kelasId || j.kelasNama || 'unknown';
-      const hariKey = j.hari || 'Senin';
-      const shiftKey = j.shift || 'Pagi';
+      const kelasKey = String(j.kelasNama || kelasList.find((k) => k.id === j.kelasId)?.nama || j.kelasId || 'unknown').trim().toUpperCase();
+      const hariKey = String(j.hari || 'Senin').trim().toUpperCase();
+      const shiftKey = (String(j.shift || 'Pagi').toLowerCase() === 'siang') ? 'SIANG' : 'PAGI';
       const groupKey = `${kelasKey}_${hariKey}_${shiftKey}`;
       if (!map.has(groupKey)) map.set(groupKey, []);
       map.get(groupKey)!.push({ ...j });
     }
 
-    for (const [groupKey, items] of map.entries()) {
+    for (const [, items] of map.entries()) {
       const activeSlots = new Set<number>();
       for (const item of items) {
         const currentJamList = parseJamKeList(item.jamKe, item.jamKeList);
@@ -1510,10 +1728,8 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           if (nonConflictingJam.length < currentJamList.length) {
             conflictCount++;
           }
-          // Mark these jams as taken
           nonConflictingJam.forEach((jam) => activeSlots.add(jam));
 
-          // Rebuild item with non-conflicting jam list
           const sortedJam = [...nonConflictingJam].sort((a, b) => a - b);
           cleanedList.push({
             ...item,
@@ -1531,9 +1747,9 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
 
     onConfirmModal(
       'Bersihkan Jadwal Tumpang Tindih & Bentrok Jam',
-      `Ditemukan ${conflictCount} konflik tumpang tindih pada jam pelajaran. Apakah Anda ingin membersihkan dan merapikan seluruh jadwal yang bentrok secara otomatis?`,
+      `Ditemukan ${conflictCount} konflik tumpang tindih pada jam pelajaran. Apakah Anda ingin membersihkan dan merapikan seluruh jadwal yang bentrok secara otomatis langsung ke server?`,
       'emerald',
-      () => {
+      async () => {
         const removedIds = allJadwalList
           .filter((j) => !cleanedList.some((c) => c.id === j.id))
           .map((j) => String(j.id));
@@ -2276,16 +2492,34 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               <span>Cetak</span>
             </button>
 
-            {/* Bersihkan Tumpang Tindih */}
+            {/* Pusat Solusi Tumpang Tindih & Bentrok Jam */}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setIsConflictModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-100 bg-amber-500/30 hover:bg-amber-500/40 border border-amber-300/40 transition cursor-pointer shadow-xs"
+                title="Buka Pusat Solusi Tumpang Tindih & Bentrok Jam (Pilihan Solusi Alternatif)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Solusi Tumpang Tindih</span>
+                {conflictStats.totalConflicts > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-amber-950 font-black text-[10px]">
+                    {conflictStats.totalConflicts}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Bersihkan Tumpang Tindih Cepat */}
             {!readOnly && allJadwalList.length > 0 && (
               <button
                 type="button"
-                onClick={handleCleanDuplicates}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 transition cursor-pointer"
-                title="Bersihkan Jadwal Ganda / Tumpang Tindih Otomatis"
+                onClick={() => handleServerResolveConflicts('smart_trim')}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 transition cursor-pointer"
+                title="Bersihkan Jadwal Ganda & Rapikan Jam Langsung ke Server"
               >
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
-                <span>Bersihkan Tumpang Tindih</span>
+                <span>Auto-Clean</span>
               </button>
             )}
 
@@ -2358,6 +2592,26 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
               </span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('riwayat_absen_mengajar')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              activeTab === 'riwayat_absen_mengajar'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-indigo-400" />
+            <span>Riwayat Absen Mengajar</span>
+            {(appData.presensiMengajarGuru || []).length > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === 'riwayat_absen_mengajar' ? 'bg-white/20 text-white' : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+              }`}>
+                {(appData.presensiMengajarGuru || []).length}
+              </span>
+            )}
+          </button>
 
           <button
             type="button"
@@ -2822,6 +3076,260 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL: PUSAT SOLUSI TUMPANG TINDIH & BENTROK JADWAL
+          Menyediakan 4 pilihan solusi alternatif yang komprehensif
+          ===================================================================== */}
+      {isConflictModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
+          <div
+            className="fixed inset-0"
+            onClick={() => !conflictResolutionLoading && setIsConflictModalOpen(false)}
+          />
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl my-6 overflow-hidden z-10 flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/20 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 shadow-md">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Pusat Solusi Tumpang Tindih &amp; Bentrok Jadwal</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-100">
+                      {conflictStats.totalConflicts} Bentrok
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    Sistem mendeteksi jadwal yang bertabrakan di kelas, hari, atau jam yang sama. Silakan pilih solusi terbaik untuk sekolah Anda:
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !conflictResolutionLoading && setIsConflictModalOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-5">
+              {/* Status Summary Banner */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                  <div className="text-xs font-semibold text-amber-800 dark:text-amber-300">Total Slot Jam Bentrok</div>
+                  <div className="text-2xl font-black text-amber-900 dark:text-amber-100 mt-1">{conflictStats.totalConflicts}</div>
+                  <div className="text-[11px] text-amber-700/80 dark:text-amber-400">Jam pelajaran bertabrakan</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+                  <div className="text-xs font-semibold text-blue-800 dark:text-blue-300">Kelompok Rombel Terdampak</div>
+                  <div className="text-2xl font-black text-blue-900 dark:text-blue-100 mt-1">{conflictStats.conflictingGroupsCount}</div>
+                  <div className="text-[11px] text-blue-700/80 dark:text-blue-400">Kombinasi Kelas &amp; Hari</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Mode Sinkronisasi</div>
+                  <div className="text-sm font-black text-emerald-900 dark:text-emerald-100 mt-1.5 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Database Otomatis</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-700/80 dark:text-emerald-400">Perubahan permanen di server</div>
+                </div>
+              </div>
+
+              {/* 4 Alternative Solutions Cards */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Pilihan Solusi Alternatif:
+                </h4>
+
+                {/* Solusi 1: Auto-Clean Cerdas */}
+                <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/40 dark:bg-emerald-950/20 hover:border-emerald-400 transition space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        1
+                      </div>
+                      <div>
+                        <div className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <span>Solusi 1: Bersihkan &amp; Rapikan Otomatis (Rekomendasi)</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
+                            Permanen di DB
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                          Menghapus 100% duplikat jadwal identik dari hasil import berulang, dan merapikan jam pelajaran yang bentrok secara otomatis langsung ke server &amp; database MySQL.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={conflictResolutionLoading || conflictStats.totalConflicts === 0}
+                      onClick={() => handleServerResolveConflicts('smart_trim')}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition cursor-pointer shrink-0 shadow-sm flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{conflictResolutionLoading ? 'Memproses...' : 'Terapkan Solusi 1'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Solusi 2: Geser ke Jam Kosong */}
+                <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-800/80 bg-blue-50/40 dark:bg-blue-950/20 hover:border-blue-400 transition space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        2
+                      </div>
+                      <div>
+                        <div className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <span>Solusi 2: Geser ke Jam Kosong (Pertahankan JP Mengajar)</span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                          Jadwal yang bentrok dipindahkan otomatis ke jam pelajaran yang masih kosong (Jam 1 s.d. 10) di hari yang sama pada kelas tersebut, sehingga total jam pelajaran (JP) guru tidak berkurang.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={conflictResolutionLoading || conflictStats.totalConflicts === 0}
+                      onClick={() => handleServerResolveConflicts('shift_free')}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer shrink-0 shadow-sm flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{conflictResolutionLoading ? 'Memproses...' : 'Terapkan Solusi 2'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Solusi 3: Mode Tampilan Rapi pada Matriks */}
+                <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-800/80 bg-purple-50/40 dark:bg-purple-950/20 hover:border-purple-400 transition space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        3
+                      </div>
+                      <div>
+                        <div className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <span>Solusi 3: Mode Tampilan Rapi (Single Slot View)</span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                          Merapikan tampilan tabel matriks jadwal agar tidak menumpuk berantakan. Setiap kotak jam hanya menampilkan 1 kartu jadwal utama dan tombol kilat untuk membereskannya tanpa merusak tata letak tabel.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMatrixSlotViewMode('clean');
+                        setActiveTab('matriks');
+                        setIsConflictModalOpen(false);
+                        onShowToast('Mode Tampilan Rapi diaktifkan!', 'success');
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/60 dark:hover:bg-purple-900/80 border border-purple-300 transition cursor-pointer shrink-0 shadow-sm flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Aktifkan Mode Rapi</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Solusi 4: Tinjauan Daftar Konflik per Kelas */}
+              {conflictStats.conflictsList.length > 0 && (
+                <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Solusi 4: Tinjau &amp; Pilih Manual per Rombel ({conflictStats.conflictingGroupsCount} Rombel)
+                    </h4>
+                    <span className="text-[11px] text-slate-400">Klik "Pilih Utama" untuk mempertahankan salah satu</span>
+                  </div>
+
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {Array.from(conflictStats.groupedConflicts.entries()).map(([grpKey, slots]) => {
+                      const [cName, hari, shift] = grpKey.split(' | ');
+                      const uniqueSchedMap = new Map<string, JadwalMengajarGuru>();
+                      slots.forEach((s) => s.schedules.forEach((sch) => uniqueSchedMap.set(String(sch.id), sch)));
+                      const groupSchedules = Array.from(uniqueSchedMap.values());
+
+                      return (
+                        <div
+                          key={grpKey}
+                          className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-extrabold text-xs">
+                                {cName}
+                              </span>
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                Hari {hari}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold">
+                                {shift}
+                              </span>
+                            </div>
+                            <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              <span>{slots.length} Slot Jam Bentrok</span>
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {groupSchedules.map((sch) => (
+                              <div
+                                key={sch.id}
+                                className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 shadow-2xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-extrabold text-xs text-blue-700 dark:text-blue-400 truncate">
+                                    {cleanMapelName(sch.mataPelajaran)}
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
+                                    {sch.guruNama}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-slate-400">
+                                    {sch.jamKe}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveSlotConflict(groupSchedules, sch)}
+                                  className="px-2 py-1 rounded-lg text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer shrink-0 shadow-2xs"
+                                  title="Jadikan jadwal ini sebagai jadwal utama dan hapus bentrokan lainnya"
+                                >
+                                  Pilih Utama
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 flex items-center justify-between">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Semua pembersihan akan disinkronkan ke server dan database secara otomatis.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsConflictModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
@@ -3319,6 +3827,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                               {groupSchedules.map((item, idx) => {
                                 const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
                                 const isSiang = (item.shift || 'Pagi') === 'Siang';
+                                const todaySesi = getSesiForJadwalToday(item.id);
                                 const timeStr = itemJamList.length > 0
                                   ? `${getJamPelajaranTime(Math.min(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[0]} - ${getJamPelajaranTime(Math.max(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[1]}`
                                   : '';
@@ -3411,7 +3920,20 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                       )}
                                     </td>
                                     <td className="py-3 px-4 text-center">
-                                      <div className="flex items-center justify-center gap-1">
+                                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                         <button
+                                           type="button"
+                                           onClick={() => handleOpenAbsenSiswa(item)}
+                                           className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
+                                             todaySesi
+                                               ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                                               : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                           }`}
+                                           title={todaySesi ? 'Edit Absensi Siswa Kelas Hari Ini' : 'Buka Lembar Absen Kelas'}
+                                         >
+                                           <UserCheck className="w-3.5 h-3.5" />
+                                           <span>{todaySesi ? 'Sudah Absen' : 'Absen Kelas'}</span>
+                                         </button>
                                         {!readOnly && (
                                           <>
                                             <button
@@ -3614,6 +4136,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                         const itemJamList = parseJamKeList(item.jamKe, item.jamKeList);
                         const isSiang = (item.shift || 'Pagi') === 'Siang';
                         const kel = getKelasKelompok(item.kelasNama, item.kelasId);
+                        const todaySesi = getSesiForJadwalToday(item.id);
                         const timeStr = itemJamList.length > 0
                           ? `${getJamPelajaranTime(Math.min(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[0]} - ${getJamPelajaranTime(Math.max(...itemJamList), isSiang ? 'Siang' : 'Pagi').split(' - ')[1]}`
                           : '';
@@ -3727,7 +4250,20 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                               )}
                             </td>
                             <td className="py-3 px-4 text-center">
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                         <button
+                                           type="button"
+                                           onClick={() => handleOpenAbsenSiswa(item)}
+                                           className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
+                                             todaySesi
+                                               ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                                               : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                           }`}
+                                           title={todaySesi ? 'Edit Absensi Siswa Kelas Hari Ini' : 'Buka Lembar Absen Kelas'}
+                                         >
+                                           <UserCheck className="w-3.5 h-3.5" />
+                                           <span>{todaySesi ? 'Sudah Absen' : 'Absen Kelas'}</span>
+                                         </button>
                                 {!readOnly && (
                                   <>
                                     <button
@@ -3796,6 +4332,20 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           onShowToast={onShowToast}
           onBackToTable={() => setActiveTab('tabel')}
           initialShiftOption={tableShiftOption}
+        />
+      )}
+
+      {/* =====================================================================
+          TAB: RIWAYAT ABSEN MENGAJAR GURU (Jurnal KBM Mandiri)
+          ===================================================================== */}
+      {activeTab === 'riwayat_absen_mengajar' && (
+        <RiwayatPresensiMengajarTab
+          appData={appData}
+          currentUser={currentUser}
+          readOnly={readOnly}
+          onOpenAbsenModal={handleOpenAbsenFromSesi}
+          onDeleteSesi={handleDeleteSesiMengajar}
+          onShowToast={onShowToast}
         />
       )}
 
@@ -3915,6 +4465,49 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                   </button>
                 </div>
               )}
+
+              {/* Slot View Mode: Rapi vs Berdampingan vs Lengkap */}
+              <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMatrixSlotViewMode('clean')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    matrixSlotViewMode === 'clean'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Mode Bersih: 1 Jadwal Utama per Jam (Mencegah tampilan bertumpuk)"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mode Rapi</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatrixSlotViewMode('sideBySide')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    matrixSlotViewMode === 'sideBySide'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Mode Berdampingan: Tampilkan 2 jadwal bersebelahan (50% - 50%)"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Berdampingan</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatrixSlotViewMode('expanded')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    matrixSlotViewMode === 'expanded'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Mode Lengkap: Tampilkan semua kartu jadwal bertumpuk"
+                >
+                  <Table2 className="w-3.5 h-3.5" />
+                  <span>Lengkap</span>
+                </button>
+              </div>
             </div>
 
             {/* Selector based on mode or Teacher badge */}
@@ -4081,11 +4674,24 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                             return itemJamList.includes(jamNum);
                           });
 
-                          // Visually consolidate exact duplicate entries for this cell (same subject, same class, same teacher)
+                          // Visually consolidate duplicate entries for this cell (normalized class, subject, teacher)
                           const matchedSchedules: JadwalMengajarGuru[] = [];
                           const seenInCell = new Set<string>();
                           for (const item of rawMatchedSchedules) {
-                            const key = `${item.kelasId || item.kelasNama}_${item.hari}_${item.shift || 'Pagi'}_${String(item.mataPelajaran).toLowerCase().trim()}_${item.guruUsername || item.guruNama}`;
+                            const cName = String(
+                              item.kelasNama ||
+                              kelasList.find((k) => k.id === item.kelasId)?.nama ||
+                              item.kelasId ||
+                              ''
+                            ).trim().toLowerCase();
+                            const mName = cleanMapelName(item.mataPelajaran).toLowerCase().trim();
+                            const gName = String(
+                              item.guruNama ||
+                              guruList.find((g) => g.username === item.guruUsername || g.id === item.guruId)?.nama ||
+                              item.guruUsername ||
+                              ''
+                            ).trim().toLowerCase();
+                            const key = `${cName}_${mName}_${gName}`;
                             if (!seenInCell.has(key)) {
                               seenInCell.add(key);
                               matchedSchedules.push(item);
@@ -4093,6 +4699,10 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                           }
 
                           const hasRawDuplicates = rawMatchedSchedules.length > matchedSchedules.length;
+                          const schedulesToDisplay =
+                            matrixSlotViewMode === 'clean' && matchedSchedules.length > 1
+                              ? [matchedSchedules[0]]
+                              : matchedSchedules;
 
                           return (
                             <td
@@ -4105,9 +4715,11 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                   : ''
                               }`}
                             >
-                              {matchedSchedules.length > 0 ? (
-                                <div className="space-y-1.5">
-                                  {matchedSchedules.map((matchedSchedule, sIdx) => (
+                              {schedulesToDisplay.length > 0 ? (
+                                <div className={matrixSlotViewMode === 'sideBySide' && matchedSchedules.length > 1 ? 'grid grid-cols-2 gap-1.5' : 'space-y-1.5'}>
+                                  {schedulesToDisplay.map((matchedSchedule, sIdx) => {
+                                     const todaySesi = getSesiForJadwalToday(matchedSchedule.id);
+                                     return (
                                     <div
                                       key={matchedSchedule.id || sIdx}
                                       className={`p-2 rounded-xl border space-y-1 ${
@@ -4171,58 +4783,75 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                           : matchedSchedule.kelasNama}
                                       </div>
                                       <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between pt-0.5">
-                                        <span className="text-[9px] px-1 py-0.2 rounded bg-blue-100/60 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-bold">
-                                          {matchedSchedule.shift || 'Pagi'}
-                                        </span>
-                                        {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
-                                          <div className="flex items-center gap-0.5 shrink-0">
-                                            {isAdmin && (
-                                              <>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleCopySchedule(matchedSchedule)}
-                                                  className="p-1 rounded-md text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
-                                                  title="Salin Jadwal ini (Copy)"
-                                                  aria-label="Salin Jadwal"
-                                                >
-                                                  <Copy className="w-3.5 h-3.5" />
-                                                </button>
-                                                {copiedSchedule && (
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handlePasteToCell(hari, jamNum)}
-                                                    className="p-1 rounded-md text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition cursor-pointer"
-                                                    title={`Tempel "${copiedSchedule.mataPelajaran}" ke sel ini`}
-                                                    aria-label="Tempel Jadwal"
-                                                  >
-                                                    <ClipboardCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                                  </button>
-                                                )}
-                                              </>
-                                            )}
-                                            <button
-                                              type="button"
-                                              onClick={() => handleStartEdit(matchedSchedule)}
-                                              className="p-1 rounded-md text-blue-600 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
-                                              title="Edit Jadwal"
-                                              aria-label="Edit Jadwal"
-                                            >
-                                              <Edit className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleDelete(matchedSchedule)}
-                                              className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
-                                              title="Hapus Jadwal"
-                                              aria-label="Hapus Jadwal"
-                                            >
-                                              <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
+                                         <span className="text-[9px] px-1 py-0.2 rounded bg-blue-100/60 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-bold">
+                                           {matchedSchedule.shift || "Pagi"}
+                                         </span>
+                                         {!readOnly && (isAdmin || isKurikulum || isStafJadwal || isGuruMapel) && (
+                                           <div className="flex items-center gap-0.5 shrink-0">
+                                             {isAdmin && (
+                                               <>
+                                                 <button
+                                                   type="button"
+                                                   onClick={() => handleCopySchedule(matchedSchedule)}
+                                                   className="p-1 rounded-md text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
+                                                   title="Salin Jadwal ini (Copy)"
+                                                   aria-label="Salin Jadwal"
+                                                 >
+                                                   <Copy className="w-3.5 h-3.5" />
+                                                 </button>
+                                                 {copiedSchedule && (
+                                                   <button
+                                                     type="button"
+                                                     onClick={() => handlePasteToCell(hari, jamNum)}
+                                                     className="p-1 rounded-md text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 transition cursor-pointer"
+                                                     title={`Tempel "${copiedSchedule.mataPelajaran}" ke sel ini`}
+                                                     aria-label="Tempel Jadwal"
+                                                   >
+                                                     <ClipboardCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                   </button>
+                                                 )}
+                                               </>
+                                             )}
+                                             <button
+                                               type="button"
+                                               onClick={() => handleStartEdit(matchedSchedule)}
+                                               className="p-1 rounded-md text-blue-600 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 transition cursor-pointer"
+                                               title="Edit Jadwal"
+                                               aria-label="Edit Jadwal"
+                                             >
+                                               <Edit className="w-3.5 h-3.5" />
+                                             </button>
+                                             <button
+                                               type="button"
+                                               onClick={() => handleDelete(matchedSchedule)}
+                                               className="p-1 rounded-md text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
+                                               title="Hapus Jadwal"
+                                               aria-label="Hapus Jadwal"
+                                             >
+                                               <Trash2 className="w-3.5 h-3.5" />
+                                             </button>
+                                           </div>
+                                         )}
+                                       </div>
 
-                                      {matchedSchedules.length > 1 && !readOnly && (
+                                       {/* Tombol Absen Kelas / Sudah Absen */}
+                                       <div className="pt-1 mt-1 border-t border-slate-200/80 dark:border-slate-800/80">
+                                         <button
+                                           type="button"
+                                           onClick={() => handleOpenAbsenSiswa(matchedSchedule)}
+                                           className={`w-full py-1 px-1.5 rounded-lg text-[10px] font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs ${
+                                             todaySesi
+                                               ? "bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700"
+                                               : "bg-blue-600 hover:bg-blue-700 text-white"
+                                           }`}
+                                           title={todaySesi ? "Edit Absensi Siswa Kelas Hari Ini" : "Buka Lembar Absen Kelas"}
+                                         >
+                                           <UserCheck className="w-3 h-3 shrink-0" />
+                                           <span className="truncate">{todaySesi ? "Sudah Absen" : "Absen Kelas"}</span>
+                                         </button>
+                                       </div>
+
+                                       {matchedSchedules.length > 1 && !readOnly && (
                                         <div className="pt-1 mt-1 border-t border-amber-200/80 dark:border-amber-800/80 flex items-center justify-between">
                                           <span className="text-[9px] font-bold text-amber-800 dark:text-amber-300">Pilihan #{sIdx + 1}</span>
                                           <button
@@ -4237,7 +4866,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                         </div>
                                       )}
                                     </div>
-                                  ))}
+                                   )})}
                                 </div>
                               ) : isUpacara ? (
                                 <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/70 space-y-1 shadow-2xs">
@@ -4313,6 +4942,22 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
           </div>
         </div>
       )}
+    
+      {/* Modal Absensi Siswa Kelas Mengajar Guru (Jurnal KBM Mandiri) */}
+      <ModalAbsenSiswaMengajar
+        isOpen={isAbsenSiswaModalOpen}
+        onClose={() => {
+          setIsAbsenSiswaModalOpen(false);
+          setSelectedJadwalForAbsen(null);
+          setSelectedExistingSesi(null);
+        }}
+        jadwal={selectedJadwalForAbsen}
+        appData={appData}
+        currentUser={currentUser}
+        onSave={handleSaveSesiMengajar}
+        onShowToast={onShowToast}
+        existingSesi={selectedExistingSesi}
+      />
     </div>
   );
 };

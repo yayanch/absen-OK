@@ -159,28 +159,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isSettingUpView, setIsSettingUpView] = useState<boolean>(true);
+  const [isSettingUpView, setIsSettingUpView] = useState<boolean>(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState<boolean>(false);
-
-  useEffect(() => {
-    setIsSettingUpView(true);
-    const timer = setTimeout(() => {
-      setIsSettingUpView(false);
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [
-    sekolah.loginBgType,
-    sekolah.loginBgImage,
-    sekolah.loginCardLayout,
-    sekolah.loginCardMaxWidth,
-    sekolah.loginCardStyle,
-    sekolah.loginContrastMode,
-    sekolah.loginCardOpacity,
-    sekolah.loginBgBlur,
-    sekolah.loginCardRounded,
-    sekolah.loginCardShadow,
-    sekolah.loginCardBorder,
-  ]);
   const [activeRoleTab, setActiveRoleTab] = useState<'semua' | 'siswa' | 'guru' | 'admin'>('semua');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());

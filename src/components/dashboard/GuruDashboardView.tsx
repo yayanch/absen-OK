@@ -1,11 +1,9 @@
-import React from 'react';
-import {
-  Calendar,
-} from 'lucide-react';
-import { AppData, UserSession, ViewType } from '../../types';
-import { formatDateIndo } from '../../utils/helpers';
-import { TeacherScheduleWidget } from './TeacherScheduleWidget';
-import { PageHeader } from '../common/UIComponents';
+import React from "react";
+import { Calendar } from "lucide-react";
+import { AppData, UserSession, ViewType } from "../../types";
+import { formatDateIndo } from "../../utils/helpers";
+import { TeacherScheduleWidget } from "./TeacherScheduleWidget";
+import { PageHeader } from "../common/UIComponents";
 
 interface GuruDashboardViewProps {
   appData: AppData;
@@ -18,6 +16,8 @@ interface GuruDashboardViewProps {
   recentLogs?: any[];
   onNavigateToInput: (kelasId?: string) => void;
   onNavigateView: (view: ViewType) => void;
+  onUpdateAppData?: (updated: AppData) => void;
+  onShowToast?: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
 export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
@@ -27,6 +27,8 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   setSelectedDate,
   onNavigateToInput,
   onNavigateView,
+  onUpdateAppData,
+  onShowToast,
 }) => {
   return (
     <div className="space-y-6">
@@ -52,8 +54,9 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
         selectedDate={selectedDate}
         onNavigateToInput={onNavigateToInput}
         onNavigateView={onNavigateView}
+        onUpdateAppData={onUpdateAppData}
+        onShowToast={onShowToast}
       />
     </div>
   );
 };
-

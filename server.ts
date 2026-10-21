@@ -470,7 +470,7 @@ let inMemoryAppDataCache: any = loadSavedAppDataCache() || null;
 if (inMemoryAppDataCache) {
   rebuildFastIndices(inMemoryAppDataCache);
 }
-let lastMySQLSyncTime = 0;
+let lastMySQLSyncTime = inMemoryAppDataCache ? Date.now() : 0;
 const MYSQL_SYNC_THROTTLE_MS = 15000; // Throttle to 15s to protect MySQL resource limit and prevent queue limit failures
 
 // Cooldown mechanism when hosting provider's max_connections_per_hour (limit: 500) is exceeded
@@ -827,6 +827,130 @@ function mergeSiswaServer(existingList: any[] = [], incomingList: any[] = [], de
   return Array.from(map.values()).filter((s) => !deletedSet.has(String(s.id)));
 }
 
+function parseJamServer(jamKe: any, jamKeList: any): number[] {
+  if (Array.isArray(jamKeList) && jamKeList.length > 0) {
+    return Array.from(new Set(jamKeList.map(Number))).filter((n) => n >= 1 && n <= 10).sort((a, b) => a - b);
+  }
+  if (!jamKe) return [];
+  const numbers = String(jamKe).match(/\d+/g);
+  return numbers ? Array.from(new Set(numbers.map(Number))).filter((n) => n >= 1 && n <= 10).sort((a, b) => a - b) : [];
+}
+
+function formatJamServer(jams: number[]): string {
+  if (!jams || jams.length === 0) return '';
+  const sorted = [...jams].sort((a, b) => a - b);
+  if (sorted.length === 1) return `Jam ke-${sorted[0]}`;
+  const isContiguous = sorted.every((val, idx) => idx === 0 || val === sorted[idx - 1] + 1);
+  if (isContiguous) return `Jam ke-${sorted[0]} - ${sorted[sorted.length - 1]} (${sorted.length} JP)`;
+  return `Jam ke-${sorted.join(', ')} (${sorted.length} JP)`;
+}
+
+function resolveJadwalConflictsServer(
+  list: any[] = [],
+  mode: 'smart_trim' | 'shift_free' | 'keep_first' = 'smart_trim'
+): { cleanedList: any[]; removedIds: string[]; trimmedCount: number; shiftedCount: number } {
+  if (!Array.isArray(list)) list = [];
+  const removedIds: string[] = [];
+  let trimmedCount = 0;
+  let shiftedCount = 0;
+
+  // 1. Group by class + hari + shift
+  const byGroup = new Map<string, any[]>();
+  for (const j of list) {
+    if (!j || !j.id) continue;
+    const cName = String(j.kelasNama || j.kelasId || 'KELAS').trim().toUpperCase();
+    const hari = String(j.hari || 'Senin').trim().toUpperCase();
+    const shift = (String(j.shift || 'Pagi').toLowerCase() === 'siang') ? 'SIANG' : 'PAGI';
+    const grpKey = `${cName}|${hari}|${shift}`;
+    if (!byGroup.has(grpKey)) byGroup.set(grpKey, []);
+    byGroup.get(grpKey)!.push({ ...j });
+  }
+
+  const cleanedList: any[] = [];
+
+  for (const [, items] of byGroup.entries()) {
+    const occupiedSlots = new Set<number>();
+    // First pass: deduplicate identical items (same mapel + same guru)
+    const seenMapelGuru = new Map<string, any>();
+    const filteredItems: any[] = [];
+
+    for (const item of items) {
+      const mapelNorm = String(item.mataPelajaran || '').trim().toLowerCase();
+      const guruNorm = String(item.guruNama || item.guruUsername || '').trim().toLowerCase();
+      const jams = parseJamServer(item.jamKe, item.jamKeList);
+      const jamKey = jams.join(',');
+      const identKey = `${mapelNorm}|${guruNorm}|${jamKey}`;
+
+      if (seenMapelGuru.has(identKey)) {
+        // Exact duplicate item -> mark removed
+        removedIds.push(String(item.id));
+      } else {
+        seenMapelGuru.set(identKey, item);
+        filteredItems.push(item);
+      }
+    }
+
+    // Second pass: handle slot collisions
+    for (const item of filteredItems) {
+      const origJams = parseJamServer(item.jamKe, item.jamKeList);
+      if (origJams.length === 0) {
+        cleanedList.push(item);
+        continue;
+      }
+
+      const availableJams = origJams.filter((jam) => !occupiedSlots.has(jam));
+
+      if (availableJams.length === origJams.length) {
+        // No conflict at all
+        origJams.forEach((j) => occupiedSlots.add(j));
+        cleanedList.push(item);
+      } else if (mode === 'shift_free' && availableJams.length < origJams.length) {
+        // Try shifting needed slots to free periods (1..10)
+        const neededCount = origJams.length;
+        const allFreePeriods: number[] = [];
+        for (let p = 1; p <= 10; p++) {
+          if (!occupiedSlots.has(p)) allFreePeriods.push(p);
+        }
+
+        if (allFreePeriods.length >= neededCount) {
+          const shiftedJams = allFreePeriods.slice(0, neededCount).sort((a, b) => a - b);
+          shiftedJams.forEach((j) => occupiedSlots.add(j));
+          shiftedCount++;
+          cleanedList.push({
+            ...item,
+            jamKeList: shiftedJams,
+            jamKe: formatJamServer(shiftedJams),
+          });
+        } else if (availableJams.length > 0) {
+          availableJams.forEach((j) => occupiedSlots.add(j));
+          trimmedCount++;
+          cleanedList.push({
+            ...item,
+            jamKeList: availableJams,
+            jamKe: formatJamServer(availableJams),
+          });
+        } else {
+          removedIds.push(String(item.id));
+        }
+      } else if (availableJams.length > 0) {
+        // Partial overlap: trim the colliding slots
+        availableJams.forEach((j) => occupiedSlots.add(j));
+        trimmedCount++;
+        cleanedList.push({
+          ...item,
+          jamKeList: availableJams,
+          jamKe: formatJamServer(availableJams),
+        });
+      } else {
+        // 100% overlap with existing scheduled slot: remove
+        removedIds.push(String(item.id));
+      }
+    }
+  }
+
+  return { cleanedList, removedIds, trimmedCount, shiftedCount };
+}
+
 function mergeJadwalMengajarServer(existingList: any[] = [], incomingList: any[] = [], deletedIds: string[] = []): any[] {
   if (!Array.isArray(existingList)) existingList = [];
   if (!Array.isArray(incomingList)) incomingList = [];
@@ -856,7 +980,9 @@ function mergeJadwalMengajarServer(existingList: any[] = [], incomingList: any[]
     }
   }
 
-  return Array.from(map.values()).filter((j) => !deletedSet.has(String(j.id)));
+  const rawMerged = Array.from(map.values()).filter((j) => !deletedSet.has(String(j.id)));
+  const { cleanedList } = resolveJadwalConflictsServer(rawMerged, 'smart_trim');
+  return cleanedList;
 }
 
 function mergePresensiServer(existingMap: any = {}, incomingMap: any = {}): any {
@@ -4416,6 +4542,177 @@ app.post("/api/global-state", async (req, res) => {
   res.json({ success: true, message: "Global state updated", version: appDataVersion });
 });
 
+// Dedicated Schedule Conflict Resolution Endpoint (Server-Authoritative Hard Clean)
+app.post("/api/jadwal-mengajar/resolve-conflicts", async (req, res) => {
+  try {
+    const mode = (req.body?.mode || "smart_trim") as "smart_trim" | "shift_free" | "keep_first";
+    if (!inMemoryAppDataCache) {
+      inMemoryAppDataCache = loadSavedAppDataCache() || { jadwalMengajar: [] };
+    }
+    const currentList = Array.isArray(inMemoryAppDataCache.jadwalMengajar) ? inMemoryAppDataCache.jadwalMengajar : [];
+    const { cleanedList, removedIds, trimmedCount, shiftedCount } = resolveJadwalConflictsServer(currentList, mode);
+
+    inMemoryAppDataCache.jadwalMengajar = cleanedList;
+    const currentDeleted = new Set(inMemoryAppDataCache.deletedJadwalIds || []);
+    removedIds.forEach((id) => currentDeleted.add(id));
+    inMemoryAppDataCache.deletedJadwalIds = Array.from(currentDeleted);
+
+    appDataVersion = Date.now();
+    saveAppDataCache(inMemoryAppDataCache);
+    queueAppDataPersist({ immediateMySQL: true });
+
+    // Directly delete removed rows from MySQL if connected
+    const config = loadSavedServerConfig();
+    if (config && removedIds.length > 0) {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        try {
+          const CHUNK_SIZE = 50;
+          for (let i = 0; i < removedIds.length; i += CHUNK_SIZE) {
+            const chunk = removedIds.slice(i, i + CHUNK_SIZE);
+            const ph = chunk.map(() => '?').join(',');
+            await pool.execute(`DELETE FROM jadwal_mengajar WHERE id IN (${ph});`, chunk).catch(() => {});
+          }
+        } catch (dbErr: any) {
+          console.warn('MySQL delete conflict schedules warning:', dbErr?.message || dbErr);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Berhasil menyelesaikan konflik jadwal: ${removedIds.length} duplikat dihapus, ${trimmedCount} jam dirapikan, ${shiftedCount} jam digeser ke jam kosong.`,
+      jadwalMengajar: cleanedList,
+      removedCount: removedIds.length,
+      trimmedCount,
+      shiftedCount,
+      version: appDataVersion
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || "Gagal menyelesaikan konflik jadwal" });
+  }
+});
+
+// ==========================================
+// DEDICATED TEACHER CLASS ATTENDANCE ENDPOINTS (ABSENSI MENGAJAR GURU)
+// ==========================================
+app.post("/api/presensi-mengajar/save", async (req, res) => {
+  try {
+    const sesi = req.body?.sesi;
+    if (!sesi || !sesi.guruUsername || !sesi.kelasId || !sesi.tanggal) {
+      return res.status(400).json({ success: false, message: "Data sesi presensi tidak lengkap." });
+    }
+
+    if (!inMemoryAppDataCache) {
+      inMemoryAppDataCache = loadSavedAppDataCache() || { presensiMengajarGuru: [] };
+    }
+    if (!Array.isArray(inMemoryAppDataCache.presensiMengajarGuru)) {
+      inMemoryAppDataCache.presensiMengajarGuru = [];
+    }
+
+    const sesiId = sesi.id || `PMG_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const fullSesi = {
+      ...sesi,
+      id: sesiId,
+      createdAt: sesi.createdAt || new Date().toISOString()
+    };
+
+    let matched = false;
+    inMemoryAppDataCache.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru.map((existing: any) => {
+      const matchId = String(existing.id) === String(sesiId);
+      const matchJadwalTanggal = sesi.jadwalId && existing.jadwalId && existing.jadwalId === sesi.jadwalId && existing.tanggal === sesi.tanggal;
+      const matchDetails = !sesi.jadwalId && existing.guruUsername === sesi.guruUsername && existing.kelasId === sesi.kelasId && existing.tanggal === sesi.tanggal && existing.mataPelajaran === sesi.mataPelajaran;
+      if (matchId || matchJadwalTanggal || matchDetails) {
+        matched = true;
+        return { ...existing, ...fullSesi, id: existing.id || sesiId };
+      }
+      return existing;
+    });
+
+    if (!matched) {
+      inMemoryAppDataCache.presensiMengajarGuru.push(fullSesi);
+    }
+
+    appDataVersion = Date.now();
+    saveAppDataCache(inMemoryAppDataCache);
+    queueAppDataPersist({ immediateMySQL: true });
+
+    // Directly persist to MySQL if configured
+    const config = loadSavedServerConfig();
+    if (config) {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        try {
+          await pool.execute(
+            `INSERT INTO presensi_mengajar_guru (id, jadwal_id, guru_username, guru_nama, tanggal, hari, kelas_id, kelas_nama, mata_pelajaran, materi_ajar, jam_pelajaran, presensi_siswa, catatan_guru, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               jadwal_id=VALUES(jadwal_id), guru_username=VALUES(guru_username), guru_nama=VALUES(guru_nama),
+               tanggal=VALUES(tanggal), hari=VALUES(hari), kelas_id=VALUES(kelas_id), kelas_nama=VALUES(kelas_nama),
+               mata_pelajaran=VALUES(mata_pelajaran), materi_ajar=VALUES(materi_ajar), jam_pelajaran=VALUES(jam_pelajaran),
+               presensi_siswa=VALUES(presensi_siswa), catatan_guru=VALUES(catatan_guru);`,
+            [
+              fullSesi.id,
+              fullSesi.jadwalId || '',
+              fullSesi.guruUsername || '',
+              fullSesi.guruNama || '',
+              fullSesi.tanggal || '',
+              fullSesi.hari || '',
+              fullSesi.kelasId || '',
+              fullSesi.kelasNama || '',
+              fullSesi.mataPelajaran || '',
+              fullSesi.materiAjar || '',
+              fullSesi.jamPelajaran || '',
+              JSON.stringify(fullSesi.presensiSiswa || []),
+              fullSesi.catatanGuru || '',
+              fullSesi.createdAt
+            ]
+          );
+        } catch (dbErr: any) {
+          console.warn('MySQL presensi_mengajar_guru direct save warning:', dbErr?.message || dbErr);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Presensi siswa kelas mengajar & jurnal berhasil disimpan!",
+      sesi: fullSesi,
+      version: appDataVersion
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || "Gagal menyimpan presensi kelas mengajar" });
+  }
+});
+
+app.post("/api/presensi-mengajar/delete", async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ success: false, message: "ID sesi tidak valid." });
+    }
+
+    if (inMemoryAppDataCache && Array.isArray(inMemoryAppDataCache.presensiMengajarGuru)) {
+      inMemoryAppDataCache.presensiMengajarGuru = inMemoryAppDataCache.presensiMengajarGuru.filter((p: any) => String(p.id) !== String(id));
+      appDataVersion = Date.now();
+      saveAppDataCache(inMemoryAppDataCache);
+      queueAppDataPersist({ immediateMySQL: true });
+    }
+
+    const config = loadSavedServerConfig();
+    if (config) {
+      const pool = getMySQLPool(config, true);
+      if (pool) {
+        await pool.execute("DELETE FROM presensi_mengajar_guru WHERE id = ?;", [id]).catch(() => {});
+      }
+    }
+
+    res.json({ success: true, message: "Sesi presensi mengajar berhasil dihapus", version: appDataVersion });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || "Gagal menghapus sesi presensi mengajar" });
+  }
+});
+
 // Dedicated Real-time Student & Profile Synchronization Endpoint
 app.post("/api/siswa/update", async (req, res) => {
   try {
@@ -5073,24 +5370,31 @@ app.post("/api/mysql/test", async (req, res) => {
       await db.execute(`
         CREATE TABLE IF NOT EXISTS presensi_mengajar_guru (
           id VARCHAR(100) PRIMARY KEY,
+          jadwal_id VARCHAR(100),
+          guru_username VARCHAR(100),
+          guru_nama VARCHAR(255) NOT NULL,
           tanggal DATE NOT NULL,
           hari VARCHAR(50) NOT NULL,
-          jam_ke VARCHAR(50),
-          guru_id VARCHAR(100) NOT NULL,
-          guru_nama VARCHAR(255) NOT NULL,
+          jam_pelajaran VARCHAR(100),
           kelas_id VARCHAR(100) NOT NULL,
           kelas_nama VARCHAR(100) NOT NULL,
-          kode_mapel VARCHAR(100),
-          nama_mapel VARCHAR(255) NOT NULL,
-          materi_pembelajaran TEXT,
-          status_kehadiran VARCHAR(50) DEFAULT 'Hadir',
-          keterangan TEXT,
+          mata_pelajaran VARCHAR(255) NOT NULL,
+          materi_ajar TEXT,
+          catatan_guru TEXT,
+          presensi_siswa LONGTEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           INDEX idx_pmg_tanggal (tanggal),
-          INDEX idx_pmg_guru (guru_id),
+          INDEX idx_pmg_guru (guru_username),
           INDEX idx_pmg_kelas (kelas_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS presensi_siswa LONGTEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS materi_ajar TEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS jadwal_id VARCHAR(100);`).catch(() => {});
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS guru_username VARCHAR(100);`).catch(() => {});
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS jam_pelajaran VARCHAR(100);`).catch(() => {});
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS catatan_guru TEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE presensi_mengajar_guru ADD COLUMN IF NOT EXISTS mata_pelajaran VARCHAR(255);`).catch(() => {});
 
       await db.execute(`
         CREATE TABLE IF NOT EXISTS hari_libur (

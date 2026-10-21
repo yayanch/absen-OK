@@ -29,6 +29,11 @@ export interface SekolahConfig {
   favicon?: string;
   namaKepalaSekolah?: string;
   nipKepalaSekolah?: string;
+  kepalaSekolah?: string;
+  kabupaten?: string;
+  headerTitle?: string;
+  headerSubtitle?: string;
+  browserTitle?: string;
   theme?: ThemeOption;
   themeMode?: 'light' | 'dark' | 'system';
   themePreset?: ThemeOption;

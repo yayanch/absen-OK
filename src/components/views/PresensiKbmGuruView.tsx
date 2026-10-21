@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import {
   BookOpenCheck,
@@ -34,7 +34,9 @@ import {
   BookOpen,
   ArrowRight,
   ShieldCheck,
-  CheckSquare
+  CheckSquare,
+  Award,
+  ChevronDown
 } from 'lucide-react';
 import {
   AppData,
@@ -84,13 +86,19 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
   onShowToast,
   onNavigateView
 }) => {
-  const [activeTab, setActiveTab] = useState<'mengabsen' | 'riwayat_tabel'>('mengabsen');
+  // Navigation tabs:
+  // 1. 'mengabsen': Form Presensi Mandiri Guru per Sesi Jadwal Kelas
+  // 2. 'riwayat_mandiri_guru': Tabel Riwayat Mandiri per Guru dengan Pilihan Guru & Profil Statistik Guru
+  // 3. 'rekap_semua_guru': Monitoring Rekap Semua Guru (Admin / Kurikulum)
+  const [activeTab, setActiveTab] = useState<'mengabsen' | 'riwayat_mandiri_guru' | 'rekap_semua_guru'>('riwayat_mandiri_guru');
+
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
   const [selectedGuruUsername, setSelectedGuruUsername] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterKelasId, setFilterKelasId] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all'); // 'all' or 'YYYY-MM'
 
-  // Modal states
+  // Modal & Interactive states
   const [activeSession, setActiveSession] = useState<{
     jadwal: JadwalMengajarGuru;
     existingLog?: AbsensiMengajarGuruItem;
@@ -103,10 +111,30 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
   >({});
 
   const [detailLog, setDetailLog] = useState<AbsensiMengajarGuruItem | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+  const [isAdminManualModalOpen, setIsAdminManualModalOpen] = useState<boolean>(false);
 
-  // User details
+  // Admin Manual Entry Form State
+  const [adminManualForm, setAdminManualForm] = useState({
+    guruUsername: '',
+    guruNama: '',
+    tanggal: getTodayString(),
+    kelasId: '',
+    mataPelajaran: '',
+    jamPelajaran: 'Jam ke-1 & 2 (07:30 - 09:00)',
+    materiAjar: '',
+    catatanGuru: ''
+  });
+
+  // User details & Roles
   const loggedUsername = (currentUser.data as any)?.username || (currentUser.data as any)?.nama || '';
   const loggedNama = (currentUser.data as any)?.nama || '';
+
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
+  const isKurikulum = currentUser.role === 'kurikulum' || (currentUser.roles || []).includes('kurikulum');
+  const isPiket = currentUser.role === 'guru_piket' || (currentUser.roles || []).includes('guru_piket');
+  const isAdminOrStaff = isAdmin || isKurikulum || isPiket;
+  const isTeacher = currentUser.role === 'guru';
 
   // List of all teachers
   const listGuru = useMemo(() => {
@@ -145,7 +173,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     return getIndonesianDayName(selectedDate);
   }, [selectedDate]);
 
-  // Teacher's Schedule for the selected day
+  // Teacher's Schedule for the selected day (for Tab 1: Mengabsen)
   const teacherSchedules = useMemo(() => {
     if (!currentGuru) return [];
 
@@ -184,6 +212,139 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
       );
     });
   };
+
+  // ----------------------------------------------------
+  // DEDICATED PER-TEACHER LOGS & STATISTICS (FOR TAB 2)
+  // ----------------------------------------------------
+  const teacherSpecificLogs = useMemo(() => {
+    if (!currentGuru) return [];
+    const allLogs = appData.presensiMengajarGuru || [];
+
+    return allLogs.filter((l) => {
+      const matchUsername =
+        currentGuru.username &&
+        l.guruUsername &&
+        l.guruUsername.toLowerCase() === currentGuru.username.toLowerCase();
+      const matchNama =
+        currentGuru.nama &&
+        l.guruNama &&
+        l.guruNama.toLowerCase() === currentGuru.nama.toLowerCase();
+
+      return matchUsername || matchNama;
+    });
+  }, [appData.presensiMengajarGuru, currentGuru]);
+
+  // Filtered dedicated teacher logs by search, kelas, and month
+  const filteredTeacherLogs = useMemo(() => {
+    let list = [...teacherSpecificLogs];
+
+    if (filterKelasId !== 'all') {
+      list = list.filter((l) => l.kelasId === filterKelasId);
+    }
+
+    if (filterMonth !== 'all') {
+      list = list.filter((l) => l.tanggal && l.tanggal.startsWith(filterMonth));
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (l) =>
+          l.kelasNama?.toLowerCase().includes(q) ||
+          l.mataPelajaran?.toLowerCase().includes(q) ||
+          l.materiAjar?.toLowerCase().includes(q) ||
+          l.tanggal?.includes(q) ||
+          l.hari?.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort newest first
+    return list.sort((a, b) => new Date(b.createdAt || b.tanggal).getTime() - new Date(a.createdAt || a.tanggal).getTime());
+  }, [teacherSpecificLogs, filterKelasId, filterMonth, searchQuery]);
+
+  // Teacher Profile Metrics
+  const teacherMetrics = useMemo(() => {
+    const totalSesi = teacherSpecificLogs.length;
+
+    // Calculate total JP
+    let totalJp = 0;
+    teacherSpecificLogs.forEach((l) => {
+      // Parse JP from jamPelajaran string or fallback to 2
+      const match = l.jamPelajaran?.match(/\d+/g);
+      if (match && match.length >= 2 && l.jamPelajaran?.includes('&')) {
+        totalJp += 2;
+      } else if (match && match.length > 0) {
+        totalJp += 2; // standard 2 JP session
+      } else {
+        totalJp += 2;
+      }
+    });
+
+    // Student attendance rate
+    let totalSiswaTracked = 0;
+    let totalSiswaHadir = 0;
+    teacherSpecificLogs.forEach((l) => {
+      (l.presensiSiswa || []).forEach((ps) => {
+        totalSiswaTracked += 1;
+        if (ps.status === 'H') totalSiswaHadir += 1;
+      });
+    });
+
+    const averageHadirPct =
+      totalSiswaTracked > 0 ? Math.round((totalSiswaHadir / totalSiswaTracked) * 100) : 100;
+
+    // Unique classes taught
+    const uniqueKelas = new Set(teacherSpecificLogs.map((l) => l.kelasNama).filter(Boolean));
+
+    // Subjects taught
+    const mapelTaught = Array.from(
+      new Set(teacherSpecificLogs.map((l) => l.mataPelajaran).filter(Boolean))
+    );
+
+    return {
+      totalSesi,
+      totalJp,
+      averageHadirPct,
+      totalKelas: uniqueKelas.size,
+      mapelTaught: mapelTaught.length > 0 ? mapelTaught.join(', ') : currentGuru?.mataPelajaran || '-'
+    };
+  }, [teacherSpecificLogs, currentGuru]);
+
+  // Available months in teacher logs for filter dropdown
+  const availableMonths = useMemo(() => {
+    const setMonths = new Set<string>();
+    teacherSpecificLogs.forEach((l) => {
+      if (l.tanggal && l.tanggal.length >= 7) {
+        setMonths.add(l.tanggal.slice(0, 7));
+      }
+    });
+    return Array.from(setMonths).sort().reverse();
+  }, [teacherSpecificLogs]);
+
+  // ----------------------------------------------------
+  // GLOBAL LOGS FOR ADMIN MONITORING (TAB 3)
+  // ----------------------------------------------------
+  const filteredGlobalLogs = useMemo(() => {
+    let list = appData.presensiMengajarGuru || [];
+
+    if (filterKelasId !== 'all') {
+      list = list.filter((l) => l.kelasId === filterKelasId);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (l) =>
+          l.guruNama?.toLowerCase().includes(q) ||
+          l.kelasNama?.toLowerCase().includes(q) ||
+          l.mataPelajaran?.toLowerCase().includes(q) ||
+          l.materiAjar?.toLowerCase().includes(q) ||
+          l.tanggal?.includes(q)
+      );
+    }
+
+    return list.sort((a, b) => new Date(b.createdAt || b.tanggal).getTime() - new Date(a.createdAt || a.tanggal).getTime());
+  }, [appData.presensiMengajarGuru, filterKelasId, searchQuery]);
 
   // Open Presensi KBM Form for a schedule
   const handleOpenAbsenSession = (jadwal: JadwalMengajarGuru) => {
@@ -318,7 +479,103 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
 
     onUpdateAppData(updatedAppData);
     setActiveSession(null);
-    onShowToast(`Presensi KBM Kelas ${jadwal.kelasNama} berhasil disimpan!`, 'success');
+    onShowToast(`Presensi KBM Kelas ${jadwal.kelasNama} berhasil disimpan ke tabel mandiri guru!`, 'success');
+  };
+
+  // Open Admin Manual Entry Form
+  const handleOpenAdminManualModal = () => {
+    const firstGuru = currentGuru || listGuru[0];
+    const firstKelas = (appData.kelas || [])[0];
+
+    setAdminManualForm({
+      guruUsername: firstGuru?.username || firstGuru?.nama || '',
+      guruNama: firstGuru?.nama || '',
+      tanggal: getTodayString(),
+      kelasId: firstKelas?.id || '',
+      mataPelajaran: firstGuru?.mataPelajaran || 'Mata Pelajaran',
+      jamPelajaran: 'Jam ke-1 & 2 (07:30 - 09:00)',
+      materiAjar: '',
+      catatanGuru: ''
+    });
+
+    // Populate students for first class
+    const siswaInKelas = (appData.siswa || []).filter((s) => s.kelasId === firstKelas?.id && s.status !== 'tidak_aktif');
+    const initialMap: Record<string, { status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | ''; catatan: string }> = {};
+    siswaInKelas.forEach((s) => {
+      initialMap[s.id] = { status: 'H', catatan: '' };
+    });
+    setPresensiSiswaMap(initialMap);
+
+    setIsAdminManualModalOpen(true);
+  };
+
+  // Admin Manual Class Change handler
+  const handleAdminClassChange = (newKelasId: string) => {
+    setAdminManualForm((prev) => ({ ...prev, kelasId: newKelasId }));
+    const siswaInKelas = (appData.siswa || []).filter((s) => s.kelasId === newKelasId && s.status !== 'tidak_aktif');
+    const initialMap: Record<string, { status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | ''; catatan: string }> = {};
+    siswaInKelas.forEach((s) => {
+      initialMap[s.id] = { status: 'H', catatan: '' };
+    });
+    setPresensiSiswaMap(initialMap);
+  };
+
+  // Save Admin Manual Entry
+  const handleSaveAdminManualEntry = () => {
+    if (!adminManualForm.guruNama || !adminManualForm.kelasId) {
+      onShowToast('Mohon lengkapi guru dan kelas terlebih dahulu!', 'warning');
+      return;
+    }
+
+    const selectedTargetGuru = listGuru.find(
+      (g) => g.username === adminManualForm.guruUsername || g.nama === adminManualForm.guruNama
+    );
+    const targetKelas = (appData.kelas || []).find((k) => k.id === adminManualForm.kelasId);
+    const siswaInKelas = (appData.siswa || []).filter((s) => s.kelasId === adminManualForm.kelasId && s.status !== 'tidak_aktif');
+
+    const presensiSiswaList: SiswaPresensiSesiGuru[] = siswaInKelas.map((s) => ({
+      siswaId: s.id,
+      siswaNama: s.nama,
+      status: presensiSiswaMap[s.id]?.status || 'H',
+      catatan: presensiSiswaMap[s.id]?.catatan || ''
+    }));
+
+    const dayName = getIndonesianDayName(adminManualForm.tanggal);
+
+    const newLogItem: AbsensiMengajarGuruItem = {
+      id: `pmg-adm-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      jadwalId: `manual-${Date.now()}`,
+      guruUsername: selectedTargetGuru?.username || adminManualForm.guruUsername,
+      guruNama: selectedTargetGuru?.nama || adminManualForm.guruNama,
+      tanggal: adminManualForm.tanggal,
+      hari: dayName,
+      kelasId: adminManualForm.kelasId,
+      kelasNama: targetKelas?.nama || adminManualForm.kelasId,
+      mataPelajaran: adminManualForm.mataPelajaran || 'Mata Pelajaran',
+      materiAjar: adminManualForm.materiAjar.trim() || 'Pembelajaran tatap muka / KBM mandiri',
+      jamPelajaran: adminManualForm.jamPelajaran || 'Jam ke-1 & 2',
+      presensiSiswa: presensiSiswaList,
+      catatanGuru: `${adminManualForm.catatanGuru.trim()} (Diinput oleh Admin: ${loggedUsername || 'Admin'})`,
+      createdAt: new Date().toISOString()
+    };
+
+    const currentPmg = appData.presensiMengajarGuru || [];
+    const updatedPmg = [newLogItem, ...currentPmg];
+
+    let updatedAppData: AppData = {
+      ...appData,
+      presensiMengajarGuru: updatedPmg
+    };
+
+    updatedAppData = addAuditLog(
+      updatedAppData,
+      'Input Manual Absen Guru (Admin)',
+      `Admin ${loggedUsername || 'Admin'} menginput sesi mengajar untuk ${newLogItem.guruNama} di kelas ${newLogItem.kelasNama}`
+    );
+
+    onUpdateAppData(updatedAppData);
+    setIsAdminManualModalOpen(false);
+    onShowToast(`Sesi presensi guru ${newLogItem.guruNama} berhasil dicatat oleh Admin!`, 'success');
   };
 
   // Delete a KBM Log
@@ -348,37 +605,62 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     );
   };
 
-  // Filtered Riwayat Logs for Table view
-  const filteredRiwayatLogs = useMemo(() => {
-    let list = appData.presensiMengajarGuru || [];
-
-    if (filterKelasId !== 'all') {
-      list = list.filter((l) => l.kelasId === filterKelasId);
+  // Export Dedicated Single Teacher Records to Excel
+  const handleExportTeacherExcel = () => {
+    if (filteredTeacherLogs.length === 0) {
+      onShowToast('Tidak ada data riwayat untuk diexport!', 'warning');
+      return;
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (l) =>
-          l.guruNama?.toLowerCase().includes(q) ||
-          l.kelasNama?.toLowerCase().includes(q) ||
-          l.mataPelajaran?.toLowerCase().includes(q) ||
-          l.materiAjar?.toLowerCase().includes(q) ||
-          l.tanggal?.includes(q)
-      );
-    }
+    const exportRows = filteredTeacherLogs.map((l, index) => {
+      const totalSiswa = l.presensiSiswa?.length || 0;
+      const hadirCount = l.presensiSiswa?.filter((ps) => ps.status === 'H').length || 0;
+      const sakitCount = l.presensiSiswa?.filter((ps) => ps.status === 'S').length || 0;
+      const izinCount = l.presensiSiswa?.filter((ps) => ps.status === 'I').length || 0;
+      const alphaCount = l.presensiSiswa?.filter((ps) => ps.status === 'A').length || 0;
+      const terlambatCount = l.presensiSiswa?.filter((ps) => ps.status === 'T' || ps.status === 'K').length || 0;
+      const pctHadir = totalSiswa > 0 ? `${Math.round((hadirCount / totalSiswa) * 100)}%` : '100%';
 
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [appData.presensiMengajarGuru, filterKelasId, searchQuery]);
+      return {
+        No: index + 1,
+        Tanggal: l.tanggal,
+        Hari: l.hari,
+        'Jam Pelajaran': l.jamPelajaran || '-',
+        Guru: l.guruNama,
+        Kelas: l.kelasNama,
+        'Mata Pelajaran': l.mataPelajaran,
+        'Materi Pembelajaran (Jurnal)': l.materiAjar || '-',
+        'Total Siswa': totalSiswa,
+        Hadir: hadirCount,
+        Sakit: sakitCount,
+        Izin: izinCount,
+        Alpha: alphaCount,
+        Terlambat: terlambatCount,
+        '% Kehadiran': pctHadir,
+        'Catatan Guru': l.catatanGuru || '-'
+      };
+    });
 
-  // Export Riwayat to Excel
-  const handleExportExcel = () => {
-    if (filteredRiwayatLogs.length === 0) {
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    const sheetName = `KBM_${(currentGuru?.nama || 'Guru').substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(
+      workbook,
+      `Riwayat_Absen_Mengajar_${(currentGuru?.nama || 'Guru').replace(/\s+/g, '_')}_${getTodayString()}.xlsx`
+    );
+
+    onShowToast(`File Excel riwayat ${currentGuru?.nama} berhasil didownload!`, 'success');
+  };
+
+  // Export Global Riwayat to Excel (All Teachers)
+  const handleExportGlobalExcel = () => {
+    if (filteredGlobalLogs.length === 0) {
       onShowToast('Tidak ada data untuk diexport!', 'warning');
       return;
     }
 
-    const exportRows = filteredRiwayatLogs.map((l, index) => {
+    const exportRows = filteredGlobalLogs.map((l, index) => {
       const totalSiswa = l.presensiSiswa?.length || 0;
       const hadirCount = l.presensiSiswa?.filter((ps) => ps.status === 'H').length || 0;
       const sakitCount = l.presensiSiswa?.filter((ps) => ps.status === 'S').length || 0;
@@ -407,10 +689,10 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Log Presensi KBM Guru');
-    XLSX.writeFile(workbook, `Log_Presensi_KBM_Guru_${getTodayString()}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Semua Log Presensi KBM');
+    XLSX.writeFile(workbook, `Log_Presensi_KBM_Semua_Guru_${getTodayString()}.xlsx`);
 
-    onShowToast('File Excel berhasil didownload!', 'success');
+    onShowToast('File Excel rekap semua guru berhasil didownload!', 'success');
   };
 
   return (
@@ -418,60 +700,412 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
       {/* Header */}
       <PageHeader
         icon={BookOpenCheck}
-        title="Absen Mengajar Guru (KBM)"
-        description="Fitur khusus pencatatan presensi siswa di kelas saat jam mengajar guru berlangsung, dilengkapi jurnal materi & tabel database log."
+        title="Presensi Mengajar Guru (KBM)"
+        description="Pencatatan kehadiran mengajar per jam pelajaran di kelas, terpisah dari absensi utama, dengan tabel riwayat mandiri untuk masing-masing guru & jurnal pembelajaran."
       />
 
-      {/* Navigation Tabs & Controls */}
+      {/* Navigation Tabs & Main Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+        <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl">
+          {/* Tab 1: Form Absen Kelas Guru */}
           <button
             type="button"
             onClick={() => setActiveTab('mengabsen')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
               activeTab === 'mengabsen'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            <span>Form Absen Kelas Guru</span>
+            <span>Form Absen Sesi Kelas</span>
           </button>
+
+          {/* Tab 2: Tabel Riwayat Mandiri Guru (Default & User Request) */}
           <button
             type="button"
-            onClick={() => setActiveTab('riwayat_tabel')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
-              activeTab === 'riwayat_tabel'
+            onClick={() => setActiveTab('riwayat_mandiri_guru')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              activeTab === 'riwayat_mandiri_guru'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Table2 className="w-4 h-4" />
-            <span>Tabel Database Log KBM</span>
-            {appData.presensiMengajarGuru && appData.presensiMengajarGuru.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-extrabold">
-                {appData.presensiMengajarGuru.length}
+            <span>Tabel Riwayat Mandiri Guru</span>
+            {teacherSpecificLogs.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-black">
+                {teacherSpecificLogs.length}
               </span>
             )}
           </button>
+
+          {/* Tab 3: Rekap Semua Guru (Admin / Kurikulum) */}
+          {isAdminOrStaff && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('rekap_semua_guru')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+                activeTab === 'rekap_semua_guru'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Monitoring Rekap Semua Guru</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+                {(appData.presensiMengajarGuru || []).length}
+              </span>
+            </button>
+          )}
         </div>
 
-        {/* Global Action Shortcuts */}
+        {/* Action Shortcuts */}
         <div className="flex items-center gap-2">
+          {isAdminOrStaff && (
+            <button
+              type="button"
+              onClick={handleOpenAdminManualModal}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition shadow-xs"
+            >
+              <Plus className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Input Manual (Admin)</span>
+            </button>
+          )}
+
           {onNavigateView && (
             <button
               type="button"
               onClick={() => onNavigateView('jadwal_mengajar')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
             >
               <Calendar className="w-3.5 h-3.5 text-blue-500" />
-              <span>Kelola Jadwal Mengajar</span>
+              <span className="hidden sm:inline">Jadwal Mengajar</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* TAB 1: FORM MENGABSEN KELAS GURU */}
+      {/* ========================================================================= */}
+      {/* TAB 2: TABEL RIWAYAT MANDIRI GURU (DEDICATED TABLE PER GURU)              */}
+      {/* ========================================================================= */}
+      {activeTab === 'riwayat_mandiri_guru' && (
+        <div className="space-y-6">
+          {/* Active Teacher Profile Card & Switcher */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs relative overflow-hidden">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              {/* Teacher Identity & Details */}
+              <div className="flex items-start sm:items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-md shrink-0">
+                  {currentGuru?.nama ? currentGuru.nama.charAt(0).toUpperCase() : 'G'}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      Tabel Absensi Mandiri Guru
+                    </span>
+                    {currentUser.role === 'guru' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                        Akun Anda
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                    {currentGuru?.nama || 'Nama Guru'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    NIP: {currentGuru?.nip || '-'} • Mapel Utama: {currentGuru?.mataPelajaran || '-'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Teacher Switcher (Available for Admin / Kurikulum / Piket) */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="space-y-1 min-w-[240px]">
+                  <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    {currentUser.role === 'guru' ? 'Guru Terpilih' : 'Ganti Pilihan Guru:'}
+                  </label>
+                  <select
+                    value={selectedGuruUsername}
+                    onChange={(e) => setSelectedGuruUsername(e.target.value)}
+                    disabled={currentUser.role === 'guru'}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {listGuru.map((g) => (
+                      <option key={g.id || g.username || g.nama} value={g.username || g.nama}>
+                        {g.nama} {g.nip ? `(NIP: ${g.nip})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Print Teaching Journal Modal Trigger */}
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition shadow-xs self-end sm:self-auto"
+                >
+                  <Printer className="w-4 h-4 text-slate-500" />
+                  <span>Cetak Jurnal</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Teaching Statistics Bar for Active Teacher */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+              <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
+                <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+                  Total Sesi Mengajar
+                </p>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                  {teacherMetrics.totalSesi} Sesi
+                </h4>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40">
+                <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+                  Jam Pelajaran (JP)
+                </p>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                  {teacherMetrics.totalJp} JP
+                </h4>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
+                <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                  Kehadiran Siswa
+                </p>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                  {teacherMetrics.averageHadirPct}%
+                </h4>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40">
+                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+                  Kelas Berbeda
+                </p>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                  {teacherMetrics.totalKelas} Kelas
+                </h4>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Filters & Single-Teacher Export */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex flex-wrap items-center gap-3 flex-1">
+              {/* Search in this teacher's logs */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Cari di riwayat ${currentGuru?.nama || 'guru'} (kelas, materi, tanggal)...`}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Class Filter */}
+              <select
+                value={filterKelasId}
+                onChange={(e) => setFilterKelasId(e.target.value)}
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"
+              >
+                <option value="all">Semua Kelas</option>
+                {(appData.kelas || []).map((k) => (
+                  <option key={k.id} value={k.id}>
+                    Kelas {k.nama}
+                  </option>
+                ))}
+              </select>
+
+              {/* Month Filter */}
+              {availableMonths.length > 0 && (
+                <select
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"
+                >
+                  <option value="all">Semua Periode</option>
+                  {availableMonths.map((m) => (
+                    <option key={m} value={m}>
+                      Bulan {m}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Export Excel Button strictly for this teacher */}
+            <button
+              type="button"
+              onClick={handleExportTeacherExcel}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs shrink-0 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Export Excel ({currentGuru?.nama?.split(' ')[0] || 'Guru'})</span>
+            </button>
+          </div>
+
+          {/* Dedicated Teacher Attendance & Journal Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+            <div className="p-4 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Table2 className="w-4 h-4 text-blue-600" />
+                  <span>Daftar Riwayat Mengajar: {currentGuru?.nama}</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Data kehadiran mengajar dan jurnal KBM yang tercatat khusus untuk akun guru ini.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                {filteredTeacherLogs.length} Catatan
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="p-3.5 w-12 text-center">No</th>
+                    <th className="p-3.5">Tanggal & Jam</th>
+                    <th className="p-3.5">Kelas & Mapel</th>
+                    <th className="p-3.5">Materi Pembelajaran (Jurnal)</th>
+                    <th className="p-3.5 text-center">Kehadiran Siswa</th>
+                    <th className="p-3.5 text-center">Verifikasi</th>
+                    <th className="p-3.5 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredTeacherLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-12 text-center text-slate-500 dark:text-slate-400 space-y-3">
+                        <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">
+                            Belum ada riwayat mengajar untuk {currentGuru?.nama}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Guru dapat mengabsen kelas langsung dari tab "Form Absen Sesi Kelas" saat mengajar.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('mengabsen')}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition"
+                        >
+                          <UserCheck className="w-4 h-4" />
+                          <span>Buka Form Absen Sesi Kelas</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTeacherLogs.map((log, index) => {
+                      const totalSiswa = log.presensiSiswa?.length || 0;
+                      const hadirCount = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
+                      const sakitCount = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
+                      const izinCount = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
+                      const alphaCount = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
+                      const terlambatCount = log.presensiSiswa?.filter((p) => p.status === 'T' || p.status === 'K').length || 0;
+                      const pctHadir = totalSiswa > 0 ? Math.round((hadirCount / totalSiswa) * 100) : 100;
+
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
+                          <td className="p-3.5 text-center font-bold text-slate-500">{index + 1}</td>
+                          <td className="p-3.5">
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {formatDateIndo(log.tanggal)}
+                            </div>
+                            <div className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3" />
+                              <span>{log.jamPelajaran || '-'}</span>
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <span className="font-extrabold text-slate-900 dark:text-white">
+                              Kelas {log.kelasNama}
+                            </span>
+                            <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                              {log.mataPelajaran}
+                            </div>
+                          </td>
+                          <td className="p-3.5 max-w-sm">
+                            <p className="text-xs text-slate-800 dark:text-slate-200 line-clamp-2">
+                              {log.materiAjar || '-'}
+                            </p>
+                            {log.catatanGuru && (
+                              <p className="text-[10px] text-slate-500 italic mt-1 line-clamp-1">
+                                Catatan: {log.catatanGuru}
+                              </p>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="inline-flex items-center gap-1 text-[10px] font-extrabold">
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                  H: {hadirCount}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                                  S: {sakitCount}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                  I: {izinCount}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                                  A: {alphaCount}
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-500">
+                                {pctHadir}% Kehadiran ({totalSiswa} Siswa)
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Terlaksana</span>
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setDetailLog(log)}
+                                className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition shadow-xs"
+                                title="Lihat Rincian Presensi Siswa"
+                              >
+                                <Info className="w-4 h-4" />
+                              </button>
+                              {(isAdminOrStaff || isTeacher) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLog(log.id)}
+                                  className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition shadow-xs"
+                                  title="Hapus Log KBM ini"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1: FORM ABSEN SESI KELAS (SELF-SERVICE GURU & JADWAL HARI INI)        */}
+      {/* ========================================================================= */}
       {activeTab === 'mengabsen' && (
         <div className="space-y-6">
           {/* Top Filter Bar: Select Teacher & Date */}
@@ -486,7 +1120,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 value={selectedGuruUsername}
                 onChange={(e) => setSelectedGuruUsername(e.target.value)}
                 disabled={currentUser.role === 'guru'}
-                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 disabled:opacity-80"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 disabled:opacity-80 cursor-pointer"
               >
                 {listGuru.map((g) => (
                   <option key={g.id || g.username || g.nama} value={g.username || g.nama}>
@@ -529,7 +1163,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   {selectedDayName}, {formatDateIndo(selectedDate)}
                 </p>
                 <p className="text-[11px] text-blue-800 dark:text-blue-300">
-                  {teacherSchedules.length} Sesi Jam Mengajar Terjadwal
+                  {teacherSchedules.length} Sesi Terjadwal untuk {currentGuru?.nama?.split(' ')[0] || 'Guru'}
                 </p>
               </div>
             </div>
@@ -548,7 +1182,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             </div>
 
             {teacherSchedules.length === 0 ? (
-              <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 space-y-3">
+              <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 space-y-4">
                 <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
                   <AlertCircle className="w-6 h-6" />
                 </div>
@@ -557,19 +1191,31 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                     Tidak ada jadwal mengajar pada hari {selectedDayName}
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                    Guru {currentGuru?.nama} tidak memiliki alokasi jam mengajar di sistem pada hari {selectedDayName}. Pastikan data jadwal mengajar sudah diinput.
+                    Guru {currentGuru?.nama} tidak memiliki alokasi jam mengajar di sistem pada hari {selectedDayName}.
                   </p>
                 </div>
-                {onNavigateView && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigateView('jadwal_mengajar')}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Tambah / Edit Jadwal Mengajar</span>
-                  </button>
-                )}
+                <div className="flex items-center justify-center gap-3">
+                  {isAdminOrStaff && (
+                    <button
+                      type="button"
+                      onClick={handleOpenAdminManualModal}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition shadow-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Input Sesi Manual (Admin/Piket)</span>
+                    </button>
+                  )}
+                  {onNavigateView && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateView('jadwal_mengajar')}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold rounded-xl hover:bg-slate-300 transition"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      <span>Kelola Jadwal Mengajar</span>
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -577,7 +1223,6 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   const existingLog = getLogForSchedule(jadwal);
                   const isCompleted = Boolean(existingLog);
 
-                  // Count attendance status breakdown if completed
                   const hadirCount = existingLog?.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
                   const sakitCount = existingLog?.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
                   const izinCount = existingLog?.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
@@ -587,7 +1232,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   return (
                     <div
                       key={jadwal.id}
-                      className={`relative bg-white dark:bg-slate-900 rounded-2xl p-5 border transition-all duration-200 shadow-xs hover:shadow-md flex flex-col justify-between ${
+                      className={`relative bg-white dark:bg-slate-900 rounded-3xl p-5 border transition-all duration-200 shadow-xs hover:shadow-md flex flex-col justify-between ${
                         isCompleted
                           ? 'border-emerald-300 dark:border-emerald-900/60 ring-1 ring-emerald-500/20'
                           : 'border-slate-200 dark:border-slate-800'
@@ -669,7 +1314,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenAbsenSession(jadwal)}
-                          className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-extrabold transition shadow-xs ${
+                          className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-extrabold transition shadow-xs cursor-pointer ${
                             isCompleted
                               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                               : 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -683,7 +1328,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                           <button
                             type="button"
                             onClick={() => handleDeleteLog(existingLog.id)}
-                            className="p-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-slate-200 dark:border-slate-700 transition"
+                            className="p-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                             title="Hapus Log KBM ini"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -699,7 +1344,213 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
         </div>
       )}
 
-      {/* FORM MODAL: MENGABSEN KELAS KBM */}
+      {/* ========================================================================= */}
+      {/* TAB 3: MONITORING REKAP SEMUA GURU (ADMIN ONLY)                           */}
+      {/* ========================================================================= */}
+      {activeTab === 'rekap_semua_guru' && isAdminOrStaff && (
+        <div className="space-y-6">
+          {/* Summary Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <Table2 className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Total Log Database KBM
+                </p>
+                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
+                  {(appData.presensiMengajarGuru || []).length}
+                </h4>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  KBM Hari Ini
+                </p>
+                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
+                  {logsForSelectedDate.length}
+                </h4>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <Users className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Total Kelas Terdata
+                </p>
+                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
+                  {new Set((appData.presensiMengajarGuru || []).map((l) => l.kelasId)).size}
+                </h4>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <UserCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Guru Aktif Mengajar
+                </p>
+                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
+                  {new Set((appData.presensiMengajarGuru || []).map((l) => l.guruUsername || l.guruNama)).size}
+                </h4>
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Global Export */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari berdasarkan Guru, Kelas, Mapel, atau Materi..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <select
+                value={filterKelasId}
+                onChange={(e) => setFilterKelasId(e.target.value)}
+                className="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"
+              >
+                <option value="all">Semua Kelas</option>
+                {(appData.kelas || []).map((k) => (
+                  <option key={k.id} value={k.id}>
+                    Kelas {k.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportGlobalExcel}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs shrink-0 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Export Rekap Semua Guru (Excel)</span>
+            </button>
+          </div>
+
+          {/* Global Database Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="p-3.5 w-12 text-center">No</th>
+                    <th className="p-3.5">Tanggal & Jam</th>
+                    <th className="p-3.5">Guru Mengajar</th>
+                    <th className="p-3.5">Kelas & Mapel</th>
+                    <th className="p-3.5">Materi Pembelajaran (Jurnal)</th>
+                    <th className="p-3.5 text-center">Kehadiran Siswa</th>
+                    <th className="p-3.5 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredGlobalLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-500 dark:text-slate-400">
+                        Belum ada data log presensi KBM guru di database.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredGlobalLogs.map((log, index) => {
+                      const hadirCount = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
+                      const sakitCount = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
+                      const izinCount = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
+                      const alphaCount = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
+                      const terlambatCount = log.presensiSiswa?.filter((p) => p.status === 'T' || p.status === 'K').length || 0;
+
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                          <td className="p-3.5 text-center font-bold text-slate-500">{index + 1}</td>
+                          <td className="p-3.5">
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {formatDateIndo(log.tanggal)}
+                            </div>
+                            <div className="text-[11px] text-slate-500">{log.jamPelajaran || '-'}</div>
+                          </td>
+                          <td className="p-3.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedGuruUsername(log.guruUsername || log.guruNama);
+                                setActiveTab('riwayat_mandiri_guru');
+                              }}
+                              className="font-extrabold text-blue-600 dark:text-blue-400 hover:underline text-left cursor-pointer"
+                              title="Buka tabel mandiri guru ini"
+                            >
+                              {log.guruNama}
+                            </button>
+                          </td>
+                          <td className="p-3.5">
+                            <span className="font-extrabold text-slate-900 dark:text-white">
+                              Kelas {log.kelasNama}
+                            </span>
+                            <div className="text-[11px] text-slate-500">{log.mataPelajaran}</div>
+                          </td>
+                          <td className="p-3.5 max-w-xs">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
+                              {log.materiAjar || '-'}
+                            </p>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <div className="inline-flex items-center gap-1 text-[10px] font-extrabold">
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">H: {hadirCount}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">S: {sakitCount}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">I: {izinCount}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">A: {alphaCount}</span>
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setDetailLog(log)}
+                                className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition"
+                                title="Lihat Rincian Presensi"
+                              >
+                                <Info className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLog(log.id)}
+                                className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition"
+                                title="Hapus Log KBM"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* FORM MODAL: MENGABSEN KELAS KBM (TEACHER / SELF-SERVICE SESSION)           */}
+      {/* ========================================================================= */}
       {activeSession && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
@@ -707,7 +1558,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             <div className="p-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between shrink-0">
               <div className="space-y-1">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-white/20 text-white uppercase tracking-wider">
-                  Absen KBM Guru - Kelas {activeSession.jadwal.kelasNama}
+                  Presensi Sesi KBM - Kelas {activeSession.jadwal.kelasNama}
                 </span>
                 <h3 className="text-lg font-black tracking-tight">
                   {activeSession.jadwal.mataPelajaran}
@@ -764,95 +1615,77 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleSetAllStatus('H')}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
                   >
                     Set Semua Hadir (H)
                   </button>
                   <button
                     type="button"
                     onClick={handleSyncWithMainDailyPresensi}
-                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
                   >
                     Sesuai Presensi Harian Sekolah
                   </button>
                 </div>
 
                 <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Total Siswa: {(appData.siswa || []).filter((s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif').length}
+                  Total Siswa: {(appData.siswa || []).filter((s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif').length} Orang
                 </div>
               </div>
 
               {/* Student Attendance Table */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-                <div className="overflow-x-auto">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                <div className="max-h-[45vh] overflow-y-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
                       <tr>
-                        <th className="p-3 w-12 text-center">No</th>
-                        <th className="p-3">NISN / Nama Siswa</th>
-                        <th className="p-3 text-center">Presensi Harian</th>
-                        <th className="p-3 text-center">Status KBM Kelas</th>
-                        <th className="p-3">Catatan Individual</th>
+                        <th className="p-3 w-10 text-center">No</th>
+                        <th className="p-3">Nama Siswa</th>
+                        <th className="p-3 text-center">Status Kehadiran</th>
+                        <th className="p-3">Catatan / Keterangan</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {(appData.siswa || [])
                         .filter((s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif')
                         .map((siswa, idx) => {
-                          const statusItem = presensiSiswaMap[siswa.id] || { status: 'H', catatan: '' };
-
-                          // Reference daily main attendance
-                          const mainPresensiKey = `${selectedDate}_${activeSession.jadwal.kelasId}`;
-                          const mainList = appData.presensi?.[mainPresensiKey] || [];
-                          const mainRecord = mainList.find((p) => p.siswaId === siswa.id);
+                          const status = presensiSiswaMap[siswa.id]?.status || 'H';
+                          const catatan = presensiSiswaMap[siswa.id]?.catatan || '';
 
                           return (
-                            <tr key={siswa.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                            <tr key={siswa.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                               <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
                               <td className="p-3">
                                 <div className="font-bold text-slate-900 dark:text-white">{siswa.nama}</div>
                                 <div className="text-[10px] text-slate-500">NISN: {siswa.nisn || '-'}</div>
                               </td>
                               <td className="p-3 text-center">
-                                {mainRecord?.status ? (
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                                    mainRecord.status === 'H' ? 'bg-emerald-100 text-emerald-800' :
-                                    mainRecord.status === 'S' ? 'bg-blue-100 text-blue-800' :
-                                    mainRecord.status === 'I' ? 'bg-amber-100 text-amber-800' :
-                                    mainRecord.status === 'A' ? 'bg-rose-100 text-rose-800' :
-                                    'bg-purple-100 text-purple-800'
-                                  }`}>
-                                    {mainRecord.status}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-slate-400 font-semibold">-</span>
-                                )}
-                              </td>
-                              <td className="p-3 text-center">
-                                <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                                  {[
-                                    { code: 'H', label: 'Hadir', bg: 'bg-emerald-600 text-white' },
-                                    { code: 'S', label: 'Sakit', bg: 'bg-blue-600 text-white' },
-                                    { code: 'I', label: 'Izin', bg: 'bg-amber-600 text-white' },
-                                    { code: 'A', label: 'Alpha', bg: 'bg-rose-600 text-white' },
-                                    { code: 'T', label: 'Terlambat', bg: 'bg-purple-600 text-white' }
-                                  ].map((btn) => (
+                                <div className="inline-flex items-center gap-1.5">
+                                  {(['H', 'S', 'I', 'A', 'T'] as const).map((st) => (
                                     <button
-                                      key={btn.code}
+                                      key={st}
                                       type="button"
                                       onClick={() =>
                                         setPresensiSiswaMap((prev) => ({
                                           ...prev,
-                                          [siswa.id]: { ...prev[siswa.id], status: btn.code as any }
+                                          [siswa.id]: { ...prev[siswa.id], status: st }
                                         }))
                                       }
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                                        statusItem.status === btn.code
-                                          ? `${btn.bg} shadow-xs scale-105`
-                                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                      className={`w-7 h-7 rounded-lg text-xs font-black transition cursor-pointer ${
+                                        status === st
+                                          ? st === 'H'
+                                            ? 'bg-emerald-600 text-white'
+                                            : st === 'S'
+                                            ? 'bg-blue-600 text-white'
+                                            : st === 'I'
+                                            ? 'bg-amber-500 text-white'
+                                            : st === 'A'
+                                            ? 'bg-rose-600 text-white'
+                                            : 'bg-purple-600 text-white'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
                                       }`}
                                     >
-                                      {btn.code}
+                                      {st}
                                     </button>
                                   ))}
                                 </div>
@@ -860,7 +1693,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                               <td className="p-3">
                                 <input
                                   type="text"
-                                  value={statusItem.catatan || ''}
+                                  value={catatan}
                                   onChange={(e) =>
                                     setPresensiSiswaMap((prev) => ({
                                       ...prev,
@@ -885,7 +1718,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSession(null)}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
               >
                 Batal
               </button>
@@ -893,7 +1726,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <button
                 type="button"
                 onClick={handleSavePresensiKbm}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-md"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-md cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>Simpan Presensi KBM Kelas</span>
@@ -903,208 +1736,249 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
         </div>
       )}
 
-      {/* TAB 2: TABEL DATABASE LOG PRESENSI KBM GURU */}
-      {activeTab === 'riwayat_tabel' && (
-        <div className="space-y-6">
-          {/* Summary Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                <Table2 className="w-6 h-6" />
-              </div>
+      {/* ========================================================================= */}
+      {/* MODAL: INPUT PRESENSI MANUAL OLEH ADMIN / KURIKULUM                       */}
+      {/* ========================================================================= */}
+      {isAdminManualModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
+            {/* Modal Header */}
+            <div className="p-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0">
               <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Total Log KBM
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-white/20 text-white uppercase tracking-wider">
+                  Admin / Kurikulum Override
+                </span>
+                <h3 className="text-lg font-black tracking-tight mt-1">
+                  Input Presensi Mengajar Guru Manual
+                </h3>
+                <p className="text-xs text-indigo-100">
+                  Digunakan untuk mencatat kehadiran mengajar guru pengganti, jam tambahan, atau koreksi piket.
                 </p>
-                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
-                  {(appData.presensiMengajarGuru || []).length}
-                </h4>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  KBM Hari Ini
-                </p>
-                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
-                  {logsForSelectedDate.length}
-                </h4>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                <Users className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Total Kelas Terdata
-                </p>
-                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
-                  {new Set((appData.presensiMengajarGuru || []).map((l) => l.kelasId)).size}
-                </h4>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <UserCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Guru Mengabsen
-                </p>
-                <h4 className="text-2xl font-black text-slate-900 dark:text-white">
-                  {new Set((appData.presensiMengajarGuru || []).map((l) => l.guruUsername)).size}
-                </h4>
-              </div>
-            </div>
-          </div>
-
-          {/* Table Search & Filter Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari berdasarkan Guru, Kelas, Mapel, atau Materi..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                />
               </div>
 
-              <select
-                value={filterKelasId}
-                onChange={(e) => setFilterKelasId(e.target.value)}
-                className="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"
+              <button
+                type="button"
+                onClick={() => setIsAdminManualModalOpen(false)}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition cursor-pointer"
               >
-                <option value="all">Semua Kelas</option>
-                {(appData.kelas || []).map((k) => (
-                  <option key={k.id} value={k.id}>
-                    Kelas {k.nama}
-                  </option>
-                ))}
-              </select>
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs shrink-0"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Export File Excel</span>
-            </button>
-          </div>
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-5 flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Target Teacher */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Pilih Guru <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={adminManualForm.guruUsername}
+                    onChange={(e) => {
+                      const u = e.target.value;
+                      const g = listGuru.find((x) => x.username === u || x.nama === u);
+                      setAdminManualForm((prev) => ({
+                        ...prev,
+                        guruUsername: u,
+                        guruNama: g?.nama || u,
+                        mataPelajaran: g?.mataPelajaran || prev.mataPelajaran
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  >
+                    {listGuru.map((g) => (
+                      <option key={g.id || g.username || g.nama} value={g.username || g.nama}>
+                        {g.nama} {g.nip ? `(${g.nip})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {/* Database Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                  <tr>
-                    <th className="p-3.5 w-12 text-center">No</th>
-                    <th className="p-3.5">Tanggal & Jam</th>
-                    <th className="p-3.5">Guru Mengajar</th>
-                    <th className="p-3.5">Kelas & Mapel</th>
-                    <th className="p-3.5">Materi Pembelajaran (Jurnal)</th>
-                    <th className="p-3.5 text-center">Kehadiran Siswa</th>
-                    <th className="p-3.5 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredRiwayatLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-500 dark:text-slate-400">
-                        Belum ada data log presensi KBM guru.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRiwayatLogs.map((log, index) => {
-                      const hadirCount = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
-                      const sakitCount = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
-                      const izinCount = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
-                      const alphaCount = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
-                      const terlambatCount = log.presensiSiswa?.filter((p) => p.status === 'T' || p.status === 'K').length || 0;
+                {/* Date */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Tanggal Mengajar <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={adminManualForm.tanggal}
+                    onChange={(e) => setAdminManualForm((prev) => ({ ...prev, tanggal: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  />
+                </div>
 
-                      return (
-                        <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                          <td className="p-3.5 text-center font-bold text-slate-500">{index + 1}</td>
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900 dark:text-white">
-                              {formatDateIndo(log.tanggal)}
-                            </div>
-                            <div className="text-[11px] text-slate-500">{log.jamPelajaran || '-'}</div>
-                          </td>
-                          <td className="p-3.5 font-extrabold text-blue-600 dark:text-blue-400">
-                            {log.guruNama}
-                          </td>
-                          <td className="p-3.5">
-                            <span className="font-extrabold text-slate-900 dark:text-white">
-                              Kelas {log.kelasNama}
-                            </span>
-                            <div className="text-[11px] text-slate-500">{log.mataPelajaran}</div>
-                          </td>
-                          <td className="p-3.5 max-w-xs">
-                            <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">
-                              {log.materiAjar || '-'}
-                            </p>
-                          </td>
-                          <td className="p-3.5 text-center">
-                            <div className="inline-flex items-center gap-1 text-[10px] font-extrabold">
-                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">H: {hadirCount}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">S: {sakitCount}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">I: {izinCount}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">A: {alphaCount}</span>
-                              {terlambatCount > 0 && (
-                                <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">T: {terlambatCount}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setDetailLog(log)}
-                                className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition"
-                                title="Lihat Rincian Presensi"
-                              >
-                                <Info className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLog(log.id)}
-                                className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition"
-                                title="Hapus Log KBM"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                {/* Class */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Kelas <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={adminManualForm.kelasId}
+                    onChange={(e) => handleAdminClassChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  >
+                    {(appData.kelas || []).map((k) => (
+                      <option key={k.id} value={k.id}>
+                        Kelas {k.nama}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Subject */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Mata Pelajaran <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={adminManualForm.mataPelajaran}
+                    onChange={(e) => setAdminManualForm((prev) => ({ ...prev, mataPelajaran: e.target.value }))}
+                    placeholder="Contoh: Matematika, Bahasa Inggris, dll."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+
+                {/* Time / Jam Ke */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Jam Pelajaran
+                  </label>
+                  <input
+                    type="text"
+                    value={adminManualForm.jamPelajaran}
+                    onChange={(e) => setAdminManualForm((prev) => ({ ...prev, jamPelajaran: e.target.value }))}
+                    placeholder="Jam ke-1 & 2 (07:30 - 09:00)"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+
+                {/* Topic / Materi Jurnal */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Materi Pembelajaran (Jurnal)
+                  </label>
+                  <input
+                    type="text"
+                    value={adminManualForm.materiAjar}
+                    onChange={(e) => setAdminManualForm((prev) => ({ ...prev, materiAjar: e.target.value }))}
+                    placeholder="Materi yang diajarkan..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Student Attendance List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase">
+                    Daftar Siswa di Kelas Terpilih
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleSetAllStatus('H')}
+                    className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                  >
+                    Set Semua Hadir (H)
+                  </button>
+                </div>
+
+                <div className="max-h-[35vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800 font-bold sticky top-0">
+                      <tr>
+                        <th className="p-2.5 w-10 text-center">No</th>
+                        <th className="p-2.5">Nama Siswa</th>
+                        <th className="p-2.5 text-center">Status</th>
+                        <th className="p-2.5">Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {(appData.siswa || [])
+                        .filter((s) => s.kelasId === adminManualForm.kelasId && s.status !== 'tidak_aktif')
+                        .map((siswa, idx) => {
+                          const status = presensiSiswaMap[siswa.id]?.status || 'H';
+                          return (
+                            <tr key={siswa.id}>
+                              <td className="p-2.5 text-center font-bold">{idx + 1}</td>
+                              <td className="p-2.5 font-bold">{siswa.nama}</td>
+                              <td className="p-2.5 text-center">
+                                <div className="inline-flex gap-1">
+                                  {(['H', 'S', 'I', 'A', 'T'] as const).map((st) => (
+                                    <button
+                                      key={st}
+                                      type="button"
+                                      onClick={() =>
+                                        setPresensiSiswaMap((prev) => ({
+                                          ...prev,
+                                          [siswa.id]: { ...prev[siswa.id], status: st }
+                                        }))
+                                      }
+                                      className={`w-6 h-6 rounded text-[11px] font-bold ${
+                                        status === st ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800'
+                                      }`}
+                                    >
+                                      {st}
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="p-2.5">
+                                <input
+                                  type="text"
+                                  value={presensiSiswaMap[siswa.id]?.catatan || ''}
+                                  onChange={(e) =>
+                                    setPresensiSiswaMap((prev) => ({
+                                      ...prev,
+                                      [siswa.id]: { ...prev[siswa.id], catatan: e.target.value }
+                                    }))
+                                  }
+                                  placeholder="Catatan..."
+                                  className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded text-xs"
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsAdminManualModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold"
+              >
+                Batal
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveAdminManualEntry}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-md"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Presensi Mengajar (Admin)</span>
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* DETAIL RINCIAN MODAL */}
+      {/* ========================================================================= */}
+      {/* MODAL: DETAIL RINCIAN SISWA                                              */}
+      {/* ========================================================================= */}
       {detailLog && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
             <div className="p-5 bg-blue-600 text-white flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-base font-bold">Detail Log KBM Kelas {detailLog.kelasNama}</h3>
+                <h3 className="text-base font-bold">Detail Sesi KBM Kelas {detailLog.kelasNama}</h3>
                 <p className="text-xs text-blue-100">
                   {detailLog.mataPelajaran} • {formatDateIndo(detailLog.tanggal)}
                 </p>
@@ -1112,7 +1986,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <button
                 type="button"
                 onClick={() => setDetailLog(null)}
-                className="p-1.5 text-white/80 hover:text-white rounded-lg"
+                className="p-1.5 text-white/80 hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1120,10 +1994,16 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
 
             <div className="p-5 overflow-y-auto space-y-4 flex-1">
               <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl space-y-2">
-                <p className="text-xs font-bold text-slate-500 uppercase">Guru Mengajar</p>
+                <p className="text-xs font-bold text-slate-500 uppercase">Guru Pengajar</p>
                 <p className="text-sm font-extrabold text-slate-900 dark:text-white">{detailLog.guruNama}</p>
                 <p className="text-xs font-bold text-slate-500 uppercase mt-2">Materi Pembelajaran (Jurnal)</p>
                 <p className="text-xs text-slate-800 dark:text-slate-200">{detailLog.materiAjar || '-'}</p>
+                {detailLog.catatanGuru && (
+                  <>
+                    <p className="text-xs font-bold text-slate-500 uppercase mt-2">Catatan Guru</p>
+                    <p className="text-xs text-slate-800 dark:text-slate-200 italic">{detailLog.catatanGuru}</p>
+                  </>
+                )}
               </div>
 
               <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
@@ -1142,7 +2022,19 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                         <td className="p-2.5 text-center">{idx + 1}</td>
                         <td className="p-2.5 font-bold">{ps.siswaNama}</td>
                         <td className="p-2.5 text-center">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                              ps.status === 'H'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : ps.status === 'S'
+                                ? 'bg-blue-100 text-blue-800'
+                                : ps.status === 'I'
+                                ? 'bg-amber-100 text-amber-800'
+                                : ps.status === 'A'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-purple-100 text-purple-800'
+                            }`}
+                          >
                             {ps.status}
                           </span>
                         </td>
@@ -1158,7 +2050,140 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <button
                 type="button"
                 onClick={() => setDetailLog(null)}
-                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 font-bold text-xs rounded-xl"
+                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CETAK JURNAL MENGAJAR GURU (PRINTABLE SHEET)                        */}
+      {/* ========================================================================= */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full max-h-[95vh] overflow-hidden flex flex-col shadow-2xl">
+            {/* Header Toolbar */}
+            <div className="p-4 bg-slate-800 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-sm">Cetak Jurnal & Presensi Mengajar Guru</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Dokumen</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  className="p-1.5 text-white/70 hover:text-white rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Body */}
+            <div className="p-8 overflow-y-auto space-y-6 flex-1 bg-white print:p-0">
+              {/* School Letterhead */}
+              <div className="text-center pb-4 border-b-2 border-slate-800 space-y-1">
+                <h2 className="text-xl font-black uppercase tracking-wide">
+                  {appData.sekolah?.nama || 'SEKOLAH MENENGAH ATAS'}
+                </h2>
+                <p className="text-xs text-slate-600">
+                  {appData.sekolah?.alamat || 'Jl. Pendidikan No. 1'} • Telp: {appData.sekolah?.telepon || '-'} • NPSN: {appData.sekolah?.npsn || '-'}
+                </p>
+                <h3 className="text-sm font-extrabold uppercase mt-2 tracking-wider underline">
+                  JURNAL & PRESENSI MENGAJAR GURU (KBM)
+                </h3>
+              </div>
+
+              {/* Teacher Identity Block */}
+              <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
+                <div>
+                  <p><span className="font-bold">Nama Guru:</span> {currentGuru?.nama}</p>
+                  <p><span className="font-bold">NIP:</span> {currentGuru?.nip || '-'}</p>
+                </div>
+                <div className="text-right">
+                  <p><span className="font-bold">Mata Pelajaran:</span> {currentGuru?.mataPelajaran || '-'}</p>
+                  <p><span className="font-bold">Total Sesi Tercatat:</span> {filteredTeacherLogs.length} Sesi</p>
+                </div>
+              </div>
+
+              {/* Table of Lessons */}
+              <table className="w-full text-left text-xs border border-slate-300 border-collapse">
+                <thead className="bg-slate-100 font-bold border-b border-slate-300">
+                  <tr>
+                    <th className="p-2 border border-slate-300 w-8 text-center">No</th>
+                    <th className="p-2 border border-slate-300 w-28">Tanggal & Jam</th>
+                    <th className="p-2 border border-slate-300 w-20">Kelas</th>
+                    <th className="p-2 border border-slate-300">Materi Pembelajaran (Jurnal)</th>
+                    <th className="p-2 border border-slate-300 w-28 text-center">Kehadiran (H/S/I/A)</th>
+                    <th className="p-2 border border-slate-300 w-28">Catatan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTeacherLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-4 text-center text-slate-500 italic">
+                        Belum ada catatan presensi KBM untuk dicetak.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTeacherLogs.map((log, idx) => {
+                      const h = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
+                      const s = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
+                      const i = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
+                      const a = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
+
+                      return (
+                        <tr key={log.id} className="border-b border-slate-200">
+                          <td className="p-2 border border-slate-300 text-center font-bold">{idx + 1}</td>
+                          <td className="p-2 border border-slate-300">
+                            <div>{log.tanggal}</div>
+                            <div className="text-[10px] text-slate-500">{log.jamPelajaran || '-'}</div>
+                          </td>
+                          <td className="p-2 border border-slate-300 font-bold">{log.kelasNama}</td>
+                          <td className="p-2 border border-slate-300">{log.materiAjar || '-'}</td>
+                          <td className="p-2 border border-slate-300 text-center font-bold">
+                            H:{h} S:{s} I:{i} A:{a}
+                          </td>
+                          <td className="p-2 border border-slate-300 text-[11px] text-slate-600">
+                            {log.catatanGuru || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-2 gap-8 pt-10 text-xs text-center">
+                <div className="space-y-16">
+                  <p>Mengetahui,<br />Kepala Sekolah / Waka Kurikulum</p>
+                  <p className="font-bold underline uppercase">{appData.sekolah?.kepalaSekolah || '....................................'}</p>
+                </div>
+                <div className="space-y-16">
+                  <p>{appData.sekolah?.kabupaten || 'Tempat'}, {formatDateIndo(getTodayString())}<br />Guru Mata Pelajaran</p>
+                  <p className="font-bold underline uppercase">{currentGuru?.nama || '....................................'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(false)}
+                className="px-4 py-2 bg-slate-300 font-bold text-xs rounded-xl cursor-pointer"
               >
                 Tutup
               </button>
