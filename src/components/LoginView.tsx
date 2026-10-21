@@ -1589,9 +1589,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                             sekolah.loginCardSchoolNameSize === 'xs'
                               ? 'text-[10px] sm:text-xs'
                               : sekolah.loginCardSchoolNameSize === 'base'
-                              ? 'text-sm sm:text-base'
+                              ? 'text-base sm:text-lg font-extrabold'
                               : sekolah.loginCardSchoolNameSize === 'lg'
-                              ? 'text-base sm:text-lg font-black'
+                              ? 'text-lg sm:text-2xl font-black'
                               : 'text-xs sm:text-sm'
                           } ${
                             sekolah.loginCardSchoolNameStyle === 'badge'

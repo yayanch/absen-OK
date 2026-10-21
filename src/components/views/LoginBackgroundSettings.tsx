@@ -474,11 +474,9 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
     onShowToast('Template teks berhasil dimuat! Klik "Simpan Pengaturan" untuk menerapkan.', 'info');
   };
 
-  // Save Settings to AppData
-  const handleSave = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Helper to instantly save updates
+  const saveWithUpdates = (overrides?: Partial<SekolahConfig>) => {
     if (readOnly) return;
-
     const baseSekolah: SekolahConfig = appData.sekolah || {
       nama: 'SMKN 6 GARUT',
       alamat: '',
@@ -489,7 +487,6 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
     const updatedSekolah: SekolahConfig = {
       ...baseSekolah,
-      // Backward compatibility fields
       loginBgType: 'two_layer',
       loginBgImage: enableWallpaper ? bgImage : undefined,
       loginBgGradient: bgGradient,
@@ -501,24 +498,18 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginBgBlur: wallpaperBlur,
       loginBgFit: wallpaperFit,
       loginBgOverlayColor: overlayColor,
-
-      // 2-Layer Background Explicit Configurations
       loginBgEnableWallpaper: enableWallpaper,
       loginBgWallpaperFit: wallpaperFit,
       loginBgWallpaperOpacity: wallpaperOpacity,
       loginBgWallpaperBlur: wallpaperBlur,
       loginBgWallpaperFilter: wallpaperFilter,
-
       loginBgEnableFill: enableFill,
       loginBgFillType: fillType,
       loginBgFillColor: bgColor,
       loginBgFillGradient: bgGradient,
       loginBgFillPattern: bgPattern,
       loginBgFillOpacity: fillOpacity,
-
       loginBgBlendMode: blendMode,
-
-      // Card & Panel Configs
       loginContrastMode: contrastMode,
       loginCardTheme: cardTheme,
       loginCardOpacity: cardOpacity,
@@ -572,6 +563,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginCustomLinks: customLinks,
       loginCustomLinksDisplayMode: customLinksDisplayMode,
       loginCustomLinksTitle: customLinksTitle,
+      ...overrides,
     };
 
     let updatedAppData: AppData = {
@@ -579,16 +571,15 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       sekolah: updatedSekolah,
     };
 
-    updatedAppData = addAuditLog(
-      updatedAppData,
-      'Pengaturan Tampilan Login',
-      `Memperbarui kustomisasi latar belakang 2 lapisan (Wallpaper: ${enableWallpaper ? 'Aktif' : 'Nonaktif'}, Warna Fill: ${
-        enableFill ? fillType : 'Nonaktif'
-      }, Blend Mode: ${blendMode}).`
-    );
-
     onUpdateAppData(updatedAppData);
-    onShowToast('Pengaturan Latar Belakang 2 Lapisan Halaman Login berhasil disimpan!', 'success');
+  };
+
+  // Save Settings to AppData
+  const handleSave = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (readOnly) return;
+    saveWithUpdates();
+    onShowToast('Pengaturan Tampilan Login berhasil disimpan!', 'success');
   };
 
   // Reset to default
@@ -1502,7 +1493,10 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                               <button
                                 key={sz.id}
                                 type="button"
-                                onClick={() => setCardSchoolNameSize(sz.id as any)}
+                                onClick={() => {
+                                  setCardSchoolNameSize(sz.id as any);
+                                  saveWithUpdates({ loginCardSchoolNameSize: sz.id as any });
+                                }}
                                 className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition text-center cursor-pointer border ${
                                   cardSchoolNameSize === sz.id
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
