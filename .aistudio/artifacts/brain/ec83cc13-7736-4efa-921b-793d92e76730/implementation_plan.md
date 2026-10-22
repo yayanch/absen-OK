@@ -8,9 +8,10 @@ Rencana arsitektur dan antarmuka untuk fitur **Absensi Siswa Kelas Mengajar Guru
 
 > [!IMPORTANT]
 > **Keputusan Kunci Terkonfirmasi dari Tanya-Jawab:**
-> 1. **Pintu Akses Guru**: Diakses langsung dari menu **Jadwal Mengajar** melalui tombol **"Absen Kelas"** pada setiap kartu sesi/slot jadwal mengajar (baik pada tampilan Matriks Mingguan maupun Daftar Tabel Jadwal).
+> 1. **Pintu Akses Guru**: Diakses langsung dari menu **Jadwal Mengajar** dan menu **Presensi KBM Guru (Form Absen Sesi Kelas)**.
 > 2. **Isolasi Data**: Data tersimpan terpisah secara mandiri (`presensiMengajarGuru`) di tabel database dan state tersendiri untuk setiap guru, tanpa menimpa (*overwrite*) data absensi harian utama sekolah.
-> 3. **Kelengkapan Pencatatan**: Mencakup status kehadiran siswa (**H/S/I/A**), **Jurnal Materi Pembelajaran** (topik bahasan KBM hari itu), jam pelajaran (JP), serta **Catatan Siswa** per individu.
+> 3. **Kelengkapan Pencatatan**: Mencakup status kehadiran siswa (**H/S/I/A/T**), **Jurnal Materi Pembelajaran** (topik bahasan KBM hari itu), jam pelajaran (JP), serta **Catatan Siswa** per individu. Default awal tidak ada yang terpilih (kosong).
+> 4. **Sinkronisasi Rotasi Shift Mingguan**: Sesi jadwal mengajar pada Tab 1 (Form Absen Sesi Kelas) secara otomatis menyesuaikan pembagian rotasi shift tiap minggu (Kelompok 1 untuk Kelas X & XI, Kelompok 2 untuk Kelas XII) berdasarkan tanggal yang dipilih, dengan banner status rotasi aktif dan toggle filter ("Sesuai Rotasi Minggu Ini" vs "Semua Shift").
 
 ---
 
