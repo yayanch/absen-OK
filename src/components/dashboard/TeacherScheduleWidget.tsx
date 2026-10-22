@@ -287,11 +287,10 @@ export const TeacherScheduleWidget: React.FC<TeacherScheduleWidgetProps> = ({
                         return isScheduled ? (
                           <div
                             key={n}
-                            className="flex-1 max-w-[28px] aspect-square rounded-full bg-blue-600 text-white font-black text-[10px] sm:text-xs flex flex-col items-center justify-center border-2 border-blue-400 dark:border-blue-500 ring-2 ring-blue-300/80 dark:ring-blue-500/40 shadow-xs leading-none select-none"
+                            className="flex-1 max-w-[28px] aspect-square rounded-full bg-blue-600 text-white font-black text-[10px] sm:text-xs flex items-center justify-center leading-none select-none"
                             title={`Jam ke-${n} (Mengajar)`}
                           >
-                            <span className="leading-none pt-0.5">{n}</span>
-                            <span className="w-1 h-1 rounded-full bg-white mt-0.5 shrink-0"></span>
+                            <span>{n}</span>
                           </div>
                         ) : (
                           <div

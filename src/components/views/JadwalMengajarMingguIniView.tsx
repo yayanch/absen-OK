@@ -758,11 +758,10 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
                           return isScheduled ? (
                             <div
                               key={n}
-                              className="flex-1 max-w-[34px] aspect-square rounded-full bg-blue-600 text-white font-black text-xs sm:text-sm flex flex-col items-center justify-center border-2 border-blue-400 dark:border-blue-500 ring-2 ring-blue-300/80 dark:ring-blue-500/40 shadow-xs leading-none select-none transition-transform hover:scale-110"
+                              className="flex-1 max-w-[34px] aspect-square rounded-full bg-blue-600 text-white font-black text-xs sm:text-sm flex items-center justify-center leading-none select-none transition-transform hover:scale-105"
                               title={`Jam ke-${n} (${shiftType}: ${timeStr}) - Mengajar ${item.mapelClean}`}
                             >
-                              <span className="leading-none pt-0.5">{n}</span>
-                              <span className="w-1 h-1 rounded-full bg-white mt-0.5 shrink-0"></span>
+                              <span>{n}</span>
                             </div>
                           ) : (
                             <div
