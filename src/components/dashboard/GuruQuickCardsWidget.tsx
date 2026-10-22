@@ -12,6 +12,7 @@ import {
   Sparkles,
   ArrowUpRight,
   ShieldOff,
+  BookOpenCheck,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
@@ -165,6 +166,18 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
   // Master List of Quick Cards
   const cards = React.useMemo(() => [
     {
+      id: 'rekap_mengajar_per_kelas',
+      title: 'Rekap Absensi Mengajar Per Kelas',
+      description: 'Rekapitulasi kehadiran siswa & jurnal KBM per kelas mengajar',
+      icon: BookOpenCheck,
+      badgeText: 'Rekap Per Kelas',
+      badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      iconBg: 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-emerald-500/25',
+      hoverBorder: 'hover:border-emerald-400 dark:hover:border-emerald-600',
+      view: 'rekap_pengisian_kelas' as ViewType,
+      highlight: true,
+    },
+    {
       id: 'presensi_kbm_guru',
       title: 'Presensi & Jurnal KBM',
       description: 'Input presensi kelas & jurnal mengajar mandiri per jam pelajaran',
@@ -176,6 +189,18 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
       iconBg: 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-blue-500/25',
       hoverBorder: 'hover:border-blue-400 dark:hover:border-blue-600',
       view: 'presensi_kbm_guru' as ViewType,
+      highlight: true,
+    },
+    {
+      id: 'jadwal_minggu_ini',
+      title: 'Jadwal Mengajar Saya',
+      description: 'Matriks jadwal mengajar mingguan & alokasi JP kelas',
+      icon: Calendar,
+      badgeText: `${weeklyTotalJp} JP Beban Mengajar`,
+      badgeStyle: 'bg-sky-50 text-sky-700 dark:bg-sky-950/80 dark:text-sky-300 border-sky-200 dark:border-sky-800',
+      iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sky-500/25',
+      hoverBorder: 'hover:border-sky-400 dark:hover:border-sky-600',
+      view: 'jadwal_minggu_ini' as ViewType,
       highlight: true,
     },
     {
@@ -212,17 +237,6 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
       hoverBorder: 'hover:border-purple-400 dark:hover:border-purple-600',
       view: 'rekap_absensi_pribadi_guru' as ViewType,
       highlight: true,
-    },
-    {
-      id: 'jadwal_minggu_ini',
-      title: 'Jadwal Mengajar Saya',
-      description: 'Matriks jadwal mengajar mingguan & alokasi JP kelas',
-      icon: Calendar,
-      badgeText: `${weeklyTotalJp} JP Beban Mengajar`,
-      badgeStyle: 'bg-sky-50 text-sky-700 dark:bg-sky-950/80 dark:text-sky-300 border-sky-200 dark:border-sky-800',
-      iconBg: 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sky-500/25',
-      hoverBorder: 'hover:border-sky-400 dark:hover:border-sky-600',
-      view: 'jadwal_minggu_ini' as ViewType,
     },
     {
       id: 'catatan_pelanggaran',

@@ -532,6 +532,8 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
       'presensi_kbm_guru',
       'absen_harian_guru',
       'rekap_absensi_pribadi_guru',
+      'rekap_pengisian_kelas',
+      'rekap_harian',
       'broadcast_wa',
       'mapel_kelas_guru',
       'jadwal_mengajar',
