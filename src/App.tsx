@@ -38,48 +38,75 @@ import { GeneralModal } from './components/GeneralModal';
 import { Footer } from './components/Footer';
 import { BackToTop } from './components/BackToTop';
 
-const DashboardView = React.lazy(() => import('./components/views/DashboardView').then(m => ({ default: m.DashboardView })));
-const InputPresensiView = React.lazy(() => import('./components/views/InputPresensiView').then(m => ({ default: m.InputPresensiView })));
-const HomeVisitView = React.lazy(() => import('./components/views/HomeVisitView').then(m => ({ default: m.HomeVisitView })));
-const PelanggaranView = React.lazy(() => import('./components/views/PelanggaranView').then(m => ({ default: m.PelanggaranView })));
-const EkstrakurikulerView = React.lazy(() => import('./components/views/EkstrakurikulerView').then(m => ({ default: m.EkstrakurikulerView })));
-const RekapHarianView = React.lazy(() => import('./components/views/RekapHarianView').then(m => ({ default: m.RekapHarianView })));
-const RekapPengisianKelasView = React.lazy(() => import('./components/views/RekapPengisianKelasView').then(m => ({ default: m.RekapPengisianKelasView })));
-const RekapMingguanView = React.lazy(() => import('./components/views/RekapMingguanView').then(m => ({ default: m.RekapMingguanView })));
-const RekapBulananView = React.lazy(() => import('./components/views/RekapBulananView').then(m => ({ default: m.RekapBulananView })));
-const RekapKetidakhadiranTertinggiView = React.lazy(() => import('./components/views/RekapKetidakhadiranTertinggiView').then(m => ({ default: m.RekapKetidakhadiranTertinggiView })));
-const MasterJurusanView = React.lazy(() => import('./components/views/MasterJurusanView').then(m => ({ default: m.MasterJurusanView })));
-const MasterGuruView = React.lazy(() => import('./components/views/MasterGuruView').then(m => ({ default: m.MasterGuruView })));
-const MasterMataPelajaranView = React.lazy(() => import('./components/views/MasterMataPelajaranView').then(m => ({ default: m.MasterMataPelajaranView })));
-const MasterKelasView = React.lazy(() => import('./components/views/MasterKelasView').then(m => ({ default: m.MasterKelasView })));
-const MasterSiswaView = React.lazy(() => import('./components/views/MasterSiswaView').then(m => ({ default: m.MasterSiswaView })));
-const HariLiburView = React.lazy(() => import('./components/views/HariLiburView').then(m => ({ default: m.HariLiburView })));
-const PengaturanSekolahView = React.lazy(() => import('./components/views/PengaturanSekolahView').then(m => ({ default: m.PengaturanSekolahView })));
-const PengaturanTemaView = React.lazy(() => import('./components/views/PengaturanTemaView').then(m => ({ default: m.PengaturanTemaView })));
-const PengaturanAdminView = React.lazy(() => import('./components/views/PengaturanAdminView').then(m => ({ default: m.PengaturanAdminView })));
-const MasterUserView = React.lazy(() => import('./components/views/MasterUserView').then(m => ({ default: m.MasterUserView })));
-const PengaturanRoleView = React.lazy(() => import('./components/views/PengaturanRoleView').then(m => ({ default: m.PengaturanRoleView })));
-const PengaturanMenuView = React.lazy(() => import('./components/views/PengaturanMenuView').then(m => ({ default: m.PengaturanMenuView })));
-const IntegrasiMySQLView = React.lazy(() => import('./components/views/IntegrasiMySQLView').then(m => ({ default: m.IntegrasiMySQLView })));
-const DatabaseTrafficView = React.lazy(() => import('./components/views/DatabaseTrafficView').then(m => ({ default: m.DatabaseTrafficView })));
-const CetakKartuQrView = React.lazy(() => import('./components/views/CetakKartuQrView').then(m => ({ default: m.CetakKartuQrView })));
-const LiveChatView = React.lazy(() => import('./components/views/LiveChatView').then(m => ({ default: m.LiveChatView })));
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return React.lazy(async () => {
+    try {
+      return await factory();
+    } catch (err: any) {
+      console.warn('Dynamic chunk import error:', err);
+      const isChunkError =
+        err?.message?.includes('Failed to fetch dynamically imported module') ||
+        err?.message?.includes('dynamically imported module') ||
+        err?.name === 'ChunkLoadError';
+
+      if (isChunkError && typeof window !== 'undefined') {
+        const reloadKey = 'chunk_reload_count';
+        const count = parseInt(sessionStorage.getItem(reloadKey) || '0', 10);
+        if (count < 2) {
+          sessionStorage.setItem(reloadKey, String(count + 1));
+          window.location.reload();
+          return new Promise<{ default: T }>(() => {});
+        }
+      }
+      throw err;
+    }
+  });
+}
+
+const DashboardView = lazyWithRetry(() => import('./components/views/DashboardView').then(m => ({ default: m.DashboardView })));
+const InputPresensiView = lazyWithRetry(() => import('./components/views/InputPresensiView').then(m => ({ default: m.InputPresensiView })));
+const HomeVisitView = lazyWithRetry(() => import('./components/views/HomeVisitView').then(m => ({ default: m.HomeVisitView })));
+const PelanggaranView = lazyWithRetry(() => import('./components/views/PelanggaranView').then(m => ({ default: m.PelanggaranView })));
+const EkstrakurikulerView = lazyWithRetry(() => import('./components/views/EkstrakurikulerView').then(m => ({ default: m.EkstrakurikulerView })));
+const RekapHarianView = lazyWithRetry(() => import('./components/views/RekapHarianView').then(m => ({ default: m.RekapHarianView })));
+const RekapPengisianKelasView = lazyWithRetry(() => import('./components/views/RekapPengisianKelasView').then(m => ({ default: m.RekapPengisianKelasView })));
+const RekapMingguanView = lazyWithRetry(() => import('./components/views/RekapMingguanView').then(m => ({ default: m.RekapMingguanView })));
+const RekapBulananView = lazyWithRetry(() => import('./components/views/RekapBulananView').then(m => ({ default: m.RekapBulananView })));
+const RekapKetidakhadiranTertinggiView = lazyWithRetry(() => import('./components/views/RekapKetidakhadiranTertinggiView').then(m => ({ default: m.RekapKetidakhadiranTertinggiView })));
+const MasterJurusanView = lazyWithRetry(() => import('./components/views/MasterJurusanView').then(m => ({ default: m.MasterJurusanView })));
+const MasterGuruView = lazyWithRetry(() => import('./components/views/MasterGuruView').then(m => ({ default: m.MasterGuruView })));
+const MasterMataPelajaranView = lazyWithRetry(() => import('./components/views/MasterMataPelajaranView').then(m => ({ default: m.MasterMataPelajaranView })));
+const MasterKelasView = lazyWithRetry(() => import('./components/views/MasterKelasView').then(m => ({ default: m.MasterKelasView })));
+const MasterSiswaView = lazyWithRetry(() => import('./components/views/MasterSiswaView').then(m => ({ default: m.MasterSiswaView })));
+const HariLiburView = lazyWithRetry(() => import('./components/views/HariLiburView').then(m => ({ default: m.HariLiburView })));
+const PengaturanSekolahView = lazyWithRetry(() => import('./components/views/PengaturanSekolahView').then(m => ({ default: m.PengaturanSekolahView })));
+const PengaturanTemaView = lazyWithRetry(() => import('./components/views/PengaturanTemaView').then(m => ({ default: m.PengaturanTemaView })));
+const PengaturanAdminView = lazyWithRetry(() => import('./components/views/PengaturanAdminView').then(m => ({ default: m.PengaturanAdminView })));
+const MasterUserView = lazyWithRetry(() => import('./components/views/MasterUserView').then(m => ({ default: m.MasterUserView })));
+const PengaturanRoleView = lazyWithRetry(() => import('./components/views/PengaturanRoleView').then(m => ({ default: m.PengaturanRoleView })));
+const PengaturanMenuView = lazyWithRetry(() => import('./components/views/PengaturanMenuView').then(m => ({ default: m.PengaturanMenuView })));
+const IntegrasiMySQLView = lazyWithRetry(() => import('./components/views/IntegrasiMySQLView').then(m => ({ default: m.IntegrasiMySQLView })));
+const DatabaseTrafficView = lazyWithRetry(() => import('./components/views/DatabaseTrafficView').then(m => ({ default: m.DatabaseTrafficView })));
+const CetakKartuQrView = lazyWithRetry(() => import('./components/views/CetakKartuQrView').then(m => ({ default: m.CetakKartuQrView })));
+const LiveChatView = lazyWithRetry(() => import('./components/views/LiveChatView').then(m => ({ default: m.LiveChatView })));
 import { LiveChatWidget } from './components/chat/LiveChatWidget';
 import { OfflineView } from './components/views/OfflineView';
-const PortalMuridView = React.lazy(() => import('./components/views/PortalMuridView').then(m => ({ default: m.PortalMuridView })));
-const JadwalShiftView = React.lazy(() => import('./components/views/JadwalShiftView').then(m => ({ default: m.JadwalShiftView })));
-const JadwalMengajarView = React.lazy(() => import('./components/views/JadwalMengajarView').then(m => ({ default: m.JadwalMengajarView })));
-const ProyeksiJadwalGuruView = React.lazy(() => import('./components/views/ProyeksiJadwalGuruView').then(m => ({ default: m.ProyeksiJadwalGuruView })));
-const JadwalMengajarMingguIniView = React.lazy(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
-const AbsenHarianGuruTab = React.lazy(() => import('./components/views/AbsenHarianGuruTab').then(m => ({ default: m.AbsenHarianGuruTab })));
-const RekapAbsensiPribadiGuruView = React.lazy(() => import('./components/views/RekapAbsensiPribadiGuruView').then(m => ({ default: m.RekapAbsensiPribadiGuruView })));
-const PresensiKbmGuruView = React.lazy(() => import('./components/views/PresensiKbmGuruView').then(m => ({ default: m.PresensiKbmGuruView })));
-const GuruMapelKelasView = React.lazy(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
-const AuditLogsView = React.lazy(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
-const IntrusionDetectionView = React.lazy(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
-const ServerMonitoringView = React.lazy(() => import('./components/views/ServerMonitoringView').then(m => ({ default: m.ServerMonitoringView })));
-const UserLoginMonitoringView = React.lazy(() => import('./components/views/UserLoginMonitoringView').then(m => ({ default: m.UserLoginMonitoringView })));
-const WhatsAppGatewayView = React.lazy(() => import('./components/views/WhatsAppGatewayView').then(m => ({ default: m.WhatsAppGatewayView })));
+const PortalMuridView = lazyWithRetry(() => import('./components/views/PortalMuridView').then(m => ({ default: m.PortalMuridView })));
+const JadwalShiftView = lazyWithRetry(() => import('./components/views/JadwalShiftView').then(m => ({ default: m.JadwalShiftView })));
+const JadwalMengajarView = lazyWithRetry(() => import('./components/views/JadwalMengajarView').then(m => ({ default: m.JadwalMengajarView })));
+const ProyeksiJadwalGuruView = lazyWithRetry(() => import('./components/views/ProyeksiJadwalGuruView').then(m => ({ default: m.ProyeksiJadwalGuruView })));
+const JadwalMengajarMingguIniView = lazyWithRetry(() => import('./components/views/JadwalMengajarMingguIniView').then(m => ({ default: m.JadwalMengajarMingguIniView })));
+const AbsenHarianGuruTab = lazyWithRetry(() => import('./components/views/AbsenHarianGuruTab').then(m => ({ default: m.AbsenHarianGuruTab })));
+const RekapAbsensiPribadiGuruView = lazyWithRetry(() => import('./components/views/RekapAbsensiPribadiGuruView').then(m => ({ default: m.RekapAbsensiPribadiGuruView })));
+const PresensiKbmGuruView = lazyWithRetry(() => import('./components/views/PresensiKbmGuruView').then(m => ({ default: m.PresensiKbmGuruView || m.default })));
+const GuruMapelKelasView = lazyWithRetry(() => import('./components/views/GuruMapelKelasView').then(m => ({ default: m.GuruMapelKelasView })));
+const AuditLogsView = lazyWithRetry(() => import('./components/views/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
+const IntrusionDetectionView = lazyWithRetry(() => import('./components/views/IntrusionDetectionView').then(m => ({ default: m.IntrusionDetectionView })));
+const ServerMonitoringView = lazyWithRetry(() => import('./components/views/ServerMonitoringView').then(m => ({ default: m.ServerMonitoringView })));
+const UserLoginMonitoringView = lazyWithRetry(() => import('./components/views/UserLoginMonitoringView').then(m => ({ default: m.UserLoginMonitoringView })));
+const WhatsAppGatewayView = lazyWithRetry(() => import('./components/views/WhatsAppGatewayView').then(m => ({ default: m.WhatsAppGatewayView })));
 
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';

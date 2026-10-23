@@ -25,6 +25,22 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Uncaught error in React application:', error, errorInfo);
+    // If dynamic chunk loading fails after a new deployment/build, auto-reload to fetch new chunks
+    const isChunkError =
+      error?.message?.includes('Failed to fetch dynamically imported module') ||
+      error?.message?.includes('dynamically imported module') ||
+      error?.name === 'ChunkLoadError';
+
+    if (isChunkError && typeof window !== 'undefined') {
+      const reloadKey = 'eb_chunk_reload_attempt';
+      const lastReload = sessionStorage.getItem(reloadKey);
+      const now = Date.now();
+      if (!lastReload || now - parseInt(lastReload, 10) > 8000) {
+        sessionStorage.setItem(reloadKey, String(now));
+        console.warn('Automatically reloading application due to stale chunk...');
+        window.location.reload();
+      }
+    }
   }
 
   public handleReset = () => {

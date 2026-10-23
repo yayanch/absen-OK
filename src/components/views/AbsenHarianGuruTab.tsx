@@ -901,36 +901,10 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
           <button
             type="button"
             onClick={() => setActiveSubTab('guru')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
-              activeSubTab === 'guru'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-            }`}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold bg-blue-600 text-white shadow-xs transition cursor-pointer"
           >
             <UserCheck className="w-4 h-4 shrink-0" />
             <span>Absen Harian Guru ({scheduledTeachers.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('siswa')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer ${
-              activeSubTab === 'siswa'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-            }`}
-          >
-            <GraduationCap className="w-4.5 h-4.5 shrink-0 text-amber-300" />
-            <span>Rekap Kehadiran Siswa Hari Ini</span>
-            <span
-              className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                activeSubTab === 'siswa'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
-              }`}
-            >
-              {studentOverallStats.attendanceRateFormatted}
-            </span>
           </button>
         </div>
       </div>
@@ -1162,64 +1136,7 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
       ) : (
         /* BRANCH B: ABSEN HARIAN GURU & JADWAL (EXISTING VIEW) */
         <div className="space-y-5 animate-in fade-in duration-300">
-          {/* Quick Banner Summary Kehadiran Siswa Hari Ini */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-200 dark:border-emerald-900/60 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
-                <GraduationCap className="w-4.5 h-4.5" />
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 dark:text-white">
-                  Ringkasan Kehadiran Siswa Hari Ini ({formatDateIndo(selectedTanggal)}):
-                </span>
-                <span className="ml-2 font-black text-emerald-600 dark:text-emerald-400">
-                  {studentOverallStats.attendanceRateFormatted} Kehadiran
-                </span>
-                <span className="text-slate-500 dark:text-slate-400 ml-2">
-                  (H: {studentOverallStats.hadirCount} • T: {studentOverallStats.kesianganCount} • S: {studentOverallStats.sakitCount} • I: {studentOverallStats.izinCount} • A: {studentOverallStats.alpaCount})
-                </span>
-              </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('siswa')}
-              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1 cursor-pointer shrink-0"
-            >
-              <span>Lihat Rekap Siswa</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Bilah Status Rotasi Shift Pekan Ini */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-white dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-900 border border-blue-200/80 dark:border-blue-900/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-black text-slate-900 dark:text-white text-xs sm:text-sm">
-                    Jadwal Rotasi Shift Pekan Ini ({formattedPeriodRange})
-                  </span>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                    Otomatis Disesuaikan
-                  </span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 mt-0.5 text-xs">
-                  <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 1 (Kelas X &amp; XI):</span>{' '}
-                  <span className={`font-black ${k1Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
-                    {k1Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
-                  </span>
-                  {' '}• <span className="font-bold text-slate-800 dark:text-slate-200">Kelompok 2 (Kelas XII):</span>{' '}
-                  <span className={`font-black ${k2Type === 'pagi' ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400'}`}>
-                    {k2Type === 'pagi' ? '☀️ Shift Pagi (06.30 - 12.00)' : '🌤️ Shift Siang (13.00 - 16.50)'}
-                  </span>
-                  . Daftar guru di bawah hanya memuat jadwal giliran aktif pekan ini (jadwal shift tidak aktif otomatis dikecualikan).
-                </p>
-              </div>
-            </div>
-          </div>
 
       {/* Weekend Notice */}
       {isWeekendSelected && (
