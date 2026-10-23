@@ -895,19 +895,7 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
         </div>
       </div>
 
-      {/* 2. SUB-NAVIGATION BAR: ABSEN GURU VS REKAP KEHADIRAN SISWA */}
-      <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl md:rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl sm:rounded-2xl border border-slate-200/70 dark:border-slate-700/70 flex-1">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('guru')}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold bg-blue-600 text-white shadow-xs transition cursor-pointer"
-          >
-            <UserCheck className="w-4 h-4 shrink-0" />
-            <span>Absen Harian Guru ({scheduledTeachers.length})</span>
-          </button>
-        </div>
-      </div>
+
 
       {/* BRANCH A: REKAP KEHADIRAN SISWA HARI INI */}
       {activeSubTab === 'siswa' ? (
