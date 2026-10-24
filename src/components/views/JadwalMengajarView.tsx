@@ -4717,9 +4717,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                             >
                               {schedulesToDisplay.length > 0 ? (
                                 <div className={matrixSlotViewMode === 'sideBySide' && matchedSchedules.length > 1 ? 'grid grid-cols-2 gap-1.5' : 'space-y-1.5'}>
-                                  {schedulesToDisplay.map((matchedSchedule, sIdx) => {
-                                     const todaySesi = getSesiForJadwalToday(matchedSchedule.id);
-                                     return (
+                                  {schedulesToDisplay.map((matchedSchedule, sIdx) => (
                                     <div
                                       key={matchedSchedule.id || sIdx}
                                       className={`p-2 rounded-xl border space-y-1 ${
@@ -4834,22 +4832,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                          )}
                                        </div>
 
-                                       {/* Tombol Absen Kelas / Sudah Absen */}
-                                       <div className="pt-1 mt-1 border-t border-slate-200/80 dark:border-slate-800/80">
-                                         <button
-                                           type="button"
-                                           onClick={() => handleOpenAbsenSiswa(matchedSchedule)}
-                                           className={`w-full py-1 px-1.5 rounded-lg text-[10px] font-extrabold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs ${
-                                             todaySesi
-                                               ? "bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700"
-                                               : "bg-blue-600 hover:bg-blue-700 text-white"
-                                           }`}
-                                           title={todaySesi ? "Edit Absensi Siswa Kelas Hari Ini" : "Buka Lembar Absen Kelas"}
-                                         >
-                                           <UserCheck className="w-3 h-3 shrink-0" />
-                                           <span className="truncate">{todaySesi ? "Sudah Absen" : "Absen Kelas"}</span>
-                                         </button>
-                                       </div>
+
 
                                        {matchedSchedules.length > 1 && !readOnly && (
                                         <div className="pt-1 mt-1 border-t border-amber-200/80 dark:border-amber-800/80 flex items-center justify-between">
@@ -4866,7 +4849,7 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
                                         </div>
                                       )}
                                     </div>
-                                   )})}
+                                   ))}
                                 </div>
                               ) : isUpacara ? (
                                 <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/50 dark:to-red-950/30 border border-rose-200 dark:border-rose-900/70 space-y-1 shadow-2xs">
