@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AppData, AbsensiMengajarGuruItem, UserSession } from '../../../types';
 import { cleanMapelName } from '../../../utils/helpers';
+import { AttendanceCircleChart } from '../../common/AttendanceCircleChart';
 
 interface RiwayatPresensiMengajarTabProps {
   appData: AppData;
@@ -307,27 +308,14 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
                           </div>
                         )}
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-1 text-[11px] flex-wrap">
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">
-                            H: {hadir}
-                          </span>
-                          {sakit > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold">
-                              S: {sakit}
-                            </span>
-                          )}
-                          {izin > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-bold">
-                              I: {izin}
-                            </span>
-                          )}
-                          {alpha > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 font-bold">
-                              A: {alpha}
-                            </span>
-                          )}
-                        </div>
+                      <td className="py-3 px-4 text-center">
+                        <AttendanceCircleChart
+                          hadir={hadir}
+                          sakit={sakit}
+                          izin={izin}
+                          alpa={alpha}
+                          total={(sesi.presensiSiswa || []).length || (hadir + sakit + izin + alpha)}
+                        />
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1">

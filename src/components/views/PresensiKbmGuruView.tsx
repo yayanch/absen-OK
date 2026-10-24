@@ -89,10 +89,10 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
   onNavigateView
 }) => {
   // Navigation tabs:
-  // 1. 'mengabsen': Form Presensi Mandiri Guru per Sesi Jadwal Kelas
-  // 2. 'riwayat_mandiri_guru': Tabel Riwayat Mandiri per Guru dengan Pilihan Guru & Profil Statistik Guru
+  // 1. 'mengabsen': Form Presensi Mandiri Guru per Sesi Jadwal Kelas (Default)
+  // 2. 'riwayat_mandiri_guru': Tabel Riwayat Mandiri per Guru dengan Pilihan Guru
   // 3. 'rekap_semua_guru': Monitoring Rekap Semua Guru (Admin / Kurikulum)
-  const [activeTab, setActiveTab] = useState<'mengabsen' | 'riwayat_mandiri_guru' | 'rekap_semua_guru'>('riwayat_mandiri_guru');
+  const [activeTab, setActiveTab] = useState<'mengabsen' | 'riwayat_mandiri_guru' | 'rekap_semua_guru'>('mengabsen');
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
   const [selectedGuruUsername, setSelectedGuruUsername] = useState<string>('');
@@ -733,7 +733,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             <span>Form Absen Sesi Kelas</span>
           </button>
 
-          {/* Tab 2: Tabel Riwayat Mandiri Guru (Default & User Request) */}
+          {/* Tab 2: Tabel Riwayat Mandiri Guru */}
           <button
             type="button"
             onClick={() => setActiveTab('riwayat_mandiri_guru')}
