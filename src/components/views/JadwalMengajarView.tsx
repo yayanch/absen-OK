@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import {
   Calendar,
@@ -41,7 +42,8 @@ import {
   ChevronDown,
   ChevronUp,
   Tv,
-  FileText
+  FileText,
+  Settings
 } from 'lucide-react';
 import { AppData, JadwalMengajarGuru, UserSession, WaliKelas, Kelas, MataPelajaran, ViewType, GuruMapelKelasItem, AbsensiMengajarGuruItem } from '../../types';
 import { PageHeader } from '../common/UIComponents';
@@ -310,6 +312,72 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
   const [conflictResolutionLoading, setConflictResolutionLoading] = useState(false);
   const [matrixSlotViewMode, setMatrixSlotViewMode] = useState<'clean' | 'sideBySide' | 'expanded'>('clean');
+
+  // Dropdown Menu Pengaturan Jadwal Terpadu
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const triggerButtonRef = useRef<HTMLButtonElement>(null);
+  const dropdownMenuRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+
+  const updateDropdownPosition = useCallback(() => {
+    if (triggerButtonRef.current) {
+      const rect = triggerButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
+    }
+  }, []);
+
+  const handleToggleDropdown = () => {
+    if (!isDropdownOpen) {
+      updateDropdownPosition();
+      setIsDropdownOpen(true);
+    } else {
+      setIsDropdownOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+
+    const handleScrollOrResize = () => {
+      updateDropdownPosition();
+    };
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        triggerButtonRef.current && triggerButtonRef.current.contains(target)
+      ) {
+        return;
+      }
+      if (
+        dropdownMenuRef.current && dropdownMenuRef.current.contains(target)
+      ) {
+        return;
+      }
+      setIsDropdownOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDropdownOpen, updateDropdownPosition]);
 
   // Copy-Paste Clipboard State untuk Matriks Mengajar
   const [copiedSchedule, setCopiedSchedule] = useState<{
@@ -2435,106 +2503,37 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             : `${jadwalList.length} Jadwal Terjadwal`
         }
         actions={
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {/* Group Excel Actions */}
-            <div className="inline-flex items-center p-0.5 bg-white/15 rounded-xl border border-white/20 backdrop-blur-xs">
-              <button
-                type="button"
-                onClick={handleExportExcel}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white hover:bg-white/15 transition cursor-pointer"
-                title={isTeacher ? 'Ekspor Jadwal Mengajar Saya ke Excel' : 'Ekspor Jadwal ke Excel'}
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-300" />
-                <span>Ekspor</span>
-              </button>
-
-              {!readOnly && (
-                <>
-                  <div className="w-px h-3.5 bg-white/20 my-auto" />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white hover:bg-white/15 transition cursor-pointer"
-                    title="Import Jadwal dari Excel"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-blue-200" />
-                    <span>Import</span>
-                  </button>
-                  <div className="w-px h-3.5 bg-white/20 my-auto" />
-                  <button
-                    type="button"
-                    onClick={handleDownloadTemplate}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white hover:bg-white/15 transition cursor-pointer"
-                    title="Unduh Template Excel"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Template</span>
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx, .xls, .csv"
-                    onChange={handleImportExcel}
-                    className="hidden"
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Cetak */}
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-white/15 hover:bg-white/25 border border-white/20 transition cursor-pointer backdrop-blur-xs"
-              title="Cetak Jadwal Pelajaran"
-            >
-              <Printer className="w-3.5 h-3.5 text-white" />
-              <span>Cetak</span>
-            </button>
-
-            {/* Pusat Solusi Tumpang Tindih & Bentrok Jam */}
+          <div className="flex items-center gap-2">
             {!readOnly && (
-              <button
-                type="button"
-                onClick={() => setIsConflictModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-100 bg-amber-500/30 hover:bg-amber-500/40 border border-amber-300/40 transition cursor-pointer shadow-xs"
-                title="Buka Pusat Solusi Tumpang Tindih & Bentrok Jam (Pilihan Solusi Alternatif)"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Solusi Tumpang Tindih</span>
-                {conflictStats.totalConflicts > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-amber-950 font-black text-[10px]">
-                    {conflictStats.totalConflicts}
-                  </span>
-                )}
-              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={handleImportExcel}
+                className="hidden"
+              />
             )}
 
-            {/* Bersihkan Tumpang Tindih Cepat */}
-            {!readOnly && allJadwalList.length > 0 && (
-              <button
-                type="button"
-                onClick={() => handleServerResolveConflicts('smart_trim')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 transition cursor-pointer"
-                title="Bersihkan Jadwal Ganda & Rapikan Jam Langsung ke Server"
-              >
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
-                <span>Auto-Clean</span>
-              </button>
-            )}
-
-            {/* Kosongkan */}
-            {!readOnly && allJadwalList.length > 0 && (
-              <button
-                type="button"
-                onClick={handleDeleteAll}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-200 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 transition cursor-pointer"
-                title="Hapus / Kosongkan Seluruh Jadwal Pelajaran"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-300" />
-                <span>Kosongkan</span>
-              </button>
-            )}
+            <button
+              ref={triggerButtonRef}
+              type="button"
+              onClick={handleToggleDropdown}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold text-white transition cursor-pointer backdrop-blur-xs shadow-xs border ${
+                isDropdownOpen
+                  ? 'bg-white/30 border-white/40 ring-2 ring-white/30'
+                  : 'bg-white/20 hover:bg-white/30 border-white/25'
+              }`}
+              title="Buka Menu Pengaturan & Opsi Jadwal"
+            >
+              <Settings className="w-4 h-4 text-white" />
+              <span>Pengaturan</span>
+              {conflictStats.totalConflicts > 0 && !readOnly && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-amber-950 font-black text-[10px]">
+                  {conflictStats.totalConflicts}
+                </span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
           </div>
         }
       />
@@ -3079,6 +3078,173 @@ export const JadwalMengajarView: React.FC<JadwalMengajarViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* =====================================================================
+          DROPDOWN: PENGATURAN & KELOLA JADWAL (PORTAL)
+          ===================================================================== */}
+      {isDropdownOpen && createPortal(
+        <div
+          ref={dropdownMenuRef}
+          style={{
+            top: `${dropdownPosition.top}px`,
+            right: `${dropdownPosition.right}px`,
+          }}
+          className="fixed w-72 sm:w-80 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-2 z-[99999] text-slate-800 dark:text-slate-100 animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                Pengaturan Jadwal
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Opsi berkas, cetak, dan kelola jadwal
+              </p>
+            </div>
+            {conflictStats.totalConflicts > 0 && !readOnly && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-amber-950">
+                {conflictStats.totalConflicts} Bentrok
+              </span>
+            )}
+          </div>
+
+          <div className="py-1.5 space-y-0.5">
+            <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Berkas &amp; Pencetakan
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsDropdownOpen(false);
+                handleExportExcel();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-left"
+            >
+              <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="flex-1">
+                <div>Ekspor Excel</div>
+                <div className="text-[10px] font-normal text-slate-400">Unduh jadwal pelajaran (.xlsx)</div>
+              </div>
+            </button>
+
+            {!readOnly && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-left"
+                >
+                  <Upload className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div className="flex-1">
+                    <div>Import dari Excel</div>
+                    <div className="text-[10px] font-normal text-slate-400">Unggah file jadwal dari Excel</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    handleDownloadTemplate();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <div className="flex-1">
+                    <div>Template Excel</div>
+                    <div className="text-[10px] font-normal text-slate-400">Unduh format template baku</div>
+                  </div>
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsDropdownOpen(false);
+                handlePrint();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-left"
+            >
+              <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <div className="flex-1">
+                <div>Cetak Jadwal</div>
+                <div className="text-[10px] font-normal text-slate-400">Cetak lembar jadwal mengajar</div>
+              </div>
+            </button>
+          </div>
+
+          {!readOnly && (
+            <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 space-y-0.5">
+              <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Optimasi &amp; Konflik
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDropdownOpen(false);
+                  setIsConflictModalOpen(true);
+                }}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div>
+                    <div>Solusi Tumpang Tindih</div>
+                    <div className="text-[10px] font-normal text-slate-400">Atasi bentrok jam guru &amp; kelas</div>
+                  </div>
+                </div>
+                {conflictStats.totalConflicts > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[10px]">
+                    {conflictStats.totalConflicts}
+                  </span>
+                )}
+              </button>
+
+              {allJadwalList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    handleServerResolveConflicts('smart_trim');
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition cursor-pointer text-left"
+                >
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <div className="flex-1">
+                    <div>Auto-Clean Bentrok</div>
+                    <div className="text-[10px] font-normal text-slate-400">Rapikan jam duplikat otomatis</div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+
+          {!readOnly && allJadwalList.length > 0 && (
+            <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDropdownOpen(false);
+                  handleDeleteAll();
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer text-left"
+              >
+                <Trash2 className="w-4 h-4 text-rose-500 shrink-0" />
+                <div className="flex-1">
+                  <div>Kosongkan Seluruh Jadwal</div>
+                  <div className="text-[10px] font-normal text-rose-400/80">Hapus semua jadwal pelajaran</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>,
+        document.body
       )}
 
       {/* =====================================================================

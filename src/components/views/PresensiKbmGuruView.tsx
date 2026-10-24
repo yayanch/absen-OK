@@ -321,53 +321,6 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     return list.sort((a, b) => new Date(b.createdAt || b.tanggal).getTime() - new Date(a.createdAt || a.tanggal).getTime());
   }, [teacherSpecificLogs, filterKelasId, filterMonth, searchQuery]);
 
-  // Teacher Profile Metrics
-  const teacherMetrics = useMemo(() => {
-    const totalSesi = teacherSpecificLogs.length;
-
-    // Calculate total JP
-    let totalJp = 0;
-    teacherSpecificLogs.forEach((l) => {
-      // Parse JP from jamPelajaran string or fallback to 2
-      const match = l.jamPelajaran?.match(/\d+/g);
-      if (match && match.length >= 2 && l.jamPelajaran?.includes('&')) {
-        totalJp += 2;
-      } else if (match && match.length > 0) {
-        totalJp += 2; // standard 2 JP session
-      } else {
-        totalJp += 2;
-      }
-    });
-
-    // Student attendance rate
-    let totalSiswaTracked = 0;
-    let totalSiswaHadir = 0;
-    teacherSpecificLogs.forEach((l) => {
-      (l.presensiSiswa || []).forEach((ps) => {
-        totalSiswaTracked += 1;
-        if (ps.status === 'H') totalSiswaHadir += 1;
-      });
-    });
-
-    const averageHadirPct =
-      totalSiswaTracked > 0 ? Math.round((totalSiswaHadir / totalSiswaTracked) * 100) : 100;
-
-    // Unique classes taught
-    const uniqueKelas = new Set(teacherSpecificLogs.map((l) => l.kelasNama).filter(Boolean));
-
-    // Subjects taught
-    const mapelTaught = Array.from(
-      new Set(teacherSpecificLogs.map((l) => l.mataPelajaran).filter(Boolean))
-    );
-
-    return {
-      totalSesi,
-      totalJp,
-      averageHadirPct,
-      totalKelas: uniqueKelas.size,
-      mapelTaught: mapelTaught.length > 0 ? mapelTaught.join(', ') : currentGuru?.mataPelajaran || '-'
-    };
-  }, [teacherSpecificLogs, currentGuru]);
 
   // Available months in teacher logs for filter dropdown
   const availableMonths = useMemo(() => {
@@ -850,109 +803,23 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'riwayat_mandiri_guru' && (
         <div className="space-y-6">
-          {/* Active Teacher Profile Card & Switcher */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs relative overflow-hidden">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              {/* Teacher Identity & Details */}
-              <div className="flex items-start sm:items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-md shrink-0">
-                  {currentGuru?.nama ? currentGuru.nama.charAt(0).toUpperCase() : 'G'}
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
-                      Tabel Absensi Mandiri Guru
-                    </span>
-                    {currentUser.role === 'guru' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                        Akun Anda
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
-                    {currentGuru?.nama || 'Nama Guru'}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    NIP: {currentGuru?.nip || '-'} • Mapel Utama: {currentGuru?.mataPelajaran || '-'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Teacher Switcher (Available for Admin / Kurikulum / Piket) */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="space-y-1 min-w-[240px]">
-                  <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    {currentUser.role === 'guru' ? 'Guru Terpilih' : 'Ganti Pilihan Guru:'}
-                  </label>
-                  <select
-                    value={selectedGuruUsername}
-                    onChange={(e) => setSelectedGuruUsername(e.target.value)}
-                    disabled={currentUser.role === 'guru'}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {listGuru.map((g) => (
-                      <option key={g.id || g.username || g.nama} value={g.username || g.nama}>
-                        {g.nama} {g.nip ? `(NIP: ${g.nip})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Print Teaching Journal Modal Trigger */}
-                <button
-                  type="button"
-                  onClick={() => setIsPrintModalOpen(true)}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition shadow-xs self-end sm:self-auto"
-                >
-                  <Printer className="w-4 h-4 text-slate-500" />
-                  <span>Cetak Jurnal</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Teaching Statistics Bar for Active Teacher */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-              <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
-                <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
-                  Total Sesi Mengajar
-                </p>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
-                  {teacherMetrics.totalSesi} Sesi
-                </h4>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40">
-                <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-                  Jam Pelajaran (JP)
-                </p>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
-                  {teacherMetrics.totalJp} JP
-                </h4>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
-                <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
-                  Kehadiran Siswa
-                </p>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
-                  {teacherMetrics.averageHadirPct}%
-                </h4>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40">
-                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
-                  Kelas Berbeda
-                </p>
-                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
-                  {teacherMetrics.totalKelas} Kelas
-                </h4>
-              </div>
-            </div>
-          </div>
-
           {/* Table Filters & Single-Teacher Export */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
             <div className="flex flex-wrap items-center gap-3 flex-1">
+              {currentUser.role !== 'guru' && (
+                <select
+                  value={selectedGuruUsername}
+                  onChange={(e) => setSelectedGuruUsername(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white cursor-pointer"
+                >
+                  {listGuru.map((g) => (
+                    <option key={g.id || g.username || g.nama} value={g.username || g.nama}>
+                      {g.nama} {g.nip ? `(NIP: ${g.nip})` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               {/* Search in this teacher's logs */}
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -996,15 +863,27 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               )}
             </div>
 
-            {/* Export Excel Button strictly for this teacher */}
-            <button
-              type="button"
-              onClick={handleExportTeacherExcel}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs shrink-0 cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Export Excel ({currentGuru?.nama?.split(' ')[0] || 'Guru'})</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Print Teaching Journal Modal Trigger */}
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition shadow-xs cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-slate-500" />
+                <span>Cetak Jurnal</span>
+              </button>
+
+              {/* Export Excel Button strictly for this teacher */}
+              <button
+                type="button"
+                onClick={handleExportTeacherExcel}
+                className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Export Excel</span>
+              </button>
+            </div>
           </div>
 
           {/* Dedicated Teacher Attendance & Journal Table */}
