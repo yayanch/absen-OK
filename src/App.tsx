@@ -110,7 +110,7 @@ const WhatsAppGatewayView = lazyWithRetry(() => import('./components/views/Whats
 
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';
-import { hasMenuAccess, getEffectiveUserRoles, ALL_MENU_ITEMS } from './utils/rolePermissionEngine';
+import { hasMenuAccess, getEffectiveUserRoles, ALL_MENU_ITEMS, getAvailableRoleWorkspaces } from './utils/rolePermissionEngine';
 import { getAccessToken, uploadBackupToGoogleDrive } from './services/googleDriveService';
 
 export default function App() {
@@ -132,6 +132,56 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserSession | null>(loadSessionUser);
   const [currentView, setCurrentView] = useState<ViewType>(getInitialView);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
+
+  // Active Role Workspace State ('all' | 'guru' | 'wali' | 'kurikulum' | 'kesiswaan' | ...)
+  const [activeRoleWorkspace, setActiveRoleWorkspace] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('active_role_workspace') || 'all';
+    }
+    return 'all';
+  });
+
+  // Reconcile activeRoleWorkspace if user doesn't possess the saved role
+  useEffect(() => {
+    if (!currentUser) return;
+    const roles = getEffectiveUserRoles(currentUser, appData);
+    if (activeRoleWorkspace !== 'all' && !roles.includes(activeRoleWorkspace)) {
+      setActiveRoleWorkspace('all');
+      try {
+        localStorage.setItem('active_role_workspace', 'all');
+      } catch (e) {}
+    }
+  }, [currentUser, appData]);
+
+  const handleSelectRoleWorkspace = (workspaceId: string) => {
+    setActiveRoleWorkspace(workspaceId);
+    try {
+      localStorage.setItem('active_role_workspace', workspaceId);
+    } catch (e) {}
+
+    const workspaces = getAvailableRoleWorkspaces(currentUser, appData);
+    const targetWs = workspaces.find((w) => w.id === workspaceId);
+    const wsLabel = targetWs ? targetWs.label : workspaceId;
+
+    // Check if currentView is allowed in the newly selected workspace
+    const effectiveRolesForNew = workspaceId === 'all'
+      ? getEffectiveUserRoles(currentUser, appData)
+      : [workspaceId];
+
+    const isCurrentViewAllowed = hasMenuAccess(effectiveRolesForNew, currentView, appData);
+
+    if (!isCurrentViewAllowed && currentView !== 'dashboard') {
+      if (workspaceId === 'guru') {
+        handleNavigate('presensi_kbm_guru');
+      } else if (workspaceId === 'wali') {
+        handleNavigate('presensi_input');
+      } else {
+        handleNavigate('dashboard');
+      }
+    }
+
+    showToast(`Mode tampilan beralih ke: ${wsLabel}`, 'info');
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1338,6 +1388,9 @@ export default function App() {
   const isStudentPortal = isStudentRole || currentView === 'portal_murid' || currentView === 'absen_qr' || currentView === 'kartu_pelajar' || currentView === 'rekap_siswa';
 
   const userEffectiveRoles = getEffectiveUserRoles(currentUser, appData);
+  const effectiveRolesForAccess = (!activeRoleWorkspace || activeRoleWorkspace === 'all')
+    ? userEffectiveRoles
+    : [activeRoleWorkspace];
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors relative">
@@ -1357,6 +1410,8 @@ export default function App() {
           onResetAll={handleResetAllData}
           onOpenBackupModal={handleOpenBackupModal}
           onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
+          activeRoleWorkspace={activeRoleWorkspace}
+          onSelectRoleWorkspace={handleSelectRoleWorkspace}
         />
       </div>
 
@@ -1431,6 +1486,8 @@ export default function App() {
             saveStatus={saveStatus}
             onOpenChat={() => setIsLiveChatOpen((prev) => !prev)}
             unreadChatCount={unreadChatCount}
+            activeRoleWorkspace={activeRoleWorkspace}
+            onSelectRoleWorkspace={handleSelectRoleWorkspace}
           />
         </div>
 
@@ -1485,24 +1542,53 @@ export default function App() {
                 onNavigate={(v) => handleNavigate(v)}
                 onLogout={handleLogout}
               />
-            ) : !hasMenuAccess(userEffectiveRoles, currentView, appData) && currentUser.role !== 'admin' ? (
+            ) : !hasMenuAccess(effectiveRolesForAccess, currentView, appData) && (activeRoleWorkspace !== 'all' ? true : currentUser.role !== 'admin') ? (
               <div className="max-w-md mx-auto my-12 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-xl">
                 <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 text-rose-600 rounded-2xl flex items-center justify-center mx-auto font-black">
                   <ShieldAlert className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Akses Dibatasi</h3>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Akses Menu Dibatasi</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                    Role Anda saat ini tidak memiliki izin untuk mengakses menu ini. Silakan hubungi Administrator untuk memperbarui hak akses role Anda.
+                    {activeRoleWorkspace !== 'all' ? (
+                      <>
+                        Menu ini tidak termasuk dalam ruang kerja{' '}
+                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                          {activeRoleWorkspace === 'wali'
+                            ? 'Wali Kelas'
+                            : activeRoleWorkspace === 'guru'
+                            ? 'Guru Mapel'
+                            : activeRoleWorkspace === 'kurikulum'
+                            ? 'WKS Kurikulum'
+                            : activeRoleWorkspace === 'kesiswaan'
+                            ? 'WKS Kesiswaan'
+                            : activeRoleWorkspace}
+                        </span>
+                        . Silakan beralih ke Mode Semua Peran di header untuk melihat seluruh menu.
+                      </>
+                    ) : (
+                      'Role Anda saat ini tidak memiliki izin untuk mengakses menu ini. Silakan hubungi Administrator untuk memperbarui hak akses role Anda.'
+                    )}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleNavigate(currentUser.role === 'murid' ? 'portal_murid' : 'dashboard')}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition cursor-pointer"
-                >
-                  Kembali ke Halaman Utama
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                  {activeRoleWorkspace !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectRoleWorkspace('all')}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs"
+                    >
+                      Beralih ke Semua Peran
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleNavigate(currentUser.role === 'murid' ? 'portal_murid' : 'dashboard')}
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-xl text-xs transition cursor-pointer"
+                  >
+                    Kembali ke Halaman Utama
+                  </button>
+                </div>
               </div>
             ) : (
               <>

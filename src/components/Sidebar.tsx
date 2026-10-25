@@ -63,6 +63,8 @@ interface SidebarProps {
   onOpenBackupModal?: () => void;
   onOpenServerQrModal?: () => void;
   onMouseEnter?: () => void;
+  activeRoleWorkspace?: string;
+  onSelectRoleWorkspace?: (roleKey: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -80,8 +82,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenBackupModal,
   onOpenServerQrModal,
   onMouseEnter,
+  activeRoleWorkspace = 'all',
+  onSelectRoleWorkspace,
 }) => {
   const userEffectiveRoles = getEffectiveUserRoles(currentUser, appData);
+  const effectiveRolesForMenu = (!activeRoleWorkspace || activeRoleWorkspace === 'all')
+    ? userEffectiveRoles
+    : [activeRoleWorkspace];
   const isAdmin = userEffectiveRoles.includes('admin');
   const isKesiswaan = userEffectiveRoles.includes('kesiswaan') || userEffectiveRoles.includes('piket_kesiswaan');
   const isKurikulum = userEffectiveRoles.includes('kurikulum');
@@ -394,11 +401,101 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
+          {/* ACTIVE WORKSPACE ROLE INDICATOR IN SIDEBAR */}
+          {userEffectiveRoles.length > 1 && (
+            <div className={`px-2 pt-2 pb-0.5 shrink-0 ${!isOpen ? 'flex justify-center' : ''}`}>
+              {isOpen ? (
+                <div className="p-2 rounded-xl bg-white/10 dark:bg-black/20 border border-white/10 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0 text-white">
+                      {activeRoleWorkspace === 'wali' ? (
+                        <GraduationCap className="w-3.5 h-3.5 text-emerald-200" />
+                      ) : activeRoleWorkspace === 'guru' ? (
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-200" />
+                      ) : activeRoleWorkspace === 'kurikulum' ? (
+                        <CalendarRange className="w-3.5 h-3.5 text-amber-200" />
+                      ) : activeRoleWorkspace === 'kesiswaan' ? (
+                        <ShieldAlert className="w-3.5 h-3.5 text-purple-200" />
+                      ) : activeRoleWorkspace === 'admin' ? (
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-200" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-sky-200" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[9px] text-white/70 font-semibold uppercase tracking-wider leading-none">
+                        Mode Menu
+                      </div>
+                      <div className="text-xs font-bold text-white truncate leading-tight mt-0.5">
+                        {activeRoleWorkspace === 'all'
+                          ? 'Semua Peran'
+                          : activeRoleWorkspace === 'wali'
+                          ? 'Wali Kelas'
+                          : activeRoleWorkspace === 'guru'
+                          ? 'Guru Mapel'
+                          : activeRoleWorkspace === 'kurikulum'
+                          ? 'WKS Kurikulum'
+                          : activeRoleWorkspace === 'kesiswaan'
+                          ? 'WKS Kesiswaan'
+                          : activeRoleWorkspace === 'admin'
+                          ? 'Administrator'
+                          : activeRoleWorkspace}
+                      </div>
+                    </div>
+                  </div>
+                  {onSelectRoleWorkspace && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const roles = ['all', ...userEffectiveRoles];
+                        const currentIndex = roles.indexOf(activeRoleWorkspace || 'all');
+                        const nextRole = roles[(currentIndex + 1) % roles.length];
+                        onSelectRoleWorkspace(nextRole);
+                      }}
+                      title="Klik untuk beralih mode peran"
+                      className="px-2 py-1 bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[10px] font-bold rounded-lg transition shrink-0 cursor-pointer border border-white/10"
+                    >
+                      Ganti
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onSelectRoleWorkspace) {
+                      const roles = ['all', ...userEffectiveRoles];
+                      const currentIndex = roles.indexOf(activeRoleWorkspace || 'all');
+                      const nextRole = roles[(currentIndex + 1) % roles.length];
+                      onSelectRoleWorkspace(nextRole);
+                    }
+                  }}
+                  title={`Mode: ${activeRoleWorkspace === 'all' ? 'Semua Peran' : activeRoleWorkspace} (Klik untuk ganti)`}
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-white cursor-pointer transition"
+                >
+                  {activeRoleWorkspace === 'wali' ? (
+                    <GraduationCap className="w-4 h-4 text-emerald-200" />
+                  ) : activeRoleWorkspace === 'guru' ? (
+                    <BookOpen className="w-4 h-4 text-indigo-200" />
+                  ) : activeRoleWorkspace === 'kurikulum' ? (
+                    <CalendarRange className="w-4 h-4 text-amber-200" />
+                  ) : activeRoleWorkspace === 'kesiswaan' ? (
+                    <ShieldAlert className="w-4 h-4 text-purple-200" />
+                  ) : activeRoleWorkspace === 'admin' ? (
+                    <ShieldCheck className="w-4 h-4 text-blue-200" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 text-sky-200" />
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto no-scrollbar p-2 sm:p-3.5 space-y-3 bg-transparent">
             {(() => {
               const navLayout = getNavigationLayout(appData);
 
-              const userRoles = userEffectiveRoles;
+              const userRoles = effectiveRolesForMenu;
 
               const hasAnyMenuAccess = (views: ViewType[]) => {
                 return views.some(

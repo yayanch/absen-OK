@@ -1177,3 +1177,109 @@ export function getEffectiveUserRoles(
   return result.length > 0 ? result : ['guru'];
 }
 
+export interface RoleWorkspaceOption {
+  id: string; // 'all' | 'guru' | 'wali' | 'kurikulum' | 'kesiswaan' | 'admin' | ...
+  label: string;
+  subLabel?: string;
+  iconName: string;
+  badgeColor: string;
+}
+
+export function getWaliClassNames(currentUser?: UserSession | null, appData?: AppData): string[] {
+  if (!currentUser || !appData?.kelas) return [];
+  const userData = currentUser.data as any;
+  if (!userData) return [];
+
+  const teacherId = userData.id;
+  const teacherNama = userData.nama?.trim().toLowerCase();
+  const teacherNip = userData.nip;
+
+  const matchedKelas = appData.kelas.filter((k) => {
+    if (teacherId && k.waliKelasId === teacherId) return true;
+    if (teacherNama) {
+      const matchedWali = (appData.waliKelas || []).find(
+        (w) => w.id === k.waliKelasId && (w.nama?.trim().toLowerCase() === teacherNama || (teacherNip && w.nip === teacherNip))
+      );
+      if (matchedWali) return true;
+    }
+    return false;
+  });
+
+  return matchedKelas.map((k) => k.nama);
+}
+
+export function getAvailableRoleWorkspaces(
+  currentUser?: UserSession | null,
+  appData?: AppData
+): RoleWorkspaceOption[] {
+  const roles = getEffectiveUserRoles(currentUser, appData);
+  // Murid does not have multiple staff workspaces
+  if (roles.includes('murid') || roles.length <= 1) return [];
+
+  const waliClasses = getWaliClassNames(currentUser, appData);
+  const options: RoleWorkspaceOption[] = [];
+
+  // 1. All roles combined option
+  options.push({
+    id: 'all',
+    label: 'Semua Peran (Mode Lengkap)',
+    subLabel: `Akses seluruh ${roles.length} wewenang sekaligus`,
+    iconName: 'Globe',
+    badgeColor: 'blue',
+  });
+
+  // 2. Each resolved role
+  roles.forEach((r) => {
+    const meta = getRoleBadgeMeta(r, appData);
+    let label = meta.label;
+    let subLabel = 'Tampilan khusus peran ini';
+
+    if (r === 'wali') {
+      label = waliClasses.length > 0 ? `Wali Kelas (${waliClasses.join(', ')})` : 'Wali Kelas';
+      subLabel = 'Presensi siswa, rekap kelas binaan, kartu & home visit';
+    } else if (r === 'guru') {
+      label = 'Guru Pengampu Mapel';
+      subLabel = 'Absen KBM mengajar, rekap pribadi & jadwal ajar';
+    } else if (r === 'kurikulum') {
+      label = 'WKS Kurikulum';
+      subLabel = 'Jadwal pelajaran KBM, master mapel & data guru';
+    } else if (r === 'kesiswaan') {
+      label = 'WKS Kesiswaan & BP BK';
+      subLabel = 'Kedisiplinan siswa, pelanggaran, ekskul & home visit';
+    } else if (r === 'staf_jadwal') {
+      label = 'Staf Pengelola Jadwal';
+      subLabel = 'Penyusunan jadwal mengajar & shift KBM';
+    } else if (r === 'adm_siswa') {
+      label = 'Admin Siswa (Non-Guru)';
+      subLabel = 'Data induk siswa, kartu pelajar digital & rekap';
+    } else if (r === 'hubin') {
+      label = 'WKS Hubin & Humas';
+      subLabel = 'Hubungan industri & kemitraan sekolah';
+    } else if (r === 'admin') {
+      label = 'Administrator Utama';
+      subLabel = 'Konfigurasi sistem, manajemen user & database';
+    }
+
+    options.push({
+      id: r,
+      label,
+      subLabel,
+      iconName:
+        r === 'wali'
+          ? 'GraduationCap'
+          : r === 'guru'
+          ? 'BookOpen'
+          : r === 'kurikulum'
+          ? 'CalendarRange'
+          : r === 'kesiswaan'
+          ? 'ShieldAlert'
+          : r === 'admin'
+          ? 'ShieldCheck'
+          : 'UserCheck',
+      badgeColor: meta.color,
+    });
+  });
+
+  return options;
+}
+
