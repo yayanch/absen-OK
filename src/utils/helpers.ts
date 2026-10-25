@@ -1296,17 +1296,6 @@ export function loadAppData(): AppData {
           return w;
         });
       }
-      if (merged.userBiasa) {
-        if (!merged.userBiasa.tugasTambahan) {
-          merged.userBiasa.tugasTambahan = "Wali Kelas";
-        }
-        if (!Array.isArray(merged.userBiasa.roles) || merged.userBiasa.roles.length === 0) {
-          merged.userBiasa.roles = ["guru", "wali"];
-        }
-        if (!Array.isArray(merged.userBiasa.additionalRoles) || merged.userBiasa.additionalRoles.length === 0) {
-          merged.userBiasa.additionalRoles = ["wali"];
-        }
-      }
       if (merged.shiftConfig) {
         if (merged.shiftConfig.periods && Array.isArray(merged.shiftConfig.periods)) {
           merged.shiftConfig.periods = normalizeWeeklyShiftPeriods(merged.shiftConfig.periods);
