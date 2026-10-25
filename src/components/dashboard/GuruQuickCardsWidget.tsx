@@ -168,7 +168,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     {
       id: 'rekap_mengajar_per_kelas',
       title: 'Rekap Absensi Mengajar Per Kelas',
-      description: 'Rekapitulasi kehadiran siswa & jurnal KBM per kelas mengajar',
+      description: 'Rekapitulasi kehadiran siswa per kelas mengajar',
       icon: BookOpenCheck,
       badgeText: 'Rekap Per Kelas',
       badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
@@ -179,8 +179,8 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'presensi_kbm_guru',
-      title: 'Presensi & Jurnal KBM',
-      description: 'Input presensi kelas & jurnal mengajar mandiri per jam pelajaran',
+      title: 'Presensi KBM Guru',
+      description: 'Input presensi kehadiran siswa per jam pelajaran mengajar',
       icon: BookOpen,
       badgeText: teacherTodaySchedules.length > 0 ? `${teacherTodaySchedules.length} Sesi Mengajar Hari Ini` : 'Tidak Ada Jadwal Hari Ini',
       badgeStyle: teacherTodaySchedules.length > 0 

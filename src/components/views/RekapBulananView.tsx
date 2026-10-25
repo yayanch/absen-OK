@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FileSpreadsheet, Search, CalendarDays, CheckCircle2, AlertTriangle, Activity, Users, Clock } from 'lucide-react';
+import { FileSpreadsheet, Search, CalendarDays, CheckCircle2, AlertTriangle, Activity, Users, Clock, Calendar } from 'lucide-react';
 import { AppData, UserSession } from '../../types';
 import { sortKelasList } from '../../data/initialData';
 import {
   getTodayString,
+  formatDateIndo,
   calculateCumulativeStudentStats,
 } from '../../utils/helpers';
 import { getAttendanceReportData, AttendanceReportViewModel } from '../../utils/reportEngine';
@@ -11,6 +12,29 @@ import { ReportExportButton } from '../common/ReportExportButton';
 import { ReportPreviewModal } from '../common/ReportPreviewModal';
 import { Pagination } from '../Pagination';
 import { PageHeader, StatCard } from '../common/UIComponents';
+
+function getWeekRangeForDate(dStr: string) {
+  const parts = dStr.split('-').map(Number);
+  const d = new Date(parts[0], parts[1] - 1, parts[2] || 1);
+  const day = d.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMon);
+  const saturday = new Date(monday);
+  saturday.setDate(monday.getDate() + 5);
+
+  const formatIso = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const dayN = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dayN}`;
+  };
+
+  const start = formatIso(monday);
+  const end = formatIso(saturday);
+  const label = `${formatDateIndo(start)} - ${formatDateIndo(end)}`;
+  return { start, end, label };
+}
 
 interface RekapBulananViewProps {
   appData: AppData;
@@ -138,11 +162,60 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
   const [pageSize, setPageSize] = useState<number>(10);
   const [previewReport, setPreviewReport] = useState<AttendanceReportViewModel | null>(null);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedKelasId, selectedBulan, selectedStatusFilter, searchQuery]);
+  // Mode Rekap: 'bulan' (Per Bulan), 'minggu' (Per Minggu), 'semua' (Semua dari Awal)
+  const [periodMode, setPeriodMode] = useState<'bulan' | 'minggu' | 'semua'>('bulan');
+  const [selectedWeek, setSelectedWeek] = useState<string>('');
 
   const currentKelas = selectedKelasId === 'all' ? null : availableClasses.find((k) => k.id === selectedKelasId);
+
+  // Available weeks from presensi records & current date
+  const availableWeeks = useMemo(() => {
+    const weeksMap = new Map<string, { start: string; end: string; label: string }>();
+
+    // Current week
+    const curW = getWeekRangeForDate(getTodayString());
+    weeksMap.set(`${curW.start}_${curW.end}`, {
+      start: curW.start,
+      end: curW.end,
+      label: `Minggu Ini (${curW.label})`
+    });
+
+    // Extract dates from appData.presensi
+    const allKeys = Object.keys(appData.presensi || {});
+    allKeys.forEach((key) => {
+      const underscoreIdx = key.indexOf('_');
+      if (underscoreIdx > 0) {
+        const tgl = key.slice(0, underscoreIdx);
+        const w = getWeekRangeForDate(tgl);
+        const k = `${w.start}_${w.end}`;
+        if (!weeksMap.has(k)) {
+          weeksMap.set(k, {
+            start: w.start,
+            end: w.end,
+            label: `Minggu ${w.label}`
+          });
+        }
+      }
+    });
+
+    return Array.from(weeksMap.entries())
+      .map(([key, item]) => ({ key, ...item }))
+      .sort((a, b) => b.start.localeCompare(a.start));
+  }, [appData.presensi]);
+
+  useEffect(() => {
+    if (!selectedWeek && availableWeeks.length > 0) {
+      setSelectedWeek(availableWeeks[0].key);
+    }
+  }, [availableWeeks, selectedWeek]);
+
+  const activeWeekObj = useMemo(() => {
+    return availableWeeks.find((w) => w.key === selectedWeek) || availableWeeks[0];
+  }, [availableWeeks, selectedWeek]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedKelasId, periodMode, selectedWeek, selectedBulan, selectedStatusFilter, searchQuery]);
 
   const availableMonths = useMemo(() => {
     const startStr = appData.sekolah?.tanggalMulai || '2026-07-15';
@@ -173,14 +246,31 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
     return months;
   }, [appData.sekolah?.tanggalMulai, appData.sekolah?.tanggalAkhir]);
 
-  // Canonical Cumulative Stats for Month or All Period
+  // Canonical Cumulative Stats for Month, Week, or All Period
   const cumulativeStats = useMemo(() => {
+    if (periodMode === 'semua') {
+      return calculateCumulativeStudentStats(appData, {
+        month: 'all',
+        kelasId: selectedKelasId === 'all' ? undefined : selectedKelasId,
+        waliKelasId: isWali ? (currentUser.data as any).id : undefined,
+      });
+    }
+
+    if (periodMode === 'minggu' && activeWeekObj) {
+      return calculateCumulativeStudentStats(appData, {
+        startDate: activeWeekObj.start,
+        endDate: activeWeekObj.end,
+        kelasId: selectedKelasId === 'all' ? undefined : selectedKelasId,
+        waliKelasId: isWali ? (currentUser.data as any).id : undefined,
+      });
+    }
+
     return calculateCumulativeStudentStats(appData, {
       month: selectedBulan,
       kelasId: selectedKelasId === 'all' ? undefined : selectedKelasId,
       waliKelasId: isWali ? (currentUser.data as any).id : undefined,
     });
-  }, [appData, selectedBulan, selectedKelasId, isWali, currentUser]);
+  }, [appData, periodMode, activeWeekObj, selectedBulan, selectedKelasId, isWali, currentUser]);
 
   const effectiveDaysCount = cumulativeStats.length > 0 ? cumulativeStats[0].expectedDays : 0;
 
@@ -260,12 +350,14 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
     return getAttendanceReportData(
       appData,
       {
-        month: selectedBulan,
+        month: periodMode === 'semua' ? 'all' : (periodMode === 'bulan' ? selectedBulan : undefined),
+        startDate: periodMode === 'minggu' && activeWeekObj ? activeWeekObj.start : undefined,
+        endDate: periodMode === 'minggu' && activeWeekObj ? activeWeekObj.end : undefined,
         kelasId: selectedKelasId,
         waliKelasId: isWali ? (currentUser.data as any).id : undefined,
         statusFilter: selectedStatusFilter,
       },
-      'MONTHLY',
+      periodMode === 'minggu' ? 'WEEKLY' : 'MONTHLY',
       currentUser
     );
   };
@@ -274,14 +366,20 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
     <div className="space-y-6 max-w-7xl mx-auto">
       <PageHeader
         icon={CalendarDays}
-        title="Rekap Presensi Akumulasi Bulanan"
-        description="Statistik kehadiran siswa berbasis Hari Efektif Sekolah (denominator expected days) dengan audit presensi canonical."
-        badge={selectedBulan === 'all' ? 'Seluruh Periode' : `Bulan ${selectedBulan} (${effectiveDaysCount} Hari Efektif)`}
+        title="Rekap Presensi Siswa"
+        description="Statistik kehadiran siswa berbasis Hari Efektif Sekolah dengan pilihan per minggu, per bulan, dan semua dari awal."
+        badge={
+          periodMode === 'semua'
+            ? `Semua dari Awal (${effectiveDaysCount} Hari Efektif)`
+            : periodMode === 'minggu'
+            ? `${activeWeekObj?.label || 'Per Minggu'} (${effectiveDaysCount} Hari Efektif)`
+            : `Bulan ${selectedBulan} (${effectiveDaysCount} Hari Efektif)`
+        }
         actions={
           <ReportExportButton
             getReportViewModel={getCanonicalReport}
             onOpenPreview={(rep) => setPreviewReport(rep)}
-            label="Export Laporan Bulanan"
+            label={`Export Rekap (${periodMode === 'semua' ? 'Semua dari Awal' : periodMode === 'minggu' ? 'Mingguan' : 'Bulanan'})`}
           />
         }
       />
@@ -332,69 +430,137 @@ export const RekapBulananView: React.FC<RekapBulananViewProps> = ({ appData, cur
         />
       </div>
 
-      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-              Pilih Kelas
-            </label>
-            {isPiketKelas && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300">
-                Terkunci (Kelas Anda)
-              </span>
-            )}
-          </div>
-          <select
-            value={selectedKelasId}
-            disabled={isPiketKelas}
-            onChange={(e) => setSelectedKelasId(e.target.value)}
-            className={`w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none transition ${
-              isPiketKelas ? 'opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60 border-teal-300 dark:border-teal-800/60' : 'cursor-pointer'
-            }`}
-          >
-            {!isWali && !isPiketKelas && <option value="all">Seluruh Kelas ({appData.kelas.length} Rombel)</option>}
-            {availableClasses.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nama} {isPiketKelas ? '(Terkunci - Kelas Anda)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
-            Pilih Bulan & Tahun
+      {/* Filter Card */}
+      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+        {/* Mode Rekap Selector: Per Bulan | Per Minggu | Semua dari Awal */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <span>Pilih Rentang Rekap:</span>
           </label>
-            <select
-              value={selectedBulan}
-              onChange={(e) => setSelectedBulan(e.target.value)}
-              className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setPeriodMode('bulan')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                periodMode === 'bulan'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
             >
-              {availableMonths.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
+              Per Bulan
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriodMode('minggu')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                periodMode === 'minggu'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Per Minggu
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriodMode('semua')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                periodMode === 'semua'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Semua dari Awal
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                Pilih Kelas
+              </label>
+              {isPiketKelas && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300">
+                  Terkunci (Kelas Anda)
+                </span>
+              )}
+            </div>
+            <select
+              value={selectedKelasId}
+              disabled={isPiketKelas}
+              onChange={(e) => setSelectedKelasId(e.target.value)}
+              className={`w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none transition ${
+                isPiketKelas ? 'opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800/60 border-teal-300 dark:border-teal-800/60' : 'cursor-pointer'
+              }`}
+            >
+              {!isWali && !isPiketKelas && <option value="all">Seluruh Kelas ({appData.kelas.length} Rombel)</option>}
+              {availableClasses.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.nama} {isPiketKelas ? '(Terkunci - Kelas Anda)' : ''}
                 </option>
               ))}
-              <option value="all">Semua Periode ({appData.sekolah.tahunAjaran || 'Aktif'})</option>
             </select>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
-            Filter Tampilan
-          </label>
-          <select
-            value={selectedStatusFilter}
-            onChange={(e) => setSelectedStatusFilter(e.target.value)}
-            className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none"
-          >
-            <option value="all">Semua Siswa Terdaftar</option>
-            <option value="absent_only">Hanya Siswa Pernah Tidak Hadir / Belum diisi</option>
-            <option value="S">Siswa Pernah Sakit (S)</option>
-            <option value="I">Siswa Pernah Izin (I)</option>
-            <option value="A">Siswa Pernah Alpa (A)</option>
-            <option value="K">Siswa Pernah Kesiangan (K)</option>
-            <option value="D">Siswa Pernah Dispensasi (D)</option>
-            <option value="unfilled">Siswa Memiliki Hari Belum Terisi (Belum diisi)</option>
-          </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+              {periodMode === 'bulan' ? 'Pilih Bulan Presensi' : periodMode === 'minggu' ? 'Pilih Minggu Presensi' : 'Periode Terpilih'}
+            </label>
+            {periodMode === 'bulan' && (
+              <select
+                value={selectedBulan}
+                onChange={(e) => setSelectedBulan(e.target.value)}
+                className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                {availableMonths.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {periodMode === 'minggu' && (
+              <select
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(e.target.value)}
+                className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                {availableWeeks.map((w) => (
+                  <option key={w.key} value={w.key}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {periodMode === 'semua' && (
+              <div className="py-3 px-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center justify-between">
+                <span>Seluruh Tahun Ajaran</span>
+                <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Dari Awal Semester s/d Hari Ini</span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+              Filter Tampilan
+            </label>
+            <select
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              className="w-full py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Semua Siswa Terdaftar</option>
+              <option value="absent_only">Hanya Siswa Pernah Tidak Hadir / Belum diisi</option>
+              <option value="S">Siswa Pernah Sakit (S)</option>
+              <option value="I">Siswa Pernah Izin (I)</option>
+              <option value="A">Siswa Pernah Alpa (A)</option>
+              <option value="K">Siswa Pernah Kesiangan (K)</option>
+              <option value="D">Siswa Pernah Dispensasi (D)</option>
+              <option value="unfilled">Siswa Memiliki Hari Belum Terisi (Belum diisi)</option>
+            </select>
+          </div>
         </div>
       </div>
 

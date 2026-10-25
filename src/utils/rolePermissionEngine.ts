@@ -54,7 +54,7 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
   {
     id: 'presensi_kbm_guru',
     label: 'Absen Mengajar Guru (KBM)',
-    shortDesc: 'Pencatatan absensi kelas siswa saat jam mengajar guru beserta jurnal materi ajar & tabel log KBM',
+    shortDesc: 'Pencatatan absensi kelas siswa saat jam mengajar guru & tabel log riwayat KBM',
     category: 'presensi',
     iconName: 'BookOpenCheck',
   },

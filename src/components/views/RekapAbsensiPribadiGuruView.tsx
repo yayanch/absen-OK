@@ -682,7 +682,7 @@ export const RekapAbsensiPribadiGuruView: React.FC<RekapAbsensiPribadiGuruViewPr
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            <span>Jurnal & Sesi KBM ({filteredKbmList.length})</span>
+            <span>Sesi Presensi KBM ({filteredKbmList.length})</span>
           </button>
         </div>
 
@@ -806,13 +806,13 @@ export const RekapAbsensiPribadiGuruView: React.FC<RekapAbsensiPribadiGuruViewPr
           </div>
         )}
 
-        {/* TAB CONTENT 2: Log Sesi KBM & Jurnal Mengajar */}
+        {/* TAB CONTENT 2: Log Sesi Presensi KBM Mengajar */}
         {activeTab === 'kbm' && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-indigo-600" />
-                <span>Log Jurnal Mengajar KBM di Kelas</span>
+                <span>Log Presensi Mengajar KBM di Kelas</span>
               </h3>
               <span className="text-xs text-slate-500 font-medium">
                 Total {filteredKbmList.length} sesi pembelajaran diisi
@@ -828,7 +828,7 @@ export const RekapAbsensiPribadiGuruView: React.FC<RekapAbsensiPribadiGuruViewPr
                   Belum Ada Log Sesi Mengajar KBM
                 </h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Belum terdapat catatan jurnal KBM yang disimpan untuk periode ini.
+                  Belum terdapat catatan presensi KBM yang disimpan untuk periode ini.
                 </p>
               </div>
             ) : (
@@ -840,7 +840,6 @@ export const RekapAbsensiPribadiGuruView: React.FC<RekapAbsensiPribadiGuruViewPr
                       <th className="p-3.5">Tanggal</th>
                       <th className="p-3.5">Kelas</th>
                       <th className="p-3.5">Mata Pelajaran</th>
-                      <th className="p-3.5">Materi / Jurnal KBM</th>
                       <th className="p-3.5 text-center">Rekap Absen Siswa</th>
                     </tr>
                   </thead>
@@ -871,14 +870,9 @@ export const RekapAbsensiPribadiGuruView: React.FC<RekapAbsensiPribadiGuruViewPr
                             </span>
                           </td>
                           <td className="p-3.5 font-semibold text-slate-900 dark:text-slate-100">
-                            {cleanMapelName(item.mataPelajaran)}
-                          </td>
-                          <td className="p-3.5 max-w-md">
-                            <p className="font-medium text-slate-800 dark:text-slate-200">
-                              {item.materiAjar || <span className="text-slate-400 italic">Tanpa ringkasan materi</span>}
-                            </p>
+                            <div>{cleanMapelName(item.mataPelajaran)}</div>
                             {item.catatanGuru && (
-                              <p className="text-[11px] text-slate-500 mt-0.5 italic">
+                              <p className="text-[11px] text-slate-500 font-normal mt-0.5 italic">
                                 Catatan: {item.catatanGuru}
                               </p>
                             )}

@@ -196,11 +196,6 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!materiAjar.trim()) {
-      onShowToast('Mohon isi jurnal materi / topik pembelajaran hari ini.', 'error');
-      return;
-    }
-
     if (siswaListKelas.length === 0) {
       onShowToast('Kelas ini belum memiliki siswa yang terdaftar.', 'error');
       return;
@@ -334,43 +329,18 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
             </div>
           </div>
 
-          {/* Baris 2: Jurnal Pembelajaran KBM (Materi Ajar) */}
-          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-3">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-indigo-600" />
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                Jurnal Mengajar Hari Ini
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Topik / Materi Pembelajaran <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={materiAjar}
-                  onChange={(e) => setMateriAjar(e.target.value)}
-                  placeholder="Contoh: Modul 3 - Konfigurasi Routing Dinamis OSPF & Analisis Paket Data..."
-                  required
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Catatan Khusus KBM / Sikap Kelas (Opsional)
-                </label>
-                <textarea
-                  rows={2}
-                  value={catatanGuru}
-                  onChange={(e) => setCatatanGuru(e.target.value)}
-                  placeholder="Catatan keaktifan siswa, tugas praktikum, kendala perangkat laboratorium..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
-                />
-              </div>
-            </div>
+          {/* Catatan Sesi Mengajar (Opsional) */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+              Catatan Sesi Mengajar / Kelas (Opsional)
+            </label>
+            <input
+              type="text"
+              value={catatanGuru}
+              onChange={(e) => setCatatanGuru(e.target.value)}
+              placeholder="Catatan keaktifan siswa, kendala kelas, tugas, atau keterangan tambahan (opsional)..."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none transition"
+            />
           </div>
 
           {/* Baris 3: Rekap Cepat & Tombol Aksi Masal */}
@@ -547,7 +517,7 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
           {/* Modal Footer */}
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
             <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
-              Data sesi dan jurnal akan otomatis tersimpan ke tabel presensi mengajar guru.
+              Data sesi presensi akan otomatis tersimpan ke tabel presensi mengajar guru.
             </span>
 
             <div className="flex items-center gap-2 ml-auto">

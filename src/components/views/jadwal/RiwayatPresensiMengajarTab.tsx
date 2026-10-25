@@ -236,7 +236,6 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
                 <th className="py-3 px-4">Tanggal &amp; Hari</th>
                 <th className="py-3 px-4">Kelas &amp; Mapel</th>
                 {!isTeacher && <th className="py-3 px-4">Guru</th>}
-                <th className="py-3 px-4 min-w-[220px]">Topik Materi Pembelajaran</th>
                 <th className="py-3 px-4 text-center">Rekap Kehadiran</th>
                 <th className="py-3 px-4 w-28 text-center">Aksi</th>
               </tr>
@@ -244,12 +243,12 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredSesiList.length === 0 ? (
                 <tr>
-                  <td colSpan={isTeacher ? 6 : 7} className="py-12 text-center text-slate-400">
+                  <td colSpan={isTeacher ? 5 : 6} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <BookOpen className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                       <p className="font-semibold">Belum ada riwayat presensi kelas mengajar.</p>
                       <p className="text-xs text-slate-400 max-w-md">
-                        Klik tombol <strong>"Absen Kelas"</strong> pada kartu jadwal mengajar Anda untuk mulai merekam presensi dan jurnal harian.
+                        Klik tombol <strong>"Absen Kelas"</strong> pada kartu jadwal mengajar Anda untuk mulai merekam presensi kelas.
                       </p>
                     </div>
                   </td>
@@ -290,6 +289,11 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
                             {sesi.kelasNama}
                           </span>
                         </div>
+                        {sesi.catatanGuru && (
+                          <div className="text-[11px] text-slate-400 italic line-clamp-1 mt-0.5">
+                            Catatan: {sesi.catatanGuru}
+                          </div>
+                        )}
                       </td>
                       {!isTeacher && (
                         <td className="py-3 px-4">
@@ -298,16 +302,6 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
                           </div>
                         </td>
                       )}
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 line-clamp-2">
-                          {sesi.materiAjar || '-'}
-                        </div>
-                        {sesi.catatanGuru && (
-                          <div className="text-[11px] text-slate-400 italic line-clamp-1 mt-0.5">
-                            Catatan: {sesi.catatanGuru}
-                          </div>
-                        )}
-                      </td>
                       <td className="py-3 px-4 text-center">
                         <AttendanceCircleChart
                           hadir={hadir}
