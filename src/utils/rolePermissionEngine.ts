@@ -1173,8 +1173,30 @@ export function getEffectiveUserRoles(
     return ['murid'];
   }
 
+  // Administrator Utama has master privilege and can switch/simulate any role workspace
+  if (rolesSet.has('admin')) {
+    rolesSet.add('admin');
+    rolesSet.add('guru');
+    rolesSet.add('wali');
+    rolesSet.add('kurikulum');
+    rolesSet.add('kesiswaan');
+    rolesSet.add('staf_jadwal');
+    rolesSet.add('adm_siswa');
+    rolesSet.add('hubin');
+  }
+
+  // Any educator with special staff duties is fundamentally also a teacher ('guru')
+  if (rolesSet.has('wali') || rolesSet.has('kurikulum') || rolesSet.has('kesiswaan') || rolesSet.has('hubin')) {
+    rolesSet.add('guru');
+  }
+
+  // Any educator with 'guru' also has access to Wali Kelas workspace for home room supervision / simulation
+  if (rolesSet.has('guru')) {
+    rolesSet.add('wali');
+  }
+
   const result = Array.from(rolesSet).filter(Boolean);
-  return result.length > 0 ? result : ['guru'];
+  return result.length > 0 ? result : ['guru', 'wali'];
 }
 
 export interface RoleWorkspaceOption {
@@ -1213,9 +1235,10 @@ export function getAvailableRoleWorkspaces(
   appData?: AppData
 ): RoleWorkspaceOption[] {
   const roles = getEffectiveUserRoles(currentUser, appData);
-  // Murid does not have multiple staff workspaces
-  if (roles.includes('murid') || roles.length <= 1) return [];
+  // Murid does not have staff workspaces
+  if (roles.includes('murid')) return [];
 
+  const isAdmin = roles.includes('admin') || currentUser?.role === 'admin';
   const waliClasses = getWaliClassNames(currentUser, appData);
   const options: RoleWorkspaceOption[] = [];
 
@@ -1223,13 +1246,33 @@ export function getAvailableRoleWorkspaces(
   options.push({
     id: 'all',
     label: 'Semua Peran (Mode Lengkap)',
-    subLabel: `Akses seluruh ${roles.length} wewenang sekaligus`,
+    subLabel: isAdmin
+      ? 'Akses penuh seluruh fitur & konfigurasi sistem'
+      : `Akses seluruh ${roles.length} wewenang sekaligus`,
     iconName: 'Globe',
     badgeColor: 'blue',
   });
 
-  // 2. Each resolved role
-  roles.forEach((r) => {
+  // Ordered list of roles to present in the switcher
+  const roleDisplayOrder = isAdmin
+    ? ['admin', 'wali', 'guru', 'kurikulum', 'kesiswaan', 'staf_jadwal', 'adm_siswa', 'hubin']
+    : roles;
+
+  // Add registered custom roles if admin
+  if (isAdmin && appData?.customRoles) {
+    appData.customRoles.forEach((cr) => {
+      const crId = normalizeRoleKey(cr.id || cr.name);
+      if (!roleDisplayOrder.includes(crId)) {
+        roleDisplayOrder.push(crId);
+      }
+    });
+  }
+
+  const seen = new Set<string>();
+  roleDisplayOrder.forEach((r) => {
+    if (seen.has(r)) return;
+    seen.add(r);
+
     const meta = getRoleBadgeMeta(r, appData);
     let label = meta.label;
     let subLabel = 'Tampilan khusus peran ini';
