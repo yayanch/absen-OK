@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData, Siswa, Kelas, WaliKelas, SiswaPresensiItem } from '../types';
 import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString, getCanonicalTeacherList } from '../utils/helpers';
-import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles, getAvailableRoleWorkspaces, RoleWorkspaceOption } from '../utils/rolePermissionEngine';
+import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
 import { renderNavIcon } from '../utils/navigationLayoutEngine';
 
 interface HeaderProps {

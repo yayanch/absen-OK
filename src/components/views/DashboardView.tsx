@@ -23,6 +23,7 @@ import { GuruDashboardView } from '../dashboard/GuruDashboardView';
 import { KurikulumDashboardView } from '../dashboard/KurikulumDashboardView';
 import { StafJadwalDashboardView } from '../dashboard/StafJadwalDashboardView';
 import { getEffectiveUserRoles } from '../../utils/rolePermissionEngine';
+import { PengaturanKartuCepatModal } from '../modals/PengaturanKartuCepatModal';
 
 interface DashboardViewProps {
   appData: AppData;
@@ -89,6 +90,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isWidgetModalOpen, setIsWidgetModalOpen] = React.useState(false);
   const [isGlobalSearchModalOpen, setIsGlobalSearchModalOpen] = React.useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = React.useState('');
+
+  const [isQuickActionModalOpen, setIsQuickActionModalOpen] = React.useState(false);
+  const [quickActionModalRole, setQuickActionModalRole] = React.useState<string>('admin');
+
+  const handleOpenQuickActionSettings = (roleKey?: string) => {
+    setQuickActionModalRole(roleKey || currentUser.role || 'admin');
+    setIsQuickActionModalOpen(true);
+  };
 
   const [widgetsConfig, setWidgetsConfig] = React.useState<{
     showTrendChart: boolean;
@@ -416,6 +425,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onOpenBackupModal={onOpenBackupModal}
           onUpdateAppData={onUpdateAppData}
           onShowToast={onShowToast}
+          onOpenQuickActionSettings={handleOpenQuickActionSettings}
         />
       );
     }
@@ -443,6 +453,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           setSelectedStudentDetail={setSelectedStudentDetail}
           onNavigateView={onNavigateView}
           onNavigateToInput={onNavigateToInput}
+          onOpenQuickActionSettings={handleOpenQuickActionSettings}
         />
       );
     }
@@ -476,6 +487,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onNavigateView={onNavigateView}
           onUpdateAppData={onUpdateAppData}
           onShowToast={onShowToast}
+          onOpenQuickActionSettings={handleOpenQuickActionSettings}
         />
       );
     }
@@ -515,6 +527,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onNavigateView={onNavigateView}
             onNavigateToInput={onNavigateToInput}
             onShowToast={onShowToast}
+            onOpenQuickActionSettings={handleOpenQuickActionSettings}
           />
         );
 
@@ -526,6 +539,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             onNavigateView={onNavigateView}
+            onOpenQuickActionSettings={handleOpenQuickActionSettings}
           />
         );
 
@@ -537,6 +551,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             onNavigateView={onNavigateView}
+            onOpenQuickActionSettings={handleOpenQuickActionSettings}
           />
         );
 
@@ -566,6 +581,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onNavigateView={onNavigateView}
             onUpdateAppData={onUpdateAppData}
             onShowToast={onShowToast}
+            onOpenQuickActionSettings={handleOpenQuickActionSettings}
           />
         );
     }
@@ -711,6 +727,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Pengaturan Kartu Cepat Dashboard Tiap Peran Modal */}
+      {isQuickActionModalOpen && onUpdateAppData && (
+        <PengaturanKartuCepatModal
+          isOpen={isQuickActionModalOpen}
+          onClose={() => setIsQuickActionModalOpen(false)}
+          appData={appData}
+          currentUser={currentUser}
+          initialRole={quickActionModalRole}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+        />
       )}
     </motion.div>
   );

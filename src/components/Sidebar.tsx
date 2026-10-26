@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   Search,
 } from 'lucide-react';
+import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
 import { hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
 import {

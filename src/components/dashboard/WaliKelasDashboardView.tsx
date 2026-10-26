@@ -40,6 +40,7 @@ interface WaliKelasDashboardViewProps {
   setSelectedStudentDetail: (item: any) => void;
   onNavigateView: (view: ViewType) => void;
   onNavigateToInput: (kelasId?: string) => void;
+  onOpenQuickActionSettings?: (roleKey?: string) => void;
 }
 
 export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
@@ -62,6 +63,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
   setSelectedStudentDetail,
   onNavigateView,
   onNavigateToInput,
+  onOpenQuickActionSettings,
 }) => {
   const currentClassName = targetClasses.map((k) => k.nama).join(', ') || 'Kelas Binaan';
 
@@ -110,8 +112,11 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
       {/* Quick Actions */}
       <RoleQuickActions
         role={currentUser.role}
+        appData={appData}
+        currentUser={currentUser}
         onNavigateView={onNavigateView}
         onNavigateToInput={() => onNavigateToInput(targetClasses[0]?.id)}
+        onOpenQuickActionSettings={onOpenQuickActionSettings}
       />
 
       {/* Status Presensi Hari Ini Banner */}

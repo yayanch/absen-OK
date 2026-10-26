@@ -690,6 +690,50 @@ export interface NavigationLayoutConfig {
   version?: number;
 }
 
+export type QuickActionColor =
+  | 'blue'
+  | 'emerald'
+  | 'amber'
+  | 'rose'
+  | 'indigo'
+  | 'cyan'
+  | 'purple'
+  | 'teal'
+  | 'sky'
+  | 'violet'
+  | 'slate';
+
+export interface DashboardQuickActionItem {
+  id: string; // unique card id, e.g. "qa_rekap_kelas"
+  view: ViewType;
+  title: string;
+  subtitle: string;
+  iconName: string;
+  colorScheme?: QuickActionColor;
+  enabled: boolean;
+  order?: number;
+  specialAction?: 'open_class_submission' | 'open_backup_modal' | 'navigate_to_input';
+  bgCardClass?: string;
+  textColorClass?: string;
+  subtextColorClass?: string;
+}
+
+export interface RoleQuickActionConfig {
+  roleKey: string; // e.g. 'admin', 'guru', 'wali', 'kesiswaan', 'kurikulum', 'staf_jadwal', 'adm_siswa', 'piket', 'piket_kelas', 'hubin', 'murid', etc.
+  roleLabel?: string;
+  sectionTitle?: string;
+  sectionSubtitle?: string;
+  dotColorClass?: string;
+  enabled: boolean;
+  cards: DashboardQuickActionItem[];
+}
+
+export interface DashboardQuickActionSettings {
+  rolesConfig: Record<string, RoleQuickActionConfig>;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface AppData {
   sekolah: SekolahConfig;
   admin: AdminAccount;
@@ -743,6 +787,7 @@ export interface AppData {
   presensiEkskul?: Record<string, PresensiEkskulItem[]>;
   petugasPiket?: PetugasPiket[];
   catatanPiketHarian?: CatatanPiketHarian[];
+  dashboardQuickActions?: DashboardQuickActionSettings;
 }
 
 export interface PetugasPiket {

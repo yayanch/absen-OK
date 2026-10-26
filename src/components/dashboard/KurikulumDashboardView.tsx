@@ -24,6 +24,7 @@ interface KurikulumDashboardViewProps {
   selectedDate: string;
   setSelectedDate: (d: string) => void;
   onNavigateView: (view: ViewType) => void;
+  onOpenQuickActionSettings?: (roleKey?: string) => void;
 }
 
 export const KurikulumDashboardView: React.FC<KurikulumDashboardViewProps> = ({
@@ -32,6 +33,7 @@ export const KurikulumDashboardView: React.FC<KurikulumDashboardViewProps> = ({
   selectedDate,
   setSelectedDate,
   onNavigateView,
+  onOpenQuickActionSettings,
 }) => {
   const mapelList = appData.mataPelajaran || [];
   const jadwalList = appData.jadwalMengajar || [];
@@ -101,7 +103,13 @@ export const KurikulumDashboardView: React.FC<KurikulumDashboardViewProps> = ({
       />
 
       {/* Aksi Cepat Tim Kurikulum */}
-      <RoleQuickActions role="kurikulum" onNavigateView={onNavigateView} />
+      <RoleQuickActions
+        role="kurikulum"
+        appData={appData}
+        currentUser={currentUser}
+        onNavigateView={onNavigateView}
+        onOpenQuickActionSettings={onOpenQuickActionSettings}
+      />
 
       {/* Statistik Ringkasan Kurikulum */}
       <motion.div

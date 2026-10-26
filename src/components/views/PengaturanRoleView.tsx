@@ -85,6 +85,7 @@ import {
   ChatTargetInfo,
 } from '../../utils/chatContactEngine';
 import { addAuditLog } from '../../utils/helpers';
+import { PengaturanKartuCepatModal } from '../modals/PengaturanKartuCepatModal';
 
 interface PengaturanRoleViewProps {
   appData: AppData;
@@ -290,6 +291,9 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
   // Copy Chat Rules modal
   const [showCopyChatModal, setShowCopyChatModal] = useState(false);
   const [sourceCopyChatRoleId, setSourceCopyChatRoleId] = useState('guru');
+
+  // Quick Action Settings Modal
+  const [showQuickActionModal, setShowQuickActionModal] = useState(false);
 
   // Currently active role object
   const currentRole = useMemo(() => {
@@ -856,6 +860,16 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
               <span>Atur Teks & Posisi Menu</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setShowQuickActionModal(true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Konfigurasi kartu cepat dashboard untuk masing-masing peran"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Atur Kartu Cepat Dashboard</span>
+          </button>
 
           {activeMainTab === 'menus' && (
             <button
@@ -2015,6 +2029,19 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal Pengaturan Kartu Cepat Dashboard */}
+      {showQuickActionModal && (
+        <PengaturanKartuCepatModal
+          isOpen={showQuickActionModal}
+          onClose={() => setShowQuickActionModal(false)}
+          appData={appData}
+          currentUser={currentUser}
+          initialRole={selectedRoleId}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+        />
       )}
     </div>
   );

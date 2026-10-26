@@ -19,6 +19,7 @@ import {
   Server,
   HardDrive,
   ArrowUpRight,
+  Sliders,
 } from 'lucide-react';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, calculateDailyAttendanceStats, getCanonicalTeacherCount } from '../../utils/helpers';
@@ -68,6 +69,7 @@ interface AdminDashboardViewProps {
   onOpenBackupModal?: () => void;
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onOpenQuickActionSettings?: (roleKey?: string) => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -110,6 +112,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onOpenBackupModal,
   onUpdateAppData,
   onShowToast,
+  onOpenQuickActionSettings,
 }) => {
   // Rank classes by attendance % using canonical stats
   const classRanking = React.useMemo(() => {
@@ -186,21 +189,37 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         description="Overview kondisi presensi dan kesehatan sistem sekolah secara keseluruhan."
         badge={formatDateIndo(selectedDate)}
         actions={
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-theme-primary"
-          />
+          <div className="flex items-center gap-2">
+            {onOpenQuickActionSettings && (
+              <button
+                type="button"
+                onClick={() => onOpenQuickActionSettings('admin')}
+                className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Atur kartu cepat dashboard tiap peran"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Atur Kartu Cepat</span>
+              </button>
+            )}
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-theme-primary"
+            />
+          </div>
         }
       />
 
       {/* Aksi Cepat Administrator */}
       <RoleQuickActions
         role={currentUser.role}
+        appData={appData}
+        currentUser={currentUser}
         onNavigateView={onNavigateView}
         onNavigateToInput={onNavigateToInput}
         onOpenBackupModal={onOpenBackupModal}
+        onOpenQuickActionSettings={onOpenQuickActionSettings}
       />
 
       {/* Statistik Utama Admin */}

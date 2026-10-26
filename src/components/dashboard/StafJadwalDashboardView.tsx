@@ -25,6 +25,7 @@ interface StafJadwalDashboardViewProps {
   selectedDate: string;
   setSelectedDate: (d: string) => void;
   onNavigateView: (view: ViewType) => void;
+  onOpenQuickActionSettings?: (roleKey?: string) => void;
 }
 
 export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = ({
@@ -33,6 +34,7 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
   selectedDate,
   setSelectedDate,
   onNavigateView,
+  onOpenQuickActionSettings,
 }) => {
   const mapelList = appData.mataPelajaran || [];
   const jadwalList = appData.jadwalMengajar || [];
@@ -149,7 +151,13 @@ export const StafJadwalDashboardView: React.FC<StafJadwalDashboardViewProps> = (
       </div>
 
       {/* Aksi Cepat Tim Jadwal */}
-      <RoleQuickActions role="staf_jadwal" onNavigateView={onNavigateView} />
+      <RoleQuickActions
+        role="staf_jadwal"
+        appData={appData}
+        currentUser={currentUser}
+        onNavigateView={onNavigateView}
+        onOpenQuickActionSettings={onOpenQuickActionSettings}
+      />
 
       {/* Statistik Ringkasan */}
       <motion.div

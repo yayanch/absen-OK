@@ -23,6 +23,7 @@ import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, normalizePresensiStatus } from '../../utils/helpers';
 import { TeacherScheduleWidget } from './TeacherScheduleWidget';
 import { GuruQuickCardsWidget } from './GuruQuickCardsWidget';
+import { RoleQuickActions } from './RoleQuickActions';
 import { TeacherAdditionalRoleStatsWidget, TeacherRoleStatusInfo } from './TeacherAdditionalRoleStatsWidget';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 import { getEffectiveUserRoles } from '../../utils/rolePermissionEngine';
@@ -50,6 +51,7 @@ interface GuruDashboardViewProps {
   onNavigateView: (view: ViewType) => void;
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onOpenQuickActionSettings?: (roleKey?: string) => void;
 }
 
 export type TeacherStatusSimulationOption =
@@ -76,6 +78,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   onNavigateView,
   onUpdateAppData,
   onShowToast,
+  onOpenQuickActionSettings,
 }) => {
   // Simulator mode for user testing / review of dynamic states
   const [statusSimulator, setStatusSimulator] = useState<TeacherStatusSimulationOption>('auto');
@@ -771,13 +774,24 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
           5. KARTU CEPAT GURU (QUICK ACTION CARDS)
       ------------------------------------------------------------- */}
       {showStandardSchedule && (
-        <GuruQuickCardsWidget
-          appData={appData}
-          currentUser={currentUser}
-          selectedDate={selectedDate}
-          onNavigateView={onNavigateView}
-          onNavigateToInput={onNavigateToInput}
-        />
+        <div className="space-y-4">
+          <RoleQuickActions
+            role="guru"
+            appData={appData}
+            currentUser={currentUser}
+            onNavigateView={onNavigateView}
+            onNavigateToInput={onNavigateToInput}
+            onOpenQuickActionSettings={onOpenQuickActionSettings}
+          />
+
+          <GuruQuickCardsWidget
+            appData={appData}
+            currentUser={currentUser}
+            selectedDate={selectedDate}
+            onNavigateView={onNavigateView}
+            onNavigateToInput={onNavigateToInput}
+          />
+        </div>
       )}
 
       {/* -------------------------------------------------------------
