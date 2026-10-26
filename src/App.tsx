@@ -516,12 +516,16 @@ export default function App() {
               const mergedWhatsappGateway = (data.appData.whatsappGateway && Object.keys(data.appData.whatsappGateway).length > 0)
                 ? data.appData.whatsappGateway
                 : (prev.whatsappGateway || data.appData.whatsappGateway);
-              const mergedSecurityIncidents = (Array.isArray(data.appData.securityIncidents) && data.appData.securityIncidents.length > 0)
+              const mergedSecurityIncidents = Array.isArray(data.appData.securityIncidents)
                 ? data.appData.securityIncidents
                 : (prev.securityIncidents || []);
-              const mergedBlockedIps = (Array.isArray(data.appData.blockedIps) && data.appData.blockedIps.length > 0)
+              const mergedBlockedIps = Array.isArray(data.appData.blockedIps)
                 ? data.appData.blockedIps
                 : (prev.blockedIps || []);
+              const mergedLockedAccounts = Array.isArray(data.appData.lockedAccounts)
+                ? data.appData.lockedAccounts
+                : (prev.lockedAccounts || []);
+              const mergedSecurityConfig = data.appData.securityConfig || prev.securityConfig;
 
               const targetAppData = {
                 ...data.appData,
@@ -548,6 +552,8 @@ export default function App() {
                 whatsappGateway: mergedWhatsappGateway,
                 securityIncidents: mergedSecurityIncidents,
                 blockedIps: mergedBlockedIps,
+                lockedAccounts: mergedLockedAccounts,
+                securityConfig: mergedSecurityConfig,
                 chatMessages: mergedMessages,
                 pelanggaran: mergedPelanggaran,
                 homeVisits: mergedHomeVisits,
@@ -631,8 +637,16 @@ export default function App() {
           const customWhatsappLogs = customEvent.detail.whatsappLogs || prev.whatsappLogs;
           const customRolePermissions = customEvent.detail.rolePermissions || prev.rolePermissions;
           const customWhatsappGateway = customEvent.detail.whatsappGateway || prev.whatsappGateway;
-          const customSecurityIncidents = customEvent.detail.securityIncidents || prev.securityIncidents;
-          const customBlockedIps = customEvent.detail.blockedIps || prev.blockedIps;
+          const customSecurityIncidents = customEvent.detail.securityIncidents !== undefined
+            ? customEvent.detail.securityIncidents
+            : prev.securityIncidents;
+          const customBlockedIps = customEvent.detail.blockedIps !== undefined
+            ? customEvent.detail.blockedIps
+            : prev.blockedIps;
+          const customLockedAccounts = customEvent.detail.lockedAccounts !== undefined
+            ? customEvent.detail.lockedAccounts
+            : prev.lockedAccounts;
+          const customSecurityConfig = customEvent.detail.securityConfig || prev.securityConfig;
           return {
             ...customEvent.detail,
             siswa: mergedSiswa,
@@ -655,6 +669,8 @@ export default function App() {
             whatsappGateway: customWhatsappGateway,
             securityIncidents: customSecurityIncidents,
             blockedIps: customBlockedIps,
+            lockedAccounts: customLockedAccounts,
+            securityConfig: customSecurityConfig,
             chatMessages: mergedMessages,
             deletedSiswaIds: allDeletedSiswa,
             deletedJadwalIds: allDeletedJadwal,

@@ -1193,11 +1193,25 @@ function saveAppDataCache(data: any, isRestore = false) {
     if (inMemoryAppDataCache.whatsappGateway && Object.keys(inMemoryAppDataCache.whatsappGateway).length > 0 && (!data.whatsappGateway || Object.keys(data.whatsappGateway).length === 0)) {
       data.whatsappGateway = inMemoryAppDataCache.whatsappGateway;
     }
-    if (Array.isArray(inMemoryAppDataCache.securityIncidents) && inMemoryAppDataCache.securityIncidents.length > 0 && (!Array.isArray(data.securityIncidents) || data.securityIncidents.length === 0)) {
+    if (data.securityIncidents !== undefined) {
+      // Keep incoming array, including empty array when cleared by administrator
+    } else if (Array.isArray(inMemoryAppDataCache.securityIncidents)) {
       data.securityIncidents = inMemoryAppDataCache.securityIncidents;
     }
-    if (Array.isArray(inMemoryAppDataCache.blockedIps) && inMemoryAppDataCache.blockedIps.length > 0 && (!Array.isArray(data.blockedIps) || data.blockedIps.length === 0)) {
+    if (data.blockedIps !== undefined) {
+      // Keep incoming array, including empty array when unblocked
+    } else if (Array.isArray(inMemoryAppDataCache.blockedIps)) {
       data.blockedIps = inMemoryAppDataCache.blockedIps;
+    }
+    if (data.lockedAccounts !== undefined) {
+      // Keep incoming locked accounts
+    } else if (Array.isArray(inMemoryAppDataCache.lockedAccounts)) {
+      data.lockedAccounts = inMemoryAppDataCache.lockedAccounts;
+    }
+    if (data.securityConfig !== undefined) {
+      // Keep incoming security policy configuration
+    } else if (inMemoryAppDataCache.securityConfig) {
+      data.securityConfig = inMemoryAppDataCache.securityConfig;
     }
     if (Array.isArray(inMemoryAppDataCache.userLoginLogs) && inMemoryAppDataCache.userLoginLogs.length > 0 && (!Array.isArray(data.userLoginLogs) || data.userLoginLogs.length === 0)) {
       data.userLoginLogs = inMemoryAppDataCache.userLoginLogs;
