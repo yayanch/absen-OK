@@ -712,6 +712,8 @@ export interface DashboardQuickActionItem {
   colorScheme?: QuickActionColor;
   enabled: boolean;
   order?: number;
+  isUtama?: boolean; // Tampilkan badge 'UTAMA' di sudut kanan atas
+  badgeText?: string; // Teks pill tag di bagian bawah kartu (cth: "4 Sesi Mengajar Hari Ini")
   specialAction?: 'open_class_submission' | 'open_backup_modal' | 'navigate_to_input';
   bgCardClass?: string;
   textColorClass?: string;

@@ -22,7 +22,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, normalizePresensiStatus } from '../../utils/helpers';
 import { TeacherScheduleWidget } from './TeacherScheduleWidget';
-import { GuruQuickCardsWidget } from './GuruQuickCardsWidget';
 import { RoleQuickActions } from './RoleQuickActions';
 import { TeacherAdditionalRoleStatsWidget, TeacherRoleStatusInfo } from './TeacherAdditionalRoleStatsWidget';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
@@ -782,14 +781,6 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
             onNavigateView={onNavigateView}
             onNavigateToInput={onNavigateToInput}
             onOpenQuickActionSettings={onOpenQuickActionSettings}
-          />
-
-          <GuruQuickCardsWidget
-            appData={appData}
-            currentUser={currentUser}
-            selectedDate={selectedDate}
-            onNavigateView={onNavigateView}
-            onNavigateToInput={onNavigateToInput}
           />
         </div>
       )}

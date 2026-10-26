@@ -131,62 +131,81 @@ export function renderQuickActionIcon(iconName: string, className = 'w-4 h-4'): 
 
 export function getQuickActionColorClasses(colorScheme: QuickActionColor = 'blue'): {
   iconBg: string;
-  cardBg?: string;
-  textColor?: string;
-  subtextColor?: string;
+  iconGradient: string;
+  pillTag: string;
   badge: string;
 } {
   switch (colorScheme) {
     case 'emerald':
       return {
         iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+        iconGradient: 'bg-gradient-to-br from-emerald-500 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-500/25',
+        pillTag: 'bg-emerald-50/90 dark:bg-emerald-950/70 border border-emerald-200/90 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 font-bold text-xs',
         badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300',
       };
     case 'amber':
       return {
         iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        iconGradient: 'bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25',
+        pillTag: 'bg-amber-50/90 dark:bg-amber-950/70 border border-amber-200/90 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 font-bold text-xs',
         badge: 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300',
       };
     case 'rose':
       return {
         iconBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+        iconGradient: 'bg-gradient-to-br from-rose-500 via-red-500 to-orange-500 text-white shadow-md shadow-rose-500/25',
+        pillTag: 'bg-rose-50/90 dark:bg-rose-950/70 border border-rose-200/90 dark:border-rose-800/80 text-rose-700 dark:text-rose-300 font-bold text-xs',
         badge: 'bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300',
       };
     case 'indigo':
       return {
         iconBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+        iconGradient: 'bg-gradient-to-br from-indigo-500 via-blue-600 to-indigo-700 text-white shadow-md shadow-indigo-500/25',
+        pillTag: 'bg-indigo-50/90 dark:bg-indigo-950/70 border border-indigo-200/90 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 font-bold text-xs',
         badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300',
       };
     case 'cyan':
       return {
         iconBg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+        iconGradient: 'bg-gradient-to-br from-cyan-400 via-teal-500 to-blue-600 text-white shadow-md shadow-cyan-500/25',
+        pillTag: 'bg-cyan-50/90 dark:bg-cyan-950/70 border border-cyan-200/90 dark:border-cyan-800/80 text-cyan-700 dark:text-cyan-300 font-bold text-xs',
         badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-300',
       };
     case 'purple':
     case 'violet':
       return {
         iconBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+        iconGradient: 'bg-gradient-to-br from-purple-500 via-violet-600 to-indigo-600 text-white shadow-md shadow-purple-500/25',
+        pillTag: 'bg-purple-50/90 dark:bg-purple-950/70 border border-purple-200/90 dark:border-purple-800/80 text-purple-700 dark:text-purple-300 font-bold text-xs',
         badge: 'bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300',
       };
     case 'teal':
       return {
         iconBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+        iconGradient: 'bg-gradient-to-br from-teal-400 via-emerald-500 to-emerald-600 text-white shadow-md shadow-teal-500/25',
+        pillTag: 'bg-teal-50/90 dark:bg-teal-950/70 border border-teal-200/90 dark:border-teal-800/80 text-teal-700 dark:text-teal-300 font-bold text-xs',
         badge: 'bg-teal-100 text-teal-700 dark:bg-teal-950/70 dark:text-teal-300',
       };
     case 'sky':
       return {
         iconBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+        iconGradient: 'bg-gradient-to-br from-sky-400 via-blue-500 to-blue-600 text-white shadow-md shadow-sky-500/25',
+        pillTag: 'bg-sky-50/90 dark:bg-sky-950/70 border border-sky-200/90 dark:border-sky-800/80 text-sky-700 dark:text-sky-300 font-bold text-xs',
         badge: 'bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300',
       };
     case 'slate':
       return {
         iconBg: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
+        iconGradient: 'bg-gradient-to-br from-slate-600 to-slate-800 text-white shadow-md shadow-slate-500/20',
+        pillTag: 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs',
         badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
       };
     case 'blue':
     default:
       return {
         iconBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+        iconGradient: 'bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25',
+        pillTag: 'bg-blue-50/90 dark:bg-blue-950/70 border border-blue-200/90 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 font-bold text-xs',
         badge: 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300',
       };
   }
@@ -264,8 +283,8 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
   guru: {
     roleKey: 'guru',
     roleLabel: 'Dewan Guru & Pengajar',
-    sectionTitle: 'Kartu Cepat Guru Pengajar',
-    sectionSubtitle: 'Akses cepat agenda KBM, absensi jam mengajar, jadwal mengajar, dan rekap pribadi',
+    sectionTitle: 'Kartu Cepat Guru',
+    sectionSubtitle: 'Akses langsung 1-klik untuk tugas mengajar, presensi harian, jadwal & administrasi KBM Anda',
     dotColorClass: 'bg-indigo-600',
     enabled: true,
     cards: [
@@ -273,56 +292,64 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         id: 'qa_guru_kbm',
         view: 'presensi_kbm_guru',
         title: 'Absen Mengajar Guru (KBM)',
-        subtitle: 'Pencatatan absensi jam mengajar guru',
-        iconName: 'BookOpenCheck',
-        colorScheme: 'indigo',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
         enabled: true,
-      },
-      {
-        id: 'qa_guru_presensi_input',
-        view: 'presensi_input',
-        title: 'Input Presensi Kelas',
-        subtitle: 'Pencatatan absensi siswa hari ini',
-        iconName: 'ClipboardCheck',
-        colorScheme: 'blue',
-        enabled: true,
-        specialAction: 'navigate_to_input',
-      },
-      {
-        id: 'qa_guru_absen_harian',
-        view: 'absen_harian_guru',
-        title: 'Absen Harian Guru',
-        subtitle: 'Presensi harian pendidik & KBM',
-        iconName: 'UserCheck',
-        colorScheme: 'emerald',
-        enabled: true,
+        isUtama: true,
+        badgeText: '4 Sesi Mengajar Hari Ini',
       },
       {
         id: 'qa_guru_jadwal_mingguan',
         view: 'jadwal_minggu_ini',
-        title: 'Jadwal Mengajar Minggu Ini',
-        subtitle: 'Agenda mengajar aktif sepekan',
+        title: 'Jadwal Mengajar Saya',
+        subtitle: 'Matriks jadwal mengajar mingguan & alokasi JP kelas',
         iconName: 'Calendar',
-        colorScheme: 'cyan',
+        colorScheme: 'sky',
         enabled: true,
-      },
-      {
-        id: 'qa_guru_rekap_pribadi',
-        view: 'rekap_absensi_pribadi_guru',
-        title: 'Rekap Absensi Pribadi Saya',
-        subtitle: 'Riwayat presensi & jam kerja saya',
-        iconName: 'FileText',
-        colorScheme: 'teal',
-        enabled: true,
+        isUtama: true,
+        badgeText: '70 JP Beban Mengajar',
       },
       {
         id: 'qa_guru_pelanggaran',
         view: 'catatan_pelanggaran',
         title: 'Catatan Pelanggaran Siswa',
-        subtitle: 'Pencatatan sanksi & kedisiplinan',
-        iconName: 'ShieldAlert',
+        subtitle: 'Catat poin kedisiplinan & sanksi tata tertib siswa',
+        iconName: 'AlertTriangle',
         colorScheme: 'rose',
         enabled: true,
+        badgeText: 'Input Kedisiplinan',
+      },
+      {
+        id: 'qa_guru_chat',
+        view: 'live_chat',
+        title: 'Pesan & Live Chat Sekolah',
+        subtitle: 'Komunikasi langsung dengan sesama guru, wali & staf',
+        iconName: 'MessageSquare',
+        colorScheme: 'emerald',
+        enabled: true,
+        badgeText: 'Live Chat Sekolah',
+      },
+      {
+        id: 'qa_guru_presensi_input',
+        view: 'presensi_input',
+        title: 'Input Presensi Kelas',
+        subtitle: 'Pencatatan kehadiran harian siswa per kelas (H/S/I/A/T/D)',
+        iconName: 'ClipboardCheck',
+        colorScheme: 'blue',
+        enabled: true,
+        specialAction: 'navigate_to_input',
+        badgeText: '12 Rombel Aktif',
+      },
+      {
+        id: 'qa_guru_absen_harian',
+        view: 'absen_harian_guru',
+        title: 'Absen Harian Guru',
+        subtitle: 'Presensi kehadiran harian guru mengajar terintegrasi jadwal KBM',
+        iconName: 'UserCheck',
+        colorScheme: 'teal',
+        enabled: true,
+        badgeText: 'Shift & Kelompok',
       },
     ],
   },

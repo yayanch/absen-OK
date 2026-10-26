@@ -654,25 +654,32 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
           <div className="p-4 rounded-3xl bg-slate-100/70 dark:bg-slate-850/60 border border-slate-200/80 dark:border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <Sparkles className="w-4 h-4 text-amber-500" />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
                   Pratinjau Tampilan Dashboard ({currentRoleMeta.label})
                 </span>
               </div>
               <span className="text-[10px] text-slate-400">
-                {currentRoleConfig.cards.filter((c) => c.enabled).length} kartu akan muncul
+                {currentRoleConfig.cards.filter((c) => c.enabled).length} kartu aktif
               </span>
             </div>
 
-            <div className="p-3.5 bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
-              <div className="flex items-center gap-2 px-1">
-                <span className={`w-2 h-2 rounded-full ${currentRoleMeta.dotColor} animate-pulse`} />
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                  {currentRoleConfig.sectionTitle || `Kartu Cepat ${currentRoleMeta.label}`}
+            <div className="p-3.5 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 space-y-3">
+              <div className="flex items-center justify-between gap-2 px-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Sparkles className="w-4 h-4 fill-white stroke-none" />
+                  </div>
+                  <span className="text-xs font-black text-slate-800 dark:text-slate-100">
+                    {currentRoleConfig.sectionTitle || `Kartu Cepat ${currentRoleMeta.label}`} (Quick Action Cards)
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-500">
+                  Menampilkan {currentRoleConfig.cards.filter((c) => c.enabled).length} kartu
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {currentRoleConfig.cards
                   .filter((c) => c.enabled)
                   .map((c) => {
@@ -680,18 +687,37 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                     return (
                       <div
                         key={c.id}
-                        className="p-3 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex items-center gap-2.5 select-none"
+                        className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col justify-between gap-3 select-none"
                       >
-                        <div className={`p-2 rounded-xl shrink-0 ${colorMeta.iconBg}`}>
-                          {renderQuickActionIcon(c.iconName, 'w-3.5 h-3.5')}
+                        <div>
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 ${colorMeta.iconGradient}`}>
+                              {renderQuickActionIcon(c.iconName, 'w-4 h-4')}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {c.isUtama && (
+                                <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-black text-[9px] uppercase">
+                                  UTAMA
+                                </span>
+                              )}
+                              <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
+                                <ExternalLink className="w-3 h-3" />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-2.5">
+                            <div className="font-extrabold text-xs text-slate-900 dark:text-white truncate">
+                              {c.title}
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
+                              {c.subtitle}
+                            </div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="font-extrabold text-[11px] truncate text-slate-800 dark:text-white">
-                            {c.title}
-                          </div>
-                          <div className="text-[9px] text-slate-400 truncate">
-                            {c.subtitle}
-                          </div>
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold truncate max-w-[130px] ${colorMeta.pillTag}`}>
+                            {c.badgeText || c.title}
+                          </span>
                         </div>
                       </div>
                     );
@@ -823,6 +849,36 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                     placeholder="Contoh: Pencatatan absensi harian"
                     className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+              </div>
+
+              {/* isUtama & badgeText */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                    Teks Pill Badge (Bawah Kartu):
+                  </label>
+                  <input
+                    type="text"
+                    value={editingCard.badgeText || ''}
+                    onChange={(e) => setEditingCard({ ...editingCard, badgeText: e.target.value })}
+                    placeholder="Contoh: 4 Sesi Mengajar Hari Ini"
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+
+                <div className="flex items-center pt-5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!editingCard.isUtama}
+                      onChange={(e) => setEditingCard({ ...editingCard, isUtama: e.target.checked })}
+                      className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Tandai Kartu "UTAMA" (Tampil Badge Emas)
+                    </span>
+                  </label>
                 </div>
               </div>
 
