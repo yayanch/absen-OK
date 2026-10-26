@@ -87,21 +87,16 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
 
   const isPiketKesiswaan = currentUser.role === 'piket_kesiswaan';
   const isPiketGuru = currentUser.role === 'piket_guru' || currentUser.role === 'piket';
-  const isAdmSiswa = currentUser.role === 'adm_siswa';
   const isAnyPiket = isPiketKesiswaan || isPiketGuru;
 
-  let titleText = "Dashboard Kesiswaan & BP/BK";
-  let descText = "Monitoring siswa berisiko, ketidakhadiran kumulatif, catatan pelanggaran, dan tindak lanjut home visit.";
+  let titleText = "Pusat Perhatian Kesiswaan & BP/BK";
+  let descText = "Monitoring siswa berisiko, ketidakhadiran kumulatif, pelanggaran, dan tindak lanjut home visit.";
   let badgeText = "Pusat Pembinaan & Kedisiplinan Siswa";
 
-  if (isAdmSiswa) {
-    titleText = "Dashboard Administrasi Siswa";
-    descText = "Pusat pengelolaan data master peserta didik, cetak kartu QR presensi, dan rekapitulasi kehadiran.";
-    badgeText = "Pengelola Administrasi Siswa";
-  } else if (isPiketKesiswaan) {
+  if (isPiketKesiswaan) {
     titleText = "Dashboard Kerja Piket Kesiswaan";
     descText = "Pindai QR kehadiran siswa, kelola draf presensi kelas, dan catat poin pelanggaran kedisiplinan harian.";
-    badgeText = "Petugas Piket Kesiswaan";
+    badgeText = "Sistem Kerja Piket Kesiswaan";
   } else if (isPiketGuru) {
     titleText = "Dashboard Kerja Guru Piket Harian";
     descText = "Kelola kehadiran rombel hari ini, bantu input absen darurat, scan QR siswa, dan catat insiden kedisiplinan.";

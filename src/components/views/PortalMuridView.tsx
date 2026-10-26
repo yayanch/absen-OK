@@ -1249,24 +1249,13 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
             </div>
           </div>
 
-          {/* Kartu Cepat Siswa */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between px-1">
-              <div className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Kartu Cepat Siswa</span>
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                Akses Langsung Fitur Portal
-              </span>
-            </div>
-
-            <div className="grid grid-cols-4 gap-2.5 sm:gap-3.5">
-              <button
-                type="button"
-                onClick={() => setCurrentSubTab('absen_qr')}
-                className="p-3 sm:p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-emerald-500/30"
-              >
+          {/* Aksi Cepat Grid with Deep Saturated (Pekat) Backgrounds */}
+          <div className="grid grid-cols-4 gap-2.5 sm:gap-3.5">
+            <button
+              type="button"
+              onClick={() => setCurrentSubTab('absen_qr')}
+              className="p-3 sm:p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-emerald-500/30"
+            >
               <CalendarCheck className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
               <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Absensi</span>
             </button>
@@ -1346,9 +1335,8 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
               <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Profil</span>
             </button>
           </div>
-        </div>
 
-        {/* Jadwal Pelajaran Section on Overview */}
+          {/* Jadwal Pelajaran Section on Overview */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">

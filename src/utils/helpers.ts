@@ -1307,7 +1307,7 @@ export function loadAppData(): AppData {
       if (!merged.securityConfig) {
         merged.securityConfig = DEFAULT_SECURITY_CONFIG;
       }
-      if (!Array.isArray(merged.securityIncidents)) {
+      if (!Array.isArray(merged.securityIncidents) || merged.securityIncidents.length === 0) {
         merged.securityIncidents = INITIAL_SECURITY_INCIDENTS;
       }
       if (!Array.isArray(merged.blockedIps)) {

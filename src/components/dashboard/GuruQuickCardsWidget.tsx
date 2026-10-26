@@ -167,10 +167,10 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
   const cards = React.useMemo(() => [
     {
       id: 'rekap_mengajar_per_kelas',
-      title: 'Rekap Pengisian Presensi Kelas',
-      description: 'Monitoring keterisian absensi rombel kelas hari ini',
+      title: 'Rekap Absensi Mengajar Per Kelas',
+      description: 'Rekapitulasi kehadiran siswa per kelas mengajar',
       icon: BookOpenCheck,
-      badgeText: 'Status Sudah / Belum Isi',
+      badgeText: 'Rekap Per Kelas',
       badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
       iconBg: 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-emerald-500/25',
       hoverBorder: 'hover:border-emerald-400 dark:hover:border-emerald-600',
@@ -179,8 +179,8 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'presensi_kbm_guru',
-      title: 'Absen Mengajar Guru (KBM)',
-      description: 'Input presensi kehadiran siswa per jam pelajaran mengajar & jurnal KBM',
+      title: 'Presensi KBM Guru',
+      description: 'Input presensi kehadiran siswa per jam pelajaran mengajar',
       icon: BookOpen,
       badgeText: teacherTodaySchedules.length > 0 ? `${teacherTodaySchedules.length} Sesi Mengajar Hari Ini` : 'Tidak Ada Jadwal Hari Ini',
       badgeStyle: teacherTodaySchedules.length > 0 
@@ -205,7 +205,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'absen_harian_guru',
-      title: 'Absen Harian Guru',
+      title: 'Presensi Harian Guru',
       description: 'Rekam presensi kehadiran & jam kerja mandiri guru',
       icon: Clock,
       badgeText: teacherPresensiToday
@@ -228,8 +228,8 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'rekap_absensi_pribadi_guru',
-      title: 'Rekap Absensi Pribadi Saya',
-      description: 'Riwayat rekapitulasi presensi harian, jam masuk & log KBM pribadi',
+      title: 'Rekap Absensi Saya',
+      description: 'Akses laporan & riwayat rekapitulasi presensi pribadi',
       icon: BarChart3,
       badgeText: `${teacherMonthlyRate}% Kehadiran Bulan Ini`,
       badgeStyle: 'bg-purple-50 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border-purple-200 dark:border-purple-800',
@@ -240,7 +240,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'catatan_pelanggaran',
-      title: 'Catatan Pelanggaran Siswa',
+      title: 'Disiplin & Pelanggaran',
       description: 'Catat poin kedisiplinan & sanksi tata tertib siswa',
       icon: AlertTriangle,
       badgeText: violationsTodayCount > 0 ? `${violationsTodayCount} Catatan Hari Ini` : 'Input Kedisiplinan',
@@ -253,7 +253,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'home_visit',
-      title: 'Home Visit (Kunjungan Rumah)',
+      title: 'Laporan Home Visit',
       description: 'Dokumentasi & hasil tindak lanjut kunjungan rumah siswa',
       icon: Home,
       badgeText: homeVisitsTotalCount > 0 ? `${homeVisitsTotalCount} Laporan Kunjungan` : 'Kunjungan Rumah',
@@ -264,7 +264,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'absen_qr',
-      title: 'Scan QR Presensi Siswa',
+      title: 'Scanner Presensi QR',
       description: 'Pemindai QR Code presensi siswa & kartu identitas',
       icon: QrCode,
       badgeText: 'Kamera / QR Scanner',
@@ -275,7 +275,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
     },
     {
       id: 'live_chat',
-      title: 'Pesan & Live Chat Sekolah',
+      title: 'Pesan & Obrolan',
       description: 'Komunikasi langsung dengan sesama guru, wali & staf',
       icon: MessageSquare,
       badgeText: 'Live Chat Sekolah',
@@ -313,7 +313,7 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
             <span>Kartu Cepat Guru (Quick Action Cards)</span>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Akses langsung 1-klik untuk tugas mengajar, presensi harian, jadwal &amp; administrasi KBM Anda
+            Akses langsung 1-klik untuk tugas mengajar, presensi, &amp; administrasi kelas Anda
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">

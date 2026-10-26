@@ -93,7 +93,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
     <div className="space-y-6">
       <PageHeader
         icon={Building2}
-        title={currentUser.role === 'piket_kelas' ? `Dashboard Piket Kelas - ${currentClassName}` : `Dashboard Wali Kelas - ${currentClassName}`}
+        title={`Kelas ${currentClassName}`}
         description={`Total ${totalStudents} Siswa Terdaftar • Tanggal ${formatDateIndo(selectedDate)}`}
         badge={currentUser.role === 'piket_kelas' ? 'Petugas Piket Kelas' : 'Kelas Binaan Wali Kelas'}
         actions={

@@ -70,37 +70,6 @@ const QuickActionBtn: React.FC<QuickActionBtnProps> = ({
   </motion.button>
 );
 
-interface RoleSectionHeaderProps {
-  title: string;
-  subtitle: string;
-  dotColorClass: string;
-  count?: number;
-}
-
-const RoleSectionHeader: React.FC<RoleSectionHeaderProps> = ({
-  title,
-  subtitle,
-  dotColorClass,
-  count,
-}) => (
-  <div className="flex items-center justify-between flex-wrap gap-2 px-1 mb-2.5">
-    <div>
-      <div className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-2">
-        <span className={`w-2 h-2 rounded-full ${dotColorClass} animate-pulse`} />
-        <span>{title}</span>
-      </div>
-      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-        {subtitle}
-      </p>
-    </div>
-    {count !== undefined && (
-      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
-        {count} kartu aksi
-      </span>
-    )}
-  </div>
-);
-
 export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   role,
   onNavigateView,
@@ -114,12 +83,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'admin') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Administrator"
-          subtitle="Akses langsung 1-klik untuk rekapitulasi presensi, master data, hak akses, user & server"
-          dotColorClass="bg-blue-600"
-          count={6}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+          Aksi Cepat Administrator
+        </div>
         <motion.div
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
           variants={cardContainerVariants}
@@ -130,8 +97,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             onClick={handleOpenClassSubmission}
             iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             icon={<CheckCircle2 className="w-4 h-4 stroke-[2.5]" />}
-            title="Rekap Pengisian Presensi Kelas"
-            subtitle="Status kelas sudah & belum isi"
+            title="Rekap Pengisian Kelas"
+            subtitle="Status sudah & belum isi"
           />
 
           <QuickActionBtn
@@ -139,7 +106,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
             icon={<Users className="w-4 h-4" />}
             title="Data Siswa"
-            subtitle="Master data peserta didik"
+            subtitle="Master peserta didik"
           />
 
           <QuickActionBtn
@@ -147,15 +114,15 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-violet-500/10 text-violet-600 dark:text-violet-400"
             icon={<ShieldAlert className="w-4 h-4" />}
             title="Hak Akses Role"
-            subtitle="Konfigurasi izin menu & peran"
+            subtitle="Konfigurasi izin menu"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('master_user')}
             iconBgClass="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
             icon={<UserCheck className="w-4 h-4 stroke-[2.5]" />}
-            title="Akun & Pengguna"
-            subtitle="Kelola staf, guru & admin"
+            title="Akun & User"
+            subtitle="Kelola pengguna & staf"
           />
 
           <QuickActionBtn
@@ -163,7 +130,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
             icon={<Activity className="w-4 h-4 stroke-[2.5]" />}
             title="Monitoring Server"
-            subtitle="Status resource & performa server"
+            subtitle="Status server & resource"
           />
 
           <QuickActionBtn
@@ -177,7 +144,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
             icon={<HardDriveDownload className="w-4 h-4 stroke-[2.5]" />}
             title="Backup & Restore"
-            subtitle="Cadangkan & pulihkan database sistem"
+            subtitle="Cadangan data sistem"
           />
         </motion.div>
       </div>
@@ -188,16 +155,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
     const isKesiswaanPiket = role === 'piket_kesiswaan';
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title={isKesiswaanPiket ? "Kartu Cepat Piket Kesiswaan" : "Kartu Cepat Guru Piket Harian"}
-          subtitle={
-            isKesiswaanPiket
-              ? "Akses langsung 1-klik untuk rekap presensi kelas, scan QR, dan pencatatan kedisiplinan"
-              : "Akses langsung 1-klik untuk input presensi darurat, scan QR siswa & penegakan disiplin"
-          }
-          dotColorClass="bg-amber-500"
-          count={isKesiswaanPiket ? 5 : 3}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          Aksi Cepat Petugas Piket {isKesiswaanPiket ? 'Kesiswaan' : 'Harian Guru'}
+        </div>
         <motion.div
           className={
             isKesiswaanPiket
@@ -213,8 +174,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
               onClick={handleOpenClassSubmission}
               iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               icon={<CheckCircle2 className="w-4 h-4 stroke-[2.5]" />}
-              title="Rekap Pengisian Presensi Kelas"
-              subtitle="Status kelas sudah & belum isi"
+              title="Rekap Pengisian Kelas"
+              subtitle="Status sudah & belum isi"
             />
           )}
 
@@ -225,24 +186,24 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             }}
             iconBgClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
             icon={<ClipboardCheck className="w-4 h-4 stroke-[2.5]" />}
-            title="Input Presensi Kelas"
-            subtitle="Kelola kehadiran siswa harian"
+            title="Input & Edit Presensi"
+            subtitle="Kelola kehadiran kelas"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('presensi_input')}
             iconBgClass="bg-teal-500/10 text-teal-600 dark:text-teal-400"
             icon={<QrCode className="w-4 h-4" />}
-            title="Scan Presensi QR"
-            subtitle="Pindai kartu pelajar & barcode"
+            title="Scan / Tampil QR"
+            subtitle="Presensi kartu pelajar"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('catatan_pelanggaran')}
             iconBgClass="bg-rose-500/10 text-rose-600 dark:text-rose-400"
             icon={<ShieldAlert className="w-4 h-4" />}
-            title="Catatan Pelanggaran Siswa"
-            subtitle="Poin disiplin & tindakan siswa"
+            title="Catat Pelanggaran"
+            subtitle="Poin disiplin & tindakan"
           />
 
           {isKesiswaanPiket && (
@@ -250,8 +211,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
               onClick={() => onNavigateView('rekap_harian')}
               iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
               icon={<FileText className="w-4 h-4" />}
-              title="Rekap Presensi Harian"
-              subtitle="Laporan kehadiran seluruh rombel"
+              title="Rekap Kehadiran Rombel"
+              subtitle="Laporan harian terpadu"
             />
           )}
         </motion.div>
@@ -262,12 +223,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'kesiswaan') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Tim Kesiswaan & BP/BK"
-          subtitle="Akses langsung 1-klik untuk pembinaan siswa, pemantauan ketidakhadiran, pelanggaran & home visit"
-          dotColorClass="bg-cyan-600"
-          count={5}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-cyan-600 animate-pulse" />
+          Aksi Cepat Tim Kesiswaan & BP/BK
+        </div>
         <motion.div
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
           variants={cardContainerVariants}
@@ -278,8 +237,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             onClick={handleOpenClassSubmission}
             iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             icon={<CheckCircle2 className="w-4 h-4 stroke-[2.5]" />}
-            title="Rekap Pengisian Presensi Kelas"
-            subtitle="Status kelas sudah & belum isi"
+            title="Rekap Pengisian Kelas"
+            subtitle="Status sudah & belum isi"
           />
 
           <QuickActionBtn
@@ -287,31 +246,31 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="theme-action-icon"
             icon={<AlertTriangle className="w-4 h-4" />}
             title="Siswa Perlu Perhatian"
-            subtitle="Siswa berisiko alfa & tidak hadir"
+            subtitle="Siswa berisiko alfa/sakit"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('rekap_bulanan')}
             iconBgClass="theme-action-icon"
             icon={<Calendar className="w-4 h-4" />}
-            title="Rekap Presensi Bulanan"
-            subtitle="Laporan bulanan seluruh kelas"
+            title="Rekap Ketidakhadiran"
+            subtitle="Laporan bulanan"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('catatan_pelanggaran')}
             iconBgClass="theme-action-icon"
             icon={<ShieldAlert className="w-4 h-4" />}
-            title="Catatan Pelanggaran Siswa"
-            subtitle="Catatan poin & sanksi kedisiplinan"
+            title="Pelanggaran"
+            subtitle="Catatan poin & tindakan"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('home_visit')}
             iconBgClass="theme-action-icon"
             icon={<Home className="w-4 h-4" />}
-            title="Laporan Home Visit"
-            subtitle="Kunjungan rumah & tindak lanjut BK"
+            title="Home Visit"
+            subtitle="Kunjungan rumah siswa"
           />
         </motion.div>
       </div>
@@ -321,12 +280,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'piket_kelas') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Piket Kelas"
-          subtitle="Akses langsung 1-klik untuk pengisian presensi siswa hari ini & rekapitulasi kehadiran kelas"
-          dotColorClass="bg-teal-500"
-          count={3}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+          Aksi Cepat Piket Kelas
+        </div>
         <motion.div
           className="grid grid-cols-2 sm:grid-cols-3 gap-3"
           variants={cardContainerVariants}
@@ -348,8 +305,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             onClick={() => onNavigateView('rekap_harian')}
             iconBgClass="bg-blue-500/10 text-blue-600 dark:text-blue-400"
             icon={<Users className="w-4 h-4" />}
-            title="Rekap Presensi Kelas"
-            subtitle="Laporan kehadiran harian kelas"
+            title="Rekap Kehadiran Siswa"
+            subtitle="Data kehadiran kelas"
           />
 
           <QuickActionBtn
@@ -367,12 +324,9 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'wali') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Wali Kelas"
-          subtitle="Akses langsung 1-klik untuk presensi hari ini, data siswa binaan, rekap, & jadwal mengajar"
-          dotColorClass="bg-emerald-600"
-          count={7}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+          Aksi Cepat Wali Kelas
+        </div>
         <motion.div
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3"
           variants={cardContainerVariants}
@@ -386,32 +340,32 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             }}
             iconBgClass="theme-action-icon"
             icon={<ClipboardCheck className="w-4 h-4 stroke-[2.5]" />}
-            title="Input Presensi Hari Ini"
-            subtitle="Isi presensi kelas binaan"
+            title="Presensi Hari Ini"
+            subtitle="Input presensi kelas"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('master_siswa')}
             iconBgClass="theme-action-icon"
             icon={<Users className="w-4 h-4" />}
-            title="Data Siswa Kelas"
-            subtitle="Daftar peserta didik binaan"
+            title="Daftar Siswa"
+            subtitle="Siswa binaan kelas"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('rekap_harian')}
             iconBgClass="theme-action-icon"
             icon={<FileText className="w-4 h-4" />}
-            title="Rekap Presensi Kelas"
-            subtitle="Laporan kehadiran harian kelas"
+            title="Rekap Kelas"
+            subtitle="Laporan kehadiran"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('rekap_ketidakhadiran_tertinggi')}
             iconBgClass="theme-action-icon"
             icon={<AlertTriangle className="w-4 h-4" />}
-            title="Siswa Perlu Perhatian"
-            subtitle="Peringatan & evaluasi siswa"
+            title="Ketidakhadiran"
+            subtitle="Peringatan siswa"
           />
 
           <QuickActionBtn
@@ -419,7 +373,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-emerald-600 text-white"
             icon={<Layers className="w-4 h-4" />}
             title="Mapel & Kelas Ajar"
-            subtitle="Kelola mapel & kelas pengampu"
+            subtitle="Kelola mapel & kelas"
             bgCardClass="bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-slate-800 dark:text-slate-100 border-emerald-200/80 dark:border-emerald-800/60"
             textColorClass="text-emerald-950 dark:text-emerald-100"
             subtextColorClass="text-emerald-600 dark:text-emerald-400 font-semibold"
@@ -429,8 +383,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             onClick={() => onNavigateView('jadwal_mengajar')}
             iconBgClass="bg-blue-600 text-white"
             icon={<BookOpen className="w-4 h-4" />}
-            title="Jadwal Mengajar Guru"
-            subtitle="Matriks & jadwal KBM guru"
+            title="Jadwal Mengajar"
+            subtitle="Matriks & tabel jadwal"
             bgCardClass="bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 border-blue-200/80 dark:border-blue-800/60"
             textColorClass="text-blue-950 dark:text-blue-100"
             subtextColorClass="text-blue-600 dark:text-blue-400 font-semibold"
@@ -440,8 +394,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             onClick={() => onNavigateView('jadwal_minggu_ini')}
             iconBgClass="bg-blue-600 text-white"
             icon={<Calendar className="w-4 h-4" />}
-            title="Jadwal Mengajar Minggu Ini"
-            subtitle="Agenda mengajar sepekan"
+            title="Jadwal Minggu Ini"
+            subtitle="Ringkasan KBM sepekan"
             bgCardClass="bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-slate-800 dark:text-slate-100 border-blue-200/80 dark:border-blue-800/60"
             textColorClass="text-blue-950 dark:text-blue-100"
             subtextColorClass="text-blue-600 dark:text-blue-400 font-semibold"
@@ -454,12 +408,9 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'kurikulum') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Tim Kurikulum & Akademik"
-          subtitle="Akses langsung 1-klik untuk presensi guru, plotting jadwal KBM, master mapel & shift belajar"
-          dotColorClass="bg-indigo-600"
-          count={5}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+          Aksi Cepat Tim Kurikulum & Akademik
+        </div>
         <motion.div
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
           variants={cardContainerVariants}
@@ -471,15 +422,15 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="theme-action-icon"
             icon={<UserCheck className="w-4 h-4 text-emerald-500" />}
             title="Absen Harian Guru"
-            subtitle="Presensi & jam kerja pendidik"
+            subtitle="Presensi guru KBM"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('jadwal_mengajar')}
             iconBgClass="theme-action-icon"
             icon={<Calendar className="w-4 h-4" />}
-            title="Jadwal Mengajar Guru"
-            subtitle="Plotting & manajemen jadwal KBM"
+            title="Jadwal Mengajar"
+            subtitle="Plotting jadwal KBM"
           />
 
           <QuickActionBtn
@@ -487,23 +438,23 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="theme-action-icon"
             icon={<BookOpen className="w-4 h-4" />}
             title="Mata Pelajaran"
-            subtitle="Master kurikulum & mapel"
+            subtitle="Master mata pelajaran"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('master_guru')}
             iconBgClass="theme-action-icon"
             icon={<Users className="w-4 h-4" />}
-            title="Data Tenaga Pendidik"
-            subtitle="Master guru & beban mengajar"
+            title="Data Pendidik"
+            subtitle="Guru & beban mengajar"
           />
 
           <QuickActionBtn
             onClick={() => onNavigateView('jadwal_shift')}
             iconBgClass="theme-action-icon"
             icon={<Clock className="w-4 h-4" />}
-            title="Jadwal Shift Belajar"
-            subtitle="Pengaturan jam KBM Pagi & Siang"
+            title="Jadwal Shift"
+            subtitle="Jam KBM Pagi & Siang"
           />
         </motion.div>
       </div>
@@ -513,14 +464,11 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'staf_jadwal') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Pengelola Jadwal Mengajar"
-          subtitle="Akses langsung 1-klik untuk editor jadwal guru, plotting KBM, shift jam pelajaran & data pendidik"
-          dotColorClass="bg-sky-600"
-          count={5}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5">
+          Aksi Utama Pengelola Jadwal
+        </div>
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+          className="grid grid-cols-1 gap-3"
           variants={cardContainerVariants}
           initial="hidden"
           animate="show"
@@ -530,42 +478,10 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             iconBgClass="bg-sky-600 text-white"
             icon={<Calendar className="w-4 h-4" />}
             title="Jadwal Mengajar Guru"
-            subtitle="Plotting & edit jadwal KBM"
+            subtitle="Plotting, edit jadwal, dan cetak matriks jadwal KBM"
             bgCardClass="bg-sky-50/80 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-slate-800 dark:text-slate-100 border-sky-200/80 dark:border-sky-800/60"
             textColorClass="text-sky-950 dark:text-sky-100"
             subtextColorClass="text-sky-600 dark:text-sky-400 font-semibold"
-          />
-
-          <QuickActionBtn
-            onClick={() => onNavigateView('jadwal_shift')}
-            iconBgClass="bg-indigo-600 text-white"
-            icon={<Clock className="w-4 h-4" />}
-            title="Jadwal Shift Belajar"
-            subtitle="Pengaturan jam KBM Pagi & Siang"
-          />
-
-          <QuickActionBtn
-            onClick={() => onNavigateView('jadwal_minggu_ini')}
-            iconBgClass="bg-blue-600 text-white"
-            icon={<Calendar className="w-4 h-4" />}
-            title="Jadwal Mengajar Minggu Ini"
-            subtitle="Matriks jadwal mengajar sepekan"
-          />
-
-          <QuickActionBtn
-            onClick={() => onNavigateView('master_guru')}
-            iconBgClass="bg-emerald-600 text-white"
-            icon={<Users className="w-4 h-4" />}
-            title="Data Tenaga Pendidik"
-            subtitle="Daftar guru & alokasi mengajar"
-          />
-
-          <QuickActionBtn
-            onClick={() => onNavigateView('master_mapel')}
-            iconBgClass="bg-amber-600 text-white"
-            icon={<BookOpen className="w-4 h-4" />}
-            title="Mata Pelajaran"
-            subtitle="Master kurikulum mata pelajaran"
           />
         </motion.div>
       </div>
@@ -575,14 +491,12 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   if (role === 'adm_siswa') {
     return (
       <div className="space-y-2">
-        <RoleSectionHeader
-          title="Kartu Cepat Administrasi Siswa"
-          subtitle="Akses langsung 1-klik untuk master peserta didik, rekap harian, cetak kartu QR & pelanggaran"
-          dotColorClass="bg-sky-500"
-          count={5}
-        />
+        <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 px-0.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+          Aksi Cepat Admin Siswa
+        </div>
         <motion.div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
           variants={cardContainerVariants}
           initial="hidden"
           animate="show"
@@ -598,28 +512,21 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
             onClick={() => onNavigateView('rekap_harian')}
             iconBgClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             icon={<CheckCircle2 className="w-4 h-4" />}
-            title="Rekap Presensi Harian"
-            subtitle="Presensi harian siswa rombel"
+            title="Rekap Harian"
+            subtitle="Presensi harian siswa"
           />
           <QuickActionBtn
             onClick={() => onNavigateView('cetak_kartu_qr')}
             iconBgClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
             icon={<QrCode className="w-4 h-4" />}
-            title="Cetak Kartu QR Siswa"
+            title="Cetak Kartu QR"
             subtitle="Kartu pelajar & barcode"
-          />
-          <QuickActionBtn
-            onClick={handleOpenClassSubmission}
-            iconBgClass="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-            icon={<ClipboardCheck className="w-4 h-4" />}
-            title="Rekap Pengisian Presensi Kelas"
-            subtitle="Status sudah & belum isi"
           />
           <QuickActionBtn
             onClick={() => onNavigateView('catatan_pelanggaran')}
             iconBgClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
             icon={<ShieldAlert className="w-4 h-4" />}
-            title="Catatan Pelanggaran Siswa"
+            title="Pelanggaran Siswa"
             subtitle="Catatan & poin kedisiplinan"
           />
         </motion.div>

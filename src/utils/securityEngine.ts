@@ -126,95 +126,85 @@ export const inspectInputPayload = (input: string): PayloadInspectionResult => {
     return { isMalicious: false };
   }
 
-  // 1. SQL Injection Signatures
-  const sqliPatterns: { regex: RegExp; name: string }[] = [
-    { regex: /(\%27)|(\')\s*(or|and)\s*[\'\d]/i, name: 'WAF-SQLI-001: SQL Quote OR/AND condition bypass' },
-    { regex: /'\s*or\s*'[^']*'\s*=\s*'[^']*/i, name: 'WAF-SQLI-002: Tautological string bypass (\' or \'a\'=\'a\')' },
-    { regex: /or\s+1\s*=\s*1/i, name: 'WAF-SQLI-003: Boolean-based OR 1=1 condition' },
-    { regex: /union(\s|\+)+select/i, name: 'WAF-SQLI-004: UNION SELECT data exfiltration attempt' },
-    { regex: /insert(\s|\+)+into/i, name: 'WAF-SQLI-005: Unauthorized INSERT statement injection' },
-    { regex: /drop(\s|\+)+table/i, name: 'WAF-SQLI-006: Malicious DDL DROP TABLE command' },
-    { regex: /select(\s|\+)+.*(\s|\+)+from/i, name: 'WAF-SQLI-007: Out-of-band SELECT FROM query' },
-    { regex: /exec(\s|\+)+(s|x)p\w+/i, name: 'WAF-SQLI-008: Stored procedure execution injection' },
-    { regex: /sleep\s*\(\s*\d+\s*\)/i, name: 'WAF-SQLI-009: Time-based blind SQLi SLEEP function' },
-    { regex: /benchmark\s*\(\s*\d+/i, name: 'WAF-SQLI-010: MySQL BENCHMARK denial-of-service query' },
-    { regex: /waitfor\s+delay\s+['"\d]/i, name: 'WAF-SQLI-011: SQL Server WAITFOR DELAY blind payload' },
-    { regex: /admin'--/i, name: 'WAF-SQLI-012: Admin comment truncation authentication bypass' },
-    { regex: /'\s*;\s*--/i, name: 'WAF-SQLI-013: Query termination and comment bypass' },
-    { regex: /information_schema/i, name: 'WAF-SQLI-014: Database schema reconnaissance query' },
-    { regex: /--\s*$/m, name: 'WAF-SQLI-015: Inline SQL comment operator' },
+  const lower = input.toLowerCase();
+
+  // 1. SQL Injection Signatures (Targeted exploit patterns, avoid matching single characters)
+  const sqliPatterns = [
+    /(\%27)|(\')\s*(or|and)\s*[\'\d]/i,
+    /union(\s)+select/i,
+    /insert(\s)+into/i,
+    /drop(\s)+table/i,
+    /select(\s)+.*(\s)+from/i,
+    /exec(\s|\+)+(s|x)p\w+/i,
+    /sleep\s*\(\s*\d+\s*\)/i,
+    /benchmark\s*\(\s*\d+/i,
+    /or\s+1\s*=\s*1/i,
+    /'\s*or\s*'[^']*'\s*=\s*'[^']*/i,
+    /admin'--/i,
+    /--\s*$/m,
   ];
 
-  for (const item of sqliPatterns) {
-    if (item.regex.test(input)) {
+  for (const pattern of sqliPatterns) {
+    if (pattern.test(input)) {
       return {
         isMalicious: true,
         threatType: 'sqli',
-        snippet: input.slice(0, 120),
-        ruleMatched: item.name,
+        snippet: input.slice(0, 100),
+        ruleMatched: 'WAF-SQLI-001: SQL Injection Meta-Character / Query Bypass',
       };
     }
   }
 
   // 2. Cross-Site Scripting (XSS) Signatures
-  const xssPatterns: { regex: RegExp; name: string }[] = [
-    { regex: /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, name: 'WAF-XSS-001: Malicious <script> block tag' },
-    { regex: /javascript:\s*[^\n]*/i, name: 'WAF-XSS-002: javascript: URI pseudo-protocol' },
-    { regex: /<img\b[^>]*\bonerror\s*=/i, name: 'WAF-XSS-003: <img> tag with inline onerror handler' },
-    { regex: /<svg\b[^>]*\bonload\s*=/i, name: 'WAF-XSS-004: <svg> tag with inline onload event' },
-    { regex: /<iframe\b[^>]*>/i, name: 'WAF-XSS-005: Arbitrary <iframe> frame injection' },
-    { regex: /\bon(load|error|click|focus|mouseover|mouseenter|submit)\s*=\s*['"]?[^'"]+/i, name: 'WAF-XSS-006: DOM event handler injection' },
-    { regex: /document\.(cookie|location|write|body)/i, name: 'WAF-XSS-007: Document object manipulation (Cookie/Location/Write)' },
-    { regex: /alert\s*\(\s*[^)]*\)/i, name: 'WAF-XSS-008: JavaScript alert execution payload' },
-    { regex: /fetch\s*\(\s*['"]https?:\/\//i, name: 'WAF-XSS-009: Data exfiltration via dynamic fetch()' },
-    { regex: /eval\s*\(\s*[^)]+\)/i, name: 'WAF-XSS-010: Arbitrary code execution via eval()' },
+  const xssPatterns = [
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    /javascript:[^\n]*/i,
+    /<img[^\>]+src[^\>]+onerror[^\>]*>/i,
+    /<svg[^\>]+onload[^\>]*>/i,
+    /on(load|error|click|focus|mouseover|mouseenter)\s*=/i,
+    /document\.(cookie|location|write)/i,
+    /alert\s*\(/i,
   ];
 
-  for (const item of xssPatterns) {
-    if (item.regex.test(input)) {
+  for (const pattern of xssPatterns) {
+    if (pattern.test(input)) {
       return {
         isMalicious: true,
         threatType: 'xss',
-        snippet: input.slice(0, 120),
-        ruleMatched: item.name,
+        snippet: input.slice(0, 100),
+        ruleMatched: 'WAF-XSS-002: Malicious JavaScript Payload / Tag Injection',
       };
     }
   }
 
   // 3. Path Traversal
-  const pathTraversalPatterns: { regex: RegExp; name: string }[] = [
-    { regex: /(\.\.\/|\.\.\\)/i, name: 'WAF-DIR-001: Directory climbing sequence (../)' },
-    { regex: /%2e%2e(%2f|\/|%5c|\\)/i, name: 'WAF-DIR-002: URL encoded traversal sequence (%2e%2e/)' },
-    { regex: /\/etc\/(passwd|shadow|hosts|group)/i, name: 'WAF-DIR-003: Unix sensitive system file target (/etc/passwd)' },
-    { regex: /c:\\(windows|boot\.ini|winnt)/i, name: 'WAF-DIR-004: Windows sensitive system path target' },
+  const pathTraversalPatterns = [
+    /(\.\.\/|\.\.\\)/i,
+    /\%2e\%2e\%2f/i,
+    /\/etc\/passwd/i,
+    /c:\\windows\\system32/i,
   ];
 
-  for (const item of pathTraversalPatterns) {
-    if (item.regex.test(input)) {
+  for (const pattern of pathTraversalPatterns) {
+    if (pattern.test(input)) {
       return {
         isMalicious: true,
         threatType: 'path_traversal',
-        snippet: input.slice(0, 120),
-        ruleMatched: item.name,
+        snippet: input.slice(0, 100),
+        ruleMatched: 'WAF-DIR-003: Directory Path Traversal Sequence',
       };
     }
   }
 
   // 4. Command Injection
-  const cmdPatterns: { regex: RegExp; name: string }[] = [
-    { regex: /;\s*(cat|whoami|id|ls|rm|curl|wget|bash|sh|nc|netcat)\b/i, name: 'WAF-RCE-001: Shell command chaining semicolon (;)' },
-    { regex: /\|\s*(nc|bash|sh|whoami|cat)\b/i, name: 'WAF-RCE-002: Pipe command shell redirection (|)' },
-    { regex: /&&\s*(whoami|cat|id|curl|wget)\b/i, name: 'WAF-RCE-003: Logical AND command execution (&&)' },
-    { regex: /`[^`]*\b(whoami|cat|id|ls)\b[^`]*`/i, name: 'WAF-RCE-004: Backtick command substitution' },
-  ];
-
-  for (const item of cmdPatterns) {
-    if (item.regex.test(input)) {
+  const cmdPatterns = [/;\s*(cat|whoami|ls|rm|curl|wget|bash|sh|nc)\b/i, /\|\s*(nc|bash|sh)/i];
+  for (const pattern of cmdPatterns) {
+    if (pattern.test(input)) {
       return {
         isMalicious: true,
         threatType: 'command_injection',
-        snippet: input.slice(0, 120),
-        ruleMatched: item.name,
+        snippet: input.slice(0, 100),
+        ruleMatched: 'WAF-RCE-004: OS Command Injection Shell Pattern',
       };
     }
   }
@@ -251,7 +241,7 @@ export const checkIpBlockedStatus = (
   blockedIps: BlockedIp[] = []
 ): { isBlocked: boolean; blockInfo?: BlockedIp } => {
   if (!ip) return { isBlocked: false };
-  const found = blockedIps.find((b) => b.ip.trim() === ip.trim());
+  const found = blockedIps.find((b) => b.ip === ip);
   if (!found) return { isBlocked: false };
 
   if (found.expiresAt) {
@@ -269,49 +259,4 @@ export const checkIpBlockedStatus = (
 export const isNightHourAccess = (): boolean => {
   const currentHour = new Date().getHours();
   return currentHour >= 23 || currentHour < 5;
-};
-
-// Failed Login Attempts persistence helpers
-export const getPersistentFailedAttempts = (username: string): number => {
-  if (typeof window === 'undefined') return 0;
-  try {
-    const key = `sec_failed_logins_${username.toLowerCase().trim()}`;
-    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
-    return raw ? parseInt(raw, 10) || 0 : 0;
-  } catch {
-    return 0;
-  }
-};
-
-export const setPersistentFailedAttempts = (username: string, count: number): void => {
-  if (typeof window === 'undefined') return;
-  try {
-    const key = `sec_failed_logins_${username.toLowerCase().trim()}`;
-    if (count <= 0) {
-      sessionStorage.removeItem(key);
-      localStorage.removeItem(key);
-    } else {
-      sessionStorage.setItem(key, String(count));
-      localStorage.setItem(key, String(count));
-    }
-  } catch {}
-};
-
-export const clearPersistentFailedAttempts = (username: string): void => {
-  setPersistentFailedAttempts(username, 0);
-};
-
-// Clean expired locks
-export const filterActiveLocks = (locks: LockedAccount[] = []): LockedAccount[] => {
-  const now = Date.now();
-  return locks.filter((l) => new Date(l.unlocksAt).getTime() > now);
-};
-
-// Clean expired IP blocks
-export const filterActiveBlockedIps = (ips: BlockedIp[] = []): BlockedIp[] => {
-  const now = Date.now();
-  return ips.filter((b) => {
-    if (!b.expiresAt) return true;
-    return new Date(b.expiresAt).getTime() > now;
-  });
 };

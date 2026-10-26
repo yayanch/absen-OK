@@ -308,9 +308,6 @@ export interface UserBiasaAccount {
   hariMengajar?: string[]; // ['Senin', 'Rabu', 'Jumat']
   batasiLoginHariMengajar?: boolean;
   roles?: string[];
-  additionalRoles?: string[];
-  tugasTambahan?: string;
-  tugasTambahanList?: string[];
 }
 
 export interface Jurusan {
