@@ -79,13 +79,6 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     category: 'presensi',
     iconName: 'Send',
   },
-  {
-    id: 'mapel_kelas_guru',
-    label: 'Mapel & Kelas Ajar',
-    shortDesc: 'Pengaturan penugasan mata pelajaran dan kelas ajar guru',
-    category: 'presensi',
-    iconName: 'Layers',
-  },
 
   // 3. Laporan & Rekapitulasi
   {
@@ -152,6 +145,13 @@ export const ALL_MENU_ITEMS: MenuItemInfo[] = [
     shortDesc: 'Daftar kurikulum mata pelajaran, alokasi jam, dan kategori',
     category: 'master',
     iconName: 'BookOpen',
+  },
+  {
+    id: 'mapel_kelas_guru',
+    label: 'Mapel & Kelas Ajar',
+    shortDesc: 'Pengaturan penugasan mata pelajaran dan kelas ajar guru',
+    category: 'master',
+    iconName: 'Layers',
   },
   {
     id: 'master_kelas',
@@ -363,7 +363,7 @@ export const MENU_CATEGORIES: MenuCategoryInfo[] = [
   {
     key: 'presensi',
     title: 'Presensi & KBM',
-    description: 'Aktivitas pencatatan absensi harian dan pembagian kelas ajar',
+    description: 'Aktivitas pencatatan absensi harian siswa dan guru terintegrasi jadwal KBM',
     iconName: 'ClipboardCheck',
     items: ALL_MENU_ITEMS.filter((m) => m.category === 'presensi'),
   },
@@ -377,7 +377,7 @@ export const MENU_CATEGORIES: MenuCategoryInfo[] = [
   {
     key: 'master',
     title: 'Data Master & KBM',
-    description: 'Master induk siswa, guru, mapel, kelas, jurusan, dan jadwal',
+    description: 'Master induk siswa, guru, mapel & kelas ajar, kelas rombel, jurusan, dan jadwal',
     iconName: 'Users',
     items: ALL_MENU_ITEMS.filter((m) => m.category === 'master'),
   },

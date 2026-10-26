@@ -37,7 +37,6 @@ import {
   ShieldCheck,
   Search,
 } from 'lucide-react';
-import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
 import { hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
 import {
@@ -63,6 +62,8 @@ interface SidebarProps {
   onOpenBackupModal?: () => void;
   onOpenServerQrModal?: () => void;
   onMouseEnter?: () => void;
+  activeRoleWorkspace?: string;
+  onSelectRoleWorkspace?: (roleKey: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -80,6 +81,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenBackupModal,
   onOpenServerQrModal,
   onMouseEnter,
+  activeRoleWorkspace = 'all',
+  onSelectRoleWorkspace,
 }) => {
   const userEffectiveRoles = getEffectiveUserRoles(currentUser, appData);
   const isAdmin = userEffectiveRoles.includes('admin');

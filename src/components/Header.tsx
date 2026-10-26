@@ -33,10 +33,14 @@ import {
   Sparkles,
   Check,
   Info,
+  Globe,
+  Briefcase,
+  CalendarRange,
+  ShieldAlert,
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData, Siswa, Kelas, WaliKelas, SiswaPresensiItem } from '../types';
 import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString, getCanonicalTeacherList } from '../utils/helpers';
-import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
+import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles, getAvailableRoleWorkspaces, RoleWorkspaceOption } from '../utils/rolePermissionEngine';
 import { renderNavIcon } from '../utils/navigationLayoutEngine';
 
 interface HeaderProps {
@@ -64,6 +68,8 @@ interface HeaderProps {
   onNavigateToMasterKelas?: (searchQuery?: string) => void;
   onOpenModal?: (title: string, content: React.ReactNode, maxWidth?: string) => void;
   onCloseModal?: () => void;
+  activeRoleWorkspace?: string;
+  onSelectRoleWorkspace?: (roleKey: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -89,6 +95,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateToMasterKelas,
   onOpenModal,
   onCloseModal,
+  activeRoleWorkspace = 'all',
+  onSelectRoleWorkspace,
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -134,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSearchOpen]);
 
-  // Close search dropdown and profile dropdown when clicking outside
+  // Close search dropdown, profile dropdown, and role switcher when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {

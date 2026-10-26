@@ -109,8 +109,8 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
     order: 2,
     visible: true,
     isAccordion: false,
-    description: 'Pencatatan kehadiran harian siswa & guru, tulis broadcast WA, dan alokasi mapel guru',
-    menuIds: ['presensi_input', 'presensi_kbm_guru', 'absen_harian_guru', 'broadcast_wa', 'mapel_kelas_guru']
+    description: 'Pencatatan kehadiran harian siswa & guru serta tulis broadcast WA',
+    menuIds: ['presensi_input', 'presensi_kbm_guru', 'absen_harian_guru', 'broadcast_wa']
   },
   {
     id: 'laporan',
@@ -129,7 +129,7 @@ export const DEFAULT_NAVIGATION_SECTIONS: NavigationSectionConfig[] = [
     order: 4,
     visible: true,
     isAccordion: true,
-    description: 'Database induk siswa, guru, mapel, kelas, jurusan, jadwal, dan shift',
+    description: 'Database induk siswa, guru, mapel, kelas ajar, rombel, jurusan, jadwal, dan shift',
     menuIds: [
       'master_siswa',
       'master_guru',

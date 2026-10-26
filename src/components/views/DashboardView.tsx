@@ -353,65 +353,146 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Render Role-based View
   const renderRoleDashboard = () => {
-    const primaryEffectiveRole = effectiveRoles.includes('admin')
-      ? 'admin'
-      : effectiveRoles.includes('kesiswaan') || effectiveRoles.includes('piket_kesiswaan')
-      ? 'kesiswaan'
-      : isWaliRole || isPiketKelasRole
-      ? 'wali'
-      : effectiveRoles.includes('kurikulum')
-      ? 'kurikulum'
-      : effectiveRoles.includes('staf_jadwal')
-      ? 'staf_jadwal'
-      : effectiveRoles.includes('adm_siswa')
-      ? 'kesiswaan'
-      : (currentUser.role || 'guru');
+    // Check if the current user is a teacher (Guru)
+    const isTeacherUser =
+      currentUser.role === 'guru' ||
+      currentUser.role === 'user' ||
+      currentUser.role === 'wali' ||
+      effectiveRoles.includes('guru') ||
+      Boolean(
+        (currentUser.data as any)?.id &&
+        appData.waliKelas?.some((w) => w.id === (currentUser.data as any)?.id)
+      ) ||
+      Boolean(
+        (currentUser.data as any)?.username &&
+        appData.waliKelas?.some(
+          (w) => w.username?.toLowerCase() === (currentUser.data as any)?.username?.toLowerCase()
+        )
+      ) ||
+      Boolean(
+        (currentUser.data as any)?.nip &&
+        appData.waliKelas?.some((w) => w.nip && w.nip === (currentUser.data as any)?.nip)
+      );
 
-    switch (primaryEffectiveRole) {
-      case 'admin':
-        return (
-          <AdminDashboardView
-            appData={appData}
-            currentUser={currentUser}
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
-            activeSiswa={activeSiswa}
-            totalStudents={totalStudents}
-            hadirCount={hadirCount}
-            sakitCount={sakitCount}
-            izinCount={izinCount}
-            alpaCount={alpaCount}
-            kesianganCount={kesianganCount}
-            hadirPercentage={hadirPercentage}
-            trendData={trendData}
-            trendRange={trendRange}
-            setTrendRange={setTrendRange}
-            customStartDate={customTrendStart}
-            customEndDate={customTrendEnd}
-            onCustomRangeChange={handleCustomRangeChange}
-            recentLogs={recentLogs}
-            unrecordedClasses={unrecordedClasses}
-            targetClasses={targetClasses}
-            paginatedCumulativeStats={paginatedCumulativeStats}
-            rekapSearch={rekapSearch}
-            setRekapSearch={setRekapSearch}
-            rekapFilter={rekapFilter}
-            setRekapFilter={setRekapFilter}
-            rekapClassFilter={rekapClassFilter}
-            setRekapClassFilter={setRekapClassFilter}
-            validRekapCurrentPage={validRekapCurrentPage}
-            totalRekapPages={totalRekapPages}
-            setRekapCurrentPage={setRekapCurrentPage}
-            setSelectedStudentDetail={setSelectedStudentDetail}
-            setCardModalData={setCardModalData}
-            onNavigateView={onNavigateView}
-            onNavigateToInput={onNavigateToInput}
-            onOpenBackupModal={onOpenBackupModal}
-            onUpdateAppData={onUpdateAppData}
-            onShowToast={onShowToast}
-          />
-        );
+    // If pure administrator
+    if (currentUser.role === 'admin' || effectiveRoles.includes('admin')) {
+      return (
+        <AdminDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          activeSiswa={activeSiswa}
+          totalStudents={totalStudents}
+          hadirCount={hadirCount}
+          sakitCount={sakitCount}
+          izinCount={izinCount}
+          alpaCount={alpaCount}
+          kesianganCount={kesianganCount}
+          hadirPercentage={hadirPercentage}
+          trendData={trendData}
+          trendRange={trendRange}
+          setTrendRange={setTrendRange}
+          customStartDate={customTrendStart}
+          customEndDate={customTrendEnd}
+          onCustomRangeChange={handleCustomRangeChange}
+          recentLogs={recentLogs}
+          unrecordedClasses={unrecordedClasses}
+          targetClasses={targetClasses}
+          paginatedCumulativeStats={paginatedCumulativeStats}
+          rekapSearch={rekapSearch}
+          setRekapSearch={setRekapSearch}
+          rekapFilter={rekapFilter}
+          setRekapFilter={setRekapFilter}
+          rekapClassFilter={rekapClassFilter}
+          setRekapClassFilter={setRekapClassFilter}
+          validRekapCurrentPage={validRekapCurrentPage}
+          totalRekapPages={totalRekapPages}
+          setRekapCurrentPage={setRekapCurrentPage}
+          setSelectedStudentDetail={setSelectedStudentDetail}
+          setCardModalData={setCardModalData}
+          onNavigateView={onNavigateView}
+          onNavigateToInput={onNavigateToInput}
+          onOpenBackupModal={onOpenBackupModal}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+        />
+      );
+    }
 
+    // Student Secretary / Piket Kelas role
+    if (currentUser.role === 'piket_kelas' || (!isTeacherUser && isPiketKelasRole)) {
+      return (
+        <WaliKelasDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          targetClasses={targetClasses}
+          waliStudents={waliStudents}
+          studentCumulativeStats={studentCumulativeStats}
+          hadirCount={hadirCount}
+          sakitCount={sakitCount}
+          izinCount={izinCount}
+          alpaCount={alpaCount}
+          kesianganCount={kesianganCount}
+          totalStudents={totalStudents}
+          hadirPercentage={hadirPercentage}
+          isFullyRecorded={isFullyRecorded}
+          trendData={trendData}
+          setSelectedStudentDetail={setSelectedStudentDetail}
+          onNavigateView={onNavigateView}
+          onNavigateToInput={onNavigateToInput}
+        />
+      );
+    }
+
+    // If the user is a Teacher (Guru), always route to the dynamic GuruDashboardView.
+    // GuruDashboardView dynamically evaluates whether the teacher is a "Guru Biasa" (standard display)
+    // or has additional roles (Wali Kelas, Wakil Kepala Kurikulum/Kesiswaan/Hubin, dll.), rendering
+    // the relevant summary statistic cards while fully preserving the standard teacher tools!
+    if (isTeacherUser) {
+      return (
+        <GuruDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          hadirCount={hadirCount}
+          totalStudents={totalStudents}
+          hadirPercentage={hadirPercentage}
+          recentLogs={recentLogs}
+          targetClasses={targetClasses}
+          waliStudents={waliStudents}
+          studentCumulativeStats={studentCumulativeStats}
+          sakitCount={sakitCount}
+          izinCount={izinCount}
+          alpaCount={alpaCount}
+          kesianganCount={kesianganCount}
+          trendData={trendData}
+          unrecordedClasses={unrecordedClasses}
+          setSelectedStudentDetail={setSelectedStudentDetail}
+          onNavigateToInput={onNavigateToInput}
+          onNavigateView={onNavigateView}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+        />
+      );
+    }
+
+    // For pure non-teaching staff accounts without a teacher record
+    const staffEffectiveRole =
+      effectiveRoles.includes('kesiswaan') || effectiveRoles.includes('piket_kesiswaan')
+        ? 'kesiswaan'
+        : effectiveRoles.includes('kurikulum')
+        ? 'kurikulum'
+        : effectiveRoles.includes('staf_jadwal')
+        ? 'staf_jadwal'
+        : effectiveRoles.includes('adm_siswa')
+        ? 'kesiswaan'
+        : currentUser.role;
+
+    switch (staffEffectiveRole) {
       case 'kesiswaan':
       case 'piket_kesiswaan':
       case 'piket_guru':
@@ -434,32 +515,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onNavigateView={onNavigateView}
             onNavigateToInput={onNavigateToInput}
             onShowToast={onShowToast}
-          />
-        );
-
-      case 'wali':
-      case 'piket_kelas':
-        return (
-          <WaliKelasDashboardView
-            appData={appData}
-            currentUser={currentUser}
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
-            targetClasses={targetClasses}
-            waliStudents={waliStudents}
-            studentCumulativeStats={studentCumulativeStats}
-            hadirCount={hadirCount}
-            sakitCount={sakitCount}
-            izinCount={izinCount}
-            alpaCount={alpaCount}
-            kesianganCount={kesianganCount}
-            totalStudents={totalStudents}
-            hadirPercentage={hadirPercentage}
-            isFullyRecorded={isFullyRecorded}
-            trendData={trendData}
-            setSelectedStudentDetail={setSelectedStudentDetail}
-            onNavigateView={onNavigateView}
-            onNavigateToInput={onNavigateToInput}
           />
         );
 
@@ -497,6 +552,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             totalStudents={totalStudents}
             hadirPercentage={hadirPercentage}
             recentLogs={recentLogs}
+            targetClasses={targetClasses}
+            waliStudents={waliStudents}
+            studentCumulativeStats={studentCumulativeStats}
+            sakitCount={sakitCount}
+            izinCount={izinCount}
+            alpaCount={alpaCount}
+            kesianganCount={kesianganCount}
+            trendData={trendData}
+            unrecordedClasses={unrecordedClasses}
+            setSelectedStudentDetail={setSelectedStudentDetail}
             onNavigateToInput={onNavigateToInput}
             onNavigateView={onNavigateView}
             onUpdateAppData={onUpdateAppData}
