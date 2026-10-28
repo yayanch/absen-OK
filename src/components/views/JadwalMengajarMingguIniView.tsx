@@ -397,9 +397,9 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
         }
       />
 
-      {/* 2. WEEK PERIOD SELECTOR & SHIFT ROTATION INFO */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-3 border-b border-slate-200/80 dark:border-slate-800">
+      {/* 2. WEEK PERIOD SELECTOR */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* Week Selector Control */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
@@ -467,56 +467,6 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
             </div>
           )}
         </div>
-
-        {/* ROTASI SHIFT BADGES */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-          {/* Kelompok 1 */}
-          <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>Kelompok 1 (Kelas X &amp; XI)</span>
-              </div>
-              <div className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                {k1Type === 'pagi' ? <Sun className="w-4 h-4 text-amber-500" /> : <Sunset className="w-4 h-4 text-sky-500" />}
-                <span>{k1ShiftTitle}</span>
-              </div>
-            </div>
-            <div className="px-2.5 py-1 rounded-xl bg-emerald-100/70 dark:bg-emerald-950/60 text-xs font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-              {k1ShiftTime}
-            </div>
-          </div>
-
-          {/* Kelompok 2 */}
-          <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                <span>Kelompok 2 (Kelas XII)</span>
-              </div>
-              <div className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                {k2Type === 'pagi' ? <Sun className="w-4 h-4 text-amber-500" /> : <Sunset className="w-4 h-4 text-sky-500" />}
-                <span>{k2ShiftTitle}</span>
-              </div>
-            </div>
-            <div className="px-2.5 py-1 rounded-xl bg-indigo-100/70 dark:bg-indigo-950/60 text-xs font-bold text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
-              {k2ShiftTime}
-            </div>
-          </div>
-
-          {/* Total Sepekan */}
-          <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs flex items-center justify-between gap-3 sm:col-span-2 lg:col-span-1">
-            <div className="space-y-0.5">
-              <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400">Beban KBM Sepekan</div>
-              <div className="text-sm font-black text-slate-900 dark:text-white">
-                {totalWeeklySchedules} Kelas Terjadwal
-              </div>
-            </div>
-            <div className="px-3 py-1 rounded-xl bg-blue-100/70 dark:bg-blue-950/60 text-xs font-black text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-              {totalWeeklyJp} JP Aktif
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* 3. DAY TABS & VIEW MODE TOGGLE */}
@@ -526,7 +476,6 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
           <div className="grid grid-cols-5 gap-1 sm:gap-2 flex-1">
             {HARI_SENIN_JUMAT.map((day) => {
               const isActive = activeDay === day && viewMode === 'day';
-              const stat = dayStats[day] || { count: 0, totalJp: 0 };
 
               return (
                 <button
@@ -536,25 +485,13 @@ export const JadwalMengajarMingguIniView: React.FC<JadwalMengajarMingguIniViewPr
                     setActiveDay(day);
                     setViewMode('day');
                   }}
-                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 px-1 sm:px-3 rounded-2xl font-bold text-xs transition cursor-pointer text-center ${
+                  className={`py-2.5 px-3 rounded-2xl font-black text-xs sm:text-sm transition cursor-pointer text-center ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
                 >
-                  <span className="truncate w-full text-xs font-black">{day}</span>
-                  <span
-                    className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold whitespace-nowrap ${
-                      isActive
-                        ? 'bg-white/20 text-white'
-                        : stat.count > 0
-                        ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    <span className="hidden sm:inline">{stat.count} Sesi ({stat.totalJp} JP)</span>
-                    <span className="sm:hidden">{stat.count} Sesi</span>
-                  </span>
+                  {day}
                 </button>
               );
             })}
