@@ -79,7 +79,8 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   onShowToast,
   onOpenQuickActionSettings,
 }) => {
-  // Simulator mode for user testing / review of dynamic states
+  // Simulator mode for user testing / review of dynamic states (admin only)
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
   const [statusSimulator, setStatusSimulator] = useState<TeacherStatusSimulationOption>('auto');
   const [activeTabFilter, setActiveTabFilter] = useState<'all' | 'tugas_tambahan' | 'mengajar' | 'wali' | 'kurikulum' | 'kesiswaan' | 'hubin'>('all');
   const [showSimulatorBar, setShowSimulatorBar] = useState<boolean>(false);
@@ -142,9 +143,11 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
     return found || targetClasses[0] || appData.kelas?.[0];
   }, [teacherData, appData.kelas, targetClasses]);
 
-  // 2. Synthesize Role Status (incorporating simulation options if active)
+  // 2. Synthesize Role Status (incorporating simulation options if active and user is admin)
   const roleStatus: TeacherRoleStatusInfo = useMemo(() => {
-    if (statusSimulator === 'guru_biasa') {
+    const activeSimulator = isAdmin ? statusSimulator : 'auto';
+
+    if (activeSimulator === 'guru_biasa') {
       return {
         isGuru: true,
         isGuruBiasa: true,
@@ -163,7 +166,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       };
     }
 
-    if (statusSimulator === 'guru_wali') {
+    if (activeSimulator === 'guru_wali') {
       const cls = naturalAssignedClass || appData.kelas?.[0] || { id: 'K_1', nama: 'XII RPL 1' };
       return {
         isGuru: true,
@@ -185,7 +188,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       };
     }
 
-    if (statusSimulator === 'guru_kurikulum') {
+    if (activeSimulator === 'guru_kurikulum') {
       return {
         isGuru: true,
         isGuruBiasa: false,
@@ -205,7 +208,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       };
     }
 
-    if (statusSimulator === 'guru_kesiswaan') {
+    if (activeSimulator === 'guru_kesiswaan') {
       return {
         isGuru: true,
         isGuruBiasa: false,
@@ -225,7 +228,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       };
     }
 
-    if (statusSimulator === 'guru_multi_peran') {
+    if (activeSimulator === 'guru_multi_peran') {
       const cls = naturalAssignedClass || appData.kelas?.[0] || { id: 'K_1', nama: 'XII RPL 1' };
       return {
         isGuru: true,
@@ -325,7 +328,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       dutiesList: naturalDutiesList,
       activeRolesList,
     };
-  }, [statusSimulator, naturalDutiesList, naturalAdditionalRoles, naturalAssignedClass, appData.kelas, appData.petugasPiket, appData.ekstrakurikuler, teacherData]);
+  }, [isAdmin, statusSimulator, naturalDutiesList, naturalAdditionalRoles, naturalAssignedClass, appData.kelas, appData.petugasPiket, appData.ekstrakurikuler, teacherData]);
 
   // 3. Teacher Personal Schedule & Attendance Stats
   const currentDayName = useMemo(() => {
@@ -455,15 +458,17 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
         badge={formatDateIndo(selectedDate)}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setShowSimulatorBar((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 transition cursor-pointer"
-              title="Uji Tampilan Berdasarkan Status & Peran Tambahan Guru"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Simulasi Status Guru</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowSimulatorBar((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+                title="Uji Tampilan Berdasarkan Status & Peran Tambahan Guru"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Simulasi Status Guru</span>
+              </button>
+            )}
 
             <input
               type="date"
@@ -476,10 +481,10 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       />
 
       {/* -------------------------------------------------------------
-          SIMULATOR / PREVIEW BAR (Untuk Memverifikasi Status Guru)
+          SIMULATOR / PREVIEW BAR (Untuk Memverifikasi Status Guru - Khusus Admin)
       ------------------------------------------------------------- */}
       <AnimatePresence>
-        {showSimulatorBar && (
+        {isAdmin && showSimulatorBar && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
