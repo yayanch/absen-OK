@@ -23,7 +23,7 @@ import { AppData, UserSession, ViewType } from '../../types';
 import { formatDateIndo, normalizePresensiStatus } from '../../utils/helpers';
 import { TeacherScheduleWidget } from './TeacherScheduleWidget';
 import { RoleQuickActions } from './RoleQuickActions';
-import { TeacherAdditionalRoleStatsWidget, TeacherRoleStatusInfo } from './TeacherAdditionalRoleStatsWidget';
+import { TeacherRoleStatusInfo } from './TeacherAdditionalRoleStatsWidget';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 import { getEffectiveUserRoles } from '../../utils/rolePermissionEngine';
 
@@ -82,7 +82,6 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   // Simulator mode for user testing / review of dynamic states (admin only)
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
   const [statusSimulator, setStatusSimulator] = useState<TeacherStatusSimulationOption>('auto');
-  const [activeTabFilter, setActiveTabFilter] = useState<'all' | 'tugas_tambahan' | 'mengajar' | 'wali' | 'kurikulum' | 'kesiswaan' | 'hubin'>('all');
   const [showSimulatorBar, setShowSimulatorBar] = useState<boolean>(false);
 
   // 1. Resolve Teacher Data & Natural Roles
@@ -439,9 +438,6 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
     return Math.round((totalHadir / totalRecorded) * 100);
   }, [appData.presensiGuru, selectedDate, teacherData]);
 
-  const showStandardSchedule = activeTabFilter === 'all' || activeTabFilter === 'mengajar';
-  const showAdditionalSummary = !roleStatus.isGuruBiasa && activeTabFilter !== 'mengajar';
-
   return (
     <div className="space-y-6">
       {/* -------------------------------------------------------------
@@ -453,29 +449,35 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
         description={
           roleStatus.isGuruBiasa
             ? 'Portal presensi harian, administrasi kelas mengajar, dan jadwal pelajaran Anda hari ini.'
-            : `Akses terpadu tugas mengajar KBM serta tugas tambahan (${roleStatus.activeRolesList.map((r) => r.label).join(', ')}).`
+            : `Akses tugas mengajar KBM dan jadwal pelajaran. Gunakan tombol switch peran di navigasi atas untuk membuka tugas tambahan (${roleStatus.activeRolesList.filter((r) => r.key !== 'guru').map((r) => r.label).join(', ')}).`
         }
         badge={formatDateIndo(selectedDate)}
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setShowSimulatorBar((prev) => !prev)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs border border-white/30 transition cursor-pointer backdrop-blur-xs shrink-0"
                 title="Uji Tampilan Berdasarkan Status & Peran Tambahan Guru"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Simulasi Status Guru</span>
+                <span>Simulasi Status</span>
               </button>
             )}
 
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
-            />
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto bg-white/15 hover:bg-white/20 transition backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/25 text-white shadow-2xs">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-white/90 shrink-0" />
+                <span>Pilih Tanggal:</span>
+              </span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 shadow-2xs"
+              />
+            </div>
           </div>
         }
       />
@@ -576,139 +578,34 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Tab / Filter Switcher if teacher holds additional roles */}
-        {!roleStatus.isGuruBiasa && (
-          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 self-start md:self-auto overflow-x-auto max-w-full">
-            <button
-              type="button"
-              onClick={() => setActiveTabFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                activeTabFilter === 'all'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-              }`}
-            >
-              Semua Ringkasan &amp; KBM
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTabFilter('tugas_tambahan')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                activeTabFilter === 'tugas_tambahan'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-              }`}
-            >
-              Tugas Tambahan Saja
-            </button>
-
-            {roleStatus.hasWaliKelas && (
-              <button
-                type="button"
-                onClick={() => setActiveTabFilter('wali')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                  activeTabFilter === 'wali'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                Wali Kelas
-              </button>
-            )}
-
-            {roleStatus.hasKurikulum && (
-              <button
-                type="button"
-                onClick={() => setActiveTabFilter('kurikulum')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                  activeTabFilter === 'kurikulum'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                WKS Kurikulum
-              </button>
-            )}
-
-            {roleStatus.hasKesiswaan && (
-              <button
-                type="button"
-                onClick={() => setActiveTabFilter('kesiswaan')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                  activeTabFilter === 'kesiswaan'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                WKS Kesiswaan
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setActiveTabFilter('mengajar')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer shrink-0 ${
-                activeTabFilter === 'mengajar'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-              }`}
-            >
-              Jadwal &amp; KBM Saya
-            </button>
-          </div>
-        )}
       </div>
 
-
-
       {/* -------------------------------------------------------------
-          4. KARTU STATISTIK RINGKASAN TAMBAHAN (DINAMIS BERDASARKAN PERAN)
+          3. KARTU CEPAT GURU (QUICK ACTION CARDS)
       ------------------------------------------------------------- */}
-      {showAdditionalSummary && (
-        <TeacherAdditionalRoleStatsWidget
+      <div className="space-y-4">
+        <RoleQuickActions
+          role="guru"
           appData={appData}
           currentUser={currentUser}
-          selectedDate={selectedDate}
-          roleStatus={roleStatus}
-          activeTabFilter={activeTabFilter === 'tugas_tambahan' ? 'all' : activeTabFilter}
           onNavigateView={onNavigateView}
           onNavigateToInput={onNavigateToInput}
-          studentCumulativeStats={studentCumulativeStats}
-          onShowToast={onShowToast}
+          onOpenQuickActionSettings={onOpenQuickActionSettings}
         />
-      )}
+      </div>
 
       {/* -------------------------------------------------------------
-          5. KARTU CEPAT GURU (QUICK ACTION CARDS)
+          4. WIDGET UTAMA GURU: JADWAL MENGAJAR HARI INI & JURNAL KBM
       ------------------------------------------------------------- */}
-      {showStandardSchedule && (
-        <div className="space-y-4">
-          <RoleQuickActions
-            role="guru"
-            appData={appData}
-            currentUser={currentUser}
-            onNavigateView={onNavigateView}
-            onNavigateToInput={onNavigateToInput}
-            onOpenQuickActionSettings={onOpenQuickActionSettings}
-          />
-        </div>
-      )}
-
-      {/* -------------------------------------------------------------
-          6. WIDGET UTAMA GURU: JADWAL MENGAJAR HARI INI & JURNAL KBM
-      ------------------------------------------------------------- */}
-      {showStandardSchedule && (
-        <TeacherScheduleWidget
-          appData={appData}
-          currentUser={currentUser}
-          selectedDate={selectedDate}
-          onNavigateToInput={onNavigateToInput}
-          onNavigateView={onNavigateView}
-          onUpdateAppData={onUpdateAppData}
-          onShowToast={onShowToast}
-        />
-      )}
+      <TeacherScheduleWidget
+        appData={appData}
+        currentUser={currentUser}
+        selectedDate={selectedDate}
+        onNavigateToInput={onNavigateToInput}
+        onNavigateView={onNavigateView}
+        onUpdateAppData={onUpdateAppData}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };

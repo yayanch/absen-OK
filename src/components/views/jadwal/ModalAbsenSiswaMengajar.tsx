@@ -392,126 +392,309 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
           </div>
 
           {/* Baris 4: Search Bar Siswa */}
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchSiswa}
-              onChange={(e) => setSearchSiswa(e.target.value)}
-              placeholder="Cari nama atau NISN siswa..."
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-            />
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchSiswa}
+                onChange={(e) => setSearchSiswa(e.target.value)}
+                placeholder="Cari nama atau NISN siswa..."
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              {searchSiswa && (
+                <button
+                  type="button"
+                  onClick={() => setSearchSiswa('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {searchSiswa.trim() && (
+              <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/40 rounded-xl text-xs text-blue-800 dark:text-blue-300">
+                <span className="truncate">
+                  Hasil: <strong>"{searchSiswa}"</strong> ({filteredSiswa.length} dari {siswaListKelas.length} siswa)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchSiswa('')}
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Baris 5: Tabel Siswa */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
-                <tr>
-                  <th className="py-2.5 px-3 w-10 text-center">No</th>
-                  <th className="py-2.5 px-3">Nama Siswa</th>
-                  <th className="py-2.5 px-3 w-56 text-center">Status Kehadiran</th>
-                  <th className="py-2.5 px-3 min-w-[150px]">Catatan / Keterangan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredSiswa.length === 0 ? (
+          {/* Baris 5: Tabel Siswa (Desktop: Table View, Mobile: Card View) */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
+            {/* Desktop Table View */}
+            <div className="hidden md:block">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-slate-400">
-                      Tidak ditemukan data siswa di kelas ini.
-                    </td>
+                    <th className="py-2.5 px-3 w-10 text-center">No</th>
+                    <th className="py-2.5 px-3">Nama Siswa</th>
+                    <th className="py-2.5 px-3 w-56 text-center">Status Kehadiran</th>
+                    <th className="py-2.5 px-3 min-w-[150px]">Catatan / Keterangan</th>
                   </tr>
-                ) : (
-                  filteredSiswa.map((siswa, idx) => {
-                    const currentItem = presensiMap[siswa.id] || { status: '', catatan: '' };
-                    const currentStatus = currentItem.status;
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                  {filteredSiswa.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-400">
+                        Tidak ditemukan data siswa di kelas ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSiswa.map((siswa, idx) => {
+                      const currentItem = presensiMap[siswa.id] || { status: '', catatan: '' };
+                      const currentStatus = currentItem.status;
 
-                    return (
-                      <tr
-                        key={siswa.id}
-                        className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
-                      >
-                        <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
-                          {idx + 1}
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="font-bold text-slate-900 dark:text-white">
-                            {siswa.nama}
-                          </div>
-                          {siswa.nisn && (
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              NISN: {siswa.nisn}
+                      return (
+                        <tr
+                          key={siswa.id}
+                          className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
+                        >
+                          <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">
+                            {idx + 1}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {siswa.nama}
                             </div>
-                          )}
-                        </td>
-                        <td className="py-2 px-3">
-                          {/* Segmented Control H / S / I / A */}
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleStatusChange(siswa.id, 'H')}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
-                                currentStatus === 'H'
-                                  ? 'bg-emerald-600 text-white shadow-xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-emerald-50 hover:text-emerald-700'
-                              }`}
-                              title="Hadir"
-                            >
-                              H
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleStatusChange(siswa.id, 'S')}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
-                                currentStatus === 'S'
-                                  ? 'bg-amber-500 text-white shadow-xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-amber-50 hover:text-amber-700'
-                              }`}
-                              title="Sakit"
-                            >
-                              S
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleStatusChange(siswa.id, 'I')}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
-                                currentStatus === 'I'
-                                  ? 'bg-blue-600 text-white shadow-xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 hover:text-blue-700'
-                              }`}
-                              title="Izin"
-                            >
-                              I
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleStatusChange(siswa.id, 'A')}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
-                                currentStatus === 'A'
-                                  ? 'bg-rose-600 text-white shadow-xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-rose-50 hover:text-rose-700'
-                              }`}
-                              title="Alpha"
-                            >
-                              A
-                            </button>
+                            {siswa.nisn && (
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                NISN: {siswa.nisn}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            {/* Segmented Control H / S / I / A */}
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(siswa.id, 'H')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                  currentStatus === 'H'
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-emerald-50 hover:text-emerald-700'
+                                }`}
+                                title="Hadir"
+                              >
+                                H
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(siswa.id, 'S')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                  currentStatus === 'S'
+                                    ? 'bg-amber-500 text-white shadow-xs'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-amber-50 hover:text-amber-700'
+                                }`}
+                                title="Sakit"
+                              >
+                                S
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(siswa.id, 'I')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                  currentStatus === 'I'
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 hover:text-blue-700'
+                                }`}
+                                title="Izin"
+                              >
+                                I
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(siswa.id, 'A')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                  currentStatus === 'A'
+                                    ? 'bg-rose-600 text-white shadow-xs'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-rose-50 hover:text-rose-700'
+                                }`}
+                                title="Alpha"
+                              >
+                                A
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="text"
+                              value={currentItem.catatan}
+                              onChange={(e) => handleCatatanChange(siswa.id, e.target.value)}
+                              placeholder="Catatan..."
+                              className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View (Opsi 1: Card View) */}
+            <div className="block md:hidden max-h-[50vh] overflow-y-auto p-2.5 space-y-2.5">
+              {filteredSiswa.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs space-y-2">
+                  <p>
+                    {searchSiswa.trim()
+                      ? `Tidak ditemukan siswa yang cocok dengan "${searchSiswa}".`
+                      : 'Tidak ditemukan data siswa di kelas ini.'}
+                  </p>
+                  {searchSiswa.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchSiswa('')}
+                      className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Reset Pencarian
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredSiswa.map((siswa, idx) => {
+                  const currentItem = presensiMap[siswa.id] || { status: '', catatan: '' };
+                  const currentStatus = currentItem.status;
+
+                  return (
+                    <div
+                      key={siswa.id}
+                      className={`p-3 rounded-2xl border transition-all ${
+                        currentStatus === 'H'
+                          ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 shadow-2xs'
+                          : currentStatus === 'S'
+                          ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 shadow-2xs'
+                          : currentStatus === 'I'
+                          ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 shadow-2xs'
+                          : currentStatus === 'A'
+                          ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-800 shadow-2xs'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs'
+                      }`}
+                    >
+                      {/* Card Header: Student Name & NISN */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                              {siswa.nama}
+                            </h5>
+                            {siswa.nisn && (
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                NISN: {siswa.nisn}
+                              </p>
+                            )}
                           </div>
-                        </td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="text"
-                            value={currentItem.catatan}
-                            onChange={(e) => handleCatatanChange(siswa.id, e.target.value)}
-                            placeholder="Catatan..."
-                            className="w-full px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                        </div>
+
+                        {/* Current Status Badge Indicator */}
+                        {currentStatus ? (
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                              currentStatus === 'H'
+                                ? 'bg-emerald-600 text-white'
+                                : currentStatus === 'S'
+                                ? 'bg-amber-500 text-white'
+                                : currentStatus === 'I'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-rose-600 text-white'
+                            }`}
+                          >
+                            {currentStatus === 'H'
+                              ? 'Hadir'
+                              : currentStatus === 'S'
+                              ? 'Sakit'
+                              : currentStatus === 'I'
+                              ? 'Izin'
+                              : 'Alpha'}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-400 shrink-0">
+                            Belum Diabsen
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Touch-Friendly Status Selection Buttons */}
+                      <div className="grid grid-cols-4 gap-1.5 mb-2">
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(siswa.id, 'H')}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 ${
+                            currentStatus === 'H'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50'
+                          }`}
+                        >
+                          <span>H</span>
+                          <span className="text-[9px] font-medium hidden xs:inline">Hadir</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(siswa.id, 'S')}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 ${
+                            currentStatus === 'S'
+                              ? 'bg-amber-500 text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50'
+                          }`}
+                        >
+                          <span>S</span>
+                          <span className="text-[9px] font-medium hidden xs:inline">Sakit</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(siswa.id, 'I')}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 ${
+                            currentStatus === 'I'
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50'
+                          }`}
+                        >
+                          <span>I</span>
+                          <span className="text-[9px] font-medium hidden xs:inline">Izin</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleStatusChange(siswa.id, 'A')}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 ${
+                            currentStatus === 'A'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50'
+                          }`}
+                        >
+                          <span>A</span>
+                          <span className="text-[9px] font-medium hidden xs:inline">Alpha</span>
+                        </button>
+                      </div>
+
+                      {/* Catatan / Keterangan Input */}
+                      <input
+                        type="text"
+                        value={currentItem.catatan || ''}
+                        onChange={(e) => handleCatatanChange(siswa.id, e.target.value)}
+                        placeholder="Catatan / keterangan siswa (opsional)..."
+                        className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {/* Modal Footer */}
@@ -520,12 +703,12 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
               Data sesi presensi akan otomatis tersimpan ke tabel presensi mengajar guru.
             </span>
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center text-center"
               >
                 Batal
               </button>
@@ -533,7 +716,7 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
               <button
                 type="submit"
                 disabled={isSaving}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer flex items-center gap-2 shadow-md shadow-blue-500/20"
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 active:scale-[0.98]"
               >
                 {isSaving ? (
                   <>
@@ -542,8 +725,8 @@ export const ModalAbsenSiswaMengajar: React.FC<ModalAbsenSiswaMengajarProps> = (
                   </>
                 ) : (
                   <>
-                    <Save className="w-4 h-4" />
-                    <span>Simpan Presensi Kelas</span>
+                    <Save className="w-4 h-4 shrink-0" />
+                    <span>Simpan</span>
                   </>
                 )}
               </button>

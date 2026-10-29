@@ -110,7 +110,7 @@ const WhatsAppGatewayView = lazyWithRetry(() => import('./components/views/Whats
 
 import { BackupRestoreModalContent } from './components/modals/BackupRestoreModalContent';
 import { ServerQrDisplayModal } from './components/modals/ServerQrDisplayModal';
-import { hasMenuAccess, getEffectiveUserRoles, ALL_MENU_ITEMS } from './utils/rolePermissionEngine';
+import { hasMenuAccess, getEffectiveUserRoles, ALL_MENU_ITEMS, getUserRoleWorkspaces } from './utils/rolePermissionEngine';
 import { getAccessToken, uploadBackupToGoogleDrive } from './services/googleDriveService';
 
 export default function App() {
@@ -260,10 +260,43 @@ export default function App() {
     }
   }, [appData.admin, appData.siswa, appData.waliKelas, appData.kesiswaan, appData.stafJadwal, appData.userBiasa]);
 
-  // Keep currentView within authorized menus for active user role
+  const availableWorkspaces = React.useMemo(() => {
+    return getUserRoleWorkspaces(currentUser, appData);
+  }, [currentUser, appData]);
+
+  const [activeRoleWorkspace, setActiveRoleWorkspace] = useState<string>(() => {
+    try {
+      return localStorage.getItem('active_role_workspace') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+
+  const effectiveWorkspaceKey = React.useMemo(() => {
+    if (availableWorkspaces.length === 0) return '';
+    const found = availableWorkspaces.find((w) => w.key === activeRoleWorkspace);
+    if (found) return found.key;
+    return availableWorkspaces[0]?.key || 'guru';
+  }, [availableWorkspaces, activeRoleWorkspace]);
+
+  const handleSelectRoleWorkspace = (roleKey: string) => {
+    setActiveRoleWorkspace(roleKey);
+    try {
+      localStorage.setItem('active_role_workspace', roleKey);
+    } catch (e) {}
+    const targetWs = availableWorkspaces.find((w) => w.key === roleKey);
+    handleNavigate('dashboard');
+    if (targetWs) {
+      showToast(`Beralih ke mode: ${targetWs.label}`, 'info');
+    }
+  };
+
+  // Keep currentView within authorized menus for active user role / workspace
   useEffect(() => {
     if (!currentUser || currentUser.role === 'admin') return;
-    const effectiveRoles = getEffectiveUserRoles(currentUser, appData);
+    const effectiveRoles = (effectiveWorkspaceKey && effectiveWorkspaceKey !== 'all' && availableWorkspaces.length > 1)
+      ? [effectiveWorkspaceKey]
+      : getEffectiveUserRoles(currentUser, appData);
     if (!hasMenuAccess(effectiveRoles, currentView, appData)) {
       const fallbackView: ViewType = effectiveRoles.includes('murid') ? 'portal_murid' : 'dashboard';
       if (hasMenuAccess(effectiveRoles, fallbackView, appData)) {
@@ -275,7 +308,7 @@ export default function App() {
         }
       }
     }
-  }, [currentUser, appData, currentView]);
+  }, [currentUser, appData, currentView, effectiveWorkspaceKey, availableWorkspaces]);
 
   const [isServerQrModalOpen, setIsServerQrModalOpen] = useState<boolean>(false);
   const [isLiveChatOpen, setIsLiveChatOpen] = useState<boolean>(false);
@@ -1373,6 +1406,8 @@ export default function App() {
           onResetAll={handleResetAllData}
           onOpenBackupModal={handleOpenBackupModal}
           onOpenServerQrModal={() => setIsServerQrModalOpen(true)}
+          activeRoleWorkspace={effectiveWorkspaceKey}
+          onSelectRoleWorkspace={handleSelectRoleWorkspace}
         />
       </div>
 
@@ -1447,6 +1482,8 @@ export default function App() {
             saveStatus={saveStatus}
             onOpenChat={() => setIsLiveChatOpen((prev) => !prev)}
             unreadChatCount={unreadChatCount}
+            activeRoleWorkspace={effectiveWorkspaceKey}
+            onSelectRoleWorkspace={handleSelectRoleWorkspace}
           />
         </div>
 
@@ -1543,6 +1580,8 @@ export default function App() {
                     onOpenBackupModal={handleOpenBackupModal}
                     onUpdateAppData={handleUpdateAppData}
                     onShowToast={showToast}
+                    activeRoleWorkspace={effectiveWorkspaceKey}
+                    onSelectRoleWorkspace={handleSelectRoleWorkspace}
                   />
                 )}
 

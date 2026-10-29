@@ -12,7 +12,8 @@ import {
   Eye,
   FileSpreadsheet,
   CheckCircle2,
-  ArrowUpDown
+  ArrowUpDown,
+  X
 } from 'lucide-react';
 import { AppData, AbsensiMengajarGuruItem, UserSession } from '../../../types';
 import { cleanMapelName } from '../../../utils/helpers';
@@ -192,25 +193,35 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
       </div>
 
       {/* Filter Toolbar */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
+        <div className="grid grid-cols-1 sm:flex sm:items-center gap-2.5 flex-1">
           {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Cari materi, kelas, mapel..."
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                title="Hapus pencarian"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Filter Kelas */}
           <select
             value={filterKelas}
             onChange={(e) => setFilterKelas(e.target.value)}
-            className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 font-semibold focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+            className="w-full sm:w-auto px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 font-semibold focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
           >
             <option value="semua">Semua Kelas</option>
             {availableKelasList.map((k) => (
@@ -221,14 +232,41 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
           </select>
         </div>
 
-        <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-          Menampilkan {filteredSesiList.length} sesi pertemuan
+        <div className="flex items-center justify-between sm:justify-end text-xs text-slate-500 dark:text-slate-400 font-semibold px-1">
+          <span>Menampilkan {filteredSesiList.length} sesi pertemuan</span>
         </div>
       </div>
 
-      {/* Table Sesi */}
+      {/* Proportional Search Result Banner */}
+      {searchTerm.trim() && (
+        <div className="flex items-center justify-between gap-2.5 p-2.5 sm:p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-2xl text-xs text-blue-900 dark:text-blue-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 shrink-0">
+              <Search className="w-3.5 h-3.5" />
+            </div>
+            <span className="truncate">
+              Hasil pencarian: <strong className="font-black text-blue-700 dark:text-blue-300">"{searchTerm}"</strong>
+              <span className="ml-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                ({filteredSesiList.length} sesi ditemukan)
+              </span>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSearchTerm('')}
+            className="px-2.5 py-1 rounded-xl bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 dark:hover:bg-blue-800/60 text-blue-700 dark:text-blue-200 font-bold text-[11px] shrink-0 transition cursor-pointer flex items-center gap-1 active:scale-95"
+            title="Hapus filter pencarian"
+          >
+            <X className="w-3 h-3" />
+            <span>Reset</span>
+          </button>
+        </div>
+      )}
+
+      {/* Table Sesi (Desktop: Table View, Mobile: Card View) */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
               <tr>
@@ -339,6 +377,147 @@ export const RiwayatPresensiMengajarTab: React.FC<RiwayatPresensiMengajarTabProp
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View (Opsi 1: Card View) */}
+        <div className="block md:hidden p-3 space-y-3">
+          {filteredSesiList.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 space-y-2.5 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl p-6">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                {searchTerm.trim() ? <Search className="w-6 h-6 text-blue-500" /> : <BookOpen className="w-6 h-6 text-slate-300 dark:text-slate-600" />}
+              </div>
+              <p className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                {searchTerm.trim()
+                  ? `Tidak ditemukan sesi mengajar untuk "${searchTerm}"`
+                  : 'Belum ada riwayat presensi kelas mengajar.'}
+              </p>
+              <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                {searchTerm.trim()
+                  ? 'Coba gunakan kata kunci lain untuk materi, kelas, atau mapel.'
+                  : 'Klik tombol "Absen Kelas" pada kartu jadwal untuk mulai merekam.'}
+              </p>
+              {searchTerm.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer mt-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Reset Pencarian</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredSesiList.map((sesi, idx) => {
+              let hadir = 0;
+              let sakit = 0;
+              let izin = 0;
+              let alpha = 0;
+              (sesi.presensiSiswa || []).forEach((st) => {
+                if (st.status === 'H') hadir++;
+                else if (st.status === 'S') sakit++;
+                else if (st.status === 'I') izin++;
+                else if (st.status === 'A') alpha++;
+              });
+              const totalSiswa = (sesi.presensiSiswa || []).length || (hadir + sakit + izin + alpha);
+              const pctHadir = totalSiswa > 0 ? Math.round((hadir / totalSiswa) * 100) : 0;
+
+              return (
+                <div
+                  key={sesi.id}
+                  className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3"
+                >
+                  {/* Card Header: Number, Date & Hari, Percent */}
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-2.5">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-[10px] font-bold flex items-center justify-center">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{sesi.tanggal}</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Hari {sesi.hari} • {sesi.jamPelajaran || 'Jam KBM'}
+                      </p>
+                    </div>
+
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black shrink-0 ${
+                      pctHadir >= 90
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        : pctHadir >= 75
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                    }`}>
+                      {pctHadir}% Hadir
+                    </span>
+                  </div>
+
+                  {/* Class, Mapel & Guru */}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                        Kelas {sesi.kelasNama}
+                      </span>
+                      <span className="font-extrabold text-xs text-slate-900 dark:text-white">
+                        {cleanMapelName(sesi.mataPelajaran)}
+                      </span>
+                    </div>
+                    {!isTeacher && sesi.guruNama && (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                        Guru: {sesi.guruNama}
+                      </p>
+                    )}
+                    {sesi.catatanGuru && (
+                      <p className="text-[11px] text-slate-500 italic bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                        Catatan: {sesi.catatanGuru}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Kehadiran Summary Pills */}
+                  <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-extrabold">
+                    <div className="py-1 px-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                      H: {hadir}
+                    </div>
+                    <div className="py-1 px-1 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                      S: {sakit}
+                    </div>
+                    <div className="py-1 px-1 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
+                      I: {izin}
+                    </div>
+                    <div className="py-1 px-1 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                      A: {alpha}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onClick={() => onOpenAbsenModal(sesi)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-100 transition cursor-pointer"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Edit Presensi</span>
+                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteSesi(sesi.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

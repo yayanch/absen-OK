@@ -2053,39 +2053,73 @@ export const AbsenHarianGuruTab: React.FC<AbsenHarianGuruTabProps> = ({
                 <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
                   Rincian Sesi Mengajar Hari {dayName}:
                 </div>
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                        <th className="py-2.5 px-3 font-bold text-center w-8">No</th>
-                        <th className="py-2.5 px-3 font-bold">Kelas</th>
-                        <th className="py-2.5 px-3 font-bold">Mata Pelajaran</th>
-                        <th className="py-2.5 px-3 font-bold text-center">Jam Ke</th>
-                        <th className="py-2.5 px-3 font-bold text-center">Durasi JP</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {detailTeacher.schedules.map((sch, sIdx) => (
-                        <tr key={sIdx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                          <td className="py-2.5 px-3 text-center text-slate-400 font-mono">{sIdx + 1}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                              {sch.kelasNama}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400">
-                            {sch.mataPelajaran}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-600 dark:text-slate-300">
-                            {sch.jamKeStr || '-'}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
-                            {sch.jp} JP
-                          </td>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                          <th className="py-2.5 px-3 font-bold text-center w-8">No</th>
+                          <th className="py-2.5 px-3 font-bold">Kelas</th>
+                          <th className="py-2.5 px-3 font-bold">Mata Pelajaran</th>
+                          <th className="py-2.5 px-3 font-bold text-center">Jam Ke</th>
+                          <th className="py-2.5 px-3 font-bold text-center">Durasi JP</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                        {detailTeacher.schedules.map((sch, sIdx) => (
+                          <tr key={sIdx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                            <td className="py-2.5 px-3 text-center text-slate-400 font-mono">{sIdx + 1}</td>
+                            <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                {sch.kelasNama}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400">
+                              {sch.mataPelajaran}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-600 dark:text-slate-300">
+                              {sch.jamKeStr || '-'}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
+                              {sch.jp} JP
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card View (Opsi 1: Card View) */}
+                  <div className="block sm:hidden p-2 space-y-2">
+                    {detailTeacher.schedules.map((sch, sIdx) => (
+                      <div
+                        key={sIdx}
+                        className="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {sIdx + 1}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                              Kelas {sch.kelasNama}
+                            </span>
+                          </div>
+                          <span className="text-xs font-black text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">
+                            {sch.jp} JP
+                          </span>
+                        </div>
+                        <div className="font-extrabold text-xs text-blue-600 dark:text-blue-400">
+                          {sch.mataPelajaran}
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                          <span>Jam ke:</span>
+                          <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{sch.jamKeStr || '-'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

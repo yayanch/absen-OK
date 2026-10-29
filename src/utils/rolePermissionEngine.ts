@@ -1177,3 +1177,174 @@ export function getEffectiveUserRoles(
   return result.length > 0 ? result : ['guru'];
 }
 
+export interface RoleWorkspaceOption {
+  key: string;
+  label: string;
+  shortLabel: string;
+  badgeLabel?: string;
+  assignedClass?: string;
+  description: string;
+  iconName: string;
+  color: string;
+  badgeClass: string;
+}
+
+/**
+ * Computes available workspaces for teachers who hold multiple roles or additional duties
+ * (e.g., Wali Kelas, WKS Kurikulum, WKS Kesiswaan, Hubin, etc.)
+ */
+export function getUserRoleWorkspaces(
+  currentUser?: UserSession | null,
+  appData?: AppData
+): RoleWorkspaceOption[] {
+  if (!currentUser) return [];
+
+  const roles = getEffectiveUserRoles(currentUser, appData);
+  // Murid/Siswa does not have multi-workspace switching
+  if (roles.includes('murid') || roles.includes('siswa')) {
+    return [];
+  }
+
+  const isTeacherUser =
+    currentUser.role === 'guru' ||
+    currentUser.role === 'user' ||
+    currentUser.role === 'wali' ||
+    roles.includes('guru') ||
+    roles.includes('wali') ||
+    Boolean((currentUser.data as any)?.id && appData?.waliKelas?.some((w) => w.id === (currentUser.data as any)?.id)) ||
+    Boolean((currentUser.data as any)?.username && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === (currentUser.data as any)?.username?.toLowerCase())) ||
+    Boolean((currentUser.data as any)?.nip && appData?.waliKelas?.some((w) => w.nip && w.nip === (currentUser.data as any)?.nip));
+
+  // Only teachers or multi-role staff
+  if (!isTeacherUser && currentUser.role !== 'admin') {
+    return [];
+  }
+
+  const workspaces: RoleWorkspaceOption[] = [];
+
+  // 1. Guru Mata Pelajaran (Selalu ada untuk akun guru)
+  workspaces.push({
+    key: 'guru',
+    label: 'Guru Mata Pelajaran',
+    shortLabel: 'Guru Mapel',
+    badgeLabel: 'Guru Mapel',
+    description: 'Jadwal mengajar, KBM kelas, jurnal harian guru, dan presensi pembelajaran',
+    iconName: 'BookOpen',
+    color: 'indigo',
+    badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800',
+  });
+
+  // 2. Wali Kelas
+  const teacherId = (currentUser.data as any)?.id;
+  const teacherNama = (currentUser.data as any)?.nama?.trim()?.toLowerCase();
+  const teacherNip = (currentUser.data as any)?.nip;
+  const teacherUsername = String((currentUser.data as any)?.username || '').trim().toLowerCase();
+
+  const matchedWaliClasses = (appData?.kelas || []).filter((k) => {
+    if (teacherId && k.waliKelasId === teacherId) return true;
+    if (teacherNama || teacherNip || teacherUsername) {
+      const matchedWali = (appData?.waliKelas || []).find((w) => {
+        if (w.id !== k.waliKelasId) return false;
+        if (teacherNama && w.nama?.trim().toLowerCase() === teacherNama) return true;
+        if (teacherNip && w.nip && w.nip === teacherNip) return true;
+        if (teacherUsername && w.username && w.username.toLowerCase() === teacherUsername) return true;
+        return false;
+      });
+      if (matchedWali) return true;
+    }
+    return false;
+  });
+
+  const isWali = roles.includes('wali') || matchedWaliClasses.length > 0;
+  if (isWali) {
+    const classNames = matchedWaliClasses.map((c) => c.nama).join(', ');
+    workspaces.push({
+      key: 'wali',
+      label: classNames ? `Wali Kelas ${classNames}` : 'Wali Kelas',
+      shortLabel: classNames ? `Wali (${classNames})` : 'Wali Kelas',
+      badgeLabel: classNames || 'Wali Kelas',
+      assignedClass: classNames,
+      description: 'Presensi kelas binaan, rekapitulasi kehadiran, catatan pelanggaran & home visit',
+      iconName: 'UserCheck',
+      color: 'emerald',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800',
+    });
+  }
+
+  // 3. WKS Kurikulum
+  if (roles.includes('kurikulum')) {
+    workspaces.push({
+      key: 'kurikulum',
+      label: 'Wakasek Kurikulum',
+      shortLabel: 'WKS Kurikulum',
+      badgeLabel: 'Kurikulum',
+      description: 'Supervisi kegiatan KBM, master mata pelajaran, dan jadwal mengajar sekolah',
+      iconName: 'CalendarRange',
+      color: 'amber',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800',
+    });
+  }
+
+  // 4. WKS Kesiswaan
+  if (roles.includes('kesiswaan') || roles.includes('piket_kesiswaan')) {
+    workspaces.push({
+      key: 'kesiswaan',
+      label: 'Wakasek Kesiswaan / BP BK',
+      shortLabel: 'WKS Kesiswaan',
+      badgeLabel: 'Kesiswaan',
+      description: 'Kedisiplinan, catatan pelanggaran siswa, rekap presensi harian, dan dispensasi',
+      iconName: 'ShieldAlert',
+      color: 'purple',
+      badgeClass: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800',
+    });
+  }
+
+  // 5. WKS Hubin
+  if (roles.includes('hubin')) {
+    workspaces.push({
+      key: 'hubin',
+      label: 'Wakasek Hubin & Industri',
+      shortLabel: 'WKS Hubin',
+      badgeLabel: 'Hubin',
+      description: 'Kemitraan industri, pemantauan kompetensi kejuruan dan data siswa',
+      iconName: 'Briefcase',
+      color: 'teal',
+      badgeClass: 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:border-teal-800',
+    });
+  }
+
+  // 6. Staf Pengelola Jadwal
+  if (roles.includes('staf_jadwal')) {
+    workspaces.push({
+      key: 'staf_jadwal',
+      label: 'Staf Pengelola Jadwal',
+      shortLabel: 'Staf Jadwal',
+      badgeLabel: 'Jadwal KBM',
+      description: 'Plotting jam KBM, penataan jadwal guru mengajar, dan alokasi ruang kelas',
+      iconName: 'CalendarDays',
+      color: 'cyan',
+      badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800',
+    });
+  }
+
+  // 7. Check for custom roles in roles
+  const standardKeys = new Set(['guru', 'wali', 'kurikulum', 'kesiswaan', 'piket_kesiswaan', 'hubin', 'staf_jadwal', 'admin', 'murid', 'user']);
+  roles.forEach((r) => {
+    if (!standardKeys.has(r)) {
+      const meta = getRoleBadgeMeta(r, appData);
+      workspaces.push({
+        key: r,
+        label: meta.label,
+        shortLabel: meta.label,
+        badgeLabel: meta.label,
+        description: `Mode peran khusus: ${meta.label}`,
+        iconName: 'Layers',
+        color: meta.color,
+        badgeClass: meta.badgeClass,
+      });
+    }
+  });
+
+  return workspaces;
+}
+

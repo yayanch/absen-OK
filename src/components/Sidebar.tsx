@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
-import { hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
+import { hasMenuAccess, getEffectiveUserRoles, getUserRoleWorkspaces } from '../utils/rolePermissionEngine';
 import {
   getNavigationLayout,
   getEffectiveMenuLabel,
@@ -86,16 +86,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectRoleWorkspace,
 }) => {
   const userEffectiveRoles = getEffectiveUserRoles(currentUser, appData);
+  const availableWorkspaces = React.useMemo(() => getUserRoleWorkspaces(currentUser, appData), [currentUser, appData]);
+  const activeWorkspace = availableWorkspaces.find((w) => w.key === activeRoleWorkspace) || availableWorkspaces[0];
+  const effectiveActiveRoles = (activeRoleWorkspace && activeRoleWorkspace !== 'all' && availableWorkspaces.length > 1)
+    ? [activeRoleWorkspace]
+    : userEffectiveRoles;
+
   const isAdmin = userEffectiveRoles.includes('admin');
-  const isKesiswaan = userEffectiveRoles.includes('kesiswaan') || userEffectiveRoles.includes('piket_kesiswaan');
-  const isKurikulum = userEffectiveRoles.includes('kurikulum');
-  const isStafJadwal = userEffectiveRoles.includes('staf_jadwal');
-  const isAdmSiswa = userEffectiveRoles.includes('adm_siswa');
-  const isHubin = userEffectiveRoles.includes('hubin');
-  const isWali = userEffectiveRoles.includes('wali') || Boolean((currentUser.data as any)?.id && appData?.kelas?.some((k) => k.waliKelasId === (currentUser.data as any)?.id));
+  const isKesiswaan = effectiveActiveRoles.includes('kesiswaan') || effectiveActiveRoles.includes('piket_kesiswaan');
+  const isKurikulum = effectiveActiveRoles.includes('kurikulum');
+  const isStafJadwal = effectiveActiveRoles.includes('staf_jadwal');
+  const isAdmSiswa = effectiveActiveRoles.includes('adm_siswa');
+  const isHubin = effectiveActiveRoles.includes('hubin');
+  const isWali = effectiveActiveRoles.includes('wali');
   const isMurid = userEffectiveRoles.includes('murid') || userEffectiveRoles.includes('siswa');
-  const isUserBiasa = userEffectiveRoles.includes('user') || userEffectiveRoles.includes('guru') || isKurikulum || isHubin || isStafJadwal;
-  const isGuruOnly = (userEffectiveRoles.includes('guru') || userEffectiveRoles.includes('user')) && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal && !isAdmSiswa;
+  const isUserBiasa = effectiveActiveRoles.includes('user') || effectiveActiveRoles.includes('guru') || isKurikulum || isHubin || isStafJadwal;
+  const isGuruOnly = (effectiveActiveRoles.includes('guru') || effectiveActiveRoles.includes('user')) && !isAdmin && !isKesiswaan && !isKurikulum && !isHubin && !isWali && !isStafJadwal && !isAdmSiswa;
   const canViewMaster = !isMurid;
   const isLiveChatEnabled = enableLiveChat ?? sekolah.enableLiveChat ?? true;
 
@@ -399,10 +405,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto no-scrollbar p-2 sm:p-3.5 space-y-3 bg-transparent">
+            {/* WORKSPACE MODE INDICATOR (FOR TEACHERS WITH MULTIPLE DUTIES) */}
+            {availableWorkspaces.length > 1 && (
+              <div className="mb-1">
+                {isOpen ? (
+                  <div className="p-2.5 rounded-xl bg-white/10 dark:bg-black/20 border border-white/10 backdrop-blur-xs flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        activeWorkspace?.key === 'wali'
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : activeWorkspace?.key === 'kurikulum'
+                          ? 'bg-amber-500/20 text-amber-300'
+                          : activeWorkspace?.key === 'kesiswaan'
+                          ? 'bg-purple-500/20 text-purple-300'
+                          : 'bg-indigo-500/20 text-indigo-300'
+                      }`}>
+                        {activeWorkspace?.key === 'wali' ? <UserCheck className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-[9.5px] uppercase font-bold tracking-wider text-white/60 leading-tight">
+                          Ruang Kerja
+                        </span>
+                        <p className="text-xs font-bold text-white truncate leading-tight">
+                          {activeWorkspace?.shortLabel || 'Guru Mapel'}
+                        </p>
+                      </div>
+                    </div>
+                    {onSelectRoleWorkspace && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentIndex = availableWorkspaces.findIndex((w) => w.key === activeWorkspace?.key);
+                          const nextWs = availableWorkspaces[(currentIndex + 1) % availableWorkspaces.length];
+                          if (nextWs) onSelectRoleWorkspace(nextWs.key);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[10px] font-bold transition cursor-pointer shrink-0"
+                        title="Beralih ke peran berikutnya"
+                      >
+                        Ganti
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSelectRoleWorkspace) {
+                        const currentIndex = availableWorkspaces.findIndex((w) => w.key === activeWorkspace?.key);
+                        const nextWs = availableWorkspaces[(currentIndex + 1) % availableWorkspaces.length];
+                        if (nextWs) onSelectRoleWorkspace(nextWs.key);
+                      }
+                    }}
+                    className="mx-auto w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer transition border border-white/10"
+                    title={`Mode Peran Aktif: ${activeWorkspace?.shortLabel} (Klik untuk beralih)`}
+                  >
+                    {activeWorkspace?.key === 'wali' ? <UserCheck className="w-4 h-4 text-emerald-300" /> : <BookOpen className="w-4 h-4 text-indigo-300" />}
+                  </button>
+                )}
+              </div>
+            )}
+
             {(() => {
               const navLayout = getNavigationLayout(appData);
 
-              const userRoles = userEffectiveRoles;
+              const userRoles = effectiveActiveRoles;
 
               const hasAnyMenuAccess = (views: ViewType[]) => {
                 return views.some(

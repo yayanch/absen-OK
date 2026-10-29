@@ -2302,7 +2302,7 @@ export const InputPresensiView: React.FC<InputPresensiViewProps> = ({
                   ) : (
                     <>
                       <Save className="w-3.5 h-3.5" />
-                      <span>{isDirty ? 'Simpan' : isAlreadySaved ? 'Tersimpan' : 'Simpan Presensi'}</span>
+                      <span>{isDirty ? 'Simpan' : isAlreadySaved ? 'Tersimpan' : 'Simpan'}</span>
                     </>
                   )}
                 </button>

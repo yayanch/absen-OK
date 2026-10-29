@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sliders, Sparkles, ArrowUpRight } from 'lucide-react';
+import { Sliders, ArrowUpRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppData, UserRole, UserSession, ViewType, DashboardQuickActionItem } from '../../types';
 import { cardContainerVariants, cardItemVariants } from '../common/UIComponents';
@@ -72,58 +72,28 @@ const QuickActionBtn: React.FC<QuickActionBtnProps> = ({ onClick, card }) => {
 };
 
 interface RoleSectionHeaderProps {
-  title: string;
-  subtitle: string;
+  title?: string;
+  subtitle?: string;
   count?: number;
   onOpenSettings?: () => void;
 }
 
 const RoleSectionHeader: React.FC<RoleSectionHeaderProps> = ({
-  title,
-  subtitle,
-  count,
   onOpenSettings,
 }) => {
-  const formattedTitle = React.useMemo(() => {
-    if (title.includes('(Quick Action Cards)')) return title;
-    return `${title} (Quick Action Cards)`;
-  }, [title]);
+  if (!onOpenSettings) return null;
 
   return (
-    <div className="flex items-center justify-between flex-wrap gap-3 px-1 mb-3.5">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-          <Sparkles className="w-5 h-5 fill-white stroke-none" />
-        </div>
-        <div>
-          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-            {formattedTitle}
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {subtitle}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        {count !== undefined && (
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            Menampilkan {count} kartu aktif
-          </span>
-        )}
-
-        {onOpenSettings && (
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/60 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-            title="Atur kartu cepat dashboard untuk peran ini"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Atur Kartu Cepat</span>
-          </button>
-        )}
-      </div>
+    <div className="flex items-center justify-end px-1 mb-2">
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-200/80 dark:border-blue-900/60 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+        title="Atur kartu cepat dashboard untuk peran ini"
+      >
+        <Sliders className="w-3.5 h-3.5" />
+        <span>Atur Kartu Cepat</span>
+      </button>
     </div>
   );
 };

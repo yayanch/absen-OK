@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi Absensi Siswa Kelas Mengajar Guru (Jurnal & Presensi Sesi KBM Mandiri). Terpisah dari absensi utama sekolah, diakses langsung dari jadwal mengajar guru dengan pencatatan status H/S/I/A, materi pembelajaran, dan catatan siswa.",
-  "updatedAt":  "2026-10-21T13:18:18.766264280Z",
+  "summary":  "Implementasi fitur Switch Ruang Kerja / Mode Peran untuk Guru dengan Tugas Tambahan (Wali Kelas, Wakasek Kurikulum, Kesiswaan, Hubin, dll).\nTampilan Dashboard dan navigasi Sidebar kini berganti secara dinamis dan mulus sesuai peran yang dipilih dari tombol Switcher di Header (dekat foto profil).",
+  "updatedAt":  "2026-10-29T06:41:53.883248218Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

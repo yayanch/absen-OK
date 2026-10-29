@@ -145,6 +145,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
 
   const [materiAjar, setMateriAjar] = useState<string>('');
   const [catatanGuru, setCatatanGuru] = useState<string>('');
+  const [searchSiswaModal, setSearchSiswaModal] = useState<string>('');
   const [presensiSiswaMap, setPresensiSiswaMap] = useState<
     Record<string, { status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | ''; catatan: string }>
   >({});
@@ -813,7 +814,21 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     setPresensiSiswaMap(initialMap);
     setMateriAjar(existing?.materiAjar || '');
     setCatatanGuru(existing?.catatanGuru || '');
+    setSearchSiswaModal('');
   };
+
+  // Filtered siswa di dalam modal absen sesi KBM berdasarkan pencarian
+  const filteredModalSiswa = useMemo(() => {
+    if (!activeSession) return [];
+    const list = (appData.siswa || []).filter(
+      (s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif'
+    );
+    if (!searchSiswaModal.trim()) return list;
+    const q = searchSiswaModal.toLowerCase().trim();
+    return list.filter(
+      (s) => s.nama.toLowerCase().includes(q) || (s.nisn && s.nisn.toLowerCase().includes(q))
+    );
+  }, [appData.siswa, activeSession, searchSiswaModal]);
 
   // Bulk action: Set all students status in form
   const handleSetAllStatus = (status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D') => {
@@ -1155,36 +1170,46 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
       />
 
       {/* Navigation Tabs & Main Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl">
           {/* Tab 1: Form Absen Kelas Guru */}
           <button
             type="button"
             onClick={() => setActiveTab('mengabsen')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'mengabsen'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
             }`}
           >
-            <UserCheck className="w-4 h-4" />
-            <span>Form Absen Sesi Kelas</span>
+            <UserCheck className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              Absen Sesi<span className="hidden md:inline"> Kelas</span>
+            </span>
           </button>
 
           {/* Tab 2: Rincian Sesi Mengajar */}
           <button
             type="button"
             onClick={() => setActiveTab('riwayat_mandiri_guru')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+            className={`w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'riwayat_mandiri_guru'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
             }`}
           >
-            <Clock className="w-4 h-4" />
-            <span>Rincian Sesi Mengajar</span>
+            <Clock className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              Rincian Sesi<span className="hidden md:inline"> Mengajar</span>
+            </span>
             {teacherSpecificLogs.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-black">
+              <span
+                className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                  activeTab === 'riwayat_mandiri_guru'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                }`}
+              >
                 {teacherSpecificLogs.length}
               </span>
             )}
@@ -1195,15 +1220,21 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('rekap_semua_guru')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+              className={`col-span-2 sm:col-span-1 w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'rekap_semua_guru'
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
               }`}
             >
-              <Layers className="w-4 h-4" />
-              <span>Monitoring Rekap Semua Guru</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+              <Layers className="w-4 h-4 shrink-0" />
+              <span className="truncate">Monitoring Rekap Semua Guru</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                  activeTab === 'rekap_semua_guru'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
                 {(appData.presensiMengajarGuru || []).length}
               </span>
             </button>
@@ -1211,15 +1242,15 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
         </div>
 
         {/* Action Shortcuts */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           {isAdminOrStaff && (
             <button
               type="button"
               onClick={handleOpenAdminManualModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition shadow-xs"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition shadow-xs cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Input Manual (Admin)</span>
+              <Plus className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Input Manual</span>
             </button>
           )}
 
@@ -1227,10 +1258,10 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             <button
               type="button"
               onClick={() => onNavigateView('jadwal_mengajar')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
             >
-              <Calendar className="w-3.5 h-3.5 text-blue-500" />
-              <span className="hidden sm:inline">Jadwal Mengajar</span>
+              <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span>Jadwal Mengajar</span>
             </button>
           )}
         </div>
@@ -1349,15 +1380,25 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari kelas, mapel, materi, atau tanggal..."
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full cursor-pointer"
+                    title="Hapus pencarian"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
                 <button
                   type="button"
                   onClick={() => setIsPrintModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer"
                 >
                   <Printer className="w-4 h-4 text-slate-500" />
                   <span>Cetak</span>
@@ -1366,59 +1407,85 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 <button
                   type="button"
                   onClick={handleExportTeacherExcel}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition shadow-xs cursor-pointer"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Export Excel</span>
                 </button>
               </div>
             </div>
+
+            {/* Proportional Search Result Banner */}
+            {searchQuery.trim() && (
+              <div className="flex items-center justify-between gap-2.5 p-2.5 sm:p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-2xl text-xs text-blue-900 dark:text-blue-200">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 shrink-0">
+                    <Search className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="truncate">
+                    Hasil pencarian: <strong className="font-black text-blue-700 dark:text-blue-300">"{searchQuery}"</strong>
+                    <span className="ml-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                      ({rekapSubView === 'siswa' ? filteredStudentStats.length : filteredTeacherLogs.length} data ditemukan)
+                    </span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="px-2.5 py-1 rounded-xl bg-blue-100 dark:bg-blue-900/60 hover:bg-blue-200 dark:hover:bg-blue-800/60 text-blue-700 dark:text-blue-200 font-bold text-[11px] shrink-0 transition cursor-pointer flex items-center gap-1 active:scale-95"
+                  title="Hapus filter pencarian"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Sub-View Navigation Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="w-full sm:w-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setRekapSubView('siswa')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                className={`w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                   rekapSubView === 'siswa'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400'
                 }`}
               >
-                <GraduationCap className="w-4 h-4" />
-                <span>Rekap Absensi Siswa per Kelas</span>
+                <GraduationCap className="w-4 h-4 shrink-0" />
+                <span className="truncate">Rekap Siswa per Kelas</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
                     rekapSubView === 'siswa'
                       ? 'bg-white/20 text-white'
                       : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
                   }`}
                 >
-                  {filteredStudentStats.length} Siswa
+                  {filteredStudentStats.length}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRekapSubView('sesi')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                className={`w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                   rekapSubView === 'sesi'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400'
                 }`}
               >
-                <Clock className="w-4 h-4" />
-                <span>Log Sesi Mengajar</span>
+                <Clock className="w-4 h-4 shrink-0" />
+                <span className="truncate">Log Sesi Mengajar</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
                     rekapSubView === 'sesi'
                       ? 'bg-white/20 text-white'
                       : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
                   }`}
                 >
-                  {filteredTeacherLogs.length} Pertemuan
+                  {filteredTeacherLogs.length}
                 </span>
               </button>
             </div>
@@ -1525,8 +1592,8 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   </div>
                 </div>
 
-                {/* Table of Students */}
-                <div className="overflow-x-auto">
+                {/* Table of Students (Desktop: Table View, Mobile: Card View) */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
                       <tr>
@@ -1728,6 +1795,133 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   </table>
                 </div>
 
+                {/* Mobile Card View (Opsi 1: Card View) */}
+                <div className="block md:hidden space-y-3">
+                  {paginatedStudentStats.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">
+                        Tidak ada siswa yang sesuai dengan filter pencarian
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Coba ubah filter status atau kata kunci pencarian kelas / nama siswa.
+                      </p>
+                    </div>
+                  ) : (
+                    paginatedStudentStats.map((item, idx) => {
+                      const indexNum = (studentPage - 1) * studentPageSize + idx + 1;
+                      const isWarning = item.rate < 75 || item.alfa >= 3;
+
+                      return (
+                        <div
+                          key={item.siswa.id}
+                          className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-3"
+                        >
+                          {/* Card Header: Avatar, Name, NISN, Kelas */}
+                          <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-2.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-extrabold flex items-center justify-center text-xs shrink-0">
+                                {item.siswa.nama.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                  {item.siswa.nama}
+                                </h5>
+                                <p className="text-[10px] text-slate-500 font-mono">
+                                  NISN: {item.siswa.nisn || '-'} • No. {indexNum}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 shrink-0">
+                              {item.kelasNama}
+                            </span>
+                          </div>
+
+                          {/* Attendance percentage & progress bar */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span className="text-slate-500">Kehadiran:</span>
+                              <div className="flex items-center gap-2">
+                                {isWarning && (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                                    Perlu Perhatian
+                                  </span>
+                                )}
+                                <span className={`font-black ${
+                                  item.rate >= 90
+                                    ? 'text-emerald-700 dark:text-emerald-400'
+                                    : item.rate >= 75
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-rose-700 dark:text-rose-400'
+                                }`}>
+                                  {item.rate}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  item.rate >= 90
+                                    ? 'bg-emerald-500'
+                                    : item.rate >= 75
+                                    ? 'bg-amber-500'
+                                    : 'bg-rose-500'
+                                }`}
+                                style={{ width: `${item.rate}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Attendance Breakdown Counters */}
+                          <div className="grid grid-cols-6 gap-1 text-center text-[10px]">
+                            <div className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50">
+                              <span className="block text-slate-500 text-[9px]">Sesi</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-200">{item.totalSesi}</span>
+                            </div>
+                            <div className="p-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50">
+                              <span className="block text-[9px] font-bold">H</span>
+                              <span className="font-black">{item.hadir}</span>
+                            </div>
+                            <div className="p-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">
+                              <span className="block text-[9px] font-bold">S</span>
+                              <span className="font-black">{item.sakit}</span>
+                            </div>
+                            <div className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">
+                              <span className="block text-[9px] font-bold">I</span>
+                              <span className="font-black">{item.izin}</span>
+                            </div>
+                            <div className="p-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border border-rose-200/50 dark:border-rose-800/50">
+                              <span className="block text-[9px] font-bold">A</span>
+                              <span className="font-black">{item.alfa}</span>
+                            </div>
+                            <div className="p-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50">
+                              <span className="block text-[9px] font-bold">T</span>
+                              <span className="font-black">{item.terlambat}</span>
+                            </div>
+                          </div>
+
+                          {/* Footer Action */}
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                            <span className="text-[11px] text-slate-500">
+                              Tidak Hadir: <span className="font-bold text-rose-600 dark:text-rose-400">{item.totalTidakHadir}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenStudentHistory(item.siswa, item.kelasNama)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900 transition cursor-pointer"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                              <span>Riwayat Kehadiran</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
                 {/* Pagination */}
                 {filteredStudentStats.length > 0 && (
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -1764,7 +1958,8 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
                     <tr>
@@ -1890,6 +2085,140 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile Card View (Opsi 1: Card View) */}
+              <div className="block md:hidden p-3 space-y-3">
+                {filteredTeacherLogs.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                      {searchQuery.trim() ? <Search className="w-6 h-6 text-blue-500" /> : <BookOpen className="w-6 h-6" />}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                        {searchQuery.trim()
+                          ? `Tidak ditemukan sesi mengajar untuk "${searchQuery}"`
+                          : `Belum ada catatan mengajar untuk ${currentGuru?.nama}`}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {searchQuery.trim()
+                          ? 'Periksa kembali kata kunci pencarian kelas atau mata pelajaran.'
+                          : 'Guru dapat mengabsen kelas langsung dari tab "Absen Sesi Kelas" saat mengajar.'}
+                      </p>
+                    </div>
+                    {searchQuery.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer mt-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Reset Pencarian</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  filteredTeacherLogs.map((log, index) => {
+                    const totalSiswa = log.presensiSiswa?.length || 0;
+                    const hadirCount = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
+                    const sakitCount = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
+                    const izinCount = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
+                    const alphaCount = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
+                    const pctHadir = totalSiswa > 0 ? Math.round((hadirCount / totalSiswa) * 100) : 100;
+
+                    return (
+                      <div
+                        key={log.id}
+                        className="p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 shadow-xs space-y-3"
+                      >
+                        {/* Header: Number, Date, Time & Status */}
+                        <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-2.5">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-[10px] font-bold flex items-center justify-center">
+                                #{index + 1}
+                              </span>
+                              <span className="font-bold text-xs text-slate-900 dark:text-white">
+                                {formatDateIndo(log.tanggal)}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 mt-1">
+                              <Clock className="w-3 h-3" />
+                              <span>{log.jamPelajaran || '-'}</span>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Terlaksana</span>
+                          </span>
+                        </div>
+
+                        {/* Class & Subject */}
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                              Kelas {log.kelasNama}
+                            </span>
+                            <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                              {log.mataPelajaran}
+                            </span>
+                          </div>
+                          {log.catatanGuru && (
+                            <p className="text-[11px] text-slate-500 italic mt-1 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                              Catatan: {log.catatanGuru}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Student Attendance Stats Grid */}
+                        <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-slate-600 dark:text-slate-400">Kehadiran Siswa:</span>
+                            <span className="text-emerald-700 dark:text-emerald-400 font-black">
+                              {pctHadir}% ({totalSiswa} Siswa)
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-extrabold">
+                            <div className="py-1 px-1 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                              H: {hadirCount}
+                            </div>
+                            <div className="py-1 px-1 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
+                              S: {sakitCount}
+                            </div>
+                            <div className="py-1 px-1 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                              I: {izinCount}
+                            </div>
+                            <div className="py-1 px-1 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                              A: {alphaCount}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                          <button
+                            type="button"
+                            onClick={() => setDetailLog(log)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-100 transition cursor-pointer"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                            <span>Rincian Siswa</span>
+                          </button>
+                          {(isAdminOrStaff || isTeacher) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLog(log.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -2376,33 +2705,91 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               </div>
 
               {/* Quick Action Toolbar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Set Massal:</span>
+              <div className="p-3 sm:p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
+                {/* Header row on mobile / Left group on desktop */}
+                <div className="flex items-center justify-between sm:justify-start gap-2">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 shrink-0">
+                    <CheckSquare className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Set Massal:</span>
+                  </span>
+
+                  {/* Total Siswa count - on mobile displayed nicely in top right corner */}
+                  <div className="sm:hidden text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700/80">
+                    Total: {(appData.siswa || []).filter((s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif').length} Siswa
+                  </div>
+                </div>
+
+                {/* Action Buttons: 2 balanced equal-width columns on mobile, flex row on desktop */}
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2.5">
                   <button
                     type="button"
                     onClick={() => handleSetAllStatus('H')}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                    className="px-3 py-2 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 text-center"
+                    title="Set seluruh siswa sebagai Hadir (H)"
                   >
-                    Set Semua Hadir (H)
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Semua Hadir (H)</span>
                   </button>
+
                   <button
                     type="button"
                     onClick={handleSyncWithMainDailyPresensi}
-                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                    className="px-3 py-2 sm:py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 text-center"
+                    title="Salin status presensi sesuai catatan presensi harian sekolah"
                   >
-                    Sesuai Presensi Harian Sekolah
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                    <span>Presensi Harian</span>
                   </button>
                 </div>
 
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {/* Total Siswa count on desktop */}
+                <div className="hidden sm:block text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0">
                   Total Siswa: {(appData.siswa || []).filter((s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif').length} Orang
                 </div>
               </div>
 
-              {/* Student Attendance Table */}
-              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
-                <div className="max-h-[45vh] overflow-y-auto">
+              {/* Search Bar Siswa Sesi */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchSiswaModal}
+                    onChange={(e) => setSearchSiswaModal(e.target.value)}
+                    placeholder="Cari nama atau NISN siswa di kelas ini..."
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  {searchSiswaModal && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchSiswaModal('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {searchSiswaModal.trim() && (
+                  <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/40 rounded-xl text-xs text-blue-800 dark:text-blue-300">
+                    <span className="truncate">
+                      Hasil: <strong>"{searchSiswaModal}"</strong> ({filteredModalSiswa.length} siswa ditemukan)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSearchSiswaModal('')}
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Student Attendance Table (Desktop: Table View, Mobile: Card View) */}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs bg-slate-50/50 dark:bg-slate-900/50">
+                {/* Desktop Table View */}
+                <div className="hidden md:block max-h-[45vh] overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
                       <tr>
@@ -2412,10 +2799,17 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                         <th className="p-3">Catatan / Keterangan</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(appData.siswa || [])
-                        .filter((s) => s.kelasId === activeSession.jadwal.kelasId && s.status !== 'tidak_aktif')
-                        .map((siswa, idx) => {
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                      {filteredModalSiswa.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-slate-400">
+                            {searchSiswaModal.trim()
+                              ? `Tidak ditemukan siswa yang cocok dengan "${searchSiswaModal}".`
+                              : 'Tidak ada data siswa di kelas ini.'}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredModalSiswa.map((siswa, idx) => {
                           const status = presensiSiswaMap[siswa.id]?.status || '';
                           const catatan = presensiSiswaMap[siswa.id]?.catatan || '';
 
@@ -2476,19 +2870,163 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                               </td>
                             </tr>
                           );
-                        })}
+                        })
+                      )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Card View (Opsi 1: Card View) */}
+                <div className="block md:hidden max-h-[48vh] overflow-y-auto p-2.5 space-y-2.5">
+                  {filteredModalSiswa.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs space-y-2">
+                      <p>
+                        {searchSiswaModal.trim()
+                          ? `Tidak ditemukan siswa yang cocok dengan "${searchSiswaModal}".`
+                          : 'Tidak ada data siswa di kelas ini.'}
+                      </p>
+                      {searchSiswaModal.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchSiswaModal('')}
+                          className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Reset Pencarian
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    filteredModalSiswa.map((siswa, idx) => {
+                      const status = presensiSiswaMap[siswa.id]?.status || '';
+                      const catatan = presensiSiswaMap[siswa.id]?.catatan || '';
+
+                      return (
+                        <div
+                          key={siswa.id}
+                          className={`p-3 rounded-2xl border transition-all ${
+                            status === 'H'
+                              ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 shadow-2xs'
+                              : status === 'S'
+                              ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 shadow-2xs'
+                              : status === 'I'
+                              ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 shadow-2xs'
+                              : status === 'A'
+                              ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-800 shadow-2xs'
+                              : status === 'T'
+                              ? 'bg-purple-50/50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-800 shadow-2xs'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xs'
+                          }`}
+                        >
+                          {/* Card Header: Student Name & Status Badge */}
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                  {siswa.nama}
+                                </h5>
+                                {siswa.nisn && (
+                                  <p className="text-[10px] text-slate-400 font-mono">
+                                    NISN: {siswa.nisn}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {status ? (
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                  status === 'H'
+                                    ? 'bg-emerald-600 text-white'
+                                    : status === 'S'
+                                    ? 'bg-blue-600 text-white'
+                                    : status === 'I'
+                                    ? 'bg-amber-500 text-white'
+                                    : status === 'A'
+                                    ? 'bg-rose-600 text-white'
+                                    : 'bg-purple-600 text-white'
+                                }`}
+                              >
+                                {status === 'H'
+                                  ? 'Hadir'
+                                  : status === 'S'
+                                  ? 'Sakit'
+                                  : status === 'I'
+                                  ? 'Izin'
+                                  : status === 'A'
+                                  ? 'Alpha'
+                                  : 'Terlambat'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-400 shrink-0">
+                                Belum Diisi
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Touch Buttons for Status */}
+                          <div className="grid grid-cols-5 gap-1.5 mb-2">
+                            {(
+                              [
+                                { key: 'H', label: 'Hadir', activeClass: 'bg-emerald-600 text-white shadow-xs' },
+                                { key: 'S', label: 'Sakit', activeClass: 'bg-blue-600 text-white shadow-xs' },
+                                { key: 'I', label: 'Izin', activeClass: 'bg-amber-500 text-white shadow-xs' },
+                                { key: 'A', label: 'Alpha', activeClass: 'bg-rose-600 text-white shadow-xs' },
+                                { key: 'T', label: 'Telat', activeClass: 'bg-purple-600 text-white shadow-xs' },
+                              ] as const
+                            ).map((st) => (
+                              <button
+                                key={st.key}
+                                type="button"
+                                onClick={() =>
+                                  setPresensiSiswaMap((prev) => ({
+                                    ...prev,
+                                    [siswa.id]: {
+                                      ...prev[siswa.id],
+                                      status: prev[siswa.id]?.status === st.key ? '' : st.key
+                                    }
+                                  }))
+                                }
+                                className={`py-1.5 px-1 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-1 ${
+                                  status === st.key
+                                    ? st.activeClass
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                                }`}
+                              >
+                                <span>{st.key}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Notes */}
+                          <input
+                            type="text"
+                            value={catatan}
+                            onChange={(e) =>
+                              setPresensiSiswaMap((prev) => ({
+                                ...prev,
+                                [siswa.id]: { ...prev[siswa.id], catatan: e.target.value }
+                              }))
+                            }
+                            placeholder="Catatan siswa (opsional)..."
+                            className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="p-5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-3 sm:flex sm:items-center sm:justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveSession(null)}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center text-center"
               >
                 Batal
               </button>
@@ -2496,10 +3034,10 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <button
                 type="button"
                 onClick={handleSavePresensiKbm}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-md cursor-pointer"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-extrabold transition shadow-md shadow-emerald-600/20 cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>Simpan Presensi KBM Kelas</span>
+                <Save className="w-4 h-4 shrink-0" />
+                <span>Simpan</span>
               </button>
             </div>
           </div>
@@ -2707,11 +3245,11 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-5 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-3 sm:flex sm:items-center sm:justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setIsAdminManualModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer flex items-center justify-center text-center"
               >
                 Batal
               </button>
@@ -2719,10 +3257,10 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <button
                 type="button"
                 onClick={handleSaveAdminManualEntry}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-md"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-extrabold shadow-md shadow-indigo-600/20 cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>Simpan Presensi Mengajar (Admin)</span>
+                <Save className="w-4 h-4 shrink-0" />
+                <span>Simpan</span>
               </button>
             </div>
           </div>
@@ -2763,43 +3301,96 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 )}
               </div>
 
-              <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase">
-                    <tr>
-                      <th className="p-2.5 w-10 text-center">No</th>
-                      <th className="p-2.5">Nama Siswa</th>
-                      <th className="p-2.5 text-center">Status</th>
-                      <th className="p-2.5">Catatan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {(detailLog.presensiSiswa || []).map((ps, idx) => (
-                      <tr key={ps.siswaId + idx}>
-                        <td className="p-2.5 text-center">{idx + 1}</td>
-                        <td className="p-2.5 font-bold">{ps.siswaNama}</td>
-                        <td className="p-2.5 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                              ps.status === 'H'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : ps.status === 'S'
-                                ? 'bg-blue-100 text-blue-800'
-                                : ps.status === 'I'
-                                ? 'bg-amber-100 text-amber-800'
-                                : ps.status === 'A'
-                                ? 'bg-rose-100 text-rose-800'
-                                : 'bg-purple-100 text-purple-800'
-                            }`}
-                          >
-                            {ps.status}
-                          </span>
-                        </td>
-                        <td className="p-2.5 text-slate-500">{ps.catatan || '-'}</td>
+              {/* Detail Log Table (Desktop: Table, Mobile: Cards) */}
+              <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="hidden sm:block">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase text-slate-700 dark:text-slate-300">
+                      <tr>
+                        <th className="p-2.5 w-10 text-center">No</th>
+                        <th className="p-2.5">Nama Siswa</th>
+                        <th className="p-2.5 text-center">Status</th>
+                        <th className="p-2.5">Catatan</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                      {(detailLog.presensiSiswa || []).map((ps, idx) => (
+                        <tr key={ps.siswaId + idx}>
+                          <td className="p-2.5 text-center">{idx + 1}</td>
+                          <td className="p-2.5 font-bold">{ps.siswaNama}</td>
+                          <td className="p-2.5 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                ps.status === 'H'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : ps.status === 'S'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : ps.status === 'I'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : ps.status === 'A'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-purple-100 text-purple-800'
+                              }`}
+                            >
+                              {ps.status}
+                            </span>
+                          </td>
+                          <td className="p-2.5 text-slate-500">{ps.catatan || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="block sm:hidden max-h-[50vh] overflow-y-auto p-2 space-y-2">
+                  {(detailLog.presensiSiswa || []).map((ps, idx) => (
+                    <div
+                      key={ps.siswaId + idx}
+                      className="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                            {ps.siswaNama}
+                          </p>
+                          {ps.catatan && (
+                            <p className="text-[10px] text-slate-400 italic line-clamp-1">
+                              {ps.catatan}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <span
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase shrink-0 ${
+                          ps.status === 'H'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : ps.status === 'S'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            : ps.status === 'I'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            : ps.status === 'A'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                        }`}
+                      >
+                        {ps.status === 'H'
+                          ? 'Hadir'
+                          : ps.status === 'S'
+                          ? 'Sakit'
+                          : ps.status === 'I'
+                          ? 'Izin'
+                          : ps.status === 'A'
+                          ? 'Alpha'
+                          : ps.status || '-'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -2864,75 +3455,144 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 </div>
               </div>
 
-              {/* Session Timeline Table */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase text-slate-600 dark:text-slate-300">
-                    <tr>
-                      <th className="p-3 w-10 text-center">No</th>
-                      <th className="p-3">Tanggal & Jam</th>
-                      <th className="p-3">Materi Ajar</th>
-                      <th className="p-3 text-center">Status</th>
-                      <th className="p-3">Catatan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {selectedStudentDetail.sessions.length === 0 ? (
+              {/* Session Timeline (Desktop: Table, Mobile: Cards) */}
+              <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="hidden sm:block">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase text-slate-600 dark:text-slate-300">
                       <tr>
-                        <td colSpan={5} className="p-8 text-center text-slate-500 italic">
-                          Belum ada catatan presensi KBM untuk siswa ini.
-                        </td>
+                        <th className="p-3 w-10 text-center">No</th>
+                        <th className="p-3">Tanggal & Jam</th>
+                        <th className="p-3">Materi Ajar</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3">Catatan</th>
                       </tr>
-                    ) : (
-                      selectedStudentDetail.sessions.map((sess, idx) => {
-                        const statusColors: Record<string, string> = {
-                          H: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-                          S: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
-                          I: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-                          A: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
-                          T: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
-                          K: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
-                          D: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
-                          '-': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                        };
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                      {selectedStudentDetail.sessions.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-slate-500 italic">
+                            Belum ada catatan presensi KBM untuk siswa ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        selectedStudentDetail.sessions.map((sess, idx) => {
+                          const statusColors: Record<string, string> = {
+                            H: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+                            S: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+                            I: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+                            A: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
+                            T: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                            K: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                            D: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                            '-': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          };
 
-                        const statusLabels: Record<string, string> = {
-                          H: 'Hadir',
-                          S: 'Sakit',
-                          I: 'Izin',
-                          A: 'Alpa',
-                          T: 'Terlambat',
-                          K: 'Kesiangan',
-                          D: 'Dispensasi',
-                          '-': 'Belum Dicatat'
-                        };
+                          const statusLabels: Record<string, string> = {
+                            H: 'Hadir',
+                            S: 'Sakit',
+                            I: 'Izin',
+                            A: 'Alpa',
+                            T: 'Terlambat',
+                            K: 'Kesiangan',
+                            D: 'Dispensasi',
+                            '-': 'Belum Dicatat'
+                          };
 
-                        return (
-                          <tr key={sess.logId + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                            <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
-                            <td className="p-3">
-                              <div className="font-bold text-slate-800 dark:text-slate-200">
+                          return (
+                            <tr key={sess.logId + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                              <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
+                              <td className="p-3">
+                                <div className="font-bold text-slate-800 dark:text-slate-200">
+                                  {formatDateIndo(sess.tanggal)}
+                                </div>
+                                <div className="text-[10px] text-slate-500">{sess.jamPelajaran}</div>
+                              </td>
+                              <td className="p-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate">
+                                {sess.materiAjar || '-'}
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold ${statusColors[sess.status] || statusColors['-']}`}>
+                                  {statusLabels[sess.status] || sess.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-500 italic text-[11px]">
+                                {sess.catatan || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="block sm:hidden max-h-[50vh] overflow-y-auto p-2.5 space-y-2.5">
+                  {selectedStudentDetail.sessions.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 italic text-xs">
+                      Belum ada catatan presensi KBM untuk siswa ini.
+                    </div>
+                  ) : (
+                    selectedStudentDetail.sessions.map((sess, idx) => {
+                      const statusColors: Record<string, string> = {
+                        H: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+                        S: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+                        I: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+                        A: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
+                        T: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                        K: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                        D: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                        '-': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                      };
+
+                      const statusLabels: Record<string, string> = {
+                        H: 'Hadir',
+                        S: 'Sakit',
+                        I: 'Izin',
+                        A: 'Alpa',
+                        T: 'Terlambat',
+                        K: 'Kesiangan',
+                        D: 'Dispensasi',
+                        '-': 'Belum Dicatat'
+                      };
+
+                      return (
+                        <div
+                          key={sess.logId + idx}
+                          className="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-2"
+                        >
+                          <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                            <div>
+                              <div className="font-bold text-xs text-slate-900 dark:text-white">
                                 {formatDateIndo(sess.tanggal)}
                               </div>
-                              <div className="text-[10px] text-slate-500">{sess.jamPelajaran}</div>
-                            </td>
-                            <td className="p-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate">
-                              {sess.materiAjar || '-'}
-                            </td>
-                            <td className="p-3 text-center">
-                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold ${statusColors[sess.status] || statusColors['-']}`}>
-                                {statusLabels[sess.status] || sess.status}
-                              </span>
-                            </td>
-                            <td className="p-3 text-slate-500 italic text-[11px]">
-                              {sess.catatan || '-'}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                              <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
+                                {sess.jamPelajaran}
+                              </div>
+                            </div>
+                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${statusColors[sess.status] || statusColors['-']}`}>
+                              {statusLabels[sess.status] || sess.status}
+                            </span>
+                          </div>
+
+                          {sess.materiAjar && (
+                            <div className="text-[11px] text-slate-700 dark:text-slate-300">
+                              <span className="font-bold text-slate-500 text-[10px]">Materi: </span>
+                              {sess.materiAjar}
+                            </div>
+                          )}
+
+                          {sess.catatan && (
+                            <div className="text-[11px] text-slate-500 italic bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                              Catatan: {sess.catatan}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
 

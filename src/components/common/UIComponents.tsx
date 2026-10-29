@@ -48,29 +48,29 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 }) => {
   return (
     <div
-      className="rounded-2xl md:rounded-3xl p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors relative z-20"
+      className="rounded-2xl md:rounded-3xl p-4 sm:p-5 md:p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4 transition-colors relative z-20"
       style={{
         background: 'var(--page-header-bg)',
         opacity: 'var(--page-header-opacity, 1)',
       }}
     >
-      <div className="flex items-start md:items-center gap-3.5">
+      <div className="flex items-start md:items-center gap-3 sm:gap-3.5 min-w-0">
         {Icon && (
-          <div className="w-11 h-11 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white/10 dark:bg-white/10 text-white flex items-center justify-center shrink-0 border border-white/20">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white/10 dark:bg-white/10 text-white flex items-center justify-center shrink-0 border border-white/20 shadow-xs">
             <Icon className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--page-header-title)' }} />
           </div>
         )}
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <h1
-              className="text-lg md:text-xl font-bold tracking-tight"
+              className="text-base sm:text-lg md:text-xl font-bold tracking-tight"
               style={{ color: 'var(--page-header-title)' }}
             >
               {title}
             </h1>
             {badge && (
               <span
-                className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border transition-colors"
+                className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border transition-colors shrink-0"
                 style={{
                   backgroundColor: 'var(--page-header-badge-bg)',
                   borderColor: 'var(--page-header-badge-border)',
@@ -83,7 +83,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           </div>
           {description && (
             <p
-              className="text-xs mt-0.5 leading-relaxed"
+              className="text-xs mt-1 sm:mt-0.5 leading-relaxed opacity-90"
               style={{ color: 'var(--page-header-subtitle)' }}
             >
               {description}
@@ -93,7 +93,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       </div>
 
       {(actions || children) && (
-        <div className="flex items-center gap-2.5 flex-wrap self-end md:self-auto shrink-0 relative z-30">
+        <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-2.5 flex-wrap md:flex-nowrap pt-3 md:pt-0 border-t border-white/15 dark:border-white/10 md:border-t-0 shrink-0 relative z-30">
           {actions}
           {children}
         </div>

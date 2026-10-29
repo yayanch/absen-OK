@@ -36,11 +36,12 @@ import {
   Globe,
   Briefcase,
   CalendarRange,
+  CalendarDays,
   ShieldAlert,
 } from 'lucide-react';
 import { SekolahConfig, ViewType, UserSession, ThemeOption, AppData, Siswa, Kelas, WaliKelas, SiswaPresensiItem } from '../types';
 import { normalizeWeeklyShiftPeriods, generateWeeklyShiftSchedules, getTodayString, getCanonicalTeacherList } from '../utils/helpers';
-import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles } from '../utils/rolePermissionEngine';
+import { getRoleBadgeMeta, ALL_MENU_ITEMS, hasMenuAccess, getEffectiveUserRoles, getUserRoleWorkspaces, RoleWorkspaceOption } from '../utils/rolePermissionEngine';
 import { renderNavIcon } from '../utils/navigationLayoutEngine';
 
 interface HeaderProps {
@@ -101,6 +102,17 @@ export const Header: React.FC<HeaderProps> = ({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  const availableWorkspaces = useMemo(() => {
+    return getUserRoleWorkspaces(currentUser, appData);
+  }, [currentUser, appData]);
+
+  const activeWorkspace = useMemo(() => {
+    return availableWorkspaces.find((w) => w.key === activeRoleWorkspace) || availableWorkspaces[0];
+  }, [availableWorkspaces, activeRoleWorkspace]);
+
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -148,6 +160,9 @@ export const Header: React.FC<HeaderProps> = ({
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
+      if (workspaceRef.current && !workspaceRef.current.contains(event.target as Node)) {
+        setIsWorkspaceMenuOpen(false);
+      }
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setIsSearchOpen(false);
       }
@@ -193,6 +208,25 @@ export const Header: React.FC<HeaderProps> = ({
 
   const roleInfo = getRoleLabel(currentUser?.role);
   const RoleIcon = roleInfo.icon;
+
+  const renderWorkspaceIcon = (iconName: string, className = 'w-4 h-4') => {
+    switch (iconName) {
+      case 'BookOpen':
+        return <BookOpen className={className} />;
+      case 'UserCheck':
+        return <UserCheck className={className} />;
+      case 'CalendarRange':
+        return <CalendarRange className={className} />;
+      case 'ShieldAlert':
+        return <ShieldAlert className={className} />;
+      case 'Briefcase':
+        return <Briefcase className={className} />;
+      case 'CalendarDays':
+        return <CalendarDays className={className} />;
+      default:
+        return <Layers className={className} />;
+    }
+  };
 
   const freshUser = React.useMemo(() => {
     if (!currentUser) return null;
@@ -1311,6 +1345,119 @@ export const Header: React.FC<HeaderProps> = ({
                 <Moon className="w-5 h-5 text-[#64748B]" />
               )}
             </button>
+          )}
+
+          {/* ROLE WORKSPACE SWITCHER (FOR TEACHERS WITH ADDITIONAL DUTIES) */}
+          {availableWorkspaces.length > 1 && (
+            <div className="relative" ref={workspaceRef}>
+              <button
+                type="button"
+                onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
+                aria-label="Ganti Ruang Kerja / Peran Guru"
+                title={`Mode Aktif: ${activeWorkspace?.label} (Klik untuk beralih mode)`}
+                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-800 dark:text-slate-100 transition border border-slate-200 dark:border-slate-700 shadow-2xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 cursor-pointer"
+              >
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                    activeWorkspace?.key === 'wali'
+                      ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300'
+                      : activeWorkspace?.key === 'kurikulum'
+                      ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300'
+                      : activeWorkspace?.key === 'kesiswaan'
+                      ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300'
+                      : activeWorkspace?.key === 'hubin'
+                      ? 'bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300'
+                      : 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300'
+                  }`}
+                >
+                  {renderWorkspaceIcon(activeWorkspace?.iconName || 'BookOpen', 'w-4 h-4')}
+                </div>
+
+                <div className="hidden md:flex flex-col text-left">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+                      Mode Peran:
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                  <span className="text-xs font-bold leading-tight max-w-[150px] truncate text-slate-900 dark:text-white">
+                    {activeWorkspace?.shortLabel || 'Pilih Mode'}
+                  </span>
+                </div>
+
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform ${
+                    isWorkspaceMenuOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {/* DROPDOWN MENU */}
+              {isWorkspaceMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span>Pilih Ruang Kerja Guru</span>
+                      </p>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                        {availableWorkspaces.length} Mode
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                      Dashboard dan navigasi sidebar akan otomatis berganti sesuai peran terpilih.
+                    </p>
+                  </div>
+
+                  <div className="p-1.5 space-y-1 max-h-72 overflow-y-auto no-scrollbar">
+                    {availableWorkspaces.map((ws) => {
+                      const isSelected = activeWorkspace?.key === ws.key;
+                      return (
+                        <button
+                          key={ws.key}
+                          type="button"
+                          onClick={() => {
+                            onSelectRoleWorkspace?.(ws.key);
+                            setIsWorkspaceMenuOpen(false);
+                          }}
+                          className={`w-full flex items-start gap-3 p-2.5 rounded-xl text-left transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 shadow-2xs'
+                              : 'hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent'
+                          }`}
+                        >
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${ws.badgeClass}`}
+                          >
+                            {renderWorkspaceIcon(ws.iconName, 'w-4 h-4')}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span
+                                className={`text-xs font-bold truncate ${
+                                  isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-white'
+                                }`}
+                              >
+                                {ws.label}
+                              </span>
+                              {isSelected && (
+                                <span className="shrink-0 text-blue-600 dark:text-blue-400">
+                                  <Check className="w-4 h-4" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 line-clamp-2">
+                              {ws.description}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* USER PROFILE DROPDOWN */}

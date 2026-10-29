@@ -33,6 +33,8 @@ interface DashboardViewProps {
   onOpenBackupModal?: () => void;
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  activeRoleWorkspace?: string;
+  onSelectRoleWorkspace?: (roleKey: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -43,6 +45,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenBackupModal,
   onUpdateAppData,
   onShowToast,
+  activeRoleWorkspace,
+  onSelectRoleWorkspace,
 }) => {
   const [selectedDate, setSelectedDate] = React.useState<string>(() => getTodayString());
   const [rekapSearch, setRekapSearch] = React.useState('');
@@ -149,22 +153,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const sortedKelas = sortKelasList(appData.kelas);
 
   const effectiveRoles = React.useMemo(() => getEffectiveUserRoles(currentUser, appData), [currentUser, appData]);
-  const isWaliRole = effectiveRoles.includes('wali') || Boolean((currentUser.data as any)?.id && appData?.kelas?.some((k) => k.waliKelasId === (currentUser.data as any)?.id));
+  const isWaliMode = activeRoleWorkspace === 'wali' || (!activeRoleWorkspace && (effectiveRoles.includes('wali') || Boolean((currentUser.data as any)?.id && appData?.kelas?.some((k) => k.waliKelasId === (currentUser.data as any)?.id))));
   const isPiketKelasRole = effectiveRoles.includes('piket_kelas');
 
   const userScope = React.useMemo(() => {
-    if (isWaliRole) {
+    if (isWaliMode) {
       return { waliKelasId: (currentUser.data as any)?.id };
     }
     if (isPiketKelasRole) {
       return { kelasId: (currentUser.data as any)?.kelasId };
     }
     return undefined;
-  }, [currentUser, isWaliRole, isPiketKelasRole]);
+  }, [currentUser, isWaliMode, isPiketKelasRole]);
 
   let targetClasses = sortedKelas;
-  if (isWaliRole) {
-    targetClasses = sortedKelas.filter((k) => k.waliKelasId === (currentUser.data as any)?.id);
+  if (isWaliMode) {
+    const teacherId = (currentUser.data as any)?.id;
+    const teacherNama = (currentUser.data as any)?.nama?.trim()?.toLowerCase();
+    const teacherNip = (currentUser.data as any)?.nip;
+    targetClasses = sortedKelas.filter((k) => {
+      if (teacherId && k.waliKelasId === teacherId) return true;
+      if (teacherNama || teacherNip) {
+        const matchedWali = appData.waliKelas?.find(
+          (w) => w.id === k.waliKelasId && (
+            (teacherNama && w.nama?.trim().toLowerCase() === teacherNama) ||
+            (teacherNip && w.nip && w.nip === teacherNip)
+          )
+        );
+        if (matchedWali) return true;
+      }
+      return false;
+    });
   } else if (isPiketKelasRole) {
     targetClasses = sortedKelas.filter((k) => k.id === (currentUser.data as any)?.kelasId);
   }
@@ -446,6 +465,86 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       );
     }
 
+    // Specific Role Workspace routing (Mode Wali Kelas, Kurikulum, Kesiswaan, Staf Jadwal, dll.)
+    const activeWs = activeRoleWorkspace && activeRoleWorkspace !== 'all' ? activeRoleWorkspace : null;
+
+    if (activeWs === 'wali') {
+      return (
+        <WaliKelasDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          targetClasses={targetClasses}
+          waliStudents={waliStudents}
+          studentCumulativeStats={studentCumulativeStats}
+          hadirCount={hadirCount}
+          sakitCount={sakitCount}
+          izinCount={izinCount}
+          alpaCount={alpaCount}
+          kesianganCount={kesianganCount}
+          totalStudents={totalStudents}
+          hadirPercentage={hadirPercentage}
+          isFullyRecorded={isFullyRecorded}
+          trendData={trendData}
+          setSelectedStudentDetail={setSelectedStudentDetail}
+          onNavigateView={onNavigateView}
+          onNavigateToInput={onNavigateToInput}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+        />
+      );
+    }
+
+    if (activeWs === 'kurikulum') {
+      return (
+        <KurikulumDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          onNavigateView={onNavigateView}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+        />
+      );
+    }
+
+    if (activeWs === 'kesiswaan') {
+      return (
+        <KesiswaanDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          activeSiswa={activeSiswa}
+          studentCumulativeStats={studentCumulativeStats}
+          hadirCount={hadirCount}
+          sakitCount={sakitCount}
+          izinCount={izinCount}
+          alpaCount={alpaCount}
+          unrecordedClasses={unrecordedClasses}
+          targetClasses={targetClasses}
+          setSelectedStudentDetail={setSelectedStudentDetail}
+          onNavigateView={onNavigateView}
+          onNavigateToInput={onNavigateToInput}
+          onShowToast={onShowToast}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+        />
+      );
+    }
+
+    if (activeWs === 'staf_jadwal') {
+      return (
+        <StafJadwalDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          onNavigateView={onNavigateView}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+        />
+      );
+    }
+
     // Student Secretary / Piket Kelas role
     if (currentUser.role === 'piket_kelas' || (!isTeacherUser && isPiketKelasRole)) {
       return (
@@ -474,11 +573,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       );
     }
 
-    // If the user is a Teacher (Guru), always route to the dynamic GuruDashboardView.
-    // GuruDashboardView dynamically evaluates whether the teacher is a "Guru Biasa" (standard display)
-    // or has additional roles (Wali Kelas, Wakil Kepala Kurikulum/Kesiswaan/Hubin, dll.), rendering
-    // the relevant summary statistic cards while fully preserving the standard teacher tools!
-    if (isTeacherUser) {
+    // Teacher User (Guru Mapel workspace or general teacher)
+    if (isTeacherUser || activeWs === 'guru') {
       return (
         <GuruDashboardView
           appData={appData}
