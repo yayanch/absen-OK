@@ -36,7 +36,8 @@ import {
   ShieldCheck,
   CheckSquare,
   Award,
-  ChevronDown
+  ChevronDown,
+  History
 } from 'lucide-react';
 import {
   AppData,
@@ -149,7 +150,22 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
   >({});
 
   const [detailLog, setDetailLog] = useState<AbsensiMengajarGuruItem | null>(null);
+  const [selectedStudentDetail, setSelectedStudentDetail] = useState<{
+    siswa: Siswa;
+    kelasNama: string;
+    sessions: {
+      logId: string;
+      tanggal: string;
+      hari: string;
+      jamPelajaran: string;
+      mataPelajaran: string;
+      materiAjar: string;
+      status: 'H' | 'S' | 'I' | 'A' | 'T' | 'K' | 'D' | '-';
+      catatan: string;
+    }[];
+  } | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+  const [printSubView, setPrintSubView] = useState<'siswa' | 'sesi'>('siswa');
   const [isAdminManualModalOpen, setIsAdminManualModalOpen] = useState<boolean>(false);
 
   // Admin Manual Entry Form State
@@ -673,6 +689,59 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     const start = (studentPage - 1) * studentPageSize;
     return filteredStudentStats.slice(start, start + studentPageSize);
   }, [filteredStudentStats, studentPage, studentPageSize]);
+
+  // Filter counts for student status pills
+  const studentFilterCounts = useMemo(() => {
+    let total = teacherStudentStats.length;
+    let absent = 0;
+    let sakit = 0;
+    let izin = 0;
+    let alfa = 0;
+    let terlambat = 0;
+
+    teacherStudentStats.forEach((s) => {
+      if (s.totalTidakHadir > 0) absent++;
+      if (s.sakit > 0) sakit++;
+      if (s.izin > 0) izin++;
+      if (s.alfa > 0) alfa++;
+      if (s.terlambat > 0) terlambat++;
+    });
+
+    return { total, absent, sakit, izin, alfa, terlambat };
+  }, [teacherStudentStats]);
+
+  // Average student attendance rate for currently filtered students
+  const averageStudentAttendanceRate = useMemo(() => {
+    if (filteredStudentStats.length === 0) return 100;
+    const sum = filteredStudentStats.reduce((acc, curr) => acc + curr.rate, 0);
+    return Math.round(sum / filteredStudentStats.length);
+  }, [filteredStudentStats]);
+
+  // Handler to open student session attendance history modal
+  const handleOpenStudentHistory = (siswa: Siswa, kelasNama: string) => {
+    const studentLogs = filteredTeacherLogs
+      .filter((log) => log.kelasId === siswa.kelasId || log.kelasNama === kelasNama)
+      .map((log) => {
+        const ps = (log.presensiSiswa || []).find((p) => p.siswaId === siswa.id);
+        return {
+          logId: log.id,
+          tanggal: log.tanggal,
+          hari: log.hari,
+          jamPelajaran: log.jamPelajaran || '-',
+          mataPelajaran: log.mataPelajaran,
+          materiAjar: log.materiAjar || '-',
+          status: (ps?.status || '-') as any,
+          catatan: ps?.catatan || log.catatanGuru || '-'
+        };
+      })
+      .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+
+    setSelectedStudentDetail({
+      siswa,
+      kelasNama,
+      sessions: studentLogs
+    });
+  };
 
   // ----------------------------------------------------
   // GLOBAL LOGS FOR ADMIN MONITORING (TAB 3)
@@ -1220,21 +1289,8 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
 
           {/* 2. Filter Card - Format Rekap Presensi Sekolah / Umum */}
           <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            {/* Rentang Rekap: Hanya Semua dari Awal */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-blue-600" />
-                <span>Rentang Rekap:</span>
-              </label>
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                <span className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-xs">
-                  Semua dari Awal
-                </span>
-              </div>
-            </div>
-
             {/* Main Filters Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Teacher Selector */}
               {currentUser.role !== 'guru' ? (
                 <div>
@@ -1282,49 +1338,6 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   ))}
                 </select>
               </div>
-
-              {/* Period Sub-selector */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                  {rekapPeriodMode === 'bulan'
-                    ? 'Bulan Presensi'
-                    : rekapPeriodMode === 'minggu'
-                    ? 'Minggu Presensi'
-                    : 'Periode Terpilih'}
-                </label>
-                {rekapPeriodMode === 'bulan' && (
-                  <select
-                    value={filterMonth}
-                    onChange={(e) => setFilterMonth(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer"
-                  >
-                    {availableMonths.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {rekapPeriodMode === 'minggu' && (
-                  <select
-                    value={selectedWeekRange}
-                    onChange={(e) => setSelectedWeekRange(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer"
-                  >
-                    {availableWeeks.map((w) => (
-                      <option key={w.key} value={w.key}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {rekapPeriodMode === 'semua' && (
-                  <div className="py-2.5 px-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center justify-between">
-                    <span>Semua dari Awal</span>
-                    <span className="text-[10px] text-blue-700 dark:text-blue-300">s/d Hari Ini</span>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Toolbar: Search and Actions */}
@@ -1362,8 +1375,380 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
             </div>
           </div>
 
-          {/* 3. RINCIAN SESI MENGAJAR */}
-          <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+          {/* Sub-View Navigation Switcher */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setRekapSubView('siswa')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                  rekapSubView === 'siswa'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Rekap Absensi Siswa per Kelas</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    rekapSubView === 'siswa'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                  }`}
+                >
+                  {filteredStudentStats.length} Siswa
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRekapSubView('sesi')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                  rekapSubView === 'sesi'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span>Log Sesi Mengajar</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    rekapSubView === 'sesi'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {filteredTeacherLogs.length} Pertemuan
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="truncate">
+                {rekapSubView === 'siswa'
+                  ? `Rekap absensi siswa terakumulasi per kelas (${activePeriodLabel})`
+                  : `Log catatan KBM dan presensi per jam pelajaran (${activePeriodLabel})`}
+              </span>
+            </div>
+          </div>
+
+          {/* VIEW A: REKAP ABSENSI SISWA PER KELAS */}
+          {rekapSubView === 'siswa' && (
+            <div className="space-y-4">
+              {/* Status Filter Chips & Summary Banner */}
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">
+                      Filter Status:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStudentStatusFilter('all')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        studentStatusFilter === 'all'
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      }`}
+                    >
+                      Semua Siswa ({studentFilterCounts.total})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentStatusFilter('absent_only')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        studentStatusFilter === 'absent_only'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
+                      }`}
+                    >
+                      Ada Ketidakhadiran ({studentFilterCounts.absent})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentStatusFilter('S')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        studentStatusFilter === 'S'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100'
+                      }`}
+                    >
+                      Sakit ({studentFilterCounts.sakit})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentStatusFilter('I')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        studentStatusFilter === 'I'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
+                      }`}
+                    >
+                      Izin ({studentFilterCounts.izin})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentStatusFilter('A')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        studentStatusFilter === 'A'
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+                      }`}
+                    >
+                      Alpa ({studentFilterCounts.alfa})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentStatusFilter('K')}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        studentStatusFilter === 'K'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100'
+                      }`}
+                    >
+                      Terlambat ({studentFilterCounts.terlambat})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs font-bold">
+                    <span className="text-slate-500">Rata-rata Kehadiran:</span>
+                    <span className={`px-2.5 py-1 rounded-lg font-black ${
+                      averageStudentAttendanceRate >= 90
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        : averageStudentAttendanceRate >= 75
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                    }`}>
+                      {averageStudentAttendanceRate}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Table of Students */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <th className="p-3 w-10 text-center">No</th>
+                        <th className="p-3 w-28">NISN / NIS</th>
+                        <th className="p-3">Nama Siswa</th>
+                        <th className="p-3 text-center">Kelas</th>
+                        <th className="p-3 text-center" title="Total pertemuan KBM yang diikuti di kelas ini">
+                          Total Sesi
+                        </th>
+                        <th className="p-3 text-center" title="Hadir">
+                          <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-black">
+                            H
+                          </span>
+                        </th>
+                        <th className="p-3 text-center" title="Sakit">
+                          <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-black">
+                            S
+                          </span>
+                        </th>
+                        <th className="p-3 text-center" title="Izin">
+                          <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-black">
+                            I
+                          </span>
+                        </th>
+                        <th className="p-3 text-center" title="Alpa / Tanpa Keterangan">
+                          <span className="px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-black">
+                            A
+                          </span>
+                        </th>
+                        <th className="p-3 text-center" title="Terlambat / Kesiangan">
+                          <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-black">
+                            T
+                          </span>
+                        </th>
+                        <th className="p-3 text-center" title="Dispensasi">
+                          <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-black">
+                            D
+                          </span>
+                        </th>
+                        <th className="p-3 text-center font-bold text-slate-600 dark:text-slate-400">
+                          Tidak Hadir
+                        </th>
+                        <th className="p-3 text-center min-w-[130px]">% Kehadiran</th>
+                        <th className="p-3 text-center w-24">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {paginatedStudentStats.length === 0 ? (
+                        <tr>
+                          <td colSpan={14} className="p-12 text-center text-slate-500 dark:text-slate-400 space-y-3">
+                            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                              <Users className="w-6 h-6" />
+                            </div>
+                            <p className="font-bold text-slate-800 dark:text-slate-200">
+                              Tidak ada siswa yang sesuai dengan filter pencarian
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Coba ubah filter status atau kata kunci pencarian kelas / nama siswa.
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedStudentStats.map((item, idx) => {
+                          const indexNum = (studentPage - 1) * studentPageSize + idx + 1;
+                          const isWarning = item.rate < 75 || item.alfa >= 3;
+                          const isGood = item.rate >= 90;
+
+                          return (
+                            <tr
+                              key={item.siswa.id}
+                              className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition"
+                            >
+                              <td className="p-3 text-center font-bold text-slate-500">
+                                {indexNum}
+                              </td>
+                              <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                                {item.siswa.nisn || '-'}
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-extrabold flex items-center justify-center text-xs shrink-0">
+                                    {item.siswa.nama.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-slate-900 dark:text-white">
+                                      {item.siswa.nama}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500">
+                                      {item.siswa.gender === 'L' ? 'Laki-laki' : item.siswa.gender === 'P' ? 'Perempuan' : '-'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                                  {item.kelasNama}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center font-extrabold text-slate-700 dark:text-slate-300">
+                                {item.totalSesi}
+                              </td>
+                              <td className="p-3 text-center font-bold text-emerald-700 dark:text-emerald-400">
+                                {item.hadir}
+                              </td>
+                              <td className="p-3 text-center font-bold text-blue-700 dark:text-blue-400">
+                                {item.sakit > 0 ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950">
+                                    {item.sakit}
+                                  </span>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                              <td className="p-3 text-center font-bold text-amber-700 dark:text-amber-400">
+                                {item.izin > 0 ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950">
+                                    {item.izin}
+                                  </span>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                              <td className="p-3 text-center font-bold text-rose-700 dark:text-rose-400">
+                                {item.alfa > 0 ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950 font-black">
+                                    {item.alfa}
+                                  </span>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                              <td className="p-3 text-center font-bold text-purple-700 dark:text-purple-400">
+                                {item.terlambat > 0 ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950">
+                                    {item.terlambat}
+                                  </span>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                              <td className="p-3 text-center font-bold text-slate-600 dark:text-slate-400">
+                                {item.dispensasi > 0 ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700">
+                                    {item.dispensasi}
+                                  </span>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                              <td className="p-3 text-center font-extrabold text-slate-800 dark:text-slate-200">
+                                {item.totalTidakHadir > 0 ? (
+                                  <span className="text-rose-600 dark:text-rose-400">
+                                    {item.totalTidakHadir}
+                                  </span>
+                                ) : (
+                                  '0'
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                <div className="flex flex-col items-center justify-center gap-1">
+                                  <div className="flex items-center gap-2 w-full max-w-[100px]">
+                                    <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          item.rate >= 90
+                                            ? 'bg-emerald-500'
+                                            : item.rate >= 75
+                                            ? 'bg-amber-500'
+                                            : 'bg-rose-500'
+                                        }`}
+                                        style={{ width: `${item.rate}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[11px] font-black">{item.rate}%</span>
+                                  </div>
+                                  {isWarning && (
+                                    <span className="px-2 py-0.2 rounded text-[9px] font-extrabold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                                      Perlu Perhatian
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudentHistory(item.siswa, item.kelasNama)}
+                                  className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 transition shadow-2xs cursor-pointer inline-flex items-center justify-center"
+                                  title="Lihat Riwayat Kehadiran Siswa ini"
+                                >
+                                  <History className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {filteredStudentStats.length > 0 && (
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <Pagination
+                      currentPage={studentPage}
+                      totalPages={totalStudentPages}
+                      pageSize={studentPageSize}
+                      totalItems={filteredStudentStats.length}
+                      onPageChange={setStudentPage}
+                      onPageSizeChange={setStudentPageSize}
+                      pageSizeOptions={[10, 25, 50, 100]}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW B: DAFTAR LOG SESI MENGAJAR */}
+          {rekapSubView === 'sesi' && (
+            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1507,6 +1892,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 </table>
               </div>
             </div>
+          )}
         </div>
       )}
 
@@ -1836,12 +2222,6 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 ))}
               </select>
 
-              {/* Rekap Period Mode: Semua dari Awal */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-xs">
-                  Semua dari Awal
-                </span>
-              </div>
             </div>
 
             <button
@@ -2437,6 +2817,140 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* MODAL: DETAIL RIWAYAT PRESENSI KBM SISWA                                 */}
+      {/* ========================================================================= */}
+      {selectedStudentDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+                  {selectedStudentDetail.siswa.nama.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold tracking-tight">
+                    {selectedStudentDetail.siswa.nama}
+                  </h3>
+                  <p className="text-xs text-blue-100 flex items-center gap-2 mt-0.5">
+                    <span>Kelas {selectedStudentDetail.kelasNama}</span>
+                    <span>•</span>
+                    <span>NISN: {selectedStudentDetail.siswa.nisn || '-'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedStudentDetail(null)}
+                className="p-1.5 text-white/80 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Teacher and Subject Info */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Guru Pengajar</p>
+                  <p className="font-extrabold text-slate-900 dark:text-white text-sm">{currentGuru?.nama}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Sesi Pertemuan</p>
+                  <p className="font-extrabold text-blue-600 dark:text-blue-400 text-sm">
+                    {selectedStudentDetail.sessions.length} Pertemuan
+                  </p>
+                </div>
+              </div>
+
+              {/* Session Timeline Table */}
+              <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase text-slate-600 dark:text-slate-300">
+                    <tr>
+                      <th className="p-3 w-10 text-center">No</th>
+                      <th className="p-3">Tanggal & Jam</th>
+                      <th className="p-3">Materi Ajar</th>
+                      <th className="p-3 text-center">Status</th>
+                      <th className="p-3">Catatan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {selectedStudentDetail.sessions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-500 italic">
+                          Belum ada catatan presensi KBM untuk siswa ini.
+                        </td>
+                      </tr>
+                    ) : (
+                      selectedStudentDetail.sessions.map((sess, idx) => {
+                        const statusColors: Record<string, string> = {
+                          H: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+                          S: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300',
+                          I: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+                          A: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
+                          T: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                          K: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300',
+                          D: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300',
+                          '-': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        };
+
+                        const statusLabels: Record<string, string> = {
+                          H: 'Hadir',
+                          S: 'Sakit',
+                          I: 'Izin',
+                          A: 'Alpa',
+                          T: 'Terlambat',
+                          K: 'Kesiangan',
+                          D: 'Dispensasi',
+                          '-': 'Belum Dicatat'
+                        };
+
+                        return (
+                          <tr key={sess.logId + idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                            <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
+                            <td className="p-3">
+                              <div className="font-bold text-slate-800 dark:text-slate-200">
+                                {formatDateIndo(sess.tanggal)}
+                              </div>
+                              <div className="text-[10px] text-slate-500">{sess.jamPelajaran}</div>
+                            </td>
+                            <td className="p-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate">
+                              {sess.materiAjar || '-'}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold ${statusColors[sess.status] || statusColors['-']}`}>
+                                {statusLabels[sess.status] || sess.status}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-500 italic text-[11px]">
+                              {sess.catatan || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedStudentDetail(null)}
+                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: CETAK PRESENSI MENGAJAR GURU (PRINTABLE SHEET)                      */}
       {/* ========================================================================= */}
       {isPrintModalOpen && (
@@ -2444,9 +2958,31 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
           <div className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full max-h-[95vh] overflow-hidden flex flex-col shadow-2xl">
             {/* Header Toolbar */}
             <div className="p-4 bg-slate-800 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <Printer className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-sm">Cetak Presensi Mengajar Guru</h3>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-blue-400" />
+                  <h3 className="font-bold text-sm">Cetak Dokumen KBM</h3>
+                </div>
+                <div className="flex items-center gap-1 bg-slate-700 p-1 rounded-xl print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setPrintSubView('siswa')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      printSubView === 'siswa' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Rekap Siswa per Kelas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintSubView('sesi')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      printSubView === 'sesi' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Log Sesi Mengajar
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -2478,7 +3014,9 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                   {appData.sekolah?.alamat || 'Jl. Pendidikan No. 1'} • Telp: {appData.sekolah?.telepon || '-'} • NPSN: {appData.sekolah?.npsn || '-'}
                 </p>
                 <h3 className="text-sm font-extrabold uppercase mt-2 tracking-wider underline">
-                  PRESENSI MENGAJAR GURU (KBM)
+                  {printSubView === 'siswa'
+                    ? 'REKAPITULASI PRESENSI SISWA PER KELAS (KBM)'
+                    : 'JURNAL & LOG SESI PRESENSI MENGAJAR GURU'}
                 </h3>
               </div>
 
@@ -2487,58 +3025,105 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
                 <div>
                   <p><span className="font-bold">Nama Guru:</span> {currentGuru?.nama}</p>
                   <p><span className="font-bold">NIP:</span> {currentGuru?.nip || '-'}</p>
+                  <p><span className="font-bold">Filter Kelas:</span> {filterKelasId === 'all' ? 'Semua Kelas' : `Kelas ${teacherClasses.find(k => k.id === filterKelasId)?.nama || filterKelasId}`}</p>
                 </div>
                 <div className="text-right">
                   <p><span className="font-bold">Mata Pelajaran:</span> {currentGuru?.mataPelajaran || '-'}</p>
-                  <p><span className="font-bold">Total Sesi Tercatat:</span> {filteredTeacherLogs.length} Sesi</p>
+                  <p><span className="font-bold">Periode:</span> {activePeriodLabel}</p>
+                  <p><span className="font-bold">Total Terdata:</span> {printSubView === 'siswa' ? `${filteredStudentStats.length} Siswa` : `${filteredTeacherLogs.length} Sesi Pertemuan`}</p>
                 </div>
               </div>
 
-              {/* Table of Lessons */}
-              <table className="w-full text-left text-xs border border-slate-300 border-collapse">
-                <thead className="bg-slate-100 font-bold border-b border-slate-300">
-                  <tr>
-                    <th className="p-2 border border-slate-300 w-8 text-center">No</th>
-                    <th className="p-2 border border-slate-300 w-28">Tanggal & Jam</th>
-                    <th className="p-2 border border-slate-300 w-20">Kelas</th>
-                    <th className="p-2 border border-slate-300 w-28 text-center">Kehadiran (H/S/I/A)</th>
-                    <th className="p-2 border border-slate-300 w-28">Catatan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTeacherLogs.length === 0 ? (
+              {/* Table Body depending on printSubView */}
+              {printSubView === 'siswa' ? (
+                <table className="w-full text-left text-xs border border-slate-300 border-collapse">
+                  <thead className="bg-slate-100 font-bold border-b border-slate-300">
                     <tr>
-                      <td colSpan={5} className="p-4 text-center text-slate-500 italic">
-                        Belum ada catatan presensi KBM untuk dicetak.
-                      </td>
+                      <th className="p-2 border border-slate-300 w-8 text-center">No</th>
+                      <th className="p-2 border border-slate-300 w-24">NISN</th>
+                      <th className="p-2 border border-slate-300">Nama Siswa</th>
+                      <th className="p-2 border border-slate-300 w-20 text-center">Kelas</th>
+                      <th className="p-2 border border-slate-300 w-12 text-center">Sesi</th>
+                      <th className="p-2 border border-slate-300 w-10 text-center">H</th>
+                      <th className="p-2 border border-slate-300 w-10 text-center">S</th>
+                      <th className="p-2 border border-slate-300 w-10 text-center">I</th>
+                      <th className="p-2 border border-slate-300 w-10 text-center">A</th>
+                      <th className="p-2 border border-slate-300 w-10 text-center">T</th>
+                      <th className="p-2 border border-slate-300 w-16 text-center">% Hadir</th>
                     </tr>
-                  ) : (
-                    filteredTeacherLogs.map((log, idx) => {
-                      const h = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
-                      const s = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
-                      const i = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
-                      const a = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
-
-                      return (
-                        <tr key={log.id} className="border-b border-slate-200">
+                  </thead>
+                  <tbody>
+                    {filteredStudentStats.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="p-4 text-center text-slate-500 italic">
+                          Belum ada data rekap presensi siswa untuk dicetak.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredStudentStats.map((item, idx) => (
+                        <tr key={item.siswa.id} className="border-b border-slate-200">
                           <td className="p-2 border border-slate-300 text-center font-bold">{idx + 1}</td>
-                          <td className="p-2 border border-slate-300">
-                            <div>{log.tanggal}</div>
-                            <div className="text-[10px] text-slate-500">{log.jamPelajaran || '-'}</div>
-                          </td>
-                          <td className="p-2 border border-slate-300 font-bold">{log.kelasNama}</td>
-                          <td className="p-2 border border-slate-300 text-center font-bold">
-                            H:{h} S:{s} I:{i} A:{a}
-                          </td>
-                          <td className="p-2 border border-slate-300 text-[11px] text-slate-600">
-                            {log.catatanGuru || '-'}
-                          </td>
+                          <td className="p-2 border border-slate-300 font-mono text-[11px]">{item.siswa.nisn || '-'}</td>
+                          <td className="p-2 border border-slate-300 font-bold">{item.siswa.nama}</td>
+                          <td className="p-2 border border-slate-300 text-center">{item.kelasNama}</td>
+                          <td className="p-2 border border-slate-300 text-center font-bold">{item.totalSesi}</td>
+                          <td className="p-2 border border-slate-300 text-center text-emerald-700 font-bold">{item.hadir}</td>
+                          <td className="p-2 border border-slate-300 text-center">{item.sakit}</td>
+                          <td className="p-2 border border-slate-300 text-center">{item.izin}</td>
+                          <td className="p-2 border border-slate-300 text-center font-bold text-rose-700">{item.alfa}</td>
+                          <td className="p-2 border border-slate-300 text-center">{item.terlambat}</td>
+                          <td className="p-2 border border-slate-300 text-center font-bold">{item.rate}%</td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left text-xs border border-slate-300 border-collapse">
+                  <thead className="bg-slate-100 font-bold border-b border-slate-300">
+                    <tr>
+                      <th className="p-2 border border-slate-300 w-8 text-center">No</th>
+                      <th className="p-2 border border-slate-300 w-28">Tanggal & Jam</th>
+                      <th className="p-2 border border-slate-300 w-20">Kelas</th>
+                      <th className="p-2 border border-slate-300 w-28 text-center">Kehadiran (H/S/I/A)</th>
+                      <th className="p-2 border border-slate-300 w-28">Catatan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTeacherLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-slate-500 italic">
+                          Belum ada catatan presensi KBM untuk dicetak.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredTeacherLogs.map((log, idx) => {
+                        const h = log.presensiSiswa?.filter((p) => p.status === 'H').length || 0;
+                        const s = log.presensiSiswa?.filter((p) => p.status === 'S').length || 0;
+                        const i = log.presensiSiswa?.filter((p) => p.status === 'I').length || 0;
+                        const a = log.presensiSiswa?.filter((p) => p.status === 'A').length || 0;
+
+                        return (
+                          <tr key={log.id} className="border-b border-slate-200">
+                            <td className="p-2 border border-slate-300 text-center font-bold">{idx + 1}</td>
+                            <td className="p-2 border border-slate-300">
+                              <div>{log.tanggal}</div>
+                              <div className="text-[10px] text-slate-500">{log.jamPelajaran || '-'}</div>
+                            </td>
+                            <td className="p-2 border border-slate-300 font-bold">{log.kelasNama}</td>
+                            <td className="p-2 border border-slate-300 text-center font-bold">
+                              H:{h} S:{s} I:{i} A:{a}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-[11px] text-slate-600">
+                              {log.catatanGuru || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              )}
 
               {/* Signatures */}
               <div className="grid grid-cols-2 gap-8 pt-10 text-xs text-center">
