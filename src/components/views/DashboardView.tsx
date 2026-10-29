@@ -94,7 +94,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isQuickActionModalOpen, setIsQuickActionModalOpen] = React.useState(false);
   const [quickActionModalRole, setQuickActionModalRole] = React.useState<string>('admin');
 
+  const isAdminUser = React.useMemo(() => {
+    if (!currentUser) return false;
+    const r = (currentUser.role || '').toLowerCase();
+    if (r === 'admin' || r === 'superadmin') return true;
+    if (Array.isArray(currentUser.roles) && currentUser.roles.some((roleItem) => ['admin', 'superadmin'].includes(roleItem.toLowerCase()))) {
+      return true;
+    }
+    const userData = currentUser.data as any;
+    if (userData?.role && ['admin', 'superadmin'].includes(String(userData.role).toLowerCase())) return true;
+    if (Array.isArray(userData?.roles) && userData.roles.some((roleItem: string) => ['admin', 'superadmin'].includes(String(roleItem).toLowerCase()))) {
+      return true;
+    }
+    return false;
+  }, [currentUser]);
+
   const handleOpenQuickActionSettings = (roleKey?: string) => {
+    if (!isAdminUser) return;
     setQuickActionModalRole(roleKey || currentUser.role || 'admin');
     setIsQuickActionModalOpen(true);
   };
@@ -453,7 +469,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           setSelectedStudentDetail={setSelectedStudentDetail}
           onNavigateView={onNavigateView}
           onNavigateToInput={onNavigateToInput}
-          onOpenQuickActionSettings={handleOpenQuickActionSettings}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
         />
       );
     }
@@ -487,7 +503,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onNavigateView={onNavigateView}
           onUpdateAppData={onUpdateAppData}
           onShowToast={onShowToast}
-          onOpenQuickActionSettings={handleOpenQuickActionSettings}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
         />
       );
     }
@@ -527,7 +543,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onNavigateView={onNavigateView}
             onNavigateToInput={onNavigateToInput}
             onShowToast={onShowToast}
-            onOpenQuickActionSettings={handleOpenQuickActionSettings}
+            onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
           />
         );
 
@@ -539,7 +555,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             onNavigateView={onNavigateView}
-            onOpenQuickActionSettings={handleOpenQuickActionSettings}
+            onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
           />
         );
 
@@ -551,7 +567,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             onNavigateView={onNavigateView}
-            onOpenQuickActionSettings={handleOpenQuickActionSettings}
+            onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
           />
         );
 
@@ -581,7 +597,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onNavigateView={onNavigateView}
             onUpdateAppData={onUpdateAppData}
             onShowToast={onShowToast}
-            onOpenQuickActionSettings={handleOpenQuickActionSettings}
+            onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
           />
         );
     }

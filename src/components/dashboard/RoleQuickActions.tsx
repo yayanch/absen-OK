@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sliders, Sparkles, ArrowUpRight, ChevronRight } from 'lucide-react';
+import { Sliders, Sparkles, ArrowUpRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppData, UserRole, UserSession, ViewType, DashboardQuickActionItem } from '../../types';
 import { cardContainerVariants, cardItemVariants } from '../common/UIComponents';
@@ -29,51 +29,6 @@ interface QuickActionBtnProps {
 
 const QuickActionBtn: React.FC<QuickActionBtnProps> = ({ onClick, card }) => {
   const colorMeta = getQuickActionColorClasses(card.colorScheme || 'blue');
-
-  const badgeDisplay = React.useMemo(() => {
-    if (card.badgeText && card.badgeText.trim()) return card.badgeText;
-    switch (card.id) {
-      case 'qa_guru_kbm':
-        return '4 Sesi Mengajar Hari Ini';
-      case 'qa_guru_jadwal_mingguan':
-      case 'qa_guru_jadwal':
-        return '70 JP Beban Mengajar';
-      case 'qa_guru_pelanggaran':
-      case 'qa_kes_pelanggaran':
-        return 'Input Kedisiplinan';
-      case 'qa_guru_chat':
-      case 'qa_mrd_chat':
-      case 'qa_pktkls_chat':
-        return 'Live Chat Sekolah';
-      case 'qa_guru_presensi_input':
-      case 'qa_wali_presensi_input':
-      case 'qa_pkt_presensi_input':
-        return '12 Rombel Aktif';
-      case 'qa_adm_rekap_pengisian':
-      case 'qa_kes_rekap_pengisian':
-        return 'Status Realtime';
-      case 'qa_adm_master_siswa':
-      case 'qa_wali_master_siswa':
-        return 'Master Data Siswa';
-      case 'qa_adm_pengaturan_role':
-        return 'Hak Akses Role';
-      case 'qa_adm_master_user':
-        return 'Kelola User System';
-      case 'qa_adm_monitoring_server':
-        return 'Performa System';
-      case 'qa_adm_backup_restore':
-        return 'Database Backup';
-      case 'qa_mrd_portal':
-        return 'Portal Murid';
-      case 'qa_mrd_scan_qr':
-      case 'qa_pkt_scan_qr':
-        return 'Presensi QR Code';
-      case 'qa_mrd_kartu':
-        return 'Kartu Pelajar';
-      default:
-        return card.title || 'Aksi Cepat';
-    }
-  }, [card]);
 
   return (
     <motion.div
@@ -107,20 +62,9 @@ const QuickActionBtn: React.FC<QuickActionBtnProps> = ({ onClick, card }) => {
           <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
             {card.title}
           </h4>
-          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mt-1 min-h-[32px]">
+          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mt-1">
             {card.subtitle}
           </p>
-        </div>
-      </div>
-
-      {/* Separator line & Bottom Row */}
-      <div>
-        <div className="border-t border-slate-100 dark:border-slate-800/80 my-3.5" />
-        <div className="flex items-center justify-between gap-2">
-          <div className={`px-3 py-1 rounded-full text-xs font-bold truncate max-w-[180px] shadow-2xs ${colorMeta.pillTag}`}>
-            {badgeDisplay}
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-transform group-hover:translate-x-0.5 shrink-0" />
         </div>
       </div>
     </motion.div>
@@ -193,6 +137,22 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   onOpenBackupModal,
   onOpenQuickActionSettings,
 }) => {
+  // Check if current user has admin privileges (only admin can customize quick action cards)
+  const isAdmin = React.useMemo(() => {
+    if (!currentUser) return false;
+    const r = (currentUser.role || '').toLowerCase();
+    if (r === 'admin' || r === 'superadmin') return true;
+    if (Array.isArray(currentUser.roles) && currentUser.roles.some((roleItem) => ['admin', 'superadmin'].includes(roleItem.toLowerCase()))) {
+      return true;
+    }
+    const userData = currentUser.data as any;
+    if (userData?.role && ['admin', 'superadmin'].includes(String(userData.role).toLowerCase())) return true;
+    if (Array.isArray(userData?.roles) && userData.roles.some((roleItem: string) => ['admin', 'superadmin'].includes(String(roleItem).toLowerCase()))) {
+      return true;
+    }
+    return false;
+  }, [currentUser]);
+
   // Resolve configuration dynamically for the specified role
   const config = React.useMemo(() => {
     return getRoleQuickActionConfig(appData, role);
@@ -204,7 +164,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   }
 
   const activeCards = (config.cards || []).filter((c) => c.enabled);
-  if (activeCards.length === 0 && !onOpenQuickActionSettings) {
+  if (activeCards.length === 0 && (!isAdmin || !onOpenQuickActionSettings)) {
     return null;
   }
 
@@ -248,7 +208,7 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
         subtitle={config.sectionSubtitle || 'Akses langsung 1-klik untuk fitur utama di dashboard'}
         count={activeCards.length}
         onOpenSettings={
-          onOpenQuickActionSettings
+          isAdmin && onOpenQuickActionSettings
             ? () => onOpenQuickActionSettings(role)
             : undefined
         }

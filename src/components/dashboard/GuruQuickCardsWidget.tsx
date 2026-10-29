@@ -8,7 +8,6 @@ import {
   Home,
   QrCode,
   MessageSquare,
-  ChevronRight,
   Sparkles,
   ArrowUpRight,
   ShieldOff,
@@ -364,14 +363,6 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed line-clamp-2 min-h-[2.5rem]">
                   {card.description}
                 </p>
-              </div>
-
-              {/* Bottom Footer Badge & Action Line */}
-              <div className="pt-4 mt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                <span className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${card.badgeStyle} truncate max-w-[80%]`}>
-                  {card.badgeText}
-                </span>
-                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-theme-primary group-hover:translate-x-1 transition-all shrink-0" />
               </div>
             </motion.div>
           );
