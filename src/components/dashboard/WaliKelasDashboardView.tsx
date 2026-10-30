@@ -18,6 +18,7 @@ import { formatDateIndo } from '../../utils/helpers';
 import { RoleQuickActions } from './RoleQuickActions';
 import { StudentAttentionWidget } from './StudentAttentionWidget';
 import { AttendanceTrendChart } from './AttendanceTrendChart';
+import { TeacherScheduleWidget } from './TeacherScheduleWidget';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
 
 interface WaliKelasDashboardViewProps {
@@ -40,6 +41,8 @@ interface WaliKelasDashboardViewProps {
   setSelectedStudentDetail: (item: any) => void;
   onNavigateView: (view: ViewType) => void;
   onNavigateToInput: (kelasId?: string) => void;
+  onUpdateAppData?: (updated: AppData) => void;
+  onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onOpenQuickActionSettings?: (roleKey?: string) => void;
 }
 
@@ -63,6 +66,8 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
   setSelectedStudentDetail,
   onNavigateView,
   onNavigateToInput,
+  onUpdateAppData,
+  onShowToast,
   onOpenQuickActionSettings,
 }) => {
   const currentClassName = targetClasses.map((k) => k.nama).join(', ') || 'Kelas Binaan';
@@ -90,6 +95,24 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
   }, [studentCumulativeStats]);
 
   const topAttention = classAttentionStudents.slice(0, 5);
+
+  // Check if this homeroom teacher also has teaching schedules (guru pengajar)
+  const hasTeachingSchedules = React.useMemo(() => {
+    const rawJadwal = appData.jadwalMengajar || [];
+    const uData = currentUser.data as any;
+    const uId = uData?.id;
+    const uName = (uData?.nama || '').toLowerCase().trim();
+    const uNip = (uData?.nip || '').toLowerCase().trim();
+    const uUsername = (uData?.username || '').toLowerCase().trim();
+
+    return rawJadwal.some((j) => {
+      if (uId && j.guruId === uId) return true;
+      if (uUsername && j.guruUsername?.toLowerCase() === uUsername) return true;
+      if (uNip && j.guruNip && j.guruNip.toLowerCase() === uNip) return true;
+      if (uName && j.guruNama && j.guruNama.toLowerCase() === uName) return true;
+      return false;
+    });
+  }, [appData.jadwalMengajar, currentUser]);
 
   return (
     <div className="space-y-6">
@@ -272,6 +295,21 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
           })}
         </div>
       </motion.div>
+
+      {/* Widget Jadwal Mengajar & Jurnal KBM untuk Wali Kelas yang Memiliki Jam Mengajar */}
+      {hasTeachingSchedules && (
+        <div className="space-y-3 pt-2">
+          <TeacherScheduleWidget
+            appData={appData}
+            currentUser={currentUser}
+            selectedDate={selectedDate}
+            onNavigateToInput={onNavigateToInput}
+            onNavigateView={onNavigateView}
+            onUpdateAppData={onUpdateAppData}
+            onShowToast={onShowToast}
+          />
+        </div>
+      )}
     </div>
   );
 };

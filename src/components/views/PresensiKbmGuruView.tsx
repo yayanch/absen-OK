@@ -184,12 +184,21 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
   // User details & Roles
   const loggedUsername = (currentUser.data as any)?.username || (currentUser.data as any)?.nama || '';
   const loggedNama = (currentUser.data as any)?.nama || '';
+  const loggedId = (currentUser.data as any)?.id || '';
+  const loggedNip = (currentUser.data as any)?.nip || '';
 
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
   const isKurikulum = currentUser.role === 'kurikulum' || (currentUser.roles || []).includes('kurikulum');
-  const isPiket = currentUser.role === 'guru_piket' || (currentUser.roles || []).includes('guru_piket');
+  const isPiket = currentUser.role === 'guru_piket' || (currentUser.roles || []).includes('guru_piket') || currentUser.role === 'piket';
   const isAdminOrStaff = isAdmin || isKurikulum || isPiket;
-  const isTeacher = currentUser.role === 'guru';
+  const isTeacher =
+    currentUser.role === 'guru' ||
+    currentUser.role === 'wali' ||
+    (currentUser.roles || []).includes('guru') ||
+    (currentUser.roles || []).includes('wali') ||
+    Boolean(loggedId && (appData.waliKelas || []).some((w) => w.id === loggedId)) ||
+    Boolean(loggedNip && (appData.waliKelas || []).some((w) => w.nip && w.nip === loggedNip)) ||
+    Boolean(loggedUsername && (appData.waliKelas || []).some((w) => w.username?.toLowerCase() === loggedUsername.toLowerCase()));
 
   // List of all teachers
   const listGuru = useMemo(() => {
@@ -200,9 +209,13 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
   useEffect(() => {
     if (selectedGuruUsername) return;
 
-    // If logged in user is a teacher
+    // If logged in user is a teacher (including teacher with additional duties)
     const loggedTeacher = listGuru.find(
-      (g) => g.username?.toLowerCase() === loggedUsername?.toLowerCase() || g.nama === loggedNama
+      (g) =>
+        (loggedId && g.id === loggedId) ||
+        (loggedNip && g.nip && g.nip === loggedNip) ||
+        (loggedUsername && g.username?.toLowerCase() === loggedUsername?.toLowerCase()) ||
+        (loggedNama && g.nama?.trim().toLowerCase() === loggedNama.trim().toLowerCase())
     );
 
     if (loggedTeacher) {
@@ -210,7 +223,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
     } else if (listGuru.length > 0) {
       setSelectedGuruUsername(listGuru[0].username || listGuru[0].nama);
     }
-  }, [currentUser, listGuru, selectedGuruUsername, loggedUsername, loggedNama]);
+  }, [currentUser, listGuru, selectedGuruUsername, loggedUsername, loggedNama, loggedId, loggedNip]);
 
   // Selected teacher object
   const currentGuru = useMemo(() => {
@@ -2241,7 +2254,7 @@ export const PresensiKbmGuruView: React.FC<PresensiKbmGuruViewProps> = ({
               <select
                 value={selectedGuruUsername}
                 onChange={(e) => setSelectedGuruUsername(e.target.value)}
-                disabled={currentUser.role === 'guru'}
+                disabled={!isAdminOrStaff && (isTeacher || currentUser.role === 'wali' || currentUser.role === 'guru')}
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 disabled:opacity-80 cursor-pointer"
               >
                 {listGuru.map((g) => (

@@ -363,6 +363,17 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     enabled: true,
     cards: [
       {
+        id: 'qa_wali_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        isUtama: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
+      {
         id: 'qa_wali_presensi_input',
         view: 'presensi_input',
         title: 'Input Presensi Hari Ini',
@@ -438,6 +449,16 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     enabled: true,
     cards: [
       {
+        id: 'qa_kes_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
+      {
         id: 'qa_kes_rekap_pengisian',
         view: 'rekap_pengisian_kelas',
         title: 'Rekap Pengisian Presensi Kelas',
@@ -494,6 +515,17 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     dotColorClass: 'bg-indigo-600',
     enabled: true,
     cards: [
+      {
+        id: 'qa_kur_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        isUtama: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
       {
         id: 'qa_kur_absen_harian',
         view: 'absen_harian_guru',
@@ -559,6 +591,16 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     dotColorClass: 'bg-sky-600',
     enabled: true,
     cards: [
+      {
+        id: 'qa_stf_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
       {
         id: 'qa_stf_jadwal_mengajar',
         view: 'jadwal_mengajar',
@@ -673,6 +715,16 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     enabled: true,
     cards: [
       {
+        id: 'qa_pkt_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
+      {
         id: 'qa_pkt_rekap_pengisian',
         view: 'rekap_pengisian_kelas',
         title: 'Rekap Pengisian Presensi Kelas',
@@ -769,6 +821,16 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     dotColorClass: 'bg-emerald-600',
     enabled: true,
     cards: [
+      {
+        id: 'qa_hub_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
       {
         id: 'qa_hub_siswa',
         view: 'master_siswa',
@@ -913,12 +975,29 @@ export function getRoleQuickActionConfig(
     appData?.dashboardQuickActions?.rolesConfig?.[roleKey];
 
   if (saved) {
+    const rawCards = (saved.cards || []).map((c, idx) => ({
+      ...c,
+      order: c.order ?? idx,
+    }));
+
+    // CRITICAL: If this role is a teacher role (guru, wali, kurikulum, kesiswaan, staf_jadwal, piket, hubin)
+    // and the saved configuration is missing the 'presensi_kbm_guru' card,
+    // automatically prepend the KBM card so existing saved database configs immediately display it!
+    const teacherRoles = ['guru', 'wali', 'kurikulum', 'kesiswaan', 'staf_jadwal', 'piket', 'hubin'];
+    const hasKbmCard = rawCards.some((c) => c.view === 'presensi_kbm_guru');
+
+    if (teacherRoles.includes(normKey) && !hasKbmCard) {
+      const defaultKbm =
+        DEFAULT_ROLE_QUICK_ACTIONS[normKey]?.cards?.find((c) => c.view === 'presensi_kbm_guru') ||
+        DEFAULT_ROLE_QUICK_ACTIONS.guru.cards.find((c) => c.view === 'presensi_kbm_guru');
+      if (defaultKbm) {
+        rawCards.unshift({ ...defaultKbm, order: -1 });
+      }
+    }
+
     return {
       ...saved,
-      cards: (saved.cards || []).map((c, idx) => ({
-        ...c,
-        order: c.order ?? idx,
-      })),
+      cards: rawCards,
     };
   }
 

@@ -128,12 +128,44 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
     return getRoleQuickActionConfig(appData, role);
   }, [appData, role]);
 
+  // Check if current user is a teacher (Guru/Wali/Tugas Tambahan)
+  const isTeacherUser = React.useMemo(() => {
+    if (!currentUser) return false;
+    const r = (currentUser.role || '').toLowerCase();
+    if (['guru', 'wali', 'user'].includes(r)) return true;
+    if (Array.isArray(currentUser.roles) && currentUser.roles.some((ro) => ['guru', 'wali'].includes(ro.toLowerCase()))) return true;
+    const uData = currentUser.data as any;
+    if (uData?.id && appData?.waliKelas?.some((w) => w.id === uData.id)) return true;
+    if (uData?.username && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === uData.username.toLowerCase())) return true;
+    if (uData?.nip && appData?.waliKelas?.some((w) => w.nip && w.nip === uData.nip)) return true;
+    if (uData?.nama && appData?.waliKelas?.some((w) => w.nama?.toLowerCase() === uData.nama.toLowerCase())) return true;
+    return false;
+  }, [currentUser, appData]);
+
   // If the section is disabled by admin for this role, return null
   if (config.enabled === false) {
     return null;
   }
 
-  const activeCards = (config.cards || []).filter((c) => c.enabled);
+  const activeCards = React.useMemo(() => {
+    const list = [...(config.cards || [])].filter((c) => c.enabled);
+    // If the logged in user is a teacher and KBM card is not present, guarantee it is included
+    if (isTeacherUser && !list.some((c) => c.view === 'presensi_kbm_guru')) {
+      list.unshift({
+        id: `qa_${role}_kbm_auto`,
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        isUtama: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      });
+    }
+    return list;
+  }, [config.cards, isTeacherUser, role]);
+
   if (activeCards.length === 0 && (!isAdmin || !onOpenQuickActionSettings)) {
     return null;
   }

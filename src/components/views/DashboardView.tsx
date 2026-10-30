@@ -490,6 +490,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           setSelectedStudentDetail={setSelectedStudentDetail}
           onNavigateView={onNavigateView}
           onNavigateToInput={onNavigateToInput}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
           onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
         />
       );
@@ -568,6 +570,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           setSelectedStudentDetail={setSelectedStudentDetail}
           onNavigateView={onNavigateView}
           onNavigateToInput={onNavigateToInput}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
           onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
         />
       );
