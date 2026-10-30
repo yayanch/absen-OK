@@ -966,259 +966,287 @@ export const Header: React.FC<HeaderProps> = ({
           {isSearchOpen && searchQuery.trim().length > 0 && (
             <div
               ref={searchResultsRef}
-              className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-[80vh] flex flex-col text-xs animate-in fade-in zoom-in-95 duration-150"
+              className="fixed left-3 right-3 top-14 mt-1 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 sm:w-[580px] md:w-[640px] max-h-[80vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 flex flex-col text-xs animate-in fade-in zoom-in-95 duration-150"
             >
-              {/* CATEGORY FILTER TABS */}
-              <div className="p-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1 bg-slate-50/80 dark:bg-slate-800/50 shrink-0 overflow-x-auto">
-                <button
-                  type="button"
-                  onClick={() => setSearchCategory('semua')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer shrink-0 ${
-                    searchCategory === 'semua'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                  }`}
-                >
-                  Semua ({totalResultCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchCategory('menu')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer shrink-0 ${
-                    searchCategory === 'menu'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                  }`}
-                >
-                  Menu &amp; Fitur ({matchedMenu.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchCategory('siswa')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer shrink-0 ${
-                    searchCategory === 'siswa'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                  }`}
-                >
-                  Siswa ({matchedSiswa.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchCategory('guru')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer shrink-0 ${
-                    searchCategory === 'guru'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
-                  }`}
-                >
-                  Guru ({matchedGuru.length})
-                </button>
-              </div>
-
-              {/* SEARCH RESULTS SCROLLABLE LIST */}
-              <div className="overflow-y-auto p-2 space-y-3 divide-y divide-slate-100 dark:divide-slate-800/60">
-                {totalResultCount === 0 && (
-                  <div className="py-8 text-center text-slate-400">
-                    <Search className="w-6 h-6 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
-                    <span>Tidak ditemukan hasil untuk "{searchQuery}"</span>
+                {/* CATEGORY FILTER TABS & CLOSE BUTTON */}
+                <div className="p-2 sm:p-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/90 dark:bg-slate-800/60 shrink-0">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setSearchCategory('semua')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                        searchCategory === 'semua'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                      }`}
+                    >
+                      Semua ({totalResultCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchCategory('menu')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                        searchCategory === 'menu'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                      }`}
+                    >
+                      Menu &amp; Fitur ({matchedMenu.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchCategory('siswa')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                        searchCategory === 'siswa'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                      }`}
+                    >
+                      Siswa ({matchedSiswa.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchCategory('guru')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                        searchCategory === 'guru'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                      }`}
+                    >
+                      Guru ({matchedGuru.length})
+                    </button>
                   </div>
-                )}
 
-                {/* MENU & FITUR APLIKASI RESULTS */}
-                {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'menu') && matchedMenu.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="px-2.5 py-1 text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Settings className="w-3.5 h-3.5" />
-                        <span>Menu &amp; Bagian Aplikasi ({matchedMenu.length})</span>
-                      </span>
-                      {searchCategory === 'semua' && matchedMenu.length > 5 && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchCategory('menu')}
-                          className="hover:underline font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer"
-                        >
-                          Lihat semua {matchedMenu.length} menu →
-                        </button>
-                      )}
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchOpen(false)}
+                    className="sm:hidden p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-lg transition shrink-0 cursor-pointer"
+                    title="Tutup hasil pencarian"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* SEARCH RESULTS SCROLLABLE LIST */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-2.5 space-y-3 divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {totalResultCount === 0 && (
+                    <div className="py-8 text-center text-slate-400">
+                      <Search className="w-6 h-6 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+                      <span>Tidak ditemukan hasil untuk "{searchQuery}"</span>
                     </div>
+                  )}
 
-                    <div className="space-y-1">
-                      {(searchCategory === 'semua' ? matchedMenu.slice(0, 5) : matchedMenu.slice(0, 25)).map((menu) => (
-                        <div
-                          key={menu.id}
-                          onClick={() => handleSelectItem({ type: 'menu', data: menu })}
-                          className="p-2 sm:p-2.5 rounded-xl transition flex items-center justify-between gap-2.5 cursor-pointer border bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-200/60 dark:border-indigo-900/60 hover:bg-indigo-100/70 dark:hover:bg-indigo-900/50 hover:border-indigo-300 dark:hover:border-indigo-700"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/80 dark:text-indigo-300 flex items-center justify-center shrink-0 shadow-2xs">
-                              {renderNavIcon(menu.iconName, 'w-4 h-4')}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                                {highlightMatch(menu.label, searchQuery)}
-                              </div>
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                {highlightMatch(menu.shortDesc, searchQuery)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 rounded-md">
-                              {menu.category}
-                            </span>
-                            <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* SISWA RESULTS */}
-                {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'siswa') && matchedSiswa.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="px-2.5 py-1 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5" />
-                        <span>Siswa ({matchedSiswa.length})</span>
-                      </span>
-                      {searchCategory === 'semua' && matchedSiswa.length > 5 && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchCategory('siswa')}
-                          className="hover:underline font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
-                        >
-                          Lihat semua {matchedSiswa.length} siswa →
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      {(searchCategory === 'semua' ? matchedSiswa.slice(0, 5) : matchedSiswa.slice(0, 25)).map((siswa) => {
-                        const kelas = kelasMap.get(siswa.kelasId);
-                        const isBinaan = binaanClassIds !== null && (siswa.kelasId ? binaanClassIds.has(siswa.kelasId) : false);
-
-                        return (
-                          <div
-                            key={siswa.id}
-                            onClick={() => handleSelectItem({ type: 'siswa', data: siswa })}
-                            className="p-2 sm:p-2.5 rounded-xl transition flex items-center justify-between gap-2.5 cursor-pointer border bg-slate-50/40 dark:bg-slate-800/30 border-slate-200/60 dark:border-slate-800/70 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700"
+                  {/* MENU & FITUR APLIKASI RESULTS */}
+                  {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'menu') && matchedMenu.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="px-2.5 py-1 text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Settings className="w-3.5 h-3.5" />
+                          <span>Menu &amp; Bagian Aplikasi ({matchedMenu.length})</span>
+                        </span>
+                        {searchCategory === 'semua' && matchedMenu.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchCategory('menu')}
+                            className="hover:underline font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer"
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              {siswa.foto ? (
-                                <img
-                                  src={siswa.foto}
-                                  alt={siswa.nama}
-                                  className="w-9 h-9 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs"
-                                />
-                              ) : (
-                                <div
-                                  className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0 shadow-2xs ${
-                                    siswa.gender === 'P' ? 'bg-pink-600' : 'bg-blue-600'
-                                  }`}
-                                >
-                                  {siswa.nama.substring(0, 2).toUpperCase()}
+                            Lihat semua {matchedMenu.length} menu →
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {(searchCategory === 'semua' ? matchedMenu.slice(0, 5) : matchedMenu.slice(0, 25)).map((menu) => (
+                          <div
+                            key={menu.id}
+                            onClick={() => handleSelectItem({ type: 'menu', data: menu })}
+                            className="p-2.5 sm:p-3 rounded-xl transition flex items-center justify-between gap-2.5 cursor-pointer border bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-200/60 dark:border-indigo-900/60 hover:bg-indigo-100/70 dark:hover:bg-indigo-900/50 hover:border-indigo-300 dark:hover:border-indigo-700"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/80 dark:text-indigo-300 flex items-center justify-center shrink-0 shadow-2xs">
+                                {renderNavIcon(menu.iconName, 'w-4 h-4')}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                                  {highlightMatch(menu.label, searchQuery)}
                                 </div>
-                              )}
-                              <div className="min-w-0">
-                                <div className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                                  {highlightMatch(siswa.nama, searchQuery)}
-                                </div>
-                                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
-                                  <span className="font-mono">{highlightMatch(siswa.nisn || '-', searchQuery)}</span>
-                                  <span>·</span>
-                                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                    Kelas {highlightMatch(kelas?.nama || '-', searchQuery)}
-                                  </span>
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                  {highlightMatch(menu.shortDesc, searchQuery)}
                                 </div>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-1.5 shrink-0">
-                              {(() => {
-                                const phoneNum = siswa.noWa || siswa.noWaOrangTua;
-                                if (!phoneNum) return null;
-                                return (
-                                  <a
-                                    href={`https://wa.me/${phoneNum.replace(/\D/g, '').replace(/^0/, '62')}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-300/80 dark:border-emerald-800 transition"
-                                    title={`Hubungi ${siswa.noWa ? 'Siswa' : 'Orang Tua'} via WhatsApp`}
+                              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 rounded-md">
+                                {menu.category}
+                              </span>
+                              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SISWA RESULTS */}
+                  {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'siswa') && matchedSiswa.length > 0 && (
+                    <div className="space-y-1.5 pt-2">
+                      <div className="px-2.5 py-1 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <GraduationCap className="w-3.5 h-3.5" />
+                          <span>Siswa ({matchedSiswa.length})</span>
+                        </span>
+                        {searchCategory === 'semua' && matchedSiswa.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchCategory('siswa')}
+                            className="hover:underline font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
+                          >
+                            Lihat semua {matchedSiswa.length} siswa →
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {(searchCategory === 'semua' ? matchedSiswa.slice(0, 5) : matchedSiswa.slice(0, 25)).map((siswa) => {
+                          const kelas = kelasMap.get(siswa.kelasId);
+                          const isBinaan = binaanClassIds !== null && (siswa.kelasId ? binaanClassIds.has(siswa.kelasId) : false);
+
+                          return (
+                            <div
+                              key={siswa.id}
+                              onClick={() => handleSelectItem({ type: 'siswa', data: siswa })}
+                              className="p-2.5 sm:p-3 rounded-xl transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 cursor-pointer border bg-slate-50/50 dark:bg-slate-800/30 border-slate-200/70 dark:border-slate-800/70 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                {siswa.foto ? (
+                                  <img
+                                    src={siswa.foto}
+                                    alt={siswa.nama}
+                                    className="w-9 h-9 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                                  />
+                                ) : (
+                                  <div
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs shrink-0 shadow-2xs ${
+                                      siswa.gender === 'P' ? 'bg-pink-600' : 'bg-blue-600'
+                                    }`}
                                   >
-                                    <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                    <span className="font-mono">{phoneNum}</span>
-                                  </a>
-                                );
-                              })()}
-                              {isBinaan && (
-                                <span className="px-2 py-0.5 text-[10px] font-extrabold bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 rounded-md border border-blue-200 dark:border-blue-800">
-                                  Binaan
+                                    {siswa.nama.substring(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                                    {highlightMatch(siswa.nama, searchQuery)}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+                                    <span className="font-mono">{highlightMatch(siswa.nisn || '-', searchQuery)}</span>
+                                    <span>·</span>
+                                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                      Kelas {highlightMatch(kelas?.nama || '-', searchQuery)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
+                                {(() => {
+                                  const phoneNum = siswa.noWa || siswa.noWaOrangTua;
+                                  if (!phoneNum) return null;
+                                  return (
+                                    <a
+                                      href={`https://wa.me/${phoneNum.replace(/\D/g, '').replace(/^0/, '62')}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-300/80 dark:border-emerald-800 transition shadow-2xs"
+                                      title={`Hubungi ${siswa.noWa ? 'Siswa' : 'Orang Tua'} via WhatsApp`}
+                                    >
+                                      <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                      <span className="font-mono">{phoneNum}</span>
+                                    </a>
+                                  );
+                                })()}
+                                {isBinaan && (
+                                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 rounded-md border border-blue-200 dark:border-blue-800">
+                                    Binaan
+                                  </span>
+                                )}
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* GURU RESULTS */}
+                  {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'guru') && matchedGuru.length > 0 && (
+                    <div className="space-y-1.5 pt-2">
+                      <div className="px-2.5 py-1 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Guru &amp; Staf ({matchedGuru.length})</span>
+                        </span>
+                        {searchCategory === 'semua' && matchedGuru.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchCategory('guru')}
+                            className="hover:underline font-bold text-blue-600 dark:text-blue-400 cursor-pointer"
+                          >
+                            Lihat semua {matchedGuru.length} guru →
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {(searchCategory === 'semua' ? matchedGuru.slice(0, 5) : matchedGuru.slice(0, 25)).map((guru) => (
+                          <div
+                            key={guru.id}
+                            onClick={() => handleSelectItem({ type: 'guru', data: guru })}
+                            className="p-2.5 sm:p-3 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                          >
+                            <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-xs bg-indigo-600 shrink-0 shadow-2xs mt-0.5 sm:mt-0">
+                                {guru.nama.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-tight">
+                                  {highlightMatch(guru.nama, searchQuery)}
+                                </div>
+                                <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-snug line-clamp-2">
+                                  {highlightMatch(guru.mataPelajaran || guru.jabatan || 'Guru & Tenaga Pendidik', searchQuery)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
+                              {guru.noHp ? (
+                                <a
+                                  href={`https://wa.me/${guru.noHp.replace(/\D/g, '').replace(/^0/, '62')}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-300/80 dark:border-emerald-800 transition shadow-2xs"
+                                  title="Hubungi Guru via WhatsApp"
+                                >
+                                  <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span className="font-mono">{guru.noHp}</span>
+                                </a>
+                              ) : (
+                                <span className="text-[10px] font-mono text-slate-400 italic">
+                                  Belum ada WA
                                 </span>
                               )}
+                              <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                             </div>
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {/* GURU RESULTS */}
-                {searchQuery.trim() && (searchCategory === 'semua' || searchCategory === 'guru') && matchedGuru.length > 0 && (
-                  <div className="space-y-1 pt-2">
-                    <div className="px-2.5 py-1 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Guru &amp; Staf ({matchedGuru.length})</span>
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {matchedGuru.map((guru) => (
-                        <div
-                          key={guru.id}
-                          onClick={() => handleSelectItem({ type: 'guru', data: guru })}
-                          className="p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition cursor-pointer flex items-center justify-between gap-2"
-                        >
-                          <div>
-                            <div className="font-bold text-xs text-slate-900 dark:text-white">
-                              {highlightMatch(guru.nama, searchQuery)}
-                            </div>
-                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                              {guru.mataPelajaran || guru.jabatan || 'Guru'}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {guru.noHp ? (
-                              <a
-                                href={`https://wa.me/${guru.noHp.replace(/\D/g, '').replace(/^0/, '62')}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-300/80 dark:border-emerald-800 transition"
-                                title="Hubungi Guru via WhatsApp"
-                              >
-                                <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                <span className="font-mono">{guru.noHp}</span>
-                              </a>
-                            ) : (
-                              <span className="text-[10px] font-mono text-slate-400 italic">
-                                Belum ada WA
-                              </span>
-                            )}
-                            <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
           )}
         </div>
 
