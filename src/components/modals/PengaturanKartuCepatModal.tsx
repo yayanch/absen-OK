@@ -40,8 +40,31 @@ import {
   resetRoleQuickActionToDefault,
   resetAllRoleQuickActionsToDefault,
 } from '../../utils/dashboardQuickActionsEngine';
-import { ALL_MENU_ITEMS } from '../../utils/rolePermissionEngine';
+import { ALL_MENU_ITEMS, MENU_CATEGORIES, MenuCategoryKey, MenuItemInfo } from '../../utils/rolePermissionEngine';
 import { addAuditLog } from '../../utils/helpers';
+
+export const getCategoryDefaultColor = (category?: string): QuickActionColor => {
+  switch (category) {
+    case 'dashboard':
+      return 'blue';
+    case 'presensi':
+      return 'emerald';
+    case 'laporan':
+      return 'amber';
+    case 'master':
+      return 'indigo';
+    case 'kegiatan':
+      return 'rose';
+    case 'qr':
+      return 'cyan';
+    case 'sistem':
+      return 'purple';
+    case 'pengaturan':
+      return 'slate';
+    default:
+      return 'blue';
+  }
+};
 
 interface PengaturanKartuCepatModalProps {
   isOpen: boolean;
@@ -110,8 +133,14 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
   const [showCopyFromModal, setShowCopyFromModal] = useState<boolean>(false);
   const [sourceCopyRoleKey, setSourceCopyRoleKey] = useState<string>('admin');
 
-  // Search filter for menu items in Add modal
+  // Search filter and Bagian filter for menu items in Add modal
   const [menuSearchQuery, setMenuSearchQuery] = useState<string>('');
+  const [selectedBagianFilter, setSelectedBagianFilter] = useState<string>('semua');
+
+  // Bulk add cards from Bagian modal state
+  const [showBulkBagianModal, setShowBulkBagianModal] = useState<boolean>(false);
+  const [bulkSelectedMenuIds, setBulkSelectedMenuIds] = useState<Set<string>>(new Set());
+  const [bulkSearchQuery, setBulkSearchQuery] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -188,6 +217,7 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
   const handleOpenEditCard = (card: DashboardQuickActionItem) => {
     setEditingCard({ ...card });
     setIsAddingNew(false);
+    setSelectedBagianFilter('semua');
   };
 
   // Open Add Card
@@ -203,6 +233,7 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
     });
     setIsAddingNew(true);
     setMenuSearchQuery('');
+    setSelectedBagianFilter('semua');
   };
 
   // Save Card (after editing or adding)
@@ -225,7 +256,7 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
   };
 
   // Quick pick from menu item in edit/add form
-  const handleSelectMenuItem = (menuItem: typeof ALL_MENU_ITEMS[0]) => {
+  const handleSelectMenuItem = (menuItem: MenuItemInfo) => {
     if (!editingCard) return;
     setEditingCard({
       ...editingCard,
@@ -233,7 +264,103 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
       title: menuItem.label,
       subtitle: menuItem.shortDesc,
       iconName: menuItem.iconName || 'FileText',
+      colorScheme: getCategoryDefaultColor(menuItem.category),
     });
+  };
+
+  // Open Bulk Add Modal for Bagian
+  const handleOpenBulkBagianModal = () => {
+    // Pre-select all menu items that are not yet in current role's cards
+    const existingViews = new Set(currentRoleConfig.cards.map((c) => c.view));
+    const toSelect = new Set<string>();
+    ALL_MENU_ITEMS.forEach((m) => {
+      if (!existingViews.has(m.id)) {
+        toSelect.add(m.id);
+      }
+    });
+    setBulkSelectedMenuIds(toSelect.size > 0 ? toSelect : new Set(ALL_MENU_ITEMS.map((m) => m.id)));
+    setBulkSearchQuery('');
+    setShowBulkBagianModal(true);
+  };
+
+  // Bulk toggle single menu item
+  const handleToggleBulkMenu = (menuId: string) => {
+    setBulkSelectedMenuIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(menuId)) {
+        next.delete(menuId);
+      } else {
+        next.add(menuId);
+      }
+      return next;
+    });
+  };
+
+  // Bulk toggle all items in a category/bagian
+  const handleToggleBulkCategory = (categoryKey: string) => {
+    const catItems = ALL_MENU_ITEMS.filter((m) => m.category === categoryKey);
+    const catItemIds = catItems.map((m) => m.id);
+    const allSelected = catItemIds.every((id) => bulkSelectedMenuIds.has(id));
+
+    setBulkSelectedMenuIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        catItemIds.forEach((id) => next.delete(id));
+      } else {
+        catItemIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  // Select all menus across all Bagian
+  const handleSelectAllBulkMenus = () => {
+    const allIds = new Set(ALL_MENU_ITEMS.map((m) => m.id));
+    setBulkSelectedMenuIds(allIds);
+  };
+
+  // Deselect all
+  const handleDeselectAllBulkMenus = () => {
+    setBulkSelectedMenuIds(new Set());
+  };
+
+  // Confirm and insert bulk selected items into current role cards
+  const handleConfirmBulkAddBagian = () => {
+    if (bulkSelectedMenuIds.size === 0) {
+      setShowBulkBagianModal(false);
+      return;
+    }
+
+    const existingViews = new Set(currentRoleConfig.cards.map((c) => c.view));
+    const newCards: DashboardQuickActionItem[] = [];
+
+    ALL_MENU_ITEMS.forEach((item, idx) => {
+      if (bulkSelectedMenuIds.has(item.id)) {
+        // If not already existing or user wants full set
+        newCards.push({
+          id: `qa_${selectedRoleKey}_${item.id}_${idx}_${Date.now().toString().slice(-4)}`,
+          view: item.id,
+          title: item.label,
+          subtitle: item.shortDesc,
+          iconName: item.iconName || 'FileText',
+          colorScheme: getCategoryDefaultColor(item.category),
+          enabled: true,
+        });
+      }
+    });
+
+    updateCurrentRoleDraft((cfg) => ({
+      ...cfg,
+      cards: [...cfg.cards, ...newCards],
+    }));
+
+    setShowBulkBagianModal(false);
+    if (onShowToast) {
+      onShowToast(
+        `Berhasil memasukkan ${newCards.length} kartu cepat dari bagian sistem ke peran "${currentRoleMeta.label}"!`,
+        'success'
+      );
+    }
   };
 
   // Reset selected role to default
@@ -322,16 +449,22 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
     onClose();
   };
 
-  // Filtered menu items for picker
-  const filteredMenuItems = ALL_MENU_ITEMS.filter((item) => {
-    if (!menuSearchQuery) return true;
-    const q = menuSearchQuery.toLowerCase();
-    return (
-      item.label.toLowerCase().includes(q) ||
-      item.shortDesc.toLowerCase().includes(q) ||
-      item.id.toLowerCase().includes(q)
-    );
-  });
+  // Filtered menu items for picker (Add / Edit Card modal)
+  const filteredMenuItems = useMemo(() => {
+    return ALL_MENU_ITEMS.filter((item) => {
+      if (selectedBagianFilter !== 'semua' && item.category !== selectedBagianFilter) {
+        return false;
+      }
+      if (!menuSearchQuery) return true;
+      const q = menuSearchQuery.toLowerCase();
+      return (
+        item.label.toLowerCase().includes(q) ||
+        item.shortDesc.toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q)
+      );
+    });
+  }, [selectedBagianFilter, menuSearchQuery]);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
@@ -505,14 +638,26 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={handleOpenAddCard}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Tambah Kartu Baru</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenBulkBagianModal}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                  title="Pilih dan masukkan menu dari seluruh bagian aplikasi sekaligus"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Pilih dari Semua Bagian</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddCard}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Tambah Kartu Baru</span>
+                </button>
+              </div>
             </div>
 
             {currentRoleConfig.cards.length === 0 ? (
@@ -785,40 +930,118 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
 
             <form onSubmit={handleSaveCard} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
               {/* Quick Pick From Menu */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Pilih Cepat dari Menu Sistem (Otomatis Isi Judul & Icon):
-                </label>
-                <div className="relative mb-2">
+              <div className="space-y-2 bg-slate-50/70 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-1">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Pilih Cepat dari Menu Sistem (Otomatis Isi Judul, Icon & Warna):
+                  </label>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                    {filteredMenuItems.length} Menu Tersedia
+                  </span>
+                </div>
+
+                {/* Bagian Filter Tabs */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBagianFilter('semua')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer ${
+                      selectedBagianFilter === 'semua'
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    Semua Bagian ({ALL_MENU_ITEMS.length})
+                  </button>
+                  {MENU_CATEGORIES.map((cat) => {
+                    const isSelected = selectedBagianFilter === cat.key;
+                    return (
+                      <button
+                        key={cat.key}
+                        type="button"
+                        onClick={() => setSelectedBagianFilter(cat.key)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span>{cat.title.split('&')[0].trim()}</span>
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-md ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                        }`}>
+                          {cat.items.length}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Cari menu (cth: Mapel, Siswa, Absen, Presensi)..."
+                    placeholder="Cari menu atau bagian (cth: Mapel, Siswa, Absen, Presensi, Backup)..."
                     value={menuSearchQuery}
                     onChange={(e) => setMenuSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
-                <div className="max-h-36 overflow-y-auto no-scrollbar grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-800/40">
-                  {filteredMenuItems.slice(0, 14).map((m) => (
+                  {menuSearchQuery && (
                     <button
-                      key={m.id}
                       type="button"
-                      onClick={() => handleSelectMenuItem(m)}
-                      className={`text-left p-2 rounded-xl text-xs transition border cursor-pointer flex items-center gap-2 ${
-                        editingCard.view === m.id
-                          ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold'
-                          : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300'
-                      }`}
+                      onClick={() => setMenuSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
                     >
-                      <div className="p-1 rounded-md bg-slate-100 dark:bg-slate-800 shrink-0">
-                        {renderQuickActionIcon(m.iconName, 'w-3 h-3')}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold text-[11px]">{m.label}</div>
-                      </div>
+                      <X className="w-3.5 h-3.5" />
                     </button>
-                  ))}
+                  )}
+                </div>
+
+                {/* Grid of ALL menu items without slicing */}
+                <div className="max-h-52 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900">
+                  {filteredMenuItems.length === 0 ? (
+                    <div className="col-span-full py-6 text-center text-slate-400 text-xs">
+                      Tidak ada menu yang sesuai dengan filter atau kata kunci.
+                    </div>
+                  ) : (
+                    filteredMenuItems.map((m) => {
+                      const catInfo = MENU_CATEGORIES.find((c) => c.key === m.category);
+                      const isSelected = editingCard.view === m.id;
+
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => handleSelectMenuItem(m)}
+                          className={`text-left p-2.5 rounded-xl text-xs transition border cursor-pointer flex items-start gap-2.5 ${
+                            isSelected
+                              ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold shadow-2xs'
+                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850'
+                          }`}
+                        >
+                          <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                          }`}>
+                            {renderQuickActionIcon(m.iconName, 'w-3.5 h-3.5')}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="truncate font-bold text-xs text-slate-900 dark:text-white">
+                                {m.label}
+                              </span>
+                              <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0">
+                                {catInfo?.title.split('&')[0].trim() || m.category}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal">
+                              {m.shortDesc}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
@@ -893,10 +1116,14 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                     onChange={(e) => setEditingCard({ ...editingCard, view: e.target.value as ViewType })}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold cursor-pointer"
                   >
-                    {ALL_MENU_ITEMS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label} ({m.id})
-                      </option>
+                    {MENU_CATEGORIES.map((cat) => (
+                      <optgroup key={cat.key} label={`Bagian: ${cat.title}`}>
+                        {cat.items.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label} ({m.id})
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -994,6 +1221,221 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-MODAL: Pilih & Masukan dari Semua Bagian */}
+      {showBulkBagianModal && (
+        <div className="fixed inset-0 z-60 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Masukan Menu dari Semua Bagian Sistem ke Kartu Cepat</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Pilih menu dari seluruh 8 bagian aplikasi untuk langsung ditambahkan ke Kartu Cepat peran <strong className="text-slate-800 dark:text-slate-200">"{currentRoleMeta.label}"</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBulkBagianModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick controls bar */}
+            <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-800/40 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllBulkMenus}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Pilih Semua Bagian (38 Menu)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeselectAllBulkMenus}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <span>Batal Pilih Semua</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                  {bulkSelectedMenuIds.size} menu dipilih
+                </span>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari bagian atau menu..."
+                    value={bulkSearchQuery}
+                    onChange={(e) => setBulkSearchQuery(e.target.value)}
+                    className="pl-8 pr-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 w-44 sm:w-56"
+                  />
+                  {bulkSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setBulkSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* List of all 8 Bagian */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+              {MENU_CATEGORIES.map((cat) => {
+                const filteredItems = cat.items.filter((item) => {
+                  if (!bulkSearchQuery) return true;
+                  const q = bulkSearchQuery.toLowerCase();
+                  return (
+                    item.label.toLowerCase().includes(q) ||
+                    item.shortDesc.toLowerCase().includes(q) ||
+                    cat.title.toLowerCase().includes(q) ||
+                    item.id.toLowerCase().includes(q)
+                  );
+                });
+
+                if (filteredItems.length === 0) return null;
+
+                const allInCatSelected = filteredItems.every((item) => bulkSelectedMenuIds.has(item.id));
+                const someInCatSelected = filteredItems.some((item) => bulkSelectedMenuIds.has(item.id));
+
+                return (
+                  <div
+                    key={cat.key}
+                    className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-50/50 dark:bg-slate-850/40"
+                  >
+                    {/* Bagian Header */}
+                    <div className="p-3 sm:p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-white dark:bg-slate-900">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                          {renderQuickActionIcon(cat.iconName, 'w-4 h-4')}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate">
+                              Bagian: {cat.title}
+                            </h4>
+                            <span className="text-[10px] font-bold px-2 py-0.2 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 shrink-0">
+                              {cat.items.length} Menu
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block truncate">
+                            {cat.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBulkCategory(cat.key)}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition border cursor-pointer shrink-0 ${
+                          allInCatSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : someInCatSelected
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300'
+                            : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        {allInCatSelected ? 'Batalkan Bagian Ini' : 'Pilih Semua di Bagian Ini'}
+                      </button>
+                    </div>
+
+                    {/* Menu items in this Bagian */}
+                    <div className="p-2 sm:p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {filteredItems.map((m) => {
+                        const isSelected = bulkSelectedMenuIds.has(m.id);
+                        const isAlreadyCard = currentRoleConfig.cards.some((c) => c.view === m.id);
+
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => handleToggleBulkMenu(m.id)}
+                            className={`p-2.5 rounded-xl border transition cursor-pointer flex items-start gap-2.5 select-none ${
+                              isSelected
+                                ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-indigo-400 dark:border-indigo-600 shadow-2xs'
+                                : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}} // handled by parent onClick
+                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer mt-0.5"
+                            />
+                            <div className="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 mt-0.5">
+                              {renderQuickActionIcon(m.iconName, 'w-3.5 h-3.5')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                  {m.label}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                                {m.shortDesc}
+                              </p>
+                              {isAlreadyCard && (
+                                <span className="inline-block mt-1 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded-md">
+                                  ✓ Sudah ada di kartu saat ini
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Total {bulkSelectedMenuIds.size} menu dari semua bagian akan dimasukkan ke kartu cepat peran {currentRoleMeta.label}.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkBagianModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmBulkAddBagian}
+                  disabled={bulkSelectedMenuIds.size === 0}
+                  className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md ${
+                    bulkSelectedMenuIds.size === 0
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25 cursor-pointer'
+                  }`}
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Masukan {bulkSelectedMenuIds.size} Menu ke Kartu Cepat</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
