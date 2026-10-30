@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementasi fitur Switch Ruang Kerja / Mode Peran untuk Guru dengan Tugas Tambahan (Wali Kelas, Wakasek Kurikulum, Kesiswaan, Hubin, dll).\nTampilan Dashboard dan navigasi Sidebar kini berganti secara dinamis dan mulus sesuai peran yang dipilih dari tombol Switcher di Header (dekat foto profil).",
-  "updatedAt":  "2026-10-29T06:41:53.883248218Z",
+  "summary":  "Rencana perbaikan aktivasi sakelar kartu cepat untuk peran Guru dan Guru dengan Tugas Tambahan agar tersimpan secara permanen dan tampil akurat di seluruh dashboard.",
+  "updatedAt":  "2026-10-30T13:02:56.654282209Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

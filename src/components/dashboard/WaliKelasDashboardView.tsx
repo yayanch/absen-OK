@@ -134,7 +134,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
 
       {/* Quick Actions */}
       <RoleQuickActions
-        role={currentUser.role}
+        role={currentUser.role === 'piket_kelas' ? 'piket_kelas' : 'wali'}
         appData={appData}
         currentUser={currentUser}
         onNavigateView={onNavigateView}

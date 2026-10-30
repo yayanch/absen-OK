@@ -148,9 +148,12 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
   }
 
   const activeCards = React.useMemo(() => {
-    const list = [...(config.cards || [])].filter((c) => c.enabled);
-    // If the logged in user is a teacher and KBM card is not present, guarantee it is included
-    if (isTeacherUser && !list.some((c) => c.view === 'presensi_kbm_guru')) {
+    const rawCards = config.cards || [];
+    const list = rawCards.filter((c) => c.enabled);
+    const hasKbmInConfig = rawCards.some((c) => c.view === 'presensi_kbm_guru');
+
+    // If the logged in user is a teacher and KBM card is not present in config at all, guarantee it is included
+    if (isTeacherUser && !hasKbmInConfig) {
       list.unshift({
         id: `qa_${role}_kbm_auto`,
         view: 'presensi_kbm_guru',

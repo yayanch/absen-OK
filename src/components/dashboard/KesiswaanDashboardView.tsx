@@ -129,7 +129,7 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
 
       {/* Quick Actions Kesiswaan / Piket */}
       <RoleQuickActions
-        role={currentUser.role}
+        role={currentUser.role === 'piket' ? 'piket' : 'kesiswaan'}
         appData={appData}
         currentUser={currentUser}
         onNavigateView={onNavigateView}
