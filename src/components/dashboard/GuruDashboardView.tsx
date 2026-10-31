@@ -17,8 +17,6 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   Award,
-  ArrowLeftRight,
-  Check,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppData, UserSession, ViewType } from '../../types';
@@ -27,7 +25,7 @@ import { TeacherScheduleWidget } from './TeacherScheduleWidget';
 import { RoleQuickActions } from './RoleQuickActions';
 import { TeacherRoleStatusInfo } from './TeacherAdditionalRoleStatsWidget';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
-import { getEffectiveUserRoles, getUserRoleWorkspaces } from '../../utils/rolePermissionEngine';
+import { getEffectiveUserRoles } from '../../utils/rolePermissionEngine';
 
 interface GuruDashboardViewProps {
   appData: AppData;
@@ -53,8 +51,6 @@ interface GuruDashboardViewProps {
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onOpenQuickActionSettings?: (roleKey?: string) => void;
-  activeRoleWorkspace?: string;
-  onSelectRoleWorkspace?: (roleKey: string) => void;
 }
 
 export type TeacherStatusSimulationOption =
@@ -82,18 +78,11 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   onUpdateAppData,
   onShowToast,
   onOpenQuickActionSettings,
-  activeRoleWorkspace,
-  onSelectRoleWorkspace,
 }) => {
   // Simulator mode for user testing / review of dynamic states (admin only)
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
   const [statusSimulator, setStatusSimulator] = useState<TeacherStatusSimulationOption>('auto');
   const [showSimulatorBar, setShowSimulatorBar] = useState<boolean>(false);
-
-  // Available workspaces for this teacher
-  const availableWorkspaces = useMemo(() => {
-    return getUserRoleWorkspaces(currentUser, appData);
-  }, [currentUser, appData]);
 
   // 1. Resolve Teacher Data & Natural Roles
   const teacherData = useMemo(() => {
@@ -560,15 +549,8 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
             <Award className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Status Penugasan Pendidik:
-              </span>
-              {availableWorkspaces.length > 1 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                  {availableWorkspaces.length} Ruang Kerja
-                </span>
-              )}
+            <div className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              Status Penugasan Pendidik:
             </div>
             <div className="flex items-center gap-1.5 flex-wrap mt-1">
               {roleStatus.activeRolesList.map((r, idx) => {
@@ -582,58 +564,20 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
                   rose: 'bg-rose-50 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 border-rose-200 dark:border-rose-800',
                 };
                 const cls = colorClasses[r.color] || colorClasses.indigo;
-                const isCurrentActive = activeRoleWorkspace === r.key || (!activeRoleWorkspace && r.key === 'guru');
-                const canSwitchToThis = availableWorkspaces.some((w) => w.key === r.key);
-
                 return (
-                  <button
+                  <span
                     key={idx}
-                    type="button"
-                    onClick={() => {
-                      if (onSelectRoleWorkspace && canSwitchToThis) {
-                        onSelectRoleWorkspace(r.key);
-                      }
-                    }}
-                    disabled={!onSelectRoleWorkspace || !canSwitchToThis}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold border transition ${cls} ${
-                      canSwitchToThis && onSelectRoleWorkspace
-                        ? 'cursor-pointer hover:opacity-90 active:scale-95'
-                        : 'cursor-default'
-                    } ${isCurrentActive ? 'ring-2 ring-blue-500/50 shadow-xs' : ''}`}
-                    title={
-                      canSwitchToThis && onSelectRoleWorkspace
-                        ? `Klik untuk beralih ke ruang kerja ${r.label}`
-                        : r.label
-                    }
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-extrabold border ${cls}`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${isCurrentActive ? 'bg-blue-600 animate-pulse' : 'bg-current'}`} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
                     <span>{r.label}</span>
-                    {isCurrentActive && <Check className="w-3 h-3 text-blue-600 dark:text-blue-400 stroke-[3]" />}
-                  </button>
+                  </span>
                 );
               })}
             </div>
           </div>
         </div>
 
-        {/* INTERACTIVE ROLE / WORKSPACE SWITCH BUTTON FOR TEACHERS WITH DUTIES */}
-        {availableWorkspaces.length > 1 && onSelectRoleWorkspace && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                const currentIndex = availableWorkspaces.findIndex((w) => w.key === activeRoleWorkspace);
-                const nextWs = availableWorkspaces[(currentIndex + 1) % availableWorkspaces.length];
-                if (nextWs) onSelectRoleWorkspace(nextWs.key);
-              }}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow transition active:scale-95 cursor-pointer"
-              title="Ganti Ruang Kerja / Beralih Mode Peran"
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-              <span>Switch Ruang Kerja</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* -------------------------------------------------------------

@@ -36,7 +36,6 @@ import {
   Server,
   ShieldCheck,
   Search,
-  Briefcase,
 } from 'lucide-react';
 import { ViewType, UserSession, SekolahConfig, AppData, SidebarThemeOption } from '../types';
 import { DEFAULT_TOGA_LOGO } from '../data/initialData';
@@ -419,33 +418,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           ? 'bg-amber-500/20 text-amber-300'
                           : activeWorkspace?.key === 'kesiswaan'
                           ? 'bg-purple-500/20 text-purple-300'
-                          : activeWorkspace?.key === 'hubin'
-                          ? 'bg-teal-500/20 text-teal-300'
-                          : activeWorkspace?.key === 'staf_jadwal'
-                          ? 'bg-cyan-500/20 text-cyan-300'
-                          : activeWorkspace?.key === 'piket'
-                          ? 'bg-amber-500/20 text-amber-300'
-                          : activeWorkspace?.key === 'adm_siswa'
-                          ? 'bg-sky-500/20 text-sky-300'
                           : 'bg-indigo-500/20 text-indigo-300'
                       }`}>
-                        {activeWorkspace?.iconName === 'UserCheck' ? (
-                          <UserCheck className="w-4 h-4" />
-                        ) : activeWorkspace?.iconName === 'CalendarRange' ? (
-                          <CalendarRange className="w-4 h-4" />
-                        ) : activeWorkspace?.iconName === 'ShieldAlert' ? (
-                          <ShieldAlert className="w-4 h-4" />
-                        ) : activeWorkspace?.iconName === 'Briefcase' ? (
-                          <Briefcase className="w-4 h-4" />
-                        ) : activeWorkspace?.iconName === 'CalendarDays' ? (
-                          <CalendarDays className="w-4 h-4" />
-                        ) : activeWorkspace?.iconName === 'ClipboardCheck' ? (
-                          <ClipboardCheck className="w-4 h-4" />
-                        ) : activeWorkspace?.iconName === 'Layers' ? (
-                          <Layers className="w-4 h-4" />
-                        ) : (
-                          <BookOpen className="w-4 h-4" />
-                        )}
+                        {activeWorkspace?.key === 'wali' ? <UserCheck className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className="block text-[9.5px] uppercase font-bold tracking-wider text-white/60 leading-tight">
@@ -484,21 +459,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className="mx-auto w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer transition border border-white/10"
                     title={`Mode Peran Aktif: ${activeWorkspace?.shortLabel} (Klik untuk beralih)`}
                   >
-                    {activeWorkspace?.iconName === 'UserCheck' ? (
-                      <UserCheck className="w-4 h-4 text-emerald-300" />
-                    ) : activeWorkspace?.iconName === 'CalendarRange' ? (
-                      <CalendarRange className="w-4 h-4 text-amber-300" />
-                    ) : activeWorkspace?.iconName === 'ShieldAlert' ? (
-                      <ShieldAlert className="w-4 h-4 text-purple-300" />
-                    ) : activeWorkspace?.iconName === 'Briefcase' ? (
-                      <Briefcase className="w-4 h-4 text-teal-300" />
-                    ) : activeWorkspace?.iconName === 'CalendarDays' ? (
-                      <CalendarDays className="w-4 h-4 text-cyan-300" />
-                    ) : activeWorkspace?.iconName === 'ClipboardCheck' ? (
-                      <ClipboardCheck className="w-4 h-4 text-amber-300" />
-                    ) : (
-                      <BookOpen className="w-4 h-4 text-indigo-300" />
-                    )}
+                    {activeWorkspace?.key === 'wali' ? <UserCheck className="w-4 h-4 text-emerald-300" /> : <BookOpen className="w-4 h-4 text-indigo-300" />}
                   </button>
                 )}
               </div>
