@@ -1013,11 +1013,65 @@ export function mapDutyToRole(duty: string, customRoles?: CustomRole[]): string 
   const d = duty.trim().toLowerCase();
 
   if (d.includes('wali kelas') || d === 'wali') return 'wali';
-  if (d.includes('kesiswaan') || d.includes('bp bk') || d.includes('bimbingan konseling')) return 'kesiswaan';
+  if (
+    d.includes('kesiswaan') ||
+    d.includes('bp bk') ||
+    d.includes('bp/bk') ||
+    d.includes('bp_bk') ||
+    d.includes('bk') ||
+    d.includes('bimbingan') ||
+    d.includes('konseling') ||
+    d.includes('osis') ||
+    d.includes('tatib') ||
+    d.includes('tata tertib') ||
+    d.includes('disiplin') ||
+    d.includes('kedisiplinan') ||
+    d.includes('ekskul') ||
+    d.includes('ekstrakurikuler') ||
+    d.includes('pramuka')
+  ) {
+    return 'kesiswaan';
+  }
   if (d.includes('kurikulum')) return 'kurikulum';
-  if (d.includes('hubin') || d.includes('hubungan industri') || d.includes('humas')) return 'hubin';
-  if (d.includes('staf jadwal') || d.includes('pengelola jadwal') || d.includes('jadwal kbm')) return 'staf_jadwal';
-  if (d.includes('adm siswa') || d.includes('admin siswa') || d.includes('administrasi siswa') || d.includes('adm_siswa')) return 'adm_siswa';
+  if (
+    d.includes('hubin') ||
+    d.includes('hubungan industri') ||
+    d.includes('humas') ||
+    d.includes('hubungan masyarakat') ||
+    d.includes('bkk') ||
+    d.includes('bursa kerja') ||
+    d.includes('pkl') ||
+    d.includes('prakerin') ||
+    d.includes('magang')
+  ) {
+    return 'hubin';
+  }
+  if (
+    d.includes('staf jadwal') ||
+    d.includes('pengelola jadwal') ||
+    d.includes('jadwal kbm') ||
+    d.includes('tim jadwal') ||
+    d === 'jadwal'
+  ) {
+    return 'staf_jadwal';
+  }
+  if (
+    d.includes('piket') ||
+    d.includes('petugas piket') ||
+    d.includes('guru piket')
+  ) {
+    return 'piket';
+  }
+  if (
+    d.includes('adm siswa') ||
+    d.includes('admin siswa') ||
+    d.includes('administrasi siswa') ||
+    d.includes('adm_siswa') ||
+    d.includes('tata usaha') ||
+    d.includes('tu')
+  ) {
+    return 'adm_siswa';
+  }
   if (d.includes('administrator') || d === 'admin') return 'admin';
 
   // Check custom roles matching name or label
@@ -1146,6 +1200,9 @@ export function getEffectiveUserRoles(
     if (typeof userData.tugasTambahan === 'string') {
       userDuties.push(...userData.tugasTambahan.split(',').map((s: string) => s.trim()));
     }
+    if (typeof userData.jabatan === 'string' && userData.jabatan.trim()) {
+      userDuties.push(userData.jabatan.trim());
+    }
     if (userDuties.length > 0) {
       mapDutiesToRoles(userDuties, appData?.customRoles).forEach((r) => rolesSet.add(r));
     }
@@ -1174,6 +1231,9 @@ export function getEffectiveUserRoles(
         if (typeof matchedGuru.tugasTambahan === 'string') {
           guruDuties.push(...matchedGuru.tugasTambahan.split(',').map((s: string) => s.trim()));
         }
+        if (typeof matchedGuru.jabatan === 'string' && matchedGuru.jabatan.trim()) {
+          guruDuties.push(matchedGuru.jabatan.trim());
+        }
         if (guruDuties.length > 0) {
           mapDutiesToRoles(guruDuties, appData.customRoles).forEach((r) => rolesSet.add(r));
         }
@@ -1183,7 +1243,43 @@ export function getEffectiveUserRoles(
       }
     }
 
-    // 5. If user is assigned as wali in any class
+    // 5. If matched in appData.userBiasa
+    if (appData?.userBiasa) {
+      const ub = appData.userBiasa;
+      if (
+        (userData.username && ub.username?.toLowerCase() === userData.username?.toLowerCase()) ||
+        (userData.nama && ub.nama?.toLowerCase() === userData.nama?.toLowerCase())
+      ) {
+        if (ub.roles && Array.isArray(ub.roles)) {
+          ub.roles.forEach((r) => rolesSet.add(normalizeRoleKey(r)));
+        }
+        if (ub.additionalRoles && Array.isArray(ub.additionalRoles)) {
+          ub.additionalRoles.forEach((r) => rolesSet.add(normalizeRoleKey(r)));
+        }
+        const ubDuties: string[] = [];
+        if (Array.isArray(ub.tugasTambahanList)) ubDuties.push(...ub.tugasTambahanList);
+        if (typeof ub.tugasTambahan === 'string') ubDuties.push(...ub.tugasTambahan.split(',').map((s: string) => s.trim()));
+        if (typeof ub.jabatan === 'string' && ub.jabatan.trim()) ubDuties.push(ub.jabatan.trim());
+        if (ubDuties.length > 0) {
+          mapDutiesToRoles(ubDuties, appData.customRoles).forEach((r) => rolesSet.add(r));
+        }
+      }
+    }
+
+    // 6. If matched in appData.petugasPiket
+    if (appData?.petugasPiket && Array.isArray(appData.petugasPiket)) {
+      const isPiket = appData.petugasPiket.some(
+        (p) =>
+          p.status !== 'nonaktif' &&
+          ((userData.username && p.username?.toLowerCase() === userData.username?.toLowerCase()) ||
+            (userData.nama && p.nama?.toLowerCase() === userData.nama?.toLowerCase()))
+      );
+      if (isPiket) {
+        rolesSet.add('piket');
+      }
+    }
+
+    // 7. If user is assigned as wali in any class
     if (userData.id && appData?.kelas?.some((k) => k.waliKelasId === userData.id)) {
       rolesSet.add('wali');
     }
@@ -1212,7 +1308,7 @@ export interface RoleWorkspaceOption {
 
 /**
  * Computes available workspaces for teachers who hold multiple roles or additional duties
- * (e.g., Wali Kelas, WKS Kurikulum, WKS Kesiswaan, Hubin, etc.)
+ * (e.g., Wali Kelas, WKS Kurikulum, WKS Kesiswaan, Hubin, Piket, Staf Jadwal, dll.)
  */
 export function getUserRoleWorkspaces(
   currentUser?: UserSession | null,
@@ -1226,15 +1322,21 @@ export function getUserRoleWorkspaces(
     return [];
   }
 
+  const userData = (currentUser.data as any) || {};
+
   const isTeacherUser =
     currentUser.role === 'guru' ||
     currentUser.role === 'user' ||
     currentUser.role === 'wali' ||
     roles.includes('guru') ||
     roles.includes('wali') ||
-    Boolean((currentUser.data as any)?.id && appData?.waliKelas?.some((w) => w.id === (currentUser.data as any)?.id)) ||
-    Boolean((currentUser.data as any)?.username && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === (currentUser.data as any)?.username?.toLowerCase())) ||
-    Boolean((currentUser.data as any)?.nip && appData?.waliKelas?.some((w) => w.nip && w.nip === (currentUser.data as any)?.nip));
+    roles.length > 1 ||
+    Boolean(userData.tugasTambahan) ||
+    Boolean(Array.isArray(userData.tugasTambahanList) && userData.tugasTambahanList.length > 0) ||
+    Boolean(Array.isArray(userData.additionalRoles) && userData.additionalRoles.length > 0) ||
+    Boolean(userData.id && appData?.waliKelas?.some((w) => w.id === userData.id)) ||
+    Boolean(userData.username && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === userData.username?.toLowerCase())) ||
+    Boolean(userData.nip && appData?.waliKelas?.some((w) => w.nip && w.nip === userData.nip));
 
   // Only teachers or multi-role staff
   if (!isTeacherUser && currentUser.role !== 'admin') {
@@ -1256,10 +1358,10 @@ export function getUserRoleWorkspaces(
   });
 
   // 2. Wali Kelas
-  const teacherId = (currentUser.data as any)?.id;
-  const teacherNama = (currentUser.data as any)?.nama?.trim()?.toLowerCase();
-  const teacherNip = (currentUser.data as any)?.nip;
-  const teacherUsername = String((currentUser.data as any)?.username || '').trim().toLowerCase();
+  const teacherId = userData.id;
+  const teacherNama = userData.nama?.trim()?.toLowerCase();
+  const teacherNip = userData.nip;
+  const teacherUsername = String(userData.username || '').trim().toLowerCase();
 
   const matchedWaliClasses = (appData?.kelas || []).filter((k) => {
     if (teacherId && k.waliKelasId === teacherId) return true;
@@ -1306,7 +1408,7 @@ export function getUserRoleWorkspaces(
     });
   }
 
-  // 4. WKS Kesiswaan
+  // 4. WKS Kesiswaan / BP BK / Tatib / OSIS
   if (roles.includes('kesiswaan') || roles.includes('piket_kesiswaan')) {
     workspaces.push({
       key: 'kesiswaan',
@@ -1348,10 +1450,57 @@ export function getUserRoleWorkspaces(
     });
   }
 
-  // 7. Check for custom roles in roles
-  const standardKeys = new Set(['guru', 'wali', 'kurikulum', 'kesiswaan', 'piket_kesiswaan', 'hubin', 'staf_jadwal', 'admin', 'murid', 'user']);
+  // 7. Petugas Piket Harian
+  if (roles.includes('piket') || roles.includes('piket_guru')) {
+    workspaces.push({
+      key: 'piket',
+      label: 'Petugas Piket Harian',
+      shortLabel: 'Piket',
+      badgeLabel: 'Piket Harian',
+      description: 'Presensi gerbang/QR, pemantauan KBM harian, dan pencatatan dispensasi/keterlambatan',
+      iconName: 'ClipboardCheck',
+      color: 'amber',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800',
+    });
+  }
+
+  // 8. Admin Siswa (jika ada hak akses adm siswa)
+  if (roles.includes('adm_siswa')) {
+    workspaces.push({
+      key: 'adm_siswa',
+      label: 'Admin Siswa & QR',
+      shortLabel: 'Admin Siswa',
+      badgeLabel: 'Adm Siswa',
+      description: 'Pengelolaan data induk siswa, kartu pelajar digital, dan rekapitulasi kehadiran',
+      iconName: 'UserCheck',
+      color: 'sky',
+      badgeClass: 'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/80 dark:text-sky-300 dark:border-sky-800',
+    });
+  }
+
+  // 9. Check for custom roles in roles
+  const standardKeys = new Set([
+    'guru',
+    'wali',
+    'kurikulum',
+    'kesiswaan',
+    'piket_kesiswaan',
+    'piket_guru',
+    'piket',
+    'hubin',
+    'staf_jadwal',
+    'adm_siswa',
+    'admin',
+    'murid',
+    'siswa',
+    'user',
+  ]);
+
+  const existingKeys = new Set(workspaces.map((w) => w.key));
+
   roles.forEach((r) => {
-    if (!standardKeys.has(r)) {
+    if (!standardKeys.has(r) && !existingKeys.has(r)) {
+      existingKeys.add(r);
       const meta = getRoleBadgeMeta(r, appData);
       workspaces.push({
         key: r,
@@ -1360,8 +1509,58 @@ export function getUserRoleWorkspaces(
         badgeLabel: meta.label,
         description: `Mode peran khusus: ${meta.label}`,
         iconName: 'Layers',
-        color: meta.color,
+        color: meta.color || 'blue',
         badgeClass: meta.badgeClass,
+      });
+    }
+  });
+
+  // 10. Extract any specific additional duties listed in teacher record that aren't mapped above
+  const rawDuties: string[] = [];
+  if (Array.isArray(userData.tugasTambahanList)) rawDuties.push(...userData.tugasTambahanList);
+  if (typeof userData.tugasTambahan === 'string') {
+    rawDuties.push(...userData.tugasTambahan.split(',').map((s: string) => s.trim()));
+  }
+  const matchedTeacher = (appData?.waliKelas || []).find(
+    (w) =>
+      (userData.id && w.id === userData.id) ||
+      (userData.username && w.username?.toLowerCase() === userData.username?.toLowerCase()) ||
+      (userData.nip && w.nip && w.nip === userData.nip)
+  );
+  if (matchedTeacher) {
+    if (Array.isArray(matchedTeacher.tugasTambahanList)) rawDuties.push(...matchedTeacher.tugasTambahanList);
+    if (typeof matchedTeacher.tugasTambahan === 'string') {
+      rawDuties.push(...matchedTeacher.tugasTambahan.split(',').map((s: string) => s.trim()));
+    }
+    if (typeof matchedTeacher.jabatan === 'string' && matchedTeacher.jabatan.trim()) {
+      rawDuties.push(matchedTeacher.jabatan.trim());
+    }
+  }
+
+  rawDuties.forEach((duty) => {
+    const trimmed = duty.trim();
+    if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
+    // Exclude duties already represented in standard workspaces
+    if (lower.includes('wali kelas') || lower === 'wali') return;
+    if (lower.includes('kurikulum') && existingKeys.has('kurikulum')) return;
+    if ((lower.includes('kesiswaan') || lower.includes('bp') || lower.includes('konseling') || lower.includes('tatib')) && existingKeys.has('kesiswaan')) return;
+    if ((lower.includes('hubin') || lower.includes('humas') || lower.includes('industri')) && existingKeys.has('hubin')) return;
+    if (lower.includes('jadwal') && existingKeys.has('staf_jadwal')) return;
+    if (lower.includes('piket') && (existingKeys.has('piket') || existingKeys.has('kesiswaan'))) return;
+
+    const dutyKey = `tugas_${trimmed.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    if (!existingKeys.has(dutyKey)) {
+      existingKeys.add(dutyKey);
+      workspaces.push({
+        key: dutyKey,
+        label: trimmed,
+        shortLabel: trimmed,
+        badgeLabel: trimmed,
+        description: `Ruang kerja penugasan khusus: ${trimmed}`,
+        iconName: 'Award',
+        color: 'purple',
+        badgeClass: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800',
       });
     }
   });

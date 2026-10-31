@@ -510,7 +510,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       );
     }
 
-    if (activeWs === 'kesiswaan') {
+    if (
+      activeWs === 'kesiswaan' ||
+      activeWs === 'piket_kesiswaan' ||
+      activeWs === 'piket' ||
+      activeWs === 'piket_guru'
+    ) {
       return (
         <KesiswaanDashboardView
           appData={appData}
@@ -530,6 +535,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onNavigateToInput={onNavigateToInput}
           onShowToast={onShowToast}
           onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+        />
+      );
+    }
+
+    if (activeWs === 'hubin') {
+      return (
+        <AdminDashboardView
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          activeSiswa={activeSiswa}
+          totalStudents={totalStudents}
+          hadirCount={hadirCount}
+          sakitCount={sakitCount}
+          izinCount={izinCount}
+          alpaCount={alpaCount}
+          kesianganCount={kesianganCount}
+          hadirPercentage={hadirPercentage}
+          trendData={trendData}
+          trendRange={trendRange}
+          setTrendRange={setTrendRange}
+          customStartDate={customTrendStart}
+          customEndDate={customTrendEnd}
+          onCustomRangeChange={handleCustomRangeChange}
+          recentLogs={recentLogs}
+          unrecordedClasses={unrecordedClasses}
+          targetClasses={targetClasses}
+          paginatedCumulativeStats={paginatedCumulativeStats}
+          rekapSearch={rekapSearch}
+          setRekapSearch={setRekapSearch}
+          rekapFilter={rekapFilter}
+          setRekapFilter={setRekapFilter}
+          rekapClassFilter={rekapClassFilter}
+          setRekapClassFilter={setRekapClassFilter}
+          validRekapCurrentPage={validRekapCurrentPage}
+          totalRekapPages={totalRekapPages}
+          setRekapCurrentPage={setRekapCurrentPage}
+          setSelectedStudentDetail={setSelectedStudentDetail}
+          setCardModalData={setCardModalData}
+          onNavigateView={onNavigateView}
+          onNavigateToInput={onNavigateToInput}
+          onOpenBackupModal={onOpenBackupModal}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+          onOpenQuickActionSettings={handleOpenQuickActionSettings}
         />
       );
     }
@@ -578,7 +629,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
 
     // Teacher User (Guru Mapel workspace or general teacher)
-    if (isTeacherUser || activeWs === 'guru') {
+    if (isTeacherUser || activeWs === 'guru' || (activeWs && activeWs.startsWith('tugas_'))) {
       return (
         <GuruDashboardView
           appData={appData}
@@ -604,6 +655,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onUpdateAppData={onUpdateAppData}
           onShowToast={onShowToast}
           onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+          activeRoleWorkspace={activeRoleWorkspace}
+          onSelectRoleWorkspace={onSelectRoleWorkspace}
         />
       );
     }
