@@ -36,7 +36,7 @@ const QuickActionBtn: React.FC<QuickActionBtnProps> = ({ onClick, card }) => {
       whileHover={{ y: -6, scale: 1.015, transition: { duration: 0.18, ease: 'easeOut' } }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-blue-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer group select-none"
+      className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-xl hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 flex flex-col justify-between cursor-pointer group select-none"
     >
       {/* Top Row: Squircle Gradient Icon + UTAMA Badge + Circle Arrow */}
       <div>
@@ -51,15 +51,15 @@ const QuickActionBtn: React.FC<QuickActionBtnProps> = ({ onClick, card }) => {
                 UTAMA
               </span>
             )}
-            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-all duration-200 shadow-2xs group-hover:shadow-blue-500/30">
-              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+            <div className="w-8 h-8 rounded-full bg-slate-100/70 dark:bg-slate-800/50 text-slate-400 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50 group-hover:bg-slate-200/70 group-hover:text-slate-700 group-hover:border-slate-300/70 dark:group-hover:bg-slate-700/50 dark:group-hover:text-slate-200 dark:group-hover:border-slate-600/60 flex items-center justify-center transition-all duration-200 shadow-2xs">
+              <ArrowUpRight className="w-4 h-4 stroke-[2.2]" />
             </div>
           </div>
         </div>
 
         {/* Title & Subtitle */}
         <div className="mt-4">
-          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white line-clamp-1 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors">
             {card.title}
           </h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mt-1">

@@ -333,8 +333,8 @@ export const GuruQuickCardsWidget: React.FC<GuruQuickCardsWidgetProps> = ({
                         Utama
                       </span>
                     )}
-                    <div className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-theme-primary group-hover:text-white text-slate-400 dark:text-slate-500 flex items-center justify-center transition-colors">
-                      <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    <div className="w-7 h-7 rounded-xl bg-slate-100/70 dark:bg-slate-800/50 text-slate-400 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50 group-hover:bg-slate-200/70 group-hover:text-slate-700 dark:group-hover:bg-slate-700/50 dark:group-hover:text-slate-200 flex items-center justify-center transition-all duration-200 shadow-2xs">
+                      <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 stroke-[2.2]" />
                     </div>
                   </div>
                 </div>

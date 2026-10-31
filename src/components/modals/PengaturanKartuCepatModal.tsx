@@ -845,7 +845,7 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                                   UTAMA
                                 </span>
                               )}
-                              <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
+                              <div className="w-6 h-6 rounded-full bg-slate-100/70 dark:bg-slate-800/50 text-slate-400 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50 flex items-center justify-center shadow-2xs">
                                 <ExternalLink className="w-3 h-3" />
                               </div>
                             </div>
