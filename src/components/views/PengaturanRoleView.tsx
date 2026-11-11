@@ -1049,6 +1049,25 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
                 </button>
               </div>
 
+              {/* Dropdown Menu Pilih Role */}
+              <div className="mb-2.5">
+                <select
+                  value={selectedRoleId}
+                  onChange={(e) => setSelectedRoleId(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  {roles.map((r) => {
+                    const normKey = normalizeRoleKey(r.roleId);
+                    const allowedTargets = draftChatRules[normKey] || getRoleChatRule(appData, normKey).allowedTargets;
+                    return (
+                      <option key={r.roleId} value={r.roleId}>
+                        {r.roleName} ({r.roleId}) — {allowedTargets.length} Kontak
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
               {/* Search Role */}
               <div className="relative mb-3">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1525,6 +1544,24 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
                 >
                   <Plus className="w-4 h-4" />
                 </button>
+              </div>
+
+              {/* Dropdown Menu Pilih Role */}
+              <div className="mb-2.5">
+                <select
+                  value={selectedRoleId}
+                  onChange={(e) => setSelectedRoleId(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  {roles.map((r) => {
+                    const allowedCount = (draftPermissions[r.roleId] || r.allowedMenus).length;
+                    return (
+                      <option key={r.roleId} value={r.roleId}>
+                        {r.roleName} ({r.roleId}) — {allowedCount} Menu Aktif
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               {/* Search Role */}

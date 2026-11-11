@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   X,
   Plus,
@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   HelpCircle,
   ExternalLink,
+  ChevronDown,
 } from 'lucide-react';
 import {
   AppData,
@@ -141,6 +142,21 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
   const [showBulkBagianModal, setShowBulkBagianModal] = useState<boolean>(false);
   const [bulkSelectedMenuIds, setBulkSelectedMenuIds] = useState<Set<string>>(new Set());
   const [bulkSearchQuery, setBulkSearchQuery] = useState<string>('');
+
+  // Role selector dropdown state
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState<boolean>(false);
+  const [roleSearchQuery, setRoleSearchQuery] = useState<string>('');
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
+        setIsRoleDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -501,9 +517,9 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-          {/* 1. ROLE SELECTOR TABS */}
+          {/* 1. ROLE SELECTOR DROPDOWN MENU */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                 Pilih Peran / Jabatan yang Dikonfigurasi:
               </label>
@@ -528,42 +544,162 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
               </div>
             </div>
 
-            {/* Horizontal scrollable role pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-              {availableRoles.map((r) => {
-                const isSelected = r.key === selectedRoleKey;
-                const rCfg = draftRolesConfig[r.key] || getRoleQuickActionConfig(appData, r.key);
-                const activeCardsCount = (rCfg.cards || []).filter((c) => c.enabled).length;
+            {/* Interactive Role Dropdown Menu */}
+            <div className="relative" ref={roleDropdownRef}>
+              {(() => {
+                const activeCount = (currentRoleConfig.cards || []).filter((c) => c.enabled).length;
+                const totalCount = (currentRoleConfig.cards || []).length;
+                const filteredRolesForDropdown = availableRoles.filter((r) => {
+                  if (!roleSearchQuery.trim()) return true;
+                  const q = roleSearchQuery.toLowerCase();
+                  return (
+                    r.label.toLowerCase().includes(q) ||
+                    r.key.toLowerCase().includes(q) ||
+                    (r.description || '').toLowerCase().includes(q)
+                  );
+                });
 
                 return (
-                  <button
-                    key={r.key}
-                    type="button"
-                    onClick={() => {
-                      setSelectedRoleKey(r.key);
-                      setEditingCard(null);
-                      setIsAddingNew(false);
-                    }}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 border cursor-pointer ${
-                      isSelected
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/25'
-                        : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : r.dotColor}`} />
-                    <span>{r.label}</span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-md ${
-                        isSelected
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsRoleDropdownOpen((prev) => !prev)}
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100/80 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition flex items-center justify-between gap-3 cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      {activeCardsCount}
-                    </span>
-                  </button>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-3 h-3 rounded-full shrink-0 ${currentRoleMeta.dotColor}`} />
+                        <div className="text-left min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                              {currentRoleMeta.label}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                              {currentRoleMeta.key}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                              {activeCount} / {totalCount} Kartu Aktif
+                            </span>
+                          </div>
+                          {currentRoleMeta.description && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                              {currentRoleMeta.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hidden sm:inline">
+                          Ganti Peran
+                        </span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-500 dark:text-slate-400 transition-transform duration-200 ${
+                            isRoleDropdownOpen ? 'rotate-180 text-blue-600' : ''
+                          }`}
+                        />
+                      </div>
+                    </button>
+
+                    {isRoleDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                        {/* Search inside dropdown */}
+                        <div className="p-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={roleSearchQuery}
+                              onChange={(e) => setRoleSearchQuery(e.target.value)}
+                              placeholder="Cari peran / jabatan (cth: Guru, Piket, Kesiswaan, Wali)..."
+                              className="w-full pl-8 pr-8 py-1.5 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            {roleSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setRoleSearchQuery('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Role items list */}
+                        <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 p-1.5">
+                          {filteredRolesForDropdown.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-slate-400">
+                              Peran tidak ditemukan.
+                            </div>
+                          ) : (
+                            filteredRolesForDropdown.map((r) => {
+                              const isSelected = r.key === selectedRoleKey;
+                              const rCfg = draftRolesConfig[r.key] || getRoleQuickActionConfig(appData, r.key);
+                              const activeCardsCount = (rCfg.cards || []).filter((c) => c.enabled).length;
+                              const totalCardsCount = (rCfg.cards || []).length;
+
+                              return (
+                                <button
+                                  key={r.key}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRoleKey(r.key);
+                                    setEditingCard(null);
+                                    setIsAddingNew(false);
+                                    setIsRoleDropdownOpen(false);
+                                  }}
+                                  className={`w-full px-3 py-2.5 rounded-xl text-left transition flex items-center justify-between gap-3 cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold'
+                                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${r.dotColor}`} />
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                                          {r.label}
+                                        </span>
+                                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                          {r.key}
+                                        </span>
+                                        {!r.isSystem && (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                                            Role Kustom
+                                          </span>
+                                        )}
+                                      </div>
+                                      {r.description && (
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-normal">
+                                          {r.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                        isSelected
+                                          ? 'bg-blue-600 text-white'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                      }`}
+                                    >
+                                      {activeCardsCount}/{totalCardsCount} Aktif
+                                    </span>
+                                    {isSelected && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 stroke-[2.5]" />}
+                                  </div>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 );
-              })}
+              })()}
             </div>
           </div>
 
@@ -943,8 +1079,8 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
             </div>
 
             <form onSubmit={handleSaveCard} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Quick Pick From Menu */}
-              <div className="space-y-2 bg-slate-50/70 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+              {/* Quick Pick From Menu (Dropdown Menu) */}
+              <div className="space-y-3 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <div className="flex flex-wrap items-center justify-between gap-1">
                   <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
                     Pilih Cepat dari Menu Sistem (Otomatis Isi Judul, Icon & Warna):
@@ -954,108 +1090,52 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                   </span>
                 </div>
 
-                {/* Bagian Filter Tabs */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBagianFilter('semua')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer ${
-                      selectedBagianFilter === 'semua'
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    Semua Bagian ({ALL_MENU_ITEMS.length})
-                  </button>
-                  {MENU_CATEGORIES.map((cat) => {
-                    const isSelected = selectedBagianFilter === cat.key;
-                    return (
-                      <button
-                        key={cat.key}
-                        type="button"
-                        onClick={() => setSelectedBagianFilter(cat.key)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-blue-600 text-white shadow-2xs'
-                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <span>{cat.title.split('&')[0].trim()}</span>
-                        <span className={`text-[9px] px-1.5 py-0.2 rounded-md ${
-                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                        }`}>
-                          {cat.items.length}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Search Bar */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari menu atau bagian (cth: Mapel, Siswa, Absen, Presensi, Backup)..."
-                    value={menuSearchQuery}
-                    onChange={(e) => setMenuSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {menuSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setMenuSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Dropdown 1: Filter Kategori / Bagian */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      Filter Bagian / Kategori Menu:
+                    </label>
+                    <select
+                      value={selectedBagianFilter}
+                      onChange={(e) => setSelectedBagianFilter(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                      <option value="semua">Semua Bagian ({ALL_MENU_ITEMS.length} Menu)</option>
+                      {MENU_CATEGORIES.map((cat) => (
+                        <option key={cat.key} value={cat.key}>
+                          {cat.title} ({cat.items.length} Menu)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* Grid of ALL menu items without slicing */}
-                <div className="max-h-52 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900">
-                  {filteredMenuItems.length === 0 ? (
-                    <div className="col-span-full py-6 text-center text-slate-400 text-xs">
-                      Tidak ada menu yang sesuai dengan filter atau kata kunci.
-                    </div>
-                  ) : (
-                    filteredMenuItems.map((m) => {
-                      const catInfo = MENU_CATEGORIES.find((c) => c.key === m.category);
-                      const isSelected = editingCard.view === m.id;
-
-                      return (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => handleSelectMenuItem(m)}
-                          className={`text-left p-2.5 rounded-xl text-xs transition border cursor-pointer flex items-start gap-2.5 ${
-                            isSelected
-                              ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold shadow-2xs'
-                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850'
-                          }`}
-                        >
-                          <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                          }`}>
-                            {renderQuickActionIcon(m.iconName, 'w-3.5 h-3.5')}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="truncate font-bold text-xs text-slate-900 dark:text-white">
-                                {m.label}
-                              </span>
-                              <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0">
-                                {catInfo?.title.split('&')[0].trim() || m.category}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal">
-                              {m.shortDesc}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
+                  {/* Dropdown 2: Pilih Menu Sistem */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      Pilih Menu Tujuan:
+                    </label>
+                    <select
+                      value={editingCard.view}
+                      onChange={(e) => {
+                        const found = ALL_MENU_ITEMS.find((m) => m.id === (e.target.value as ViewType));
+                        if (found) {
+                          handleSelectMenuItem(found);
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {filteredMenuItems.map((m) => {
+                        const catInfo = MENU_CATEGORIES.find((c) => c.key === m.category);
+                        const catShort = catInfo?.title.split('&')[0].trim() || m.category;
+                        return (
+                          <option key={m.id} value={m.id}>
+                            [{catShort}] {m.label} ({m.id})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
                 </div>
               </div>
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Calendar,
   UserCheck,
@@ -12,6 +12,7 @@ import {
   Briefcase,
   Layers,
   ChevronRight,
+  ChevronDown,
   Filter,
   Eye,
   SlidersHorizontal,
@@ -94,6 +95,19 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   const availableWorkspaces = useMemo(() => {
     return getUserRoleWorkspaces(currentUser, appData);
   }, [currentUser, appData]);
+
+  const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
+  const workspaceDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (workspaceDropdownRef.current && !workspaceDropdownRef.current.contains(e.target as Node)) {
+        setIsWorkspaceDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // 1. Resolve Teacher Data & Natural Roles
   const teacherData = useMemo(() => {
@@ -616,22 +630,73 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* INTERACTIVE ROLE / WORKSPACE SWITCH BUTTON FOR TEACHERS WITH DUTIES */}
+        {/* INTERACTIVE ROLE / WORKSPACE DROPDOWN MENU FOR TEACHERS WITH DUTIES */}
         {availableWorkspaces.length > 1 && onSelectRoleWorkspace && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="relative shrink-0" ref={workspaceDropdownRef}>
             <button
               type="button"
-              onClick={() => {
-                const currentIndex = availableWorkspaces.findIndex((w) => w.key === activeRoleWorkspace);
-                const nextWs = availableWorkspaces[(currentIndex + 1) % availableWorkspaces.length];
-                if (nextWs) onSelectRoleWorkspace(nextWs.key);
-              }}
+              onClick={() => setIsWorkspaceDropdownOpen((prev) => !prev)}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow transition active:scale-95 cursor-pointer"
-              title="Ganti Ruang Kerja / Beralih Mode Peran"
+              title="Pilih Ruang Kerja / Mode Peran"
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
-              <span>Switch Ruang Kerja</span>
+              <span>
+                {availableWorkspaces.find((w) => w.key === activeRoleWorkspace)?.shortLabel || 'Switch Ruang Kerja'}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                  isWorkspaceDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
             </button>
+
+            {isWorkspaceDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="text-xs font-black text-slate-900 dark:text-white flex items-center justify-between">
+                    <span>Pilih Ruang Kerja / Peran</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+                      {availableWorkspaces.length} Mode
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Tampilan dashboard &amp; kartu cepat akan menyesuaikan.
+                  </p>
+                </div>
+
+                <div className="p-1.5 space-y-1 max-h-64 overflow-y-auto">
+                  {availableWorkspaces.map((ws) => {
+                    const isSelected =
+                      activeRoleWorkspace === ws.key || (!activeRoleWorkspace && ws.key === availableWorkspaces[0]?.key);
+                    return (
+                      <button
+                        key={ws.key}
+                        type="button"
+                        onClick={() => {
+                          onSelectRoleWorkspace(ws.key);
+                          setIsWorkspaceDropdownOpen(false);
+                        }}
+                        className={`w-full px-3 py-2 rounded-xl text-left transition flex items-start justify-between gap-2 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold border border-blue-200/80 dark:border-blue-800/80'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-300 border border-transparent'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                            {ws.label}
+                          </div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 font-normal">
+                            {ws.description}
+                          </div>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5 stroke-[2.5]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
