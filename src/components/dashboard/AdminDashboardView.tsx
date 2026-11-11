@@ -70,6 +70,7 @@ interface AdminDashboardViewProps {
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onOpenQuickActionSettings?: (roleKey?: string) => void;
+  activeRoleOverride?: string;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -113,7 +114,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onUpdateAppData,
   onShowToast,
   onOpenQuickActionSettings,
+  activeRoleOverride,
 }) => {
+  const effectiveQuickActionRole = activeRoleOverride || currentUser.role;
   // Rank classes by attendance % using canonical stats
   const classRanking = React.useMemo(() => {
     return targetClasses.map((k) => {
@@ -193,7 +196,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             {onOpenQuickActionSettings && (
               <button
                 type="button"
-                onClick={() => onOpenQuickActionSettings('admin')}
+                onClick={() => onOpenQuickActionSettings(effectiveQuickActionRole)}
                 className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 title="Atur kartu cepat dashboard tiap peran"
               >
@@ -211,9 +214,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         }
       />
 
-      {/* Aksi Cepat Administrator */}
+      {/* Aksi Cepat Administrator / Hubin */}
       <RoleQuickActions
-        role={currentUser.role}
+        role={effectiveQuickActionRole}
         appData={appData}
         currentUser={currentUser}
         onNavigateView={onNavigateView}

@@ -514,7 +514,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       activeWs === 'kesiswaan' ||
       activeWs === 'piket_kesiswaan' ||
       activeWs === 'piket' ||
-      activeWs === 'piket_guru'
+      activeWs === 'piket_guru' ||
+      activeWs === 'adm_siswa'
     ) {
       return (
         <KesiswaanDashboardView
@@ -535,6 +536,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onNavigateToInput={onNavigateToInput}
           onShowToast={onShowToast}
           onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+          activeRoleOverride={activeWs === 'piket' ? 'piket_guru' : activeWs}
         />
       );
     }
@@ -580,7 +582,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onOpenBackupModal={onOpenBackupModal}
           onUpdateAppData={onUpdateAppData}
           onShowToast={onShowToast}
-          onOpenQuickActionSettings={handleOpenQuickActionSettings}
+          onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+          activeRoleOverride="hubin"
         />
       );
     }
@@ -624,6 +627,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           onUpdateAppData={onUpdateAppData}
           onShowToast={onShowToast}
           onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+          activeRoleOverride="piket_kelas"
         />
       );
     }
@@ -663,17 +667,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     // For pure non-teaching staff accounts without a teacher record
     const staffEffectiveRole =
-      effectiveRoles.includes('kesiswaan') || effectiveRoles.includes('piket_kesiswaan')
+      effectiveRoles.includes('adm_siswa')
+        ? 'adm_siswa'
+        : effectiveRoles.includes('piket_kesiswaan')
+        ? 'piket_kesiswaan'
+        : effectiveRoles.includes('piket_guru') || effectiveRoles.includes('piket')
+        ? 'piket_guru'
+        : effectiveRoles.includes('kesiswaan')
         ? 'kesiswaan'
         : effectiveRoles.includes('kurikulum')
         ? 'kurikulum'
         : effectiveRoles.includes('staf_jadwal')
         ? 'staf_jadwal'
-        : effectiveRoles.includes('adm_siswa')
-        ? 'kesiswaan'
+        : effectiveRoles.includes('hubin')
+        ? 'hubin'
         : currentUser.role;
 
     switch (staffEffectiveRole) {
+      case 'adm_siswa':
       case 'kesiswaan':
       case 'piket_kesiswaan':
       case 'piket_guru':
@@ -697,6 +708,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onNavigateToInput={onNavigateToInput}
             onShowToast={onShowToast}
             onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+            activeRoleOverride={staffEffectiveRole === 'piket' ? 'piket_guru' : staffEffectiveRole}
+          />
+        );
+
+      case 'hubin':
+        return (
+          <AdminDashboardView
+            appData={appData}
+            currentUser={currentUser}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            activeSiswa={activeSiswa}
+            totalStudents={totalStudents}
+            hadirCount={hadirCount}
+            sakitCount={sakitCount}
+            izinCount={izinCount}
+            alpaCount={alpaCount}
+            kesianganCount={kesianganCount}
+            hadirPercentage={hadirPercentage}
+            trendData={trendData}
+            trendRange={trendRange}
+            setTrendRange={setTrendRange}
+            customStartDate={customTrendStart}
+            customEndDate={customTrendEnd}
+            onCustomRangeChange={handleCustomRangeChange}
+            recentLogs={recentLogs}
+            unrecordedClasses={unrecordedClasses}
+            targetClasses={targetClasses}
+            paginatedCumulativeStats={paginatedCumulativeStats}
+            rekapSearch={rekapSearch}
+            setRekapSearch={setRekapSearch}
+            rekapFilter={rekapFilter}
+            setRekapFilter={setRekapFilter}
+            rekapClassFilter={rekapClassFilter}
+            setRekapClassFilter={setRekapClassFilter}
+            validRekapCurrentPage={validRekapCurrentPage}
+            totalRekapPages={totalRekapPages}
+            setRekapCurrentPage={setRekapCurrentPage}
+            setSelectedStudentDetail={setSelectedStudentDetail}
+            setCardModalData={setCardModalData}
+            onNavigateView={onNavigateView}
+            onNavigateToInput={onNavigateToInput}
+            onOpenBackupModal={onOpenBackupModal}
+            onUpdateAppData={onUpdateAppData}
+            onShowToast={onShowToast}
+            onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+            activeRoleOverride="hubin"
           />
         );
 
@@ -751,6 +809,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onUpdateAppData={onUpdateAppData}
             onShowToast={onShowToast}
             onOpenQuickActionSettings={isAdminUser ? handleOpenQuickActionSettings : undefined}
+            activeRoleWorkspace={activeRoleWorkspace}
+            onSelectRoleWorkspace={onSelectRoleWorkspace}
           />
         );
     }

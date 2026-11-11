@@ -37,6 +37,7 @@ interface KesiswaanDashboardViewProps {
   onNavigateToInput?: (kelasId?: string) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onOpenQuickActionSettings?: (roleKey?: string) => void;
+  activeRoleOverride?: string;
 }
 
 export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
@@ -57,6 +58,7 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
   onNavigateToInput,
   onShowToast,
   onOpenQuickActionSettings,
+  activeRoleOverride,
 }) => {
   // Map student risk levels (Prioritas, Perlu Perhatian)
   const studentsWithRisk = React.useMemo(() => {
@@ -87,9 +89,10 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
     return studentsWithRisk.filter((s) => s.alfa > 0).slice(0, 5);
   }, [studentsWithRisk]);
 
-  const isPiketKesiswaan = currentUser.role === 'piket_kesiswaan';
-  const isPiketGuru = currentUser.role === 'piket_guru' || currentUser.role === 'piket';
-  const isAdmSiswa = currentUser.role === 'adm_siswa';
+  const effectiveRoleKey = activeRoleOverride || currentUser.role;
+  const isPiketKesiswaan = effectiveRoleKey === 'piket_kesiswaan';
+  const isPiketGuru = effectiveRoleKey === 'piket_guru' || effectiveRoleKey === 'piket';
+  const isAdmSiswa = effectiveRoleKey === 'adm_siswa';
   const isAnyPiket = isPiketKesiswaan || isPiketGuru;
 
   let titleText = "Dashboard Kesiswaan & BP/BK";
@@ -110,6 +113,14 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
     badgeText = "Petugas Piket Guru Harian";
   }
 
+  const quickActionRole = isAdmSiswa
+    ? 'adm_siswa'
+    : isPiketKesiswaan
+    ? 'piket_kesiswaan'
+    : isPiketGuru
+    ? 'piket_guru'
+    : 'kesiswaan';
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -127,9 +138,9 @@ export const KesiswaanDashboardView: React.FC<KesiswaanDashboardViewProps> = ({
         }
       />
 
-      {/* Quick Actions Kesiswaan / Piket */}
+      {/* Quick Actions Kesiswaan / Piket / Adm Siswa */}
       <RoleQuickActions
-        role={currentUser.role === 'piket' ? 'piket' : 'kesiswaan'}
+        role={quickActionRole}
         appData={appData}
         currentUser={currentUser}
         onNavigateView={onNavigateView}

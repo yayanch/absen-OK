@@ -44,6 +44,7 @@ interface WaliKelasDashboardViewProps {
   onUpdateAppData?: (updated: AppData) => void;
   onShowToast?: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onOpenQuickActionSettings?: (roleKey?: string) => void;
+  activeRoleOverride?: string;
 }
 
 export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
@@ -69,7 +70,10 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
   onUpdateAppData,
   onShowToast,
   onOpenQuickActionSettings,
+  activeRoleOverride,
 }) => {
+  const effectiveRoleKey = activeRoleOverride || (currentUser.role === 'piket_kelas' ? 'piket_kelas' : 'wali');
+  const isPiketKelasView = effectiveRoleKey === 'piket_kelas';
   const currentClassName = targetClasses.map((k) => k.nama).join(', ') || 'Kelas Binaan';
 
   // Siswa perlu perhatian di kelas wali (hanya siswa dengan indikator ketidakhadiran / risiko pembinaan)
@@ -118,9 +122,9 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
     <div className="space-y-6">
       <PageHeader
         icon={Building2}
-        title={currentUser.role === 'piket_kelas' ? `Dashboard Piket Kelas - ${currentClassName}` : `Dashboard Wali Kelas - ${currentClassName}`}
+        title={isPiketKelasView ? `Dashboard Piket Kelas - ${currentClassName}` : `Dashboard Wali Kelas - ${currentClassName}`}
         description={`Total ${totalStudents} Siswa Terdaftar • Tanggal ${formatDateIndo(selectedDate)}`}
-        badge={currentUser.role === 'piket_kelas' ? 'Petugas Piket Kelas' : 'Kelas Binaan Wali Kelas'}
+        badge={isPiketKelasView ? 'Petugas Piket Kelas' : 'Kelas Binaan Wali Kelas'}
         actions={
           <button
             onClick={() => onNavigateToInput(targetClasses[0]?.id)}
@@ -134,7 +138,7 @@ export const WaliKelasDashboardView: React.FC<WaliKelasDashboardViewProps> = ({
 
       {/* Quick Actions */}
       <RoleQuickActions
-        role={currentUser.role === 'piket_kelas' ? 'piket_kelas' : 'wali'}
+        role={isPiketKelasView ? 'piket_kelas' : 'wali'}
         appData={appData}
         currentUser={currentUser}
         onNavigateView={onNavigateView}

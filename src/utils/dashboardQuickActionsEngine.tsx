@@ -39,7 +39,7 @@ import {
   QuickActionColor,
   ViewType,
 } from '../types';
-import { ALL_MENU_ITEMS, getEffectiveCustomRoles, normalizeRoleKey } from './rolePermissionEngine';
+import { ALL_MENU_ITEMS, getAllRolePermissions, getEffectiveCustomRoles, normalizeRoleKey } from './rolePermissionEngine';
 
 export const AVAILABLE_QUICK_ACTION_ICONS: { name: string; label: string }[] = [
   { name: 'CheckCircle2', label: 'Centang / Sukses' },
@@ -592,16 +592,6 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     enabled: true,
     cards: [
       {
-        id: 'qa_stf_kbm',
-        view: 'presensi_kbm_guru',
-        title: 'Absen Mengajar Guru (KBM)',
-        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
-        iconName: 'BookOpen',
-        colorScheme: 'purple',
-        enabled: true,
-        badgeText: 'Sesi Mengajar Hari Ini',
-      },
-      {
         id: 'qa_stf_jadwal_mengajar',
         view: 'jadwal_mengajar',
         title: 'Jadwal Mengajar Guru',
@@ -609,6 +599,7 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         iconName: 'Calendar',
         colorScheme: 'sky',
         enabled: true,
+        isUtama: true,
       },
       {
         id: 'qa_stf_jadwal_shift',
@@ -626,6 +617,15 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         subtitle: 'Matriks jadwal mengajar sepekan',
         iconName: 'CalendarDays',
         colorScheme: 'blue',
+        enabled: true,
+      },
+      {
+        id: 'qa_stf_mapel_kelas',
+        view: 'mapel_kelas_guru',
+        title: 'Mapel & Kelas Ajar',
+        subtitle: 'Penugasan guru mapel dan rombel',
+        iconName: 'Layers',
+        colorScheme: 'cyan',
         enabled: true,
       },
       {
@@ -700,6 +700,143 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         title: 'Catatan Pelanggaran Siswa',
         subtitle: 'Catatan & poin kedisiplinan',
         iconName: 'ShieldAlert',
+        colorScheme: 'amber',
+        enabled: true,
+      },
+    ],
+  },
+
+  piket_guru: {
+    roleKey: 'piket_guru',
+    roleLabel: 'Piket Guru Harian',
+    sectionTitle: 'Kartu Cepat Guru Piket Harian',
+    sectionSubtitle: 'Akses langsung 1-klik untuk input presensi kelas, absen mengajar KBM, scan QR siswa & disiplin',
+    dotColorClass: 'bg-amber-500',
+    enabled: true,
+    cards: [
+      {
+        id: 'qa_pktg_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        isUtama: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
+      {
+        id: 'qa_pktg_presensi_input',
+        view: 'presensi_input',
+        title: 'Input Presensi Kelas',
+        subtitle: 'Kelola kehadiran siswa harian',
+        iconName: 'ClipboardCheck',
+        colorScheme: 'blue',
+        enabled: true,
+        specialAction: 'navigate_to_input',
+      },
+      {
+        id: 'qa_pktg_absen_harian',
+        view: 'absen_harian_guru',
+        title: 'Absen Harian Guru',
+        subtitle: 'Presensi kehadiran harian guru mengajar',
+        iconName: 'UserCheck',
+        colorScheme: 'emerald',
+        enabled: true,
+      },
+      {
+        id: 'qa_pktg_scan_qr',
+        view: 'absen_qr',
+        title: 'Scan Presensi QR',
+        subtitle: 'Pindai kartu pelajar & barcode',
+        iconName: 'QrCode',
+        colorScheme: 'teal',
+        enabled: true,
+      },
+      {
+        id: 'qa_pktg_pelanggaran',
+        view: 'catatan_pelanggaran',
+        title: 'Catatan Pelanggaran Siswa',
+        subtitle: 'Poin disiplin & tindakan siswa',
+        iconName: 'ShieldAlert',
+        colorScheme: 'rose',
+        enabled: true,
+      },
+      {
+        id: 'qa_pktg_chat',
+        view: 'live_chat',
+        title: 'Pesan & Live Chat Sekolah',
+        subtitle: 'Koordinasi cepat dengan wali kelas & kesiswaan',
+        iconName: 'MessageSquare',
+        colorScheme: 'indigo',
+        enabled: true,
+      },
+    ],
+  },
+
+  piket_kesiswaan: {
+    roleKey: 'piket_kesiswaan',
+    roleLabel: 'Piket Kesiswaan',
+    sectionTitle: 'Kartu Cepat Piket Kesiswaan',
+    sectionSubtitle: 'Akses langsung 1-klik untuk pantau pengisian presensi kelas, scan QR siswa, pelanggaran & rekap harian',
+    dotColorClass: 'bg-amber-600',
+    enabled: true,
+    cards: [
+      {
+        id: 'qa_pktk_kbm',
+        view: 'presensi_kbm_guru',
+        title: 'Absen Mengajar Guru (KBM)',
+        subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+        badgeText: 'Sesi Mengajar Hari Ini',
+      },
+      {
+        id: 'qa_pktk_rekap_pengisian',
+        view: 'rekap_pengisian_kelas',
+        title: 'Rekap Pengisian Presensi Kelas',
+        subtitle: 'Status kelas sudah & belum isi',
+        iconName: 'CheckCircle2',
+        colorScheme: 'emerald',
+        enabled: true,
+        isUtama: true,
+        specialAction: 'open_class_submission',
+      },
+      {
+        id: 'qa_pktk_presensi_input',
+        view: 'presensi_input',
+        title: 'Input Presensi Kelas',
+        subtitle: 'Kelola kehadiran siswa harian',
+        iconName: 'ClipboardCheck',
+        colorScheme: 'blue',
+        enabled: true,
+        specialAction: 'navigate_to_input',
+      },
+      {
+        id: 'qa_pktk_scan_qr',
+        view: 'absen_qr',
+        title: 'Scan Presensi QR',
+        subtitle: 'Pindai kartu pelajar & barcode',
+        iconName: 'QrCode',
+        colorScheme: 'teal',
+        enabled: true,
+      },
+      {
+        id: 'qa_pktk_pelanggaran',
+        view: 'catatan_pelanggaran',
+        title: 'Catatan Pelanggaran Siswa',
+        subtitle: 'Poin disiplin & tindakan siswa',
+        iconName: 'ShieldAlert',
+        colorScheme: 'rose',
+        enabled: true,
+      },
+      {
+        id: 'qa_pktk_rekap_harian',
+        view: 'rekap_harian',
+        title: 'Rekap Presensi Harian',
+        subtitle: 'Laporan kehadiran seluruh rombel',
+        iconName: 'FileText',
         colorScheme: 'amber',
         enabled: true,
       },
@@ -817,7 +954,7 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     roleKey: 'hubin',
     roleLabel: 'WKS Hubin & Industri',
     sectionTitle: 'Kartu Cepat Hubin & Kerjasama Industri',
-    sectionSubtitle: 'Akses cepat data siswa magang/PKL, rekapitulasi kehadiran dan jadwal shift',
+    sectionSubtitle: 'Akses cepat data siswa magang/PKL, kompetensi jurusan, rekapitulasi kehadiran dan jadwal shift',
     dotColorClass: 'bg-emerald-600',
     enabled: true,
     cards: [
@@ -834,10 +971,19 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
       {
         id: 'qa_hub_siswa',
         view: 'master_siswa',
-        title: 'Data Siswa & Jurusan',
-        subtitle: 'Daftar peserta didik & kompetensi',
+        title: 'Data Siswa',
+        subtitle: 'Daftar peserta didik & kontak wali',
         iconName: 'Users',
         colorScheme: 'blue',
+        enabled: true,
+      },
+      {
+        id: 'qa_hub_jurusan',
+        view: 'master_jurusan',
+        title: 'Data Jurusan & Keahlian',
+        subtitle: 'Master kompetensi keahlian & industri',
+        iconName: 'GraduationCap',
+        colorScheme: 'indigo',
         enabled: true,
       },
       {
@@ -855,7 +1001,7 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         title: 'Jadwal Shift Belajar',
         subtitle: 'Pengaturan shift jam belajar',
         iconName: 'Clock',
-        colorScheme: 'purple',
+        colorScheme: 'teal',
         enabled: true,
       },
       {
@@ -879,15 +1025,6 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
     enabled: true,
     cards: [
       {
-        id: 'qa_mrd_portal',
-        view: 'portal_murid',
-        title: 'Portal Siswa Mandiri',
-        subtitle: 'Dashboard statistik kehadiran saya',
-        iconName: 'Users',
-        colorScheme: 'blue',
-        enabled: true,
-      },
-      {
         id: 'qa_mrd_scan_qr',
         view: 'absen_qr',
         title: 'Scan Presensi QR',
@@ -897,21 +1034,39 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         enabled: true,
       },
       {
-        id: 'qa_mrd_kartu',
-        view: 'kartu_pelajar',
-        title: 'Kartu Pelajar Digital',
-        subtitle: 'Identitas kartu digital & barcode',
-        iconName: 'CreditCard',
-        colorScheme: 'indigo',
-        enabled: true,
-      },
-      {
         id: 'qa_mrd_rekap',
         view: 'rekap_siswa',
         title: 'Riwayat Kehadiran Saya',
         subtitle: 'Cek presensi semester berjalan',
         iconName: 'FileText',
+        colorScheme: 'indigo',
+        enabled: true,
+      },
+      {
+        id: 'qa_mrd_jadwal',
+        view: 'jadwal_mengajar',
+        title: 'Jadwal Pelajaran',
+        subtitle: 'Jadwal KBM kelas hari ini & mingguan',
+        iconName: 'BookOpen',
+        colorScheme: 'purple',
+        enabled: true,
+      },
+      {
+        id: 'qa_mrd_pelanggaran',
+        view: 'catatan_pelanggaran',
+        title: 'Catatan Pelanggaran',
+        subtitle: 'Catatan kedisiplinan & tata tertib',
+        iconName: 'ShieldAlert',
         colorScheme: 'amber',
+        enabled: true,
+      },
+      {
+        id: 'qa_mrd_kartu',
+        view: 'kartu_pelajar',
+        title: 'Kartu Pelajar Digital',
+        subtitle: 'Identitas kartu digital & barcode',
+        iconName: 'CreditCard',
+        colorScheme: 'cyan',
         enabled: true,
       },
       {
@@ -920,47 +1075,90 @@ export const DEFAULT_ROLE_QUICK_ACTIONS: Record<string, RoleQuickActionConfig> =
         title: 'Pusat Bantuan & Guru BK',
         subtitle: 'Kirim pesan ke wali kelas / admin',
         iconName: 'MessageSquare',
-        colorScheme: 'cyan',
+        colorScheme: 'blue',
         enabled: true,
       },
     ],
   },
 };
 
-// Aliases for matching roles
+// Aliases for matching roles (keeps piket_guru and piket_kesiswaan separate!)
 export function normalizeRoleForQuickActions(role: string): string {
   const norm = normalizeRoleKey(role);
   if (norm === 'siswa') return 'murid';
   if (norm === 'user') return 'guru';
-  if (norm === 'piket_guru' || norm === 'piket_kesiswaan') return 'piket';
+  if (norm === 'piket') return 'piket_guru';
   return norm;
 }
 
-export function getDefaultRoleQuickActionConfig(roleKey: string): RoleQuickActionConfig {
+export function getDefaultRoleQuickActionConfig(roleKey: string, appData?: AppData): RoleQuickActionConfig {
   const normKey = normalizeRoleForQuickActions(roleKey);
   if (DEFAULT_ROLE_QUICK_ACTIONS[normKey]) {
     return JSON.parse(JSON.stringify(DEFAULT_ROLE_QUICK_ACTIONS[normKey]));
   }
 
-  // Generic fallback for custom role
-  return {
-    roleKey: roleKey,
-    roleLabel: roleKey.replace(/_/g, ' ').toUpperCase(),
-    sectionTitle: `Kartu Cepat ${roleKey.replace(/_/g, ' ').toUpperCase()}`,
-    sectionSubtitle: 'Akses cepat navigasi dashboard',
-    dotColorClass: 'bg-indigo-600',
+  // Dynamic fallback for custom roles based on their allowedMenus in Pengaturan Hak Akses Role
+  const allPerms = getAllRolePermissions(appData);
+  const matchedPerm = allPerms.find((p) => normalizeRoleKey(p.roleId) === normKey);
+  const roleLabel = matchedPerm?.roleName || roleKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const allowedMenus = matchedPerm?.allowedMenus || ['dashboard', 'presensi_input', 'rekap_harian', 'live_chat'];
+
+  const colorCycle: QuickActionColor[] = ['indigo', 'emerald', 'blue', 'amber', 'purple', 'teal', 'rose', 'cyan'];
+  const generatedCards: DashboardQuickActionItem[] = [];
+
+  // Always include KBM card as first item in custom role config (will only render on dashboard if user is a teacher)
+  generatedCards.push({
+    id: `qa_${normKey}_kbm`,
+    view: 'presensi_kbm_guru',
+    title: 'Absen Mengajar Guru (KBM)',
+    subtitle: 'Input presensi kehadiran siswa per jam pelajaran mengajar & tabel log riwayat KBM',
+    iconName: 'BookOpen',
+    colorScheme: 'purple',
     enabled: true,
-    cards: [
-      {
-        id: `qa_${roleKey}_dashboard`,
-        view: 'dashboard',
-        title: 'Dashboard Utama',
-        subtitle: 'Ringkasan data & statistik',
-        iconName: 'CheckCircle2',
-        colorScheme: 'blue',
-        enabled: true,
-      },
-    ],
+    isUtama: true,
+    badgeText: 'Sesi Mengajar Hari Ini',
+  });
+
+  allowedMenus
+    .filter((v) => v !== 'dashboard' && v !== 'presensi_kbm_guru' && v !== 'pengaturan_admin')
+    .slice(0, 5)
+    .forEach((viewId, idx) => {
+      const menuMeta = ALL_MENU_ITEMS.find((m) => m.id === viewId);
+      if (menuMeta) {
+        generatedCards.push({
+          id: `qa_${normKey}_${viewId}`,
+          view: viewId,
+          title: menuMeta.label,
+          subtitle: menuMeta.shortDesc,
+          iconName: menuMeta.iconName || 'FileText',
+          colorScheme: colorCycle[idx % colorCycle.length],
+          enabled: true,
+          ...(viewId === 'presensi_input' ? { specialAction: 'navigate_to_input' as const } : {}),
+          ...(viewId === 'rekap_pengisian_kelas' ? { specialAction: 'open_class_submission' as const } : {}),
+        });
+      }
+    });
+
+  if (generatedCards.length === 0) {
+    generatedCards.push({
+      id: `qa_${normKey}_dashboard`,
+      view: 'dashboard',
+      title: 'Dashboard Utama',
+      subtitle: 'Ringkasan data & statistik',
+      iconName: 'CheckCircle2',
+      colorScheme: 'blue',
+      enabled: true,
+    });
+  }
+
+  return {
+    roleKey: normKey,
+    roleLabel,
+    sectionTitle: `Kartu Cepat ${roleLabel}`,
+    sectionSubtitle: matchedPerm?.description || `Akses cepat navigasi dashboard untuk peran ${roleLabel}`,
+    dotColorClass: 'bg-violet-600',
+    enabled: true,
+    cards: generatedCards,
   };
 }
 
@@ -968,11 +1166,14 @@ export function getRoleQuickActionConfig(
   appData?: AppData,
   roleKey?: string
 ): RoleQuickActionConfig {
-  if (!roleKey) return getDefaultRoleQuickActionConfig('admin');
+  if (!roleKey) return getDefaultRoleQuickActionConfig('admin', appData);
   const normKey = normalizeRoleForQuickActions(roleKey);
 
-  const saved = appData?.dashboardQuickActions?.rolesConfig?.[normKey] ||
-    appData?.dashboardQuickActions?.rolesConfig?.[roleKey];
+  const rolesConfig = appData?.dashboardQuickActions?.rolesConfig;
+  const saved =
+    rolesConfig?.[normKey] ||
+    rolesConfig?.[roleKey] ||
+    ((normKey === 'piket_guru' || normKey === 'piket_kesiswaan') ? rolesConfig?.['piket'] : undefined);
 
   if (saved) {
     const rawCards = (saved.cards || []).map((c, idx) => ({
@@ -980,28 +1181,14 @@ export function getRoleQuickActionConfig(
       order: c.order ?? idx,
     }));
 
-    // CRITICAL: If this role is a teacher role (guru, wali, kurikulum, kesiswaan, staf_jadwal, piket, hubin)
-    // and the saved configuration is missing the 'presensi_kbm_guru' card,
-    // automatically prepend the KBM card so existing saved database configs immediately display it!
-    const teacherRoles = ['guru', 'wali', 'kurikulum', 'kesiswaan', 'staf_jadwal', 'piket', 'hubin'];
-    const hasKbmCard = rawCards.some((c) => c.view === 'presensi_kbm_guru');
-
-    if (teacherRoles.includes(normKey) && !hasKbmCard) {
-      const defaultKbm =
-        DEFAULT_ROLE_QUICK_ACTIONS[normKey]?.cards?.find((c) => c.view === 'presensi_kbm_guru') ||
-        DEFAULT_ROLE_QUICK_ACTIONS.guru.cards.find((c) => c.view === 'presensi_kbm_guru');
-      if (defaultKbm) {
-        rawCards.unshift({ ...defaultKbm, order: -1 });
-      }
-    }
-
     return {
       ...saved,
+      roleKey: normKey,
       cards: rawCards,
     };
   }
 
-  return getDefaultRoleQuickActionConfig(normKey);
+  return getDefaultRoleQuickActionConfig(normKey, appData);
 }
 
 export interface KnownRoleOption {
@@ -1019,11 +1206,12 @@ export function getAvailableRolesForConfig(appData?: AppData): KnownRoleOption[]
     { key: 'wali', label: 'Wali Kelas', description: 'Pembina kelas binaan, siswa & catatan presensi', dotColor: 'bg-emerald-600', isSystem: true },
     { key: 'kesiswaan', label: 'WKS Kesiswaan & BP/BK', description: 'Pengawasan siswa, evaluasi alfa & home visit', dotColor: 'bg-cyan-600', isSystem: true },
     { key: 'kurikulum', label: 'WKS Kurikulum', description: 'Jadwal pelajaran, kurikulum & pemantauan guru', dotColor: 'bg-purple-600', isSystem: true },
-    { key: 'staf_jadwal', label: 'Staf Pengelola Jadwal', description: 'Plotting jadwal KBM, shift & kalender libur', dotColor: 'bg-sky-600', isSystem: true },
+    { key: 'staf_jadwal', label: 'Staf Pengelola Jadwal (Non-Guru)', description: 'Plotting jadwal KBM, shift & kalender libur', dotColor: 'bg-sky-600', isSystem: true },
     { key: 'adm_siswa', label: 'Admin Siswa (Non-Guru)', description: 'Master data siswa, cetak kartu QR & dokumen', dotColor: 'bg-sky-500', isSystem: true },
-    { key: 'piket', label: 'Petugas Piket Harian', description: 'Petugas piket gerbang & presensi harian', dotColor: 'bg-amber-500', isSystem: true },
+    { key: 'piket_guru', label: 'Piket Guru Harian', description: 'Guru piket harian, input absen kelas, KBM & QR', dotColor: 'bg-amber-500', isSystem: true },
+    { key: 'piket_kesiswaan', label: 'Piket Kesiswaan', description: 'Petugas piket kesiswaan, pantau pengisian kelas & QR', dotColor: 'bg-amber-600', isSystem: true },
     { key: 'piket_kelas', label: 'Petugas Piket Kelas', description: 'Sekretaris / perwakilan siswa pengisi absen', dotColor: 'bg-teal-500', isSystem: true },
-    { key: 'hubin', label: 'WKS Hubin & Industri', description: 'Hubungan industri, PKL/magang & shift siswa', dotColor: 'bg-emerald-600', isSystem: true },
+    { key: 'hubin', label: 'WKS Hubin & Industri', description: 'Hubungan industri, PKL/magang, jurusan & shift siswa', dotColor: 'bg-emerald-600', isSystem: true },
     { key: 'murid', label: 'Siswa / Murid', description: 'Siswa mandiri, portal kartu & riwayat presensi', dotColor: 'bg-blue-500', isSystem: true },
   ];
 

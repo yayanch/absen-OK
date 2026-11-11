@@ -40,7 +40,7 @@ import {
   resetRoleQuickActionToDefault,
   resetAllRoleQuickActionsToDefault,
 } from '../../utils/dashboardQuickActionsEngine';
-import { ALL_MENU_ITEMS, MENU_CATEGORIES, MenuCategoryKey, MenuItemInfo } from '../../utils/rolePermissionEngine';
+import { ALL_MENU_ITEMS, MENU_CATEGORIES, MenuCategoryKey, MenuItemInfo, hasMenuAccess } from '../../utils/rolePermissionEngine';
 import { addAuditLog } from '../../utils/helpers';
 
 export const getCategoryDefaultColor = (category?: string): QuickActionColor => {
@@ -365,7 +365,7 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
 
   // Reset selected role to default
   const handleResetCurrentRole = () => {
-    const defaultCfg = getDefaultRoleQuickActionConfig(selectedRoleKey);
+    const defaultCfg = getDefaultRoleQuickActionConfig(selectedRoleKey, appData);
     setDraftRolesConfig((prev) => ({
       ...prev,
       [selectedRoleKey]: JSON.parse(JSON.stringify(defaultCfg)),
@@ -383,7 +383,7 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
     }
     const map: Record<string, RoleQuickActionConfig> = {};
     availableRoles.forEach((r) => {
-      map[r.key] = getDefaultRoleQuickActionConfig(r.key);
+      map[r.key] = getDefaultRoleQuickActionConfig(r.key, appData);
     });
     setDraftRolesConfig(map);
     setHasUnsavedChanges(true);
@@ -734,6 +734,20 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
                             {card.specialAction && (
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                                 Aksi: {card.specialAction}
+                              </span>
+                            )}
+                            {card.view === 'presensi_kbm_guru' && ['wali', 'kurikulum', 'kesiswaan', 'hubin', 'piket_guru', 'piket_kesiswaan'].includes(selectedRoleKey) && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                                Khusus Pengguna Berstatus Guru
+                              </span>
+                            )}
+                            {card.view !== 'presensi_kbm_guru' && !hasMenuAccess(selectedRoleKey, card.view, appData) && (
+                              <span
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1"
+                                title="Menu ini belum diizinkan pada Pengaturan Hak Akses Role, sehingga kartu ini otomatis disembunyikan di dashboard."
+                              >
+                                <AlertCircle className="w-2.5 h-2.5" />
+                                <span>Disembunyikan (Izin Menu Nonaktif)</span>
                               </span>
                             )}
                           </div>

@@ -605,8 +605,10 @@ export const DEFAULT_ROLE_PERMISSIONS: RoleMenuPermission[] = [
     allowedMenus: [
       'dashboard',
       'presensi_kbm_guru',
+      'rekap_harian',
       'master_siswa',
       'master_jurusan',
+      'jadwal_shift',
       'catatan_pelanggaran',
       'ekstrakurikuler',
       'live_chat',
@@ -878,16 +880,14 @@ function checkSingleRoleMenuAccess(role: string, view: ViewType, appData?: AppDa
     view === 'pengaturan_menu' ||
     view === 'pengaturan_sekolah';
 
-  // Safety guard: Teachers and teachers with additional duties always have access to KBM attendance
+  // Safety guard: Teachers and teachers with additional duties have access to KBM attendance unless explicitly disabled
   const isTeacherRoleWithKbm =
     normalized === 'guru' ||
     normalized === 'wali' ||
     normalized === 'kurikulum' ||
     normalized === 'kesiswaan' ||
-    normalized === 'staf_jadwal' ||
     normalized === 'piket' ||
     normalized === 'piket_guru' ||
-    normalized === 'piket_kesiswaan' ||
     normalized === 'hubin' ||
     normalized === 'user';
 

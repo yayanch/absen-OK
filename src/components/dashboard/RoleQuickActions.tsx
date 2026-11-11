@@ -8,9 +8,10 @@ import {
   getRoleQuickActionConfig,
   renderQuickActionIcon,
 } from '../../utils/dashboardQuickActionsEngine';
+import { getEffectiveUserRoles, hasMenuAccess } from '../../utils/rolePermissionEngine';
 
 export interface RoleQuickActionsProps {
-  role: UserRole;
+  role: UserRole | string;
   appData?: AppData;
   currentUser?: UserSession;
   onNavigateView: (view: ViewType) => void;
@@ -128,19 +129,69 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
     return getRoleQuickActionConfig(appData, role);
   }, [appData, role]);
 
-  // Check if current user is a teacher (Guru/Wali/Tugas Tambahan)
+  const effectiveRoles = React.useMemo(() => {
+    return getEffectiveUserRoles(currentUser || null, appData);
+  }, [currentUser, appData]);
+
+  // Check if current user is a teacher or has teaching schedules (Guru / Wali / Guru dengan Tugas Tambahan)
   const isTeacherUser = React.useMemo(() => {
     if (!currentUser) return false;
     const r = (currentUser.role || '').toLowerCase();
-    if (['guru', 'wali', 'user'].includes(r)) return true;
-    if (Array.isArray(currentUser.roles) && currentUser.roles.some((ro) => ['guru', 'wali'].includes(ro.toLowerCase()))) return true;
+    if (r === 'murid' || r === 'siswa' || r === 'piket_kelas' || r === 'adm_siswa' || r === 'staf_jadwal') {
+      // Check if they explicitly also have 'guru' or 'wali' role
+      if (!effectiveRoles.some((ro) => ['guru', 'wali'].includes(ro.toLowerCase()))) {
+        return false;
+      }
+    }
+
     const uData = currentUser.data as any;
-    if (uData?.id && appData?.waliKelas?.some((w) => w.id === uData.id)) return true;
-    if (uData?.username && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === uData.username.toLowerCase())) return true;
-    if (uData?.nip && appData?.waliKelas?.some((w) => w.nip && w.nip === uData.nip)) return true;
-    if (uData?.nama && appData?.waliKelas?.some((w) => w.nama?.toLowerCase() === uData.nama.toLowerCase())) return true;
+    const uId = String(uData?.id || '');
+    const uName = String(uData?.nama || '').toLowerCase().trim();
+    const uNip = String(uData?.nip || '').toLowerCase().trim();
+    const uUsername = String(uData?.username || '').toLowerCase().trim();
+
+    // Check if user has teaching schedules in jadwalMengajar or guruMapelKelas
+    const hasSchedule =
+      (appData?.jadwalMengajar || []).some(
+        (j) =>
+          (uId && j.guruId === uId) ||
+          (uUsername && j.guruUsername?.toLowerCase() === uUsername) ||
+          (uNip && j.guruNip?.toLowerCase() === uNip) ||
+          (uName && j.guruNama?.toLowerCase() === uName)
+      ) ||
+      (appData?.guruMapelKelas || []).some(
+        (g) =>
+          (uId && g.guruId === uId) ||
+          (uUsername && g.guruUsername?.toLowerCase() === uUsername) ||
+          (uNip && g.guruNip?.toLowerCase() === uNip) ||
+          (uName && g.guruNama?.toLowerCase() === uName)
+      );
+
+    if (hasSchedule) return true;
+
+    // Pure staff accounts created in waliKelas array for login
+    const isPureStaffId =
+      uId === 'USER_ADM_SISWA' ||
+      uId === 'USER_STAF_JADWAL' ||
+      uId === 'USER_KESISWAAN' ||
+      uData?.isStaffAccount === true;
+
+    if (isPureStaffId) {
+      return effectiveRoles.some((ro) => ['guru', 'wali'].includes(ro.toLowerCase()));
+    }
+
+    if (['guru', 'wali', 'user', 'piket_guru', 'piket', 'kurikulum', 'hubin'].includes(r)) return true;
+    if (effectiveRoles.some((ro) => ['guru', 'wali', 'piket_guru', 'kurikulum', 'hubin'].includes(ro.toLowerCase()))) {
+      return true;
+    }
+
+    if (uId && appData?.waliKelas?.some((w) => w.id === uId)) return true;
+    if (uUsername && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === uUsername)) return true;
+    if (uNip && appData?.waliKelas?.some((w) => w.nip && w.nip.toLowerCase() === uNip)) return true;
+    if (uName && appData?.waliKelas?.some((w) => w.nama?.toLowerCase() === uName)) return true;
+
     return false;
-  }, [currentUser, appData]);
+  }, [currentUser, appData, effectiveRoles]);
 
   // If the section is disabled by admin for this role, return null
   if (config.enabled === false) {
@@ -149,11 +200,18 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
   const activeCards = React.useMemo(() => {
     const rawCards = config.cards || [];
-    const list = rawCards.filter((c) => c.enabled);
+    let list = rawCards.filter((c) => c.enabled);
     const hasKbmInConfig = rawCards.some((c) => c.view === 'presensi_kbm_guru');
+    const normalizedRole = (role || '').toLowerCase();
+    const isNonTeachingRole = ['admin', 'superadmin', 'murid', 'siswa', 'adm_siswa', 'piket_kelas', 'staf_jadwal'].includes(normalizedRole);
 
-    // If the logged in user is a teacher and KBM card is not present in config at all, guarantee it is included
-    if (isTeacherUser && !hasKbmInConfig) {
+    // 1. Rule for Absen Mengajar Guru (KBM):
+    // - Only display if user is a teacher/teaching (isTeacherUser)
+    // - If user is a teacher and KBM card is not in config at all for this additional duty role, prepend it
+    // - If KBM card IS in config and admin disabled it (enabled: false), respect enabled: false
+    if (!isTeacherUser) {
+      list = list.filter((c) => c.view !== 'presensi_kbm_guru');
+    } else if (!hasKbmInConfig && !isNonTeachingRole) {
       list.unshift({
         id: `qa_${role}_kbm_auto`,
         view: 'presensi_kbm_guru',
@@ -166,8 +224,17 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
         badgeText: 'Sesi Mengajar Hari Ini',
       });
     }
+
+    // 2. Automatically hide cards whose target menu is not permitted in Pengaturan Hak Akses Role
+    list = list.filter((card) => {
+      if (card.view === 'presensi_kbm_guru' && isTeacherUser) {
+        return true;
+      }
+      return hasMenuAccess(role, card.view, appData);
+    });
+
     return list;
-  }, [config.cards, isTeacherUser, role]);
+  }, [config.cards, isTeacherUser, role, appData]);
 
   if (activeCards.length === 0 && (!isAdmin || !onOpenQuickActionSettings)) {
     return null;

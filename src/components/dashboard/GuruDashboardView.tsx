@@ -637,11 +637,17 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       </div>
 
       {/* -------------------------------------------------------------
-          3. KARTU CEPAT GURU (QUICK ACTION CARDS)
+          3. KARTU CEPAT GURU / PERAN AKTIF (QUICK ACTION CARDS)
       ------------------------------------------------------------- */}
       <div className="space-y-4">
         <RoleQuickActions
-          role="guru"
+          role={
+            activeRoleWorkspace && activeRoleWorkspace !== 'all' && !activeRoleWorkspace.startsWith('tugas_')
+              ? activeRoleWorkspace
+              : currentUser.role && !['user', 'guru'].includes(currentUser.role.toLowerCase())
+              ? currentUser.role
+              : 'guru'
+          }
           appData={appData}
           currentUser={currentUser}
           onNavigateView={onNavigateView}

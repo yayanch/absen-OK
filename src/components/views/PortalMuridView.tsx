@@ -56,6 +56,8 @@ import { AppData, SekolahConfig, Siswa, UserSession, SiswaPresensiItem, ViewType
 import { INITIAL_PENGUMUMAN } from '../../data/initialData';
 import { CurrentWeeklyShiftCard } from '../dashboard/CurrentWeeklyShiftCard';
 import { getTodayString, compressBase64Image, saveSessionUser, normalizePresensiStatus, determinePresensiStatusByTime, getShiftTimingForStudent, formatDateIndo, getEffectiveSchoolDays, syncSiswaProfileToServer } from '../../utils/helpers';
+import { getRoleQuickActionConfig, renderQuickActionIcon } from '../../utils/dashboardQuickActionsEngine';
+import { hasMenuAccess } from '../../utils/rolePermissionEngine';
 
 interface PortalMuridViewProps {
   appData: AppData;
@@ -1249,104 +1251,134 @@ export const PortalMuridView: React.FC<PortalMuridViewProps> = ({
             </div>
           </div>
 
-          {/* Kartu Cepat Siswa */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between px-1">
-              <div className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Kartu Cepat Siswa</span>
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                Akses Langsung Fitur Portal
-              </span>
-            </div>
+          {/* Kartu Cepat Siswa (Tersinkronisasi dengan Pengaturan Kartu Cepat & Hak Akses Role Murid) */}
+          {(() => {
+            const muridQaConfig = getRoleQuickActionConfig(appData, 'murid');
+            if (muridQaConfig.enabled === false) return null;
+            const activeMuridCards = (muridQaConfig.cards || []).filter(
+              (c) => c.enabled && hasMenuAccess('murid', c.view, appData)
+            );
+            if (activeMuridCards.length === 0) return null;
 
-            <div className="grid grid-cols-4 gap-2.5 sm:gap-3.5">
-              <button
-                type="button"
-                onClick={() => setCurrentSubTab('absen_qr')}
-                className="p-3 sm:p-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-emerald-500/30"
-              >
-              <CalendarCheck className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Absensi</span>
-            </button>
+            const getMuridBtnColorClass = (scheme?: string) => {
+              switch (scheme) {
+                case 'emerald':
+                  return 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/10 border-emerald-500/30';
+                case 'indigo':
+                  return 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-900/10 border-indigo-500/30';
+                case 'purple':
+                  return 'bg-purple-600 hover:bg-purple-700 shadow-purple-900/10 border-purple-500/30';
+                case 'amber':
+                  return 'bg-amber-500 hover:bg-amber-600 shadow-amber-900/10 border-amber-400/30';
+                case 'rose':
+                  return 'bg-rose-600 hover:bg-rose-700 shadow-rose-900/10 border-rose-500/30';
+                case 'cyan':
+                  return 'bg-cyan-600 hover:bg-cyan-700 shadow-cyan-900/10 border-cyan-500/30';
+                case 'teal':
+                  return 'bg-teal-600 hover:bg-teal-700 shadow-teal-900/10 border-teal-500/30';
+                case 'sky':
+                  return 'bg-sky-600 hover:bg-sky-700 shadow-sky-900/10 border-sky-500/30';
+                case 'slate':
+                  return 'bg-slate-600 hover:bg-slate-700 shadow-slate-900/10 border-slate-500/30';
+                case 'blue':
+                default:
+                  return 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/10 border-blue-500/30';
+              }
+            };
 
-            <button
-              type="button"
-              onClick={() => setCurrentSubTab('rekap_siswa')}
-              className="p-3 sm:p-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-indigo-500/30"
-            >
-              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Riwayat</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentSubTab('jadwal_pelajaran')}
-              className="p-3 sm:p-4 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-violet-500/30"
-            >
-              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Jadwal Pelajaran</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentSubTab('pelanggaran')}
-              className="relative p-3 sm:p-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-amber-400/30"
-            >
-              {myPelanggaran.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 py-0.5 bg-rose-600 text-white font-black text-[10px] rounded-full shadow-xs ring-2 ring-white animate-pulse">
-                  {myPelanggaran.length}
-                </span>
-              )}
-              <ShieldAlert className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Catatan Pelanggaran</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
+            const handleMuridCardClick = (view: ViewType, cardId: string) => {
+              const vStr = String(view);
+              if (cardId.includes('izin') || vStr === 'pengajuan_izin') {
                 setShowFormIzin(true);
-              }}
-              className="p-3 sm:p-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-purple-500/30"
-            >
-              <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Pengajuan</span>
-            </button>
+                return;
+              }
+              switch (vStr) {
+                case 'absen_qr':
+                  setCurrentSubTab('absen_qr');
+                  break;
+                case 'rekap_siswa':
+                  setCurrentSubTab('rekap_siswa');
+                  break;
+                case 'jadwal_pelajaran':
+                case 'jadwal_mengajar_guru':
+                  setCurrentSubTab('jadwal_pelajaran');
+                  break;
+                case 'catatan_pelanggaran':
+                  setCurrentSubTab('pelanggaran');
+                  break;
+                case 'home_visit':
+                  setCurrentSubTab('home_visit');
+                  break;
+                case 'cetak_qr':
+                  setCurrentSubTab('kartu_pelajar');
+                  break;
+                case 'pengaturan_akun':
+                  setCurrentSubTab('profil');
+                  break;
+                default:
+                  if (onNavigate) {
+                    onNavigate(view);
+                  }
+                  break;
+              }
+            };
 
-            <button
-              type="button"
-              onClick={() => setCurrentSubTab('home_visit')}
-              className="relative p-3 sm:p-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-rose-500/30"
-            >
-              {myHomeVisits.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 py-0.5 bg-amber-400 text-slate-900 font-black text-[10px] rounded-full shadow-xs ring-2 ring-white animate-pulse">
-                  {myHomeVisits.length}
-                </span>
-              )}
-              <MapPin className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Home Visit</span>
-            </button>
+            return (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-1">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{muridQaConfig.sectionTitle || 'Kartu Cepat Siswa'}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                    {muridQaConfig.sectionSubtitle || 'Akses Langsung Fitur Portal'}
+                  </span>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setCurrentSubTab('kartu_pelajar')}
-              className="p-3 sm:p-4 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-cyan-500/30"
-            >
-              <CreditCard className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Kartu Pelajar</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentSubTab('profil')}
-              className="p-3 sm:p-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-blue-500/30"
-            >
-              <User className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
-              <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Profil</span>
-            </button>
-          </div>
-        </div>
+                <div className="grid grid-cols-4 gap-2.5 sm:gap-3.5">
+                  {activeMuridCards.map((card) => {
+                    const isPelanggaranCard = card.view === 'catatan_pelanggaran';
+                    const isHomeVisitCard = card.view === 'home_visit';
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => handleMuridCardClick(card.view, card.id)}
+                        className={`relative p-3 sm:p-4 rounded-2xl text-white shadow-md active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border ${getMuridBtnColorClass(card.colorScheme)}`}
+                      >
+                        {isPelanggaranCard && myPelanggaran.length > 0 && (
+                          <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 py-0.5 bg-rose-600 text-white font-black text-[10px] rounded-full shadow-xs ring-2 ring-white animate-pulse">
+                            {myPelanggaran.length}
+                          </span>
+                        )}
+                        {isHomeVisitCard && myHomeVisits.length > 0 && (
+                          <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 px-1.5 py-0.5 bg-amber-400 text-slate-900 font-black text-[10px] rounded-full shadow-xs ring-2 ring-white animate-pulse">
+                            {myHomeVisits.length}
+                          </span>
+                        )}
+                        <div className="group-hover:scale-110 transition shrink-0">
+                          {renderQuickActionIcon(card.iconName, 'w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8]')}
+                        </div>
+                        <span className="text-[11px] sm:text-sm font-bold text-white leading-tight line-clamp-2">
+                          {card.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {hasMenuAccess('murid', 'rekap_siswa', appData) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFormIzin(true)}
+                      className="p-3 sm:p-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-900/10 active:scale-95 transition flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 cursor-pointer group border border-purple-500/30"
+                    >
+                      <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-white stroke-[1.8] group-hover:scale-110 transition shrink-0" />
+                      <span className="text-[11px] sm:text-sm font-bold text-white leading-tight">Pengajuan Izin</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
         {/* Jadwal Pelajaran Section on Overview */}
           <div className="space-y-2.5">
