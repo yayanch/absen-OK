@@ -9,7 +9,7 @@ import {
   UserSession,
   WaliKelas,
 } from '../types';
-import { normalizeRoleKey } from './rolePermissionEngine';
+import { getEffectiveCustomRoles, normalizeRoleKey } from './rolePermissionEngine';
 
 export interface ChatTargetInfo {
   id: ChatTargetPermission;
@@ -306,7 +306,7 @@ export function getAllRoleChatRules(appData: AppData): RoleChatContactRule[] {
   const baseKeys = Object.keys(DEFAULT_CHAT_CONTACT_RULES);
   
   // Custom roles registered in appData
-  const registeredCustomRoles = (appData.customRoles || []).map(r => normalizeRoleKey(r.name));
+  const registeredCustomRoles = getEffectiveCustomRoles(appData).map(r => normalizeRoleKey(r.id || r.name));
   const allKeys = Array.from(new Set([...baseKeys, ...registeredCustomRoles, ...Object.keys(customRules)]));
 
   return allKeys.map(key => {

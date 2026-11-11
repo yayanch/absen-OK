@@ -39,7 +39,7 @@ import {
   QuickActionColor,
   ViewType,
 } from '../types';
-import { ALL_MENU_ITEMS, normalizeRoleKey } from './rolePermissionEngine';
+import { ALL_MENU_ITEMS, getEffectiveCustomRoles, normalizeRoleKey } from './rolePermissionEngine';
 
 export const AVAILABLE_QUICK_ACTION_ICONS: { name: string; label: string }[] = [
   { name: 'CheckCircle2', label: 'Centang / Sukses' },
@@ -1028,7 +1028,7 @@ export function getAvailableRolesForConfig(appData?: AppData): KnownRoleOption[]
   ];
 
   // Append custom roles
-  const customRoleItems = (appData?.customRoles || []).map((cr) => ({
+  const customRoleItems = getEffectiveCustomRoles(appData).map((cr) => ({
     key: cr.id || cr.name,
     label: cr.label || cr.name,
     description: cr.description || `Role kustom ${cr.label || cr.name}`,

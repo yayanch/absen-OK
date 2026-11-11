@@ -1190,6 +1190,9 @@ function saveAppDataCache(data: any, isRestore = false) {
     if (Array.isArray(inMemoryAppDataCache.rolePermissions) && inMemoryAppDataCache.rolePermissions.length > 0 && (!Array.isArray(data.rolePermissions) || data.rolePermissions.length === 0)) {
       data.rolePermissions = inMemoryAppDataCache.rolePermissions;
     }
+    if (Array.isArray(inMemoryAppDataCache.customRoles) && inMemoryAppDataCache.customRoles.length > 0 && (!Array.isArray(data.customRoles) || data.customRoles.length === 0)) {
+      data.customRoles = inMemoryAppDataCache.customRoles;
+    }
     if (inMemoryAppDataCache.whatsappGateway && Object.keys(inMemoryAppDataCache.whatsappGateway).length > 0 && (!data.whatsappGateway || Object.keys(data.whatsappGateway).length === 0)) {
       data.whatsappGateway = inMemoryAppDataCache.whatsappGateway;
     }
@@ -3429,7 +3432,7 @@ async function performMySQLLoad(config: any) {
       appData.whatsappLogs = inMemoryAppDataCache.whatsappLogs;
     }
 
-    // Role Permissions
+    // Role Permissions & Custom Roles
     if (Array.isArray(rpRows) && rpRows.length > 0) {
       appData.rolePermissions = rpRows.map((r: any) => {
         let allowedMenus: string[] = [];
@@ -3448,6 +3451,30 @@ async function performMySQLLoad(config: any) {
     } else if (inMemoryAppDataCache?.rolePermissions && inMemoryAppDataCache.rolePermissions.length > 0) {
       appData.rolePermissions = inMemoryAppDataCache.rolePermissions;
     }
+
+    const customRoleMap = new Map<string, any>();
+    if (Array.isArray(inMemoryAppDataCache?.customRoles)) {
+      inMemoryAppDataCache.customRoles.forEach((cr: any) => {
+        if (cr && cr.id) customRoleMap.set(String(cr.id).toLowerCase(), cr);
+      });
+    }
+    if (Array.isArray(appData.rolePermissions)) {
+      appData.rolePermissions.forEach((rp: any) => {
+        if (rp && rp.roleId && !rp.isSystem) {
+          const key = String(rp.roleId).toLowerCase();
+          if (!customRoleMap.has(key)) {
+            customRoleMap.set(key, {
+              id: rp.roleId,
+              name: rp.roleId,
+              label: rp.roleName || rp.roleId,
+              color: rp.badgeColor || 'teal',
+              description: rp.description || `Role kustom untuk ${rp.roleName || rp.roleId}`,
+            });
+          }
+        }
+      });
+    }
+    appData.customRoles = Array.from(customRoleMap.values());
 
     // WhatsApp Gateway Config
     if (wgRows && wgRows.length > 0) {
@@ -6306,6 +6333,7 @@ app.post("/api/backup/restore", async (req, res) => {
       petugasPiket: Array.isArray(incoming.petugasPiket) ? incoming.petugasPiket : (baseData.petugasPiket || []),
       catatanPiketHarian: Array.isArray(incoming.catatanPiketHarian) ? incoming.catatanPiketHarian : (baseData.catatanPiketHarian || []),
       rolePermissions: Array.isArray(incoming.rolePermissions) ? incoming.rolePermissions : (baseData.rolePermissions || []),
+      customRoles: Array.isArray(incoming.customRoles) ? incoming.customRoles : (baseData.customRoles || []),
       whatsappGateway: incoming.whatsappGateway || baseData.whatsappGateway,
       whatsappLogs: Array.isArray(incoming.whatsappLogs) ? incoming.whatsappLogs : (baseData.whatsappLogs || []),
       securityIncidents: Array.isArray(incoming.securityIncidents) ? incoming.securityIncidents : (baseData.securityIncidents || []),

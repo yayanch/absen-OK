@@ -546,6 +546,30 @@ export default function App() {
               const mergedRolePermissions = (Array.isArray(data.appData.rolePermissions) && data.appData.rolePermissions.length > 0)
                 ? data.appData.rolePermissions
                 : (prev.rolePermissions || []);
+              const mergedCustomRoles = (() => {
+                const map = new Map<string, any>();
+                (prev.customRoles || []).forEach((cr: any) => {
+                  if (cr && cr.id) map.set(String(cr.id).toLowerCase(), cr);
+                });
+                (data.appData.customRoles || []).forEach((cr: any) => {
+                  if (cr && cr.id) map.set(String(cr.id).toLowerCase(), cr);
+                });
+                (mergedRolePermissions || []).forEach((rp: any) => {
+                  if (rp && rp.roleId && rp.isSystem === false) {
+                    const key = String(rp.roleId).toLowerCase();
+                    if (!map.has(key)) {
+                      map.set(key, {
+                        id: rp.roleId,
+                        name: rp.roleId,
+                        label: rp.roleName || rp.roleId,
+                        color: rp.badgeColor || 'teal',
+                        description: rp.description || `Role kustom untuk ${rp.roleName || rp.roleId}`,
+                      });
+                    }
+                  }
+                });
+                return Array.from(map.values());
+              })();
               const mergedWhatsappGateway = (data.appData.whatsappGateway && Object.keys(data.appData.whatsappGateway).length > 0)
                 ? data.appData.whatsappGateway
                 : (prev.whatsappGateway || data.appData.whatsappGateway);
@@ -582,6 +606,7 @@ export default function App() {
                 auditLogs: mergedAuditLogs,
                 whatsappLogs: mergedWhatsappLogs,
                 rolePermissions: mergedRolePermissions,
+                customRoles: mergedCustomRoles,
                 whatsappGateway: mergedWhatsappGateway,
                 securityIncidents: mergedSecurityIncidents,
                 blockedIps: mergedBlockedIps,
@@ -669,6 +694,9 @@ export default function App() {
           const customAuditLogs = customEvent.detail.auditLogs || prev.auditLogs;
           const customWhatsappLogs = customEvent.detail.whatsappLogs || prev.whatsappLogs;
           const customRolePermissions = customEvent.detail.rolePermissions || prev.rolePermissions;
+          const customCustomRoles = customEvent.detail.customRoles !== undefined
+            ? customEvent.detail.customRoles
+            : prev.customRoles;
           const customWhatsappGateway = customEvent.detail.whatsappGateway || prev.whatsappGateway;
           const customSecurityIncidents = customEvent.detail.securityIncidents !== undefined
             ? customEvent.detail.securityIncidents
@@ -699,6 +727,7 @@ export default function App() {
             auditLogs: customAuditLogs,
             whatsappLogs: customWhatsappLogs,
             rolePermissions: customRolePermissions,
+            customRoles: customCustomRoles,
             whatsappGateway: customWhatsappGateway,
             securityIncidents: customSecurityIncidents,
             blockedIps: customBlockedIps,
@@ -710,8 +739,9 @@ export default function App() {
             deletedGmkIds: allDeletedGmk,
           };
         });
+      } else {
+        fetchGlobalState();
       }
-      fetchGlobalState();
     };
 
     window.addEventListener('focus', handleFocus);

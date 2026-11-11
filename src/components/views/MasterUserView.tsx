@@ -30,11 +30,11 @@ import {
   Sparkles,
   Filter
 } from 'lucide-react';
-import { AppData, CustomRole, UserRole, UserSession, ViewType, WaliKelas } from '../../types';
+import { AppData, CustomRole, RoleMenuPermission, UserRole, UserSession, ViewType, WaliKelas } from '../../types';
 import { Pagination } from '../Pagination';
 import { PageHeader } from '../common/UIComponents';
 import { addAuditLog, cleanMapelName } from '../../utils/helpers';
-import { normalizeRoleKey, mapDutyToRole } from '../../utils/rolePermissionEngine';
+import { getEffectiveCustomRoles, normalizeRoleKey, mapDutyToRole } from '../../utils/rolePermissionEngine';
 
 export interface UserItem {
   id: string;
@@ -184,13 +184,18 @@ export const getAvailableRoleOptionsList = (appData: AppData): AvailableRoleOpti
     { id: 'murid', label: 'Siswa / Murid', badgeColor: 'rose', description: 'Portal mandiri siswa, scan kehadiran QR & kartu pelajar digital', isSystem: true },
   ];
 
-  const customRoles: AvailableRoleOption[] = (appData.customRoles || []).map((cr) => ({
-    id: cr.id,
-    label: cr.label || cr.name,
-    badgeColor: cr.color || 'indigo',
-    description: cr.description || 'Role kustom pengguna',
-    isSystem: false,
-  }));
+  const effectiveCustomRoles = getEffectiveCustomRoles(appData);
+  const baseIds = new Set(baseRoles.map((b) => normalizeRoleKey(b.id)));
+
+  const customRoles: AvailableRoleOption[] = effectiveCustomRoles
+    .filter((cr) => !baseIds.has(normalizeRoleKey(cr.id || cr.name)))
+    .map((cr) => ({
+      id: cr.id || cr.name,
+      label: cr.label || cr.name,
+      badgeColor: cr.color || 'indigo',
+      description: cr.description || 'Role kustom pengguna',
+      isSystem: false,
+    }));
 
   return [...baseRoles, ...customRoles];
 };
@@ -211,6 +216,7 @@ export const RoleFormModalContent: React.FC<RoleFormModalContentProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [color, setColor] = useState('indigo');
+  const [description, setDescription] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,26 +224,58 @@ export const RoleFormModalContent: React.FC<RoleFormModalContentProps> = ({
       onShowToast('Nama role tidak boleh kosong!', 'error');
       return;
     }
-    const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const currentCustomRoles = appData.customRoles || [];
-    if (currentCustomRoles.some((r) => r.id === roleId || r.name.toLowerCase() === name.toLowerCase())) {
+    const roleId = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const currentCustomRoles = getEffectiveCustomRoles(appData);
+    if (
+      currentCustomRoles.some(
+        (r) =>
+          normalizeRoleKey(r.id) === normalizeRoleKey(roleId) ||
+          (r.label || r.name).toLowerCase() === name.trim().toLowerCase()
+      )
+    ) {
       onShowToast('Role dengan nama tersebut sudah ada!', 'warning');
       return;
     }
 
-    const newRoleObj = {
+    const defaultAllowedMenus: ViewType[] = [
+      'dashboard',
+      'presensi_input',
+      'rekap_harian',
+      'rekap_siswa',
+      'live_chat',
+      'pengaturan_admin',
+    ];
+
+    const newRoleObj: CustomRole = {
       id: roleId,
       name: roleId,
       label: name.trim(),
       color: color,
+      description: description.trim() || `Role kustom ${name.trim()}`,
+      allowedMenus: defaultAllowedMenus,
+      isSystem: false,
     };
+
+    const newPermissionObj: RoleMenuPermission = {
+      roleId: roleId,
+      roleName: name.trim(),
+      description: description.trim() || `Role kustom ${name.trim()}`,
+      badgeColor: color,
+      isSystem: false,
+      allowedMenus: defaultAllowedMenus,
+    };
+
+    const existingPermissions = (appData.rolePermissions || []).filter(
+      (p) => normalizeRoleKey(p.roleId) !== normalizeRoleKey(roleId)
+    );
 
     onUpdateAppData({
       ...appData,
       customRoles: [...currentCustomRoles, newRoleObj],
+      rolePermissions: [...existingPermissions, newPermissionObj],
     });
 
-    onShowToast(`Role baru "${name}" berhasil dibuat!`, 'success');
+    onShowToast(`Role baru "${name.trim()}" berhasil dibuat dan siap dipilih!`, 'success');
     onCloseModal();
   };
 
@@ -320,7 +358,7 @@ export const ManageRolesModalContent: React.FC<ManageRolesModalContentProps> = (
   onConfirmModal,
   onShowToast,
 }) => {
-  const customRoles = appData.customRoles || [];
+  const customRoles = getEffectiveCustomRoles(appData);
 
   if (customRoles.length === 0) {
     return (
@@ -352,10 +390,18 @@ export const ManageRolesModalContent: React.FC<ManageRolesModalContentProps> = (
                     `Apakah Anda yakin ingin menghapus role "${role.label}"? Role ini akan dicabut dari ${count} pengguna.`,
                     'danger',
                     () => {
-                      const updatedCustomRoles = (appData.customRoles || []).filter((r) => r.id !== role.id);
+                      const normTarget = normalizeRoleKey(role.id || role.name);
+                      const updatedCustomRoles = customRoles.filter(
+                        (r) => normalizeRoleKey(r.id || r.name) !== normTarget
+                      );
+                      const updatedRolePermissions = (appData.rolePermissions || []).filter(
+                        (p) => normalizeRoleKey(p.roleId) !== normTarget
+                      );
                       const updatedWaliKelas = appData.waliKelas.map((w) => {
                         const wRoles = Array.isArray(w.roles) && w.roles.length > 0 ? w.roles : [w.role || 'guru'];
-                        const filteredRoles = wRoles.filter((r) => r !== role.id && r !== role.name);
+                        const filteredRoles = wRoles.filter(
+                          (r) => normalizeRoleKey(r) !== normTarget && r !== role.id && r !== role.name
+                        );
                         const nextRoles = filteredRoles.length > 0 ? filteredRoles : ['guru'];
                         return {
                           ...w,
@@ -366,6 +412,7 @@ export const ManageRolesModalContent: React.FC<ManageRolesModalContentProps> = (
                       onUpdateAppData({
                         ...appData,
                         customRoles: updatedCustomRoles,
+                        rolePermissions: updatedRolePermissions,
                         waliKelas: updatedWaliKelas,
                       });
                       onShowToast(`Role "${role.label}" berhasil dihapus!`, 'success');
@@ -414,6 +461,7 @@ export const QuickRoleModalContent: React.FC<QuickRoleModalContentProps> = ({
   onCloseModal,
   onShowToast,
 }) => {
+  const effectiveCustomRoles = getEffectiveCustomRoles(appData);
   const availableOptions = getAvailableRoleOptionsList(appData);
   const initialRoles = user.roles && user.roles.length > 0 ? [...user.roles] : [user.role || 'guru'];
   const [selectedRoles, setSelectedRoles] = useState<UserRole[]>(initialRoles);
@@ -496,7 +544,7 @@ export const QuickRoleModalContent: React.FC<QuickRoleModalContentProps> = ({
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRoleBadgeClass(opt.id, appData.customRoles)}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRoleBadgeClass(opt.id, effectiveCustomRoles)}`}>
                       {opt.label}
                     </span>
                     {primaryRole === opt.id && (
@@ -537,7 +585,7 @@ export const QuickRoleModalContent: React.FC<QuickRoleModalContentProps> = ({
           >
             {selectedRoles.map((r) => (
               <option key={r} value={r}>
-                {getRoleLabel(r, appData.customRoles)}
+                {getRoleLabel(r, effectiveCustomRoles)}
               </option>
             ))}
           </select>
@@ -582,7 +630,8 @@ interface UserFormModalContentProps {
     noHp: string,
     mataPelajaran?: string,
     hariMengajar?: string[],
-    batasiLoginHariMengajar?: boolean
+    batasiLoginHariMengajar?: boolean,
+    inlineCreatedRoles?: CustomRole[]
   ) => void;
   onCloseModal: () => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -595,7 +644,21 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
   onCloseModal,
   onShowToast,
 }) => {
-  const availableOptions = getAvailableRoleOptionsList(appData);
+  const [inlineCustomRoles, setInlineCustomRoles] = useState<CustomRole[]>([]);
+  const [showInlineRoleForm, setShowInlineRoleForm] = useState(false);
+  const [newRoleLabel, setNewRoleLabel] = useState('');
+  const [newRoleDesc, setNewRoleDesc] = useState('');
+  const [newRoleColor, setNewRoleColor] = useState('teal');
+
+  const mergedAppDataForOptions: AppData = {
+    ...appData,
+    customRoles: [
+      ...getEffectiveCustomRoles(appData),
+      ...inlineCustomRoles,
+    ],
+  };
+  const effectiveCustomRoles = getEffectiveCustomRoles(mergedAppDataForOptions);
+  const availableOptions = getAvailableRoleOptionsList(mergedAppDataForOptions);
   const initialRoles = user ? (user.roles && user.roles.length > 0 ? user.roles : [user.role || 'wali']) : ['wali'];
   
   const [nama, setNama] = useState(user ? user.nama : '');
@@ -605,6 +668,46 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
   const [selectedRoles, setSelectedRoles] = useState<UserRole[]>(initialRoles);
   const [primaryRole, setPrimaryRole] = useState<UserRole>(user ? user.role || initialRoles[0] : 'wali');
   const [noHp, setNoHp] = useState(user ? user.noHp || '' : '');
+
+  const handleAddInlineRole = () => {
+    const cleanLabel = newRoleLabel.trim();
+    if (!cleanLabel) {
+      onShowToast('Nama role baru tidak boleh kosong!', 'warning');
+      return;
+    }
+    const slug = cleanLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    if (!slug) {
+      onShowToast('Nama role tidak valid!', 'error');
+      return;
+    }
+    const exists = availableOptions.some(
+      (r) => r.id.toLowerCase() === slug || r.label.toLowerCase() === cleanLabel.toLowerCase()
+    );
+    if (exists) {
+      onShowToast(`Role "${cleanLabel}" sudah tersedia di daftar pilihan!`, 'warning');
+      if (!selectedRoles.includes(slug)) {
+        setSelectedRoles((prev) => [...prev, slug]);
+      }
+      setShowInlineRoleForm(false);
+      setNewRoleLabel('');
+      setNewRoleDesc('');
+      return;
+    }
+    const createdRole: CustomRole = {
+      id: slug,
+      name: slug,
+      label: cleanLabel,
+      color: newRoleColor,
+      description: newRoleDesc.trim() || `Role kustom untuk ${cleanLabel}`,
+    };
+    setInlineCustomRoles((prev) => [...prev, createdRole]);
+    setSelectedRoles((prev) => [...prev, slug]);
+    setPrimaryRole(slug);
+    setNewRoleLabel('');
+    setNewRoleDesc('');
+    setShowInlineRoleForm(false);
+    onShowToast(`Role "${cleanLabel}" ditambahkan dan otomatis dipilih!`, 'success');
+  };
 
   const toggleRole = (roleId: string) => {
     setSelectedRoles((prev) => {
@@ -642,7 +745,8 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
       noHp.trim(),
       user?.mataPelajaran || '',
       user?.hariMengajar,
-      user?.batasiLoginHariMengajar
+      user?.batasiLoginHariMengajar,
+      inlineCustomRoles
     );
   };
 
@@ -720,15 +824,84 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
 
       {/* Multi-Role Selector */}
       <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
           <label className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
             <span>Pengaturan Role &amp; Hak Akses Pengguna</span>
           </label>
-          <span className="text-[11px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg">
-            {selectedRoles.length} Role Terpilih
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowInlineRoleForm((prev) => !prev)}
+              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 px-2.5 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>{showInlineRoleForm ? 'Tutup Form Role' : 'Buat Role Baru'}</span>
+            </button>
+            <span className="text-[11px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg">
+              {selectedRoles.length} Role Terpilih
+            </span>
+          </div>
         </div>
+
+        {showInlineRoleForm && (
+          <div className="mb-3 p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/70 rounded-xl space-y-2.5">
+            <div className="text-[11px] font-bold text-indigo-800 dark:text-indigo-300 flex items-center justify-between">
+              <span>Tambah Role / Jabatan Baru Secara Cepat</span>
+              <span className="text-[10px] font-normal text-indigo-600 dark:text-indigo-400">Otomatis terpilih untuk user ini</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={newRoleLabel}
+                onChange={(e) => setNewRoleLabel(e.target.value)}
+                placeholder="Nama Role (Contoh: Kepala Perpustakaan)"
+                className="w-full py-2 px-2.5 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-700 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <input
+                type="text"
+                value={newRoleDesc}
+                onChange={(e) => setNewRoleDesc(e.target.value)}
+                placeholder="Deskripsi singkat (opsional)"
+                className="w-full py-2 px-2.5 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-700 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1 flex-wrap">
+                {[
+                  { id: 'teal', label: 'Teal' },
+                  { id: 'indigo', label: 'Indigo' },
+                  { id: 'blue', label: 'Biru' },
+                  { id: 'purple', label: 'Ungu' },
+                  { id: 'emerald', label: 'Hijau' },
+                  { id: 'amber', label: 'Oranye' },
+                  { id: 'rose', label: 'Merah' },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setNewRoleColor(c.id)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                      newRoleColor === c.id
+                        ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-400'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleAddInlineRole}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambahkan Role</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <p className="text-[11px] text-slate-400 mb-2.5">
           Centang satu atau lebih role yang dimiliki oleh pengguna ini. Pengguna akan mendapatkan akses ke seluruh menu dari role yang dicentang.
@@ -749,7 +922,7 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRoleBadgeClass(opt.id, appData.customRoles)}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getRoleBadgeClass(opt.id, effectiveCustomRoles)}`}>
                       {opt.label}
                     </span>
                     {primaryRole === opt.id && (
@@ -790,7 +963,7 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
           >
             {selectedRoles.map((r) => (
               <option key={r} value={r}>
-                {getRoleLabel(r, appData.customRoles)}
+                {getRoleLabel(r, effectiveCustomRoles)}
               </option>
             ))}
           </select>
@@ -984,7 +1157,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     effectiveWaliKelas.forEach((w) => {
       const userRoles: UserRole[] = Array.isArray(w.roles) && w.roles.length > 0
         ? w.roles
-        : [w.role && ['admin', 'adm_siswa', 'wali', 'kesiswaan', 'user', 'guru', 'kurikulum', 'hubin', 'staf_jadwal', 'murid'].includes(w.role) ? w.role : 'wali'];
+        : [w.role || 'wali'];
       
       const primaryRole: UserRole = userRoles[0] || 'wali';
       const isWaliRole = userRoles.includes('wali');
@@ -1305,6 +1478,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     );
   };
 
+  const effectiveCustomRoles = getEffectiveCustomRoles(appData);
+
   const handleSaveUser = (
     editingUser: UserItem | null,
     nama: string,
@@ -1316,15 +1491,43 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     noHp: string,
     mataPelajaran?: string,
     hariMengajar?: string[],
-    batasiLoginHariMengajar?: boolean
+    batasiLoginHariMengajar?: boolean,
+    inlineCreatedRoles?: CustomRole[]
   ) => {
     const finalRoles = roles && roles.length > 0 ? roles : [primaryRole || 'guru'];
     const finalPrimaryRole = primaryRole || finalRoles[0] || 'guru';
 
+    let baseAppData = appData;
+    if (inlineCreatedRoles && inlineCreatedRoles.length > 0) {
+      const mergedCustomRoles = [...effectiveCustomRoles];
+      const mergedRolePermissions: RoleMenuPermission[] = [...(appData.rolePermissions || [])];
+      inlineCreatedRoles.forEach((cr) => {
+        if (!mergedCustomRoles.some((r) => r.id.toLowerCase() === cr.id.toLowerCase())) {
+          mergedCustomRoles.push(cr);
+        }
+        if (!mergedRolePermissions.some((rp) => rp.roleId.toLowerCase() === cr.id.toLowerCase())) {
+          mergedRolePermissions.push({
+            roleId: cr.id,
+            roleName: cr.label || cr.name,
+            description: cr.description || `Role kustom untuk ${cr.label || cr.name}`,
+            badgeColor: cr.color || 'teal',
+            isSystem: false,
+            allowedMenus: ['dashboard', 'presensi_input', 'rekap_harian', 'rekap_siswa', 'live_chat', 'pengaturan_admin'],
+          });
+        }
+      });
+      baseAppData = {
+        ...appData,
+        customRoles: mergedCustomRoles,
+        rolePermissions: mergedRolePermissions,
+      };
+    }
+    const currentCustomRoles = getEffectiveCustomRoles(baseAppData);
+
     // 1. Admin
     if (finalRoles.includes('admin') || editingUser?.roles.includes('admin') || editingUser?.role === 'admin') {
       let updatedAdmin = {
-        ...appData.admin,
+        ...baseAppData.admin,
         username: username || appData.admin?.username || 'admin',
         password: password || appData.admin?.password || 'admin123',
         nama: nama || appData.admin?.nama || 'Administrator Utama',
@@ -1486,18 +1689,18 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                 roles: finalRoles,
                 additionalRoles: finalRoles.filter((r) => r !== finalPrimaryRole),
                 tugasTambahanList: (w.tugasTambahanList || []).filter((d) => {
-                  const r = mapDutyToRole(d, appData.customRoles);
+                  const r = mapDutyToRole(d, currentCustomRoles);
                   return !r || finalRoles.includes(r as any);
                 }),
                 tugasTambahan: (w.tugasTambahanList || [])
                   .filter((d) => {
-                    const r = mapDutyToRole(d, appData.customRoles);
+                    const r = mapDutyToRole(d, currentCustomRoles);
                     return !r || finalRoles.includes(r as any);
                   })
                   .join(', '),
                 jabatan: (w.tugasTambahanList || [])
                   .filter((d) => {
-                    const r = mapDutyToRole(d, appData.customRoles);
+                    const r = mapDutyToRole(d, currentCustomRoles);
                     return !r || finalRoles.includes(r as any);
                   })
                   .join(', '),
@@ -1545,15 +1748,15 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       onShowToast(`User baru "${nama}" dengan ${finalRoles.length} role berhasil dibuat!`, 'success');
     }
 
-    let nextKelas = appData.kelas;
+    let nextKelas = baseAppData.kelas;
     if (editingUser && !finalRoles.includes('wali')) {
-      nextKelas = (appData.kelas || []).map((k) =>
+      nextKelas = (baseAppData.kelas || []).map((k) =>
         k.waliKelasId === editingUser.id ? { ...k, waliKelasId: '' } : k
       );
     }
 
     const nextAppData = {
-      ...appData,
+      ...baseAppData,
       waliKelas: updatedWaliKelas,
       kelas: nextKelas,
       ...(nextKesiswaan ? { kesiswaan: nextKesiswaan } : {}),
@@ -1635,7 +1838,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
 
     onConfirmModal(
       isStudent ? 'Hapus Siswa / Murid' : 'Hapus User Pengguna',
-      `Apakah Anda yakin ingin menghapus ${isStudent ? 'siswa' : 'user'} "${user.nama}" (${user.roles.map((r) => getRoleLabel(r, appData.customRoles)).join(', ')})?`,
+      `Apakah Anda yakin ingin menghapus ${isStudent ? 'siswa' : 'user'} "${user.nama}" (${user.roles.map((r) => getRoleLabel(r, effectiveCustomRoles)).join(', ')})?`,
       'danger',
       () => {
         if (isStudent && user.roles.length === 1) {
@@ -1735,7 +1938,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                   <option value="guru">Guru ({guruCount})</option>
                   <option value="wali">Wali Kelas ({waliCount})</option>
                   <option value="murid">Siswa / Murid ({muridCount})</option>
-                  {(appData.customRoles || []).map((cr) => {
+                  {effectiveCustomRoles.map((cr) => {
                     const count = allUsers.filter((u) => userHasMatchingRole(u, cr.id) || userHasMatchingRole(u, cr.name)).length;
                     return (
                       <option key={cr.id} value={cr.id}>
@@ -1871,7 +2074,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                           </div>
                         </button>
 
-                        {appData.customRoles && appData.customRoles.length > 0 && (
+                        {effectiveCustomRoles.length > 0 && (
                           <button
                             type="button"
                             onClick={() => {
@@ -1885,7 +2088,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                             </div>
                             <div>
                               <div className="font-bold">Kelola Role Kustom</div>
-                              <div className="text-[10px] text-slate-400">{appData.customRoles.length} role kustom aktif</div>
+                              <div className="text-[10px] text-slate-400">{effectiveCustomRoles.length} role kustom aktif</div>
                             </div>
                           </button>
                         )}
@@ -2026,8 +2229,8 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                               #{(currentPage - 1) * pageSize + idx + 1}
                             </span>
                             {user.roles.map((r) => (
-                              <span key={r} className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${getRoleBadgeClass(r, appData.customRoles)}`}>
-                                {getRoleLabel(r, appData.customRoles)}
+                              <span key={r} className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${getRoleBadgeClass(r, effectiveCustomRoles)}`}>
+                                {getRoleLabel(r, effectiveCustomRoles)}
                               </span>
                             ))}
                           </div>
@@ -2087,9 +2290,9 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                           {user.roles.map((r) => (
                             <span
                               key={r}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${getRoleBadgeClass(r, appData.customRoles)}`}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border ${getRoleBadgeClass(r, effectiveCustomRoles)}`}
                             >
-                              {getRoleLabel(r, appData.customRoles)}
+                              {getRoleLabel(r, effectiveCustomRoles)}
                             </span>
                           ))}
                         </div>
@@ -2247,9 +2450,9 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                         {user.roles.map((r) => (
                           <span
                             key={r}
-                            className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border ${getRoleBadgeClass(r, appData.customRoles)}`}
+                            className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border ${getRoleBadgeClass(r, effectiveCustomRoles)}`}
                           >
-                            {getRoleLabel(r, appData.customRoles)}
+                            {getRoleLabel(r, effectiveCustomRoles)}
                           </span>
                         ))}
 

@@ -706,11 +706,86 @@ export function normalizeRoleKey(role?: string): string {
   return lower;
 }
 
+export const SYSTEM_ROLE_KEYS = new Set<string>([
+  'admin',
+  'kesiswaan',
+  'kurikulum',
+  'staf_jadwal',
+  'adm_siswa',
+  'admin_siswa',
+  'hubin',
+  'wali',
+  'guru',
+  'user',
+  'piket',
+  'piket_guru',
+  'piket_kesiswaan',
+  'piket_kelas',
+  'murid',
+  'siswa',
+]);
+
+/**
+ * Returns a unified list of all custom roles from both appData.customRoles and appData.rolePermissions
+ */
+export function getEffectiveCustomRoles(appData?: AppData): CustomRole[] {
+  const map = new Map<string, CustomRole>();
+  const rawCustomRoles = appData?.customRoles || [];
+  const storedPermissions = appData?.rolePermissions || [];
+
+  rawCustomRoles.forEach((cr) => {
+    if (!cr || (!cr.id && !cr.name)) return;
+    const rawId = cr.id || cr.name;
+    const norm = normalizeRoleKey(rawId);
+    if (SYSTEM_ROLE_KEYS.has(norm)) return;
+    map.set(norm, {
+      id: rawId,
+      name: cr.name || rawId,
+      label: cr.label || cr.name || rawId,
+      color: cr.color || 'indigo',
+      description: cr.description || `Role kustom ${cr.label || cr.name || rawId}`,
+      allowedMenus: Array.isArray(cr.allowedMenus) ? [...cr.allowedMenus] : ['dashboard', 'live_chat'],
+      isSystem: false,
+    });
+  });
+
+  storedPermissions.forEach((sp) => {
+    if (!sp || !sp.roleId) return;
+    const norm = normalizeRoleKey(sp.roleId);
+    if (sp.isSystem || SYSTEM_ROLE_KEYS.has(norm)) return;
+    const existing = map.get(norm);
+    if (existing) {
+      map.set(norm, {
+        ...existing,
+        label: existing.label || sp.roleName || sp.roleId,
+        color: existing.color || sp.badgeColor || 'indigo',
+        description: existing.description || sp.description || `Role kustom ${sp.roleName || sp.roleId}`,
+        allowedMenus:
+          Array.isArray(sp.allowedMenus) && sp.allowedMenus.length > 0
+            ? [...sp.allowedMenus]
+            : existing.allowedMenus,
+      });
+    } else {
+      map.set(norm, {
+        id: sp.roleId,
+        name: sp.roleId,
+        label: sp.roleName || sp.roleId,
+        color: sp.badgeColor || 'indigo',
+        description: sp.description || `Role kustom ${sp.roleName || sp.roleId}`,
+        allowedMenus: Array.isArray(sp.allowedMenus) ? [...sp.allowedMenus] : ['dashboard', 'live_chat'],
+        isSystem: false,
+      });
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 /**
  * Retrieves all registered roles (default system roles + custom roles + configured permissions)
  */
 export function getAllRolePermissions(appData?: AppData): RoleMenuPermission[] {
-  const customRoles = appData?.customRoles || [];
+  const customRoles = getEffectiveCustomRoles(appData);
   const storedPermissions = appData?.rolePermissions || [];
 
   // Start with default roles, override with stored permissions if any
@@ -973,7 +1048,7 @@ export function updateRolePermissionInAppData(
   });
 
   // Also sync customRoles if it was a custom role
-  const updatedCustomRoles = (appData.customRoles || []).map((cr) => {
+  const updatedCustomRoles = getEffectiveCustomRoles(appData).map((cr) => {
     if (normalizeRoleKey(cr.id || cr.name) === norm) {
       return {
         ...cr,
@@ -993,15 +1068,29 @@ export function updateRolePermissionInAppData(
 }
 
 /**
- * Resets all role permissions back to factory defaults
+ * Resets all role permissions back to factory defaults while preserving custom roles
  */
 export function resetRolePermissionsToDefault(appData: AppData): AppData {
+  const customRoles = getEffectiveCustomRoles(appData);
+  const customPermissions: RoleMenuPermission[] = customRoles.map((cr) => ({
+    roleId: cr.id || cr.name,
+    roleName: cr.label || cr.name,
+    description: cr.description || `Role kustom ${cr.label || cr.name}`,
+    badgeColor: cr.color || 'indigo',
+    isSystem: false,
+    allowedMenus: Array.isArray(cr.allowedMenus) ? [...cr.allowedMenus] : ['dashboard', 'live_chat'],
+  }));
+
   return {
     ...appData,
-    rolePermissions: DEFAULT_ROLE_PERMISSIONS.map((d) => ({
-      ...d,
-      allowedMenus: [...d.allowedMenus],
-    })),
+    customRoles,
+    rolePermissions: [
+      ...DEFAULT_ROLE_PERMISSIONS.map((d) => ({
+        ...d,
+        allowedMenus: [...d.allowedMenus],
+      })),
+      ...customPermissions,
+    ],
   };
 }
 
