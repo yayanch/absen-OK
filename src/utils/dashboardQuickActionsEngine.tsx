@@ -1181,6 +1181,38 @@ export function getRoleQuickActionConfig(
       order: c.order ?? idx,
     }));
 
+    // For custom roles, automatically append any newly permitted menus from Pengaturan Hak Akses Role
+    // that are not yet present in saved.cards, while respecting existing cards (including enabled: false).
+    if (!DEFAULT_ROLE_QUICK_ACTIONS[normKey]) {
+      const allPerms = getAllRolePermissions(appData);
+      const matchedPerm = allPerms.find((p) => normalizeRoleKey(p.roleId) === normKey);
+      const allowedMenus = matchedPerm?.allowedMenus || [];
+      const colorCycle: QuickActionColor[] = ['indigo', 'emerald', 'blue', 'amber', 'purple', 'teal', 'rose', 'cyan'];
+
+      allowedMenus
+        .filter((v) => v !== 'dashboard' && v !== 'presensi_kbm_guru' && v !== 'pengaturan_admin')
+        .forEach((viewId, idx) => {
+          const alreadyExists = rawCards.some((c) => c.view === viewId);
+          if (!alreadyExists) {
+            const menuMeta = ALL_MENU_ITEMS.find((m) => m.id === viewId);
+            if (menuMeta) {
+              rawCards.push({
+                id: `qa_${normKey}_${viewId}`,
+                view: viewId,
+                title: menuMeta.label,
+                subtitle: menuMeta.shortDesc,
+                iconName: menuMeta.iconName || 'FileText',
+                colorScheme: colorCycle[(rawCards.length + idx) % colorCycle.length],
+                enabled: true,
+                order: rawCards.length,
+                ...(viewId === 'presensi_input' ? { specialAction: 'navigate_to_input' as const } : {}),
+                ...(viewId === 'rekap_pengisian_kelas' ? { specialAction: 'open_class_submission' as const } : {}),
+              });
+            }
+          }
+        });
+    }
+
     return {
       ...saved,
       roleKey: normKey,

@@ -22,7 +22,7 @@ import { WaliKelasDashboardView } from '../dashboard/WaliKelasDashboardView';
 import { GuruDashboardView } from '../dashboard/GuruDashboardView';
 import { KurikulumDashboardView } from '../dashboard/KurikulumDashboardView';
 import { StafJadwalDashboardView } from '../dashboard/StafJadwalDashboardView';
-import { getEffectiveUserRoles } from '../../utils/rolePermissionEngine';
+import { getEffectiveUserRoles, isActualTeacherUser } from '../../utils/rolePermissionEngine';
 import { PengaturanKartuCepatModal } from '../modals/PengaturanKartuCepatModal';
 
 interface DashboardViewProps {
@@ -397,26 +397,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Render Role-based View
   const renderRoleDashboard = () => {
-    // Check if the current user is a teacher (Guru)
-    const isTeacherUser =
-      currentUser.role === 'guru' ||
-      currentUser.role === 'user' ||
-      currentUser.role === 'wali' ||
-      effectiveRoles.includes('guru') ||
-      Boolean(
-        (currentUser.data as any)?.id &&
-        appData.waliKelas?.some((w) => w.id === (currentUser.data as any)?.id)
-      ) ||
-      Boolean(
-        (currentUser.data as any)?.username &&
-        appData.waliKelas?.some(
-          (w) => w.username?.toLowerCase() === (currentUser.data as any)?.username?.toLowerCase()
-        )
-      ) ||
-      Boolean(
-        (currentUser.data as any)?.nip &&
-        appData.waliKelas?.some((w) => w.nip && w.nip === (currentUser.data as any)?.nip)
-      );
+    // Check if the current user is an actual teacher (Guru)
+    const isTeacherUser = isActualTeacherUser(currentUser, appData);
 
     // If pure administrator
     if (currentUser.role === 'admin' || effectiveRoles.includes('admin')) {

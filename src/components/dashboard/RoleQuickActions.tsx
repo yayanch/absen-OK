@@ -8,7 +8,7 @@ import {
   getRoleQuickActionConfig,
   renderQuickActionIcon,
 } from '../../utils/dashboardQuickActionsEngine';
-import { getEffectiveUserRoles, hasMenuAccess } from '../../utils/rolePermissionEngine';
+import { getEffectiveUserRoles, hasMenuAccess, isActualTeacherUser } from '../../utils/rolePermissionEngine';
 
 export interface RoleQuickActionsProps {
   role: UserRole | string;
@@ -135,63 +135,8 @@ export const RoleQuickActions: React.FC<RoleQuickActionsProps> = ({
 
   // Check if current user is a teacher or has teaching schedules (Guru / Wali / Guru dengan Tugas Tambahan)
   const isTeacherUser = React.useMemo(() => {
-    if (!currentUser) return false;
-    const r = (currentUser.role || '').toLowerCase();
-    if (r === 'murid' || r === 'siswa' || r === 'piket_kelas' || r === 'adm_siswa' || r === 'staf_jadwal') {
-      // Check if they explicitly also have 'guru' or 'wali' role
-      if (!effectiveRoles.some((ro) => ['guru', 'wali'].includes(ro.toLowerCase()))) {
-        return false;
-      }
-    }
-
-    const uData = currentUser.data as any;
-    const uId = String(uData?.id || '');
-    const uName = String(uData?.nama || '').toLowerCase().trim();
-    const uNip = String(uData?.nip || '').toLowerCase().trim();
-    const uUsername = String(uData?.username || '').toLowerCase().trim();
-
-    // Check if user has teaching schedules in jadwalMengajar or guruMapelKelas
-    const hasSchedule =
-      (appData?.jadwalMengajar || []).some(
-        (j) =>
-          (uId && j.guruId === uId) ||
-          (uUsername && j.guruUsername?.toLowerCase() === uUsername) ||
-          (uNip && j.guruNip?.toLowerCase() === uNip) ||
-          (uName && j.guruNama?.toLowerCase() === uName)
-      ) ||
-      (appData?.guruMapelKelas || []).some(
-        (g) =>
-          (uId && g.guruId === uId) ||
-          (uUsername && g.guruUsername?.toLowerCase() === uUsername) ||
-          (uNip && g.guruNip?.toLowerCase() === uNip) ||
-          (uName && g.guruNama?.toLowerCase() === uName)
-      );
-
-    if (hasSchedule) return true;
-
-    // Pure staff accounts created in waliKelas array for login
-    const isPureStaffId =
-      uId === 'USER_ADM_SISWA' ||
-      uId === 'USER_STAF_JADWAL' ||
-      uId === 'USER_KESISWAAN' ||
-      uData?.isStaffAccount === true;
-
-    if (isPureStaffId) {
-      return effectiveRoles.some((ro) => ['guru', 'wali'].includes(ro.toLowerCase()));
-    }
-
-    if (['guru', 'wali', 'user', 'piket_guru', 'piket', 'kurikulum', 'hubin'].includes(r)) return true;
-    if (effectiveRoles.some((ro) => ['guru', 'wali', 'piket_guru', 'kurikulum', 'hubin'].includes(ro.toLowerCase()))) {
-      return true;
-    }
-
-    if (uId && appData?.waliKelas?.some((w) => w.id === uId)) return true;
-    if (uUsername && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === uUsername)) return true;
-    if (uNip && appData?.waliKelas?.some((w) => w.nip && w.nip.toLowerCase() === uNip)) return true;
-    if (uName && appData?.waliKelas?.some((w) => w.nama?.toLowerCase() === uName)) return true;
-
-    return false;
-  }, [currentUser, appData, effectiveRoles]);
+    return isActualTeacherUser(currentUser, appData);
+  }, [currentUser, appData]);
 
   // If the section is disabled by admin for this role, return null
   if (config.enabled === false) {

@@ -41,7 +41,16 @@ import {
   resetRoleQuickActionToDefault,
   resetAllRoleQuickActionsToDefault,
 } from '../../utils/dashboardQuickActionsEngine';
-import { ALL_MENU_ITEMS, MENU_CATEGORIES, MenuCategoryKey, MenuItemInfo, hasMenuAccess } from '../../utils/rolePermissionEngine';
+import {
+  ALL_MENU_ITEMS,
+  MENU_CATEGORIES,
+  MenuCategoryKey,
+  MenuItemInfo,
+  getAllRolePermissions,
+  hasMenuAccess,
+  normalizeRoleKey,
+  updateRolePermissionInAppData,
+} from '../../utils/rolePermissionEngine';
 import { addAuditLog } from '../../utils/helpers';
 
 export const getCategoryDefaultColor = (category?: string): QuickActionColor => {
@@ -115,8 +124,27 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
     return map;
   });
 
-  // Keep track of unsaved modifications
+  // Keep track of unsaved modifications and which roles were explicitly modified
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [modifiedRoleKeys, setModifiedRoleKeys] = useState<Set<string>>(new Set());
+
+  // Refresh draft state when modal opens or appData updates (while no unsaved changes exist)
+  useEffect(() => {
+    if (isOpen && !hasUnsavedChanges) {
+      const map: Record<string, RoleQuickActionConfig> = {};
+      availableRoles.forEach((r) => {
+        map[r.key] = getRoleQuickActionConfig(appData, r.key);
+      });
+      setDraftRolesConfig(map);
+      setModifiedRoleKeys(new Set());
+    }
+  }, [isOpen, appData, availableRoles, hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (isOpen && initialRole) {
+      setSelectedRoleKey(initialRole);
+    }
+  }, [isOpen, initialRole]);
 
   // Active role config being edited
   const currentRoleConfig = useMemo(() => {
@@ -177,6 +205,11 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
         ...prev,
         [selectedRoleKey]: updated,
       };
+    });
+    setModifiedRoleKeys((prev) => {
+      const next = new Set(prev);
+      next.add(selectedRoleKey);
+      return next;
     });
     setHasUnsavedChanges(true);
   };
@@ -386,6 +419,11 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
       ...prev,
       [selectedRoleKey]: JSON.parse(JSON.stringify(defaultCfg)),
     }));
+    setModifiedRoleKeys((prev) => {
+      const next = new Set(prev);
+      next.add(selectedRoleKey);
+      return next;
+    });
     setHasUnsavedChanges(true);
     if (onShowToast) {
       onShowToast(`Kartu cepat role "${currentRoleMeta.label}" dikembalikan ke preset standar bawaan.`, 'info');
@@ -398,10 +436,13 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
       return;
     }
     const map: Record<string, RoleQuickActionConfig> = {};
+    const allKeys = new Set<string>();
     availableRoles.forEach((r) => {
       map[r.key] = getDefaultRoleQuickActionConfig(r.key, appData);
+      allKeys.add(r.key);
     });
     setDraftRolesConfig(map);
+    setModifiedRoleKeys(allKeys);
     setHasUnsavedChanges(true);
     if (onShowToast) {
       onShowToast('Semua peran berhasil di-reset ke standar kartu cepat.', 'info');
@@ -438,8 +479,37 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
     let updated = { ...appData };
     const currentRolesConfig = { ...(appData.dashboardQuickActions?.rolesConfig || {}) };
 
-    Object.entries(draftRolesConfig).forEach(([rKey, cfg]) => {
-      currentRolesConfig[rKey] = cfg;
+    // Only write roles that were modified in this session or already existed in currentRolesConfig
+    const keysToSave = modifiedRoleKeys.size > 0 ? Array.from(modifiedRoleKeys) : [selectedRoleKey];
+    keysToSave.forEach((rKey) => {
+      if (draftRolesConfig[rKey]) {
+        currentRolesConfig[rKey] = draftRolesConfig[rKey];
+      }
+    });
+
+    // Also sync any enabled card views on modified roles into rolePermissions.allowedMenus
+    // so cards explicitly enabled by the Admin in Pengaturan Kartu Cepat are permitted on the dashboard.
+    const allPerms = getAllRolePermissions(updated);
+    keysToSave.forEach((rKey) => {
+      const cfg = currentRolesConfig[rKey];
+      if (!cfg || !Array.isArray(cfg.cards)) return;
+      const normKey = normalizeRoleKey(rKey);
+      if (normKey === 'admin' || normKey === 'superadmin') return;
+
+      const matchedPerm = allPerms.find((p) => normalizeRoleKey(p.roleId) === normKey);
+      if (matchedPerm) {
+        const currentAllowed = new Set<ViewType>(matchedPerm.allowedMenus || ['dashboard']);
+        let permChanged = false;
+        cfg.cards.forEach((card) => {
+          if (card.enabled && card.view && card.view !== 'presensi_kbm_guru' && !currentAllowed.has(card.view)) {
+            currentAllowed.add(card.view);
+            permChanged = true;
+          }
+        });
+        if (permChanged) {
+          updated = updateRolePermissionInAppData(updated, matchedPerm.roleId, Array.from(currentAllowed));
+        }
+      }
     });
 
     updated = {
@@ -454,11 +524,12 @@ export const PengaturanKartuCepatModal: React.FC<PengaturanKartuCepatModalProps>
     updated = addAuditLog(
       updated,
       'Ubah Pengaturan Kartu Cepat Dashboard',
-      `Memperbarui konfigurasi kartu cepat dashboard untuk ${Object.keys(draftRolesConfig).length} role.`
+      `Memperbarui konfigurasi kartu cepat dashboard untuk ${keysToSave.length} role.`
     );
 
     onUpdateAppData(updated);
     setHasUnsavedChanges(false);
+    setModifiedRoleKeys(new Set());
     if (onShowToast) {
       onShowToast('Pengaturan kartu cepat dashboard berhasil disimpan & langsung aktif!', 'success');
     }

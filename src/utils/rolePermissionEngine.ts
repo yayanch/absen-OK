@@ -1300,8 +1300,116 @@ export interface RoleWorkspaceOption {
 }
 
 /**
+ * Determines whether a user is an actual teacher (Guru / Pengajar) rather than
+ * a non-teaching staff or custom-role account stored in `appData.waliKelas`.
+ */
+export function isActualTeacherUser(
+  currentUser?: UserSession | null,
+  appData?: AppData
+): boolean {
+  if (!currentUser) return false;
+
+  const primaryRole = normalizeRoleKey(currentUser.role || '');
+  const roles = getEffectiveUserRoles(currentUser, appData);
+
+  if (primaryRole === 'admin' || primaryRole === 'superadmin') return false;
+  if (primaryRole === 'murid' || primaryRole === 'siswa' || roles.includes('murid') || roles.includes('siswa')) {
+    return false;
+  }
+
+  // Explicit guru or wali role
+  if (
+    primaryRole === 'guru' ||
+    primaryRole === 'user' ||
+    primaryRole === 'wali' ||
+    roles.includes('guru') ||
+    roles.includes('user') ||
+    roles.includes('wali')
+  ) {
+    return true;
+  }
+
+  const uData = (currentUser.data as any) || {};
+  const uId = String(uData.id || '');
+  const uName = String(uData.nama || '').toLowerCase().trim();
+  const uNip = String(uData.nip || '').toLowerCase().trim();
+  const uUsername = String(uData.username || '').toLowerCase().trim();
+
+  // Check if user has teaching schedules in jadwalMengajar or guruMapelKelas
+  const hasSchedule =
+    (appData?.jadwalMengajar || []).some(
+      (j) =>
+        (uId && j.guruId === uId) ||
+        (uUsername && j.guruUsername?.toLowerCase() === uUsername) ||
+        (uNip && j.guruNip?.toLowerCase() === uNip) ||
+        (uName && j.guruNama?.toLowerCase() === uName)
+    ) ||
+    (appData?.guruMapelKelas || []).some(
+      (g) =>
+        (uId && g.guruId === uId) ||
+        (uUsername && g.guruUsername?.toLowerCase() === uUsername) ||
+        (uNip && g.guruNip?.toLowerCase() === uNip) ||
+        (uName && g.guruNama?.toLowerCase() === uName)
+    );
+
+  if (hasSchedule) return true;
+
+  // Check if assigned as waliKelasId in any class
+  if (uId && (appData?.kelas || []).some((k) => k.waliKelasId === uId)) {
+    return true;
+  }
+
+  // Pure staff accounts
+  const isPureStaffId =
+    uId === 'USER_ADM_SISWA' ||
+    uId === 'USER_STAF_JADWAL' ||
+    uId === 'USER_KESISWAAN' ||
+    uData?.isStaffAccount === true;
+  if (isPureStaffId) {
+    return false;
+  }
+
+  // Check matched record in waliKelas
+  const matchedWali = (appData?.waliKelas || []).find(
+    (w) =>
+      (uId && w.id === uId) ||
+      (uUsername && w.username?.toLowerCase() === uUsername) ||
+      (uNip && w.nip && w.nip.toLowerCase() === uNip) ||
+      (uName && w.nama?.toLowerCase() === uName)
+  );
+
+  if (matchedWali) {
+    if (String(matchedWali.mataPelajaran || '').trim().length > 0) {
+      return true;
+    }
+    const wRoles = [
+      matchedWali.role,
+      ...(Array.isArray(matchedWali.roles) ? matchedWali.roles : []),
+      ...(Array.isArray(matchedWali.additionalRoles) ? matchedWali.additionalRoles : []),
+    ]
+      .filter(Boolean)
+      .map((r) => normalizeRoleKey(String(r)));
+
+    if (wRoles.some((r) => ['guru', 'wali', 'user', 'piket_guru', 'kurikulum', 'hubin'].includes(r))) {
+      return true;
+    }
+    // Custom-role or non-teaching user stored in waliKelas without subjects or teaching roles
+    return false;
+  }
+
+  if (['piket_guru', 'piket', 'kurikulum', 'hubin'].includes(primaryRole)) {
+    return true;
+  }
+  if (roles.some((ro) => ['piket_guru', 'kurikulum', 'hubin'].includes(ro.toLowerCase()))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Computes available workspaces for teachers who hold multiple roles or additional duties
- * (e.g., Wali Kelas, WKS Kurikulum, WKS Kesiswaan, Hubin, etc.)
+ * (e.g., Wali Kelas, WKS Kurikulum, WKS Kesiswaan, Hubin, etc.) or custom role users.
  */
 export function getUserRoleWorkspaces(
   currentUser?: UserSession | null,
@@ -1315,34 +1423,23 @@ export function getUserRoleWorkspaces(
     return [];
   }
 
-  const isTeacherUser =
-    currentUser.role === 'guru' ||
-    currentUser.role === 'user' ||
-    currentUser.role === 'wali' ||
-    roles.includes('guru') ||
-    roles.includes('wali') ||
-    Boolean((currentUser.data as any)?.id && appData?.waliKelas?.some((w) => w.id === (currentUser.data as any)?.id)) ||
-    Boolean((currentUser.data as any)?.username && appData?.waliKelas?.some((w) => w.username?.toLowerCase() === (currentUser.data as any)?.username?.toLowerCase())) ||
-    Boolean((currentUser.data as any)?.nip && appData?.waliKelas?.some((w) => w.nip && w.nip === (currentUser.data as any)?.nip));
-
-  // Only teachers or multi-role staff
-  if (!isTeacherUser && currentUser.role !== 'admin') {
-    return [];
-  }
+  const isActualGuru = isActualTeacherUser(currentUser, appData);
 
   const workspaces: RoleWorkspaceOption[] = [];
 
-  // 1. Guru Mata Pelajaran (Selalu ada untuk akun guru)
-  workspaces.push({
-    key: 'guru',
-    label: 'Guru Mata Pelajaran',
-    shortLabel: 'Guru Mapel',
-    badgeLabel: 'Guru Mapel',
-    description: 'Jadwal mengajar, KBM kelas, jurnal harian guru, dan presensi pembelajaran',
-    iconName: 'BookOpen',
-    color: 'indigo',
-    badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800',
-  });
+  // 1. Guru Mata Pelajaran (Hanya untuk akun yang benar-benar berstatus Guru / mengajar)
+  if (isActualGuru) {
+    workspaces.push({
+      key: 'guru',
+      label: 'Guru Mata Pelajaran',
+      shortLabel: 'Guru Mapel',
+      badgeLabel: 'Guru Mapel',
+      description: 'Jadwal mengajar, KBM kelas, jurnal harian guru, dan presensi pembelajaran',
+      iconName: 'BookOpen',
+      color: 'indigo',
+      badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800',
+    });
+  }
 
   // 2. Wali Kelas
   const teacherId = (currentUser.data as any)?.id;
@@ -1396,7 +1493,7 @@ export function getUserRoleWorkspaces(
   }
 
   // 4. WKS Kesiswaan
-  if (roles.includes('kesiswaan') || roles.includes('piket_kesiswaan')) {
+  if (roles.includes('kesiswaan')) {
     workspaces.push({
       key: 'kesiswaan',
       label: 'Wakasek Kesiswaan / BP BK',
@@ -1406,6 +1503,33 @@ export function getUserRoleWorkspaces(
       iconName: 'ShieldAlert',
       color: 'purple',
       badgeClass: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800',
+    });
+  }
+
+  // 4b. Piket Guru & Piket Kesiswaan
+  if (roles.includes('piket_guru')) {
+    workspaces.push({
+      key: 'piket_guru',
+      label: 'Piket Guru Harian',
+      shortLabel: 'Piket Guru',
+      badgeLabel: 'Piket Guru',
+      description: 'Pemantauan presensi harian kelas, absen QR, dan catatan piket',
+      iconName: 'ClipboardCheck',
+      color: 'amber',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800',
+    });
+  }
+
+  if (roles.includes('piket_kesiswaan')) {
+    workspaces.push({
+      key: 'piket_kesiswaan',
+      label: 'Piket Kesiswaan',
+      shortLabel: 'Piket Kesiswaan',
+      badgeLabel: 'Piket Kesiswaan',
+      description: 'Petugas piket kesiswaan, pantau pengisian kelas & QR',
+      iconName: 'ShieldAlert',
+      color: 'amber',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800',
     });
   }
 
@@ -1437,8 +1561,37 @@ export function getUserRoleWorkspaces(
     });
   }
 
+  // 6b. Admin Siswa
+  if (roles.includes('adm_siswa')) {
+    workspaces.push({
+      key: 'adm_siswa',
+      label: 'Admin Siswa',
+      shortLabel: 'Admin Siswa',
+      badgeLabel: 'Admin Siswa',
+      description: 'Master data siswa, cetak kartu QR & dokumen',
+      iconName: 'Users',
+      color: 'cyan',
+      badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/80 dark:text-cyan-300 dark:border-cyan-800',
+    });
+  }
+
   // 7. Check for custom roles in roles
-  const standardKeys = new Set(['guru', 'wali', 'kurikulum', 'kesiswaan', 'piket_kesiswaan', 'hubin', 'staf_jadwal', 'admin', 'murid', 'user']);
+  const standardKeys = new Set([
+    'guru',
+    'wali',
+    'kurikulum',
+    'kesiswaan',
+    'piket_guru',
+    'piket_kesiswaan',
+    'hubin',
+    'staf_jadwal',
+    'adm_siswa',
+    'admin',
+    'murid',
+    'siswa',
+    'piket_kelas',
+    'user',
+  ]);
   roles.forEach((r) => {
     if (!standardKeys.has(r)) {
       const meta = getRoleBadgeMeta(r, appData);
@@ -1454,6 +1607,17 @@ export function getUserRoleWorkspaces(
       });
     }
   });
+
+  // If the user's primary role is a custom role or specific role in workspaces and not 'guru',
+  // place their primary role first when they are not an actual guru.
+  const primaryNorm = normalizeRoleKey(currentUser.role || '');
+  if (!isActualGuru && primaryNorm) {
+    const idx = workspaces.findIndex((w) => w.key === primaryNorm);
+    if (idx > 0) {
+      const [primaryWs] = workspaces.splice(idx, 1);
+      workspaces.unshift(primaryWs);
+    }
+  }
 
   return workspaces;
 }

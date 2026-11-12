@@ -498,9 +498,64 @@ export const PengaturanRoleView: React.FC<PengaturanRoleViewProps> = ({
     if (readOnly) return;
 
     let updated = { ...appData };
+    const prevPerms = getAllRolePermissions(appData);
+    const nextRolesConfig = updated.dashboardQuickActions?.rolesConfig
+      ? { ...updated.dashboardQuickActions.rolesConfig }
+      : undefined;
+
     Object.entries(draftPermissions).forEach(([rId, allowed]) => {
+      const prevRolePerm = prevPerms.find((p) => normalizeRoleKey(p.roleId) === normalizeRoleKey(rId));
+      const prevAllowedSet = new Set<ViewType>(prevRolePerm?.allowedMenus || []);
+      const newlyAddedMenus = allowed.filter((m) => !prevAllowedSet.has(m));
+
       updated = updateRolePermissionInAppData(updated, rId, allowed);
+
+      if (nextRolesConfig && nextRolesConfig[rId]) {
+        const existingCfg = nextRolesConfig[rId];
+        const updatedCards = [...(existingCfg.cards || [])].map((card) => {
+          if (newlyAddedMenus.includes(card.view)) {
+            return { ...card, enabled: true };
+          }
+          return card;
+        });
+
+        newlyAddedMenus
+          .filter((v) => v !== 'dashboard' && v !== 'presensi_kbm_guru' && v !== 'pengaturan_admin')
+          .forEach((viewId) => {
+            if (!updatedCards.some((c) => c.view === viewId)) {
+              const menuMeta = ALL_MENU_ITEMS.find((m) => m.id === viewId);
+              if (menuMeta) {
+                updatedCards.push({
+                  id: `qa_${rId}_${viewId}`,
+                  view: viewId,
+                  title: menuMeta.label,
+                  subtitle: menuMeta.shortDesc,
+                  iconName: menuMeta.iconName || 'FileText',
+                  colorScheme: 'indigo',
+                  enabled: true,
+                  order: updatedCards.length,
+                });
+              }
+            }
+          });
+
+        nextRolesConfig[rId] = {
+          ...existingCfg,
+          cards: updatedCards,
+        };
+      }
     });
+
+    if (nextRolesConfig && updated.dashboardQuickActions) {
+      updated = {
+        ...updated,
+        dashboardQuickActions: {
+          ...updated.dashboardQuickActions,
+          rolesConfig: nextRolesConfig,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    }
 
     updated = addAuditLog(
       updated,

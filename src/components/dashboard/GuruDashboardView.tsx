@@ -28,7 +28,12 @@ import { TeacherScheduleWidget } from './TeacherScheduleWidget';
 import { RoleQuickActions } from './RoleQuickActions';
 import { TeacherRoleStatusInfo } from './TeacherAdditionalRoleStatsWidget';
 import { PageHeader, StatCard, cardContainerVariants, cardItemVariants } from '../common/UIComponents';
-import { getEffectiveUserRoles, getUserRoleWorkspaces } from '../../utils/rolePermissionEngine';
+import {
+  getEffectiveUserRoles,
+  getRoleBadgeMeta,
+  getUserRoleWorkspaces,
+  isActualTeacherUser,
+} from '../../utils/rolePermissionEngine';
 
 interface GuruDashboardViewProps {
   appData: AppData;
@@ -125,6 +130,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
   }, [currentUser, appData.waliKelas]);
 
   const effectiveRoles = useMemo(() => getEffectiveUserRoles(currentUser, appData), [currentUser, appData]);
+  const isActualGuru = useMemo(() => isActualTeacherUser(currentUser, appData), [currentUser, appData]);
 
   // Extract all duties (tugasTambahan)
   const naturalDutiesList = useMemo(() => {
@@ -309,7 +315,16 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
     const isGuruBiasa = !hasWali && !hasKurikulum && !hasKesiswaan && !hasHubin && !hasStafJadwal && !hasPiket && !hasEkskul;
 
     const activeRolesList: { key: string; label: string; color: string }[] = [];
-    if (isGuruBiasa) {
+    if (!isActualGuru) {
+      effectiveRoles.forEach((r) => {
+        const meta = getRoleBadgeMeta(r, appData);
+        activeRolesList.push({
+          key: r,
+          label: meta.label,
+          color: meta.color,
+        });
+      });
+    } else if (isGuruBiasa) {
       activeRolesList.push({ key: 'guru', label: 'Guru Mata Pelajaran (Reguler)', color: 'indigo' });
     } else {
       activeRolesList.push({ key: 'guru', label: 'Guru Mata Pelajaran', color: 'indigo' });
@@ -338,7 +353,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
     }
 
     return {
-      isGuru: true,
+      isGuru: isActualGuru,
       isGuruBiasa,
       hasWaliKelas: hasWali,
       hasKurikulum,
@@ -352,7 +367,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       dutiesList: naturalDutiesList,
       activeRolesList,
     };
-  }, [isAdmin, statusSimulator, naturalDutiesList, naturalAdditionalRoles, naturalAssignedClass, appData.kelas, appData.petugasPiket, appData.ekstrakurikuler, teacherData]);
+  }, [isAdmin, statusSimulator, isActualGuru, effectiveRoles, appData, naturalDutiesList, naturalAdditionalRoles, naturalAssignedClass, teacherData]);
 
   // 3. Teacher Personal Schedule & Attendance Stats
   const currentDayName = useMemo(() => {
@@ -472,7 +487,9 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
         icon={Calendar}
         title={`Selamat Datang, ${currentUser.data.nama}`}
         description={
-          roleStatus.isGuruBiasa
+          !roleStatus.isGuru
+            ? 'Portal layanan digital sekolah dan akses cepat menu sesuai peran Anda.'
+            : roleStatus.isGuruBiasa
             ? 'Portal presensi harian, administrasi kelas mengajar, dan jadwal pelajaran Anda hari ini.'
             : `Akses tugas mengajar KBM dan jadwal pelajaran. Gunakan tombol switch peran di navigasi atas untuk membuka tugas tambahan (${roleStatus.activeRolesList.filter((r) => r.key !== 'guru').map((r) => r.label).join(', ')}).`
         }
@@ -576,7 +593,7 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Status Penugasan Pendidik:
+                {roleStatus.isGuru ? 'Status Penugasan Pendidik:' : 'Status & Peran Pengguna:'}
               </span>
               {availableWorkspaces.length > 1 && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
@@ -707,11 +724,14 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       <div className="space-y-4">
         <RoleQuickActions
           role={
-            activeRoleWorkspace && activeRoleWorkspace !== 'all' && !activeRoleWorkspace.startsWith('tugas_')
+            activeRoleWorkspace &&
+            activeRoleWorkspace !== 'all' &&
+            !activeRoleWorkspace.startsWith('tugas_') &&
+            (roleStatus.isGuru || activeRoleWorkspace !== 'guru')
               ? activeRoleWorkspace
               : currentUser.role && !['user', 'guru'].includes(currentUser.role.toLowerCase())
               ? currentUser.role
-              : 'guru'
+              : effectiveRoles[0] || 'guru'
           }
           appData={appData}
           currentUser={currentUser}
@@ -724,15 +744,17 @@ export const GuruDashboardView: React.FC<GuruDashboardViewProps> = ({
       {/* -------------------------------------------------------------
           4. WIDGET UTAMA GURU: JADWAL MENGAJAR HARI INI & JURNAL KBM
       ------------------------------------------------------------- */}
-      <TeacherScheduleWidget
-        appData={appData}
-        currentUser={currentUser}
-        selectedDate={selectedDate}
-        onNavigateToInput={onNavigateToInput}
-        onNavigateView={onNavigateView}
-        onUpdateAppData={onUpdateAppData}
-        onShowToast={onShowToast}
-      />
+      {roleStatus.isGuru && (
+        <TeacherScheduleWidget
+          appData={appData}
+          currentUser={currentUser}
+          selectedDate={selectedDate}
+          onNavigateToInput={onNavigateToInput}
+          onNavigateView={onNavigateView}
+          onUpdateAppData={onUpdateAppData}
+          onShowToast={onShowToast}
+        />
+      )}
     </div>
   );
 };

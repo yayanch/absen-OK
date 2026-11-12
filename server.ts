@@ -1125,6 +1125,22 @@ function saveAppDataCache(data: any, isRestore = false) {
         data.waliKelas = inMemoryAppDataCache.waliKelas;
       } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && (!Array.isArray(data.waliKelas) || data.waliKelas.length === 0)) {
         data.waliKelas = inMemoryAppDataCache.waliKelas;
+      } else if (Array.isArray(inMemoryAppDataCache.waliKelas) && Array.isArray(data.waliKelas)) {
+        const latestAuditAction = data.auditLogs?.[0]?.aksi || '';
+        if (latestAuditAction !== 'Hapus akun pengguna') {
+          const incomingWaliIds = new Set(data.waliKelas.map((w: any) => String(w.id)));
+          const incomingWaliUsernames = new Set(data.waliKelas.map((w: any) => String(w.username || '').toLowerCase()));
+          const missingCustomUsers = inMemoryAppDataCache.waliKelas.filter(
+            (w: any) =>
+              w &&
+              String(w.id || '').startsWith('WAL_') &&
+              !incomingWaliIds.has(String(w.id)) &&
+              !incomingWaliUsernames.has(String(w.username || '').toLowerCase())
+          );
+          if (missingCustomUsers.length > 0) {
+            data.waliKelas = [...data.waliKelas, ...missingCustomUsers];
+          }
+        }
       }
 
       const isIncomingDemoJurusan = (
@@ -1574,6 +1590,9 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
     }
 
     if (!shouldProtectWaliData && Array.isArray(appData.waliKelas) && appData.waliKelas.length > 0) {
+      await db.execute(`ALTER TABLE wali_kelas ADD COLUMN roles TEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE wali_kelas ADD COLUMN additional_roles TEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE wali_kelas ADD COLUMN tugas_tambahan_list TEXT;`).catch(() => {});
       await db.execute(`DELETE FROM wali_kelas;`);
       if (appData.waliKelas.length > 0) {
         const CHUNK_SIZE = 50;
@@ -2987,6 +3006,31 @@ async function performMySQLLoad(config: any) {
           batasiLoginHariMengajar: Boolean(w.batasi_login_hari_mengajar)
         };
       });
+
+      // Preserve any custom user accounts (WAL_*) from cached appData / inMemoryAppDataCache
+      // if they were not yet in the wali_kelas table and were not deleted.
+      const prevWaliList = [
+        ...(Array.isArray(inMemoryAppDataCache?.waliKelas) ? inMemoryAppDataCache.waliKelas : []),
+      ];
+      if (prevWaliList.length > 0) {
+        const latestAudit = (appData.auditLogs || inMemoryAppDataCache?.auditLogs || [])[0]?.aksi || '';
+        if (latestAudit !== 'Hapus akun pengguna') {
+          const loadedIds = new Set(appData.waliKelas.map((w: any) => String(w.id)));
+          const loadedUsernames = new Set(appData.waliKelas.map((w: any) => String(w.username || '').toLowerCase()));
+          for (const pw of prevWaliList) {
+            if (
+              pw &&
+              String(pw.id || '').startsWith('WAL_') &&
+              !loadedIds.has(String(pw.id)) &&
+              !loadedUsernames.has(String(pw.username || '').toLowerCase())
+            ) {
+              appData.waliKelas.push(pw);
+              loadedIds.add(String(pw.id));
+              loadedUsernames.add(String(pw.username || '').toLowerCase());
+            }
+          }
+        }
+      }
     }
 
     if (kelasRows && kelasRows.length > 0) {
@@ -5212,6 +5256,9 @@ app.post("/api/mysql/test", async (req, res) => {
           tugas_tambahan_list TEXT
         );
       `);
+      await db.execute(`ALTER TABLE wali_kelas ADD COLUMN IF NOT EXISTS roles TEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE wali_kelas ADD COLUMN IF NOT EXISTS additional_roles TEXT;`).catch(() => {});
+      await db.execute(`ALTER TABLE wali_kelas ADD COLUMN IF NOT EXISTS tugas_tambahan_list TEXT;`).catch(() => {});
 
       await db.execute(`
         CREATE TABLE IF NOT EXISTS kelas (
