@@ -1086,11 +1086,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   const getContainerMaxWidthClass = () => {
     switch (sekolah.loginCardMaxWidth) {
-      case 'compact': return 'max-w-sm';
-      case 'wide': return 'max-w-lg';
-      case 'large': return 'max-w-xl';
+      case 'compact': return 'max-w-none sm:max-w-sm';
+      case 'wide': return 'max-w-none sm:max-w-lg';
+      case 'large': return 'max-w-none sm:max-w-xl';
       case 'standard':
-      default: return 'max-w-md';
+      default: return 'max-w-none sm:max-w-md';
     }
   };
 
@@ -1106,34 +1106,34 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const getContainerRoundedClass = () => {
     switch (sekolah.loginCardRounded) {
       case 'none': return 'rounded-none';
-      case 'lg': return 'rounded-2xl';
-      case 'xl': return 'rounded-3xl';
-      case 'full_pill': return 'rounded-[36px] sm:rounded-[44px]';
-      case '3xl': return 'rounded-[32px] sm:rounded-[36px]';
+      case 'lg': return 'rounded-none sm:rounded-2xl';
+      case 'xl': return 'rounded-none sm:rounded-3xl';
+      case 'full_pill': return 'rounded-none sm:rounded-[44px]';
+      case '3xl': return 'rounded-none sm:rounded-[36px]';
       case '2xl':
-      default: return 'rounded-2xl sm:rounded-3xl';
+      default: return 'rounded-none sm:rounded-3xl';
     }
   };
 
   const getContainerShadowClass = () => {
     switch (sekolah.loginCardShadow) {
       case 'none': return 'shadow-none';
-      case 'soft': return 'shadow-lg shadow-slate-900/5 dark:shadow-black/40';
-      case 'glow': return 'shadow-2xl shadow-blue-500/20 dark:shadow-blue-600/30 ring-2 ring-blue-500/20';
-      case 'neon': return 'shadow-[0_0_40px_rgba(59,130,246,0.3)] dark:shadow-[0_0_50px_rgba(99,102,241,0.4)] border-blue-500/40 ring-1 ring-blue-400/30';
+      case 'soft': return 'shadow-none sm:shadow-lg sm:shadow-slate-900/5 dark:sm:shadow-black/40';
+      case 'glow': return 'shadow-none sm:shadow-2xl sm:shadow-blue-500/20 dark:sm:shadow-blue-600/30 sm:ring-2 sm:ring-blue-500/20';
+      case 'neon': return 'shadow-none sm:shadow-[0_0_40px_rgba(59,130,246,0.3)] dark:sm:shadow-[0_0_50px_rgba(99,102,241,0.4)] sm:border-blue-500/40 sm:ring-1 sm:ring-blue-400/30';
       case 'medium':
-      default: return darkTheme ? 'shadow-2xl shadow-black/80' : 'shadow-2xl shadow-slate-900/10';
+      default: return darkTheme ? 'shadow-none sm:shadow-2xl sm:shadow-black/80' : 'shadow-none sm:shadow-2xl sm:shadow-slate-900/10';
     }
   };
 
   const getContainerBorderClass = () => {
     switch (sekolah.loginCardBorder) {
-      case 'none': return 'border-transparent';
-      case 'subtle': return 'border border-slate-200 dark:border-zinc-800';
-      case 'gradient': return 'border-2 border-transparent bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500 bg-origin-border';
-      case 'accent': return 'border-2 border-blue-500/50 dark:border-blue-400/50';
+      case 'none': return 'border-0 sm:border sm:border-transparent';
+      case 'subtle': return 'border-0 sm:border sm:border-slate-200 dark:sm:border-zinc-800';
+      case 'gradient': return 'border-0 sm:border-2 sm:border-transparent sm:bg-gradient-to-r sm:from-blue-500 sm:via-indigo-500 sm:to-cyan-500 sm:bg-origin-border';
+      case 'accent': return 'border-0 sm:border-2 sm:border-blue-500/50 dark:sm:border-blue-400/50';
       case 'glass':
-      default: return darkTheme ? 'border-zinc-800/80' : 'border-white/90 ring-1 ring-black/5';
+      default: return darkTheme ? 'border-0 sm:border sm:border-zinc-800/80' : 'border-0 sm:border sm:border-white/90 sm:ring-1 sm:ring-black/5';
     }
   };
 
@@ -1380,7 +1380,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       </header>
 
       {/* MAIN CONTAINER: LEFT TEXT & RIGHT LOGIN CARD */}
-      <main className={`w-full flex-1 ${sekolah.loginLeftShowPanel !== false ? 'grid grid-cols-1 md:grid-cols-12 items-center justify-between' : 'flex justify-center items-center'} p-3.5 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-0 sm:my-auto overflow-y-auto w-full h-full min-h-screen sm:min-h-0`}>
+      <main className={`w-full flex-1 ${sekolah.loginLeftShowPanel !== false ? 'grid grid-cols-1 md:grid-cols-12 items-stretch sm:items-center justify-between' : 'flex justify-center items-stretch sm:items-center'} p-0 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-0 sm:my-auto overflow-y-auto w-full h-full min-h-dvh sm:min-h-0`}>
         {/* LEFT SIDE TEXT: Sistem Absensi Siswa */}
         {sekolah.loginLeftShowPanel !== false && (
           <div className="hidden md:flex md:col-span-6 lg:col-span-7 flex-col justify-center space-y-6 pr-6 lg:pr-10 xl:pr-14 pl-2 lg:pl-6">
@@ -1521,11 +1521,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
         )}
 
         {/* RIGHT SIDE LOGIN CARD */}
-        <div className={`w-full ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-center my-auto`}>
-          <div className={`w-full ${getContainerMaxWidthClass()} ${getContainerAlignmentClass()} flex flex-col justify-center my-auto`}>
+        <div className={`w-full min-h-dvh sm:min-h-0 ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-stretch sm:items-center my-0 sm:my-auto`}>
+          <div className={`w-full min-h-dvh sm:min-h-0 ${getContainerMaxWidthClass()} ${getContainerAlignmentClass()} flex flex-col justify-center my-0 sm:my-auto`}>
             {/* Main Card Container with White Gradient Styling */}
             <div
-              className={`${getBlurFilter()} border ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} px-5 py-6 sm:p-6 relative transition-all w-full flex flex-col justify-between items-center ${
+              className={`${getBlurFilter()} ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} px-6 pt-16 pb-6 sm:p-6 relative transition-all w-full min-h-dvh sm:min-h-0 flex-1 sm:flex-initial flex flex-col justify-between items-center ${
                 isCardDark
                   ? 'text-zinc-100'
                   : 'text-slate-900'
