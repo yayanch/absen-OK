@@ -1326,7 +1326,8 @@ function queueAppDataPersist(options?: { immediateMySQL?: boolean }) {
 
   const mysqlConfig = loadSavedServerConfig();
   const hasDeletions = (inMemoryAppDataCache?.deletedPelanggaranIds && inMemoryAppDataCache.deletedPelanggaranIds.length > 0) ||
-                       (inMemoryAppDataCache?.deletedHomeVisitIds && inMemoryAppDataCache.deletedHomeVisitIds.length > 0);
+                       (inMemoryAppDataCache?.deletedHomeVisitIds && inMemoryAppDataCache.deletedHomeVisitIds.length > 0) ||
+                       (inMemoryAppDataCache?.deletedSiswaIds && inMemoryAppDataCache.deletedSiswaIds.length > 0);
   if (mysqlConfig && (Date.now() >= mysqlCooldownUntil || hasDeletions || options?.immediateMySQL)) {
     if (backgroundPersistTimeout) {
       clearTimeout(backgroundPersistTimeout);
@@ -1745,12 +1746,13 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         await db.execute(q).catch(() => {});
       }
 
-      if (!shouldProtectMasterData && Array.isArray(appData.deletedSiswaIds) && appData.deletedSiswaIds.length > 0) {
+      if (Array.isArray(appData.deletedSiswaIds) && appData.deletedSiswaIds.length > 0) {
         const CHUNK_SIZE = 50;
         for (let i = 0; i < appData.deletedSiswaIds.length; i += CHUNK_SIZE) {
           const chunk = appData.deletedSiswaIds.slice(i, i + CHUNK_SIZE);
           const delPlaceholders = chunk.map(() => '?').join(',');
           await db.execute(`DELETE FROM siswa WHERE id IN (${delPlaceholders});`, chunk).catch(() => {});
+          await db.execute(`DELETE FROM user WHERE id IN (${delPlaceholders});`, chunk).catch(() => {});
         }
       }
 
@@ -5733,7 +5735,8 @@ app.post("/api/mysql/save", async (req, res) => {
     lastMySQLSyncTime = Date.now();
 
     const hasDeletions = (appData.deletedPelanggaranIds && appData.deletedPelanggaranIds.length > 0) ||
-                         (appData.deletedHomeVisitIds && appData.deletedHomeVisitIds.length > 0);
+                         (appData.deletedHomeVisitIds && appData.deletedHomeVisitIds.length > 0) ||
+                         (appData.deletedSiswaIds && appData.deletedSiswaIds.length > 0);
 
     if (Date.now() >= mysqlCooldownUntil || hasDeletions) {
       await performMySQLSave(config, appData, Boolean(hasDeletions));

@@ -398,11 +398,49 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
     }
   };
 
+  const [selectedSiswaIds, setSelectedSiswaIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const existingIds = new Set(appData.siswa.map((s) => s.id));
+    setSelectedSiswaIds((prev) => {
+      const next = prev.filter((id) => existingIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [appData.siswa]);
+
   const validPageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 10;
   const validCurrentPage = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
   const totalPages = Math.ceil(filteredSiswa.length / validPageSize) || 1;
   const startIdx = (validCurrentPage - 1) * validPageSize;
   const pagedSiswa = filteredSiswa.slice(startIdx, startIdx + validPageSize);
+
+  const selectedSiswaSet = useMemo(() => new Set(selectedSiswaIds), [selectedSiswaIds]);
+  const isAllPagedSelected = pagedSiswa.length > 0 && pagedSiswa.every((s) => selectedSiswaSet.has(s.id));
+  const isAllFilteredSelected = filteredSiswa.length > 0 && filteredSiswa.every((s) => selectedSiswaSet.has(s.id));
+
+  const handleToggleSelectSiswa = (id: string) => {
+    setSelectedSiswaIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectPage = () => {
+    const pageIds = pagedSiswa.map((s) => s.id);
+    if (isAllPagedSelected) {
+      const pageSet = new Set(pageIds);
+      setSelectedSiswaIds((prev) => prev.filter((id) => !pageSet.has(id)));
+    } else {
+      setSelectedSiswaIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedSiswaIds(filteredSiswa.map((s) => s.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedSiswaIds([]);
+  };
 
   const handleSaveSiswa = (
     id: string | null,
@@ -1386,8 +1424,50 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         `Menghapus data siswa: ${targetName} (NISN: ${targetNisn})`
       );
       onUpdateAppData(nextAppData);
+      setSelectedSiswaIds((prev) => prev.filter((item) => item !== id));
       onShowToast('Data siswa telah dihapus!', 'info');
     });
+  };
+
+  const handleDeleteSelectedSiswa = () => {
+    if (selectedSiswaIds.length === 0) {
+      onShowToast('Pilih minimal satu siswa yang ingin dihapus!', 'warning');
+      return;
+    }
+
+    const idsSet = new Set(selectedSiswaIds);
+    const targetStudents = appData.siswa.filter((s) => idsSet.has(s.id));
+    if (targetStudents.length === 0) {
+      setSelectedSiswaIds([]);
+      return;
+    }
+
+    const sampleNames = targetStudents
+      .slice(0, 3)
+      .map((s) => s.nama)
+      .join(', ');
+    const moreText =
+      targetStudents.length > 3 ? ` dan ${targetStudents.length - 3} siswa lainnya` : '';
+
+    onConfirmModal(
+      'Hapus Beberapa Data Siswa',
+      `Apakah Anda yakin ingin menghapus ${targetStudents.length} data siswa yang dipilih (${sampleNames}${moreText})? Data yang dihapus tidak dapat dikembalikan.`,
+      'danger',
+      () => {
+        const newSiswaList = appData.siswa.filter((s) => !idsSet.has(s.id));
+        const updatedDeletedIds = Array.from(
+          new Set([...(appData.deletedSiswaIds || []), ...Array.from(idsSet)])
+        );
+        const nextAppData = addAuditLog(
+          { ...appData, siswa: newSiswaList, deletedSiswaIds: updatedDeletedIds },
+          'Hapus beberapa siswa',
+          `Menghapus ${targetStudents.length} siswa terpilih (${sampleNames}${moreText})`
+        );
+        onUpdateAppData(nextAppData);
+        setSelectedSiswaIds([]);
+        onShowToast(`Berhasil menghapus ${targetStudents.length} data siswa terpilih!`, 'success');
+      }
+    );
   };
 
   const handleHapusSeluruh = () => {
@@ -2652,6 +2732,25 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                           Zona Bahaya
                         </div>
 
+                        {selectedSiswaIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSettingsMenu(false);
+                              handleDeleteSelectedSiswa();
+                            }}
+                            className="w-full px-3 py-2 text-left rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-400 transition flex items-center gap-2.5 text-xs font-semibold cursor-pointer group"
+                          >
+                            <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 group-hover:bg-rose-600 group-hover:text-white transition shrink-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <div className="font-bold">Hapus {selectedSiswaIds.length} Siswa Terpilih</div>
+                              <div className="text-[10px] text-rose-500/80">Hapus siswa yang telah dicentang</div>
+                            </div>
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => {
@@ -2675,6 +2774,19 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
               )}
             </div>
 
+            {/* Tombol Cepat Hapus Terpilih */}
+            {canDelete && selectedSiswaIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteSelectedSiswa}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-600/20 transition flex items-center gap-1.5 cursor-pointer shrink-0 animate-in fade-in zoom-in-95 duration-150"
+                title="Hapus siswa yang dicentang"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Hapus Terpilih ({selectedSiswaIds.length})</span>
+              </button>
+            )}
+
             {/* Tombol Utama: Tambah Siswa */}
             {canAdd && hasJurusan && (
               <button
@@ -2689,6 +2801,61 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
           </div>
         </div>
 
+        {/* Bar Aksi Massal / Pilih Beberapa Siswa */}
+        {canDelete && filteredSiswa.length > 0 && (selectedSiswaIds.length > 0 || viewMode === 'grid') && (
+          <div className="px-4 sm:px-6 py-3 bg-indigo-50/70 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllPagedSelected}
+                  onChange={handleToggleSelectPage}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span>Pilih Halaman Ini ({pagedSiswa.length})</span>
+              </label>
+
+              {selectedSiswaIds.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-600 text-white text-[11px] font-extrabold shadow-2xs">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{selectedSiswaIds.length} Siswa Dipilih</span>
+                </span>
+              )}
+
+              {filteredSiswa.length > pagedSiswa.length && !isAllFilteredSelected && (
+                <button
+                  type="button"
+                  onClick={handleSelectAllFiltered}
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                >
+                  Pilih Semua {filteredSiswa.length} Siswa Terfilter
+                </button>
+              )}
+
+              {selectedSiswaIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  Batal Pilih
+                </button>
+              )}
+            </div>
+
+            {selectedSiswaIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteSelectedSiswa}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus {selectedSiswaIds.length} Siswa Terpilih</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {filteredSiswa.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-xs">
             <Users className="w-8 h-8 mx-auto mb-3 text-slate-300" />
@@ -2702,11 +2869,16 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                 const k = appData.kelas.find((item) => item.id === s.kelasId);
                 const isStudentBinaan = binaanClassIds === null || (s.kelasId ? binaanClassIds.has(s.kelasId) : false);
                 const showFullActions = isStudentBinaan || isAdmin || isKesiswaan;
+                const isSelected = selectedSiswaSet.has(s.id);
 
                 return (
                   <div
                     key={s.id}
-                    className="bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700/60 transition duration-150 flex flex-col justify-between"
+                    className={`bg-white dark:bg-slate-800/80 border rounded-2xl p-4 shadow-xs hover:shadow-md transition duration-150 flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/20'
+                        : 'border-slate-200/80 dark:border-slate-700/80 hover:border-indigo-300 dark:hover:border-indigo-700/60'
+                    }`}
                   >
                     <div>
                       {/* Card Header: Avatar, Nama, NISN (jika binaan), Kelas */}
@@ -2741,6 +2913,16 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                             )}
                           </div>
                         </div>
+
+                        {canDelete && (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectSiswa(s.id)}
+                            className="w-4 h-4 mt-1 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                            title="Pilih siswa ini untuk dihapus"
+                          />
+                        )}
                       </div>
 
                       {/* Kelas & Status Badges */}
@@ -2867,11 +3049,22 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             </div>
           </div>
         ) : (
-          /* List View: Clean Data Table with No, NISN, Nama Siswa, Kelas, and Aksi */
+          /* List View: Clean Data Table with Checkbox, No, NISN, Nama Siswa, Kelas, and Aksi */
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {canDelete && (
+                    <th className="p-4 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllPagedSelected}
+                        onChange={handleToggleSelectPage}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        title="Pilih semua siswa di halaman ini"
+                      />
+                    </th>
+                  )}
                   <th className="p-4 w-12 text-center">No</th>
                   <th className="p-4 cursor-pointer hover:text-indigo-600 transition select-none w-44" onClick={() => handleSort('nisn')}>
                     <div className="flex items-center gap-1.5">
@@ -2911,9 +3104,28 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
                   const k = appData.kelas.find((item) => item.id === s.kelasId);
                   const isStudentBinaan = binaanClassIds === null || (s.kelasId ? binaanClassIds.has(s.kelasId) : false);
                   const showFullActions = isStudentBinaan || isAdmin || isKesiswaan;
+                  const isSelected = selectedSiswaSet.has(s.id);
 
                   return (
-                    <tr key={s.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                    <tr
+                      key={s.id}
+                      className={`transition ${
+                        isSelected
+                          ? 'bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/40'
+                          : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      {canDelete && (
+                        <td className="p-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectSiswa(s.id)}
+                            className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            title={`Pilih ${s.nama}`}
+                          />
+                        </td>
+                      )}
                       <td className="p-4 text-center font-extrabold text-slate-400">{startIdx + idx + 1}</td>
                       <td className="p-4 font-mono font-bold text-slate-700 dark:text-slate-300">{s.nisn || '-'}</td>
                       <td className="p-4 font-bold text-slate-800 dark:text-slate-100">

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Users,
@@ -1432,11 +1432,23 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       `Apakah Anda yakin ingin menghapus SELURUH ${appData.siswa.length} data Siswa / Murid dari sistem?`,
       'danger',
       () => {
-        onUpdateAppData({ ...appData, siswa: [] });
+        const allIds = (appData.siswa || []).map((s) => s.id);
+        const updatedDeletedIds = Array.from(new Set([...(appData.deletedSiswaIds || []), ...allIds]));
+        onUpdateAppData({ ...appData, siswa: [], deletedSiswaIds: updatedDeletedIds });
         onShowToast('Seluruh data Siswa / Murid berhasil dihapus!', 'success');
       }
     );
   };
+
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const validIds = new Set(allUsers.map((u) => u.id));
+    setSelectedUserIds((prev) => {
+      const next = prev.filter((id) => validIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allUsers]);
 
   const validPageSize = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 10;
   const validCurrentPage = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
@@ -1823,6 +1835,30 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
     return false;
   };
 
+  const deletablePagedUsers = useMemo(
+    () => pagedUsers.filter((u) => canDeleteUser(u)),
+    [pagedUsers, isAdmin, isKesiswaan, isWali, currentUser]
+  );
+  const selectedUserSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
+  const isAllPagedDeletableSelected =
+    deletablePagedUsers.length > 0 && deletablePagedUsers.every((u) => selectedUserSet.has(u.id));
+
+  const handleToggleSelectUser = (id: string) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectPageUsers = () => {
+    const pageIds = deletablePagedUsers.map((u) => u.id);
+    if (isAllPagedDeletableSelected) {
+      const pageSet = new Set(pageIds);
+      setSelectedUserIds((prev) => prev.filter((id) => !pageSet.has(id)));
+    } else {
+      setSelectedUserIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
   const handleDeleteUser = (user: UserItem) => {
     if (!canDeleteUser(user)) {
       onShowToast('Akses dibatasi! Anda tidak memiliki izin untuk menghapus user ini.', 'warning');
@@ -1842,13 +1878,20 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       'danger',
       () => {
         if (isStudent && user.roles.length === 1) {
+          const removedSiswaIds = (appData.siswa || [])
+            .filter((s) => s.id === user.id || s.nisn === user.username)
+            .map((s) => s.id);
           const updatedSiswa = (appData.siswa || []).filter((s) => s.id !== user.id && s.nisn !== user.username);
+          const updatedDeletedIds = Array.from(
+            new Set([...(appData.deletedSiswaIds || []), user.id, ...removedSiswaIds])
+          );
           const nextAppData = addAuditLog(
-            { ...appData, siswa: updatedSiswa },
+            { ...appData, siswa: updatedSiswa, deletedSiswaIds: updatedDeletedIds },
             'Hapus akun murid',
             `Menghapus akun murid: ${user.nama} (${user.username})`
           );
           onUpdateAppData(nextAppData);
+          setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
           onShowToast(`Siswa / Murid "${user.nama}" berhasil dihapus.`, 'info');
         } else {
           const updatedWaliKelas = (appData.waliKelas || []).filter((w) => w.id !== user.id && w.username !== user.username);
@@ -1858,8 +1901,87 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
             `Menghapus akun pengguna: ${user.nama} (${user.username}, roles: ${user.roles.join(', ')})`
           );
           onUpdateAppData(nextAppData);
+          setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
           onShowToast(`User "${user.nama}" berhasil dihapus.`, 'info');
         }
+      }
+    );
+  };
+
+  const handleDeleteSelectedUsers = () => {
+    if (selectedUserIds.length === 0) return;
+    const targetUsers = allUsers.filter((u) => selectedUserSet.has(u.id) && canDeleteUser(u));
+    if (targetUsers.length === 0) {
+      setSelectedUserIds([]);
+      return;
+    }
+
+    const sampleNames = targetUsers
+      .slice(0, 3)
+      .map((u) => u.nama)
+      .join(', ');
+    const moreText = targetUsers.length > 3 ? ` dan ${targetUsers.length - 3} lainnya` : '';
+
+    onConfirmModal(
+      'Hapus Beberapa Data Terpilih',
+      `Apakah Anda yakin ingin menghapus ${targetUsers.length} akun/siswa terpilih (${sampleNames}${moreText})?`,
+      'danger',
+      () => {
+        const studentTargets = targetUsers.filter(
+          (u) => (u.roles.includes('murid') || u.role === 'murid') && u.roles.length === 1
+        );
+        const staffTargets = targetUsers.filter(
+          (u) => !((u.roles.includes('murid') || u.role === 'murid') && u.roles.length === 1)
+        );
+
+        const studentIdsSet = new Set(studentTargets.map((u) => u.id));
+        const studentUsernamesSet = new Set(studentTargets.map((u) => u.username));
+        const staffIdsSet = new Set(staffTargets.map((u) => u.id));
+        const staffUsernamesSet = new Set(staffTargets.map((u) => u.username));
+
+        const removedSiswaIds = (appData.siswa || [])
+          .filter((s) => studentIdsSet.has(s.id) || studentUsernamesSet.has(s.nisn))
+          .map((s) => s.id);
+
+        const updatedSiswa =
+          studentTargets.length > 0
+            ? (appData.siswa || []).filter(
+                (s) => !studentIdsSet.has(s.id) && !studentUsernamesSet.has(s.nisn)
+              )
+            : appData.siswa;
+
+        const updatedDeletedIds =
+          studentTargets.length > 0
+            ? Array.from(
+                new Set([
+                  ...(appData.deletedSiswaIds || []),
+                  ...Array.from(studentIdsSet),
+                  ...removedSiswaIds,
+                ])
+              )
+            : appData.deletedSiswaIds;
+
+        const updatedWaliKelas =
+          staffTargets.length > 0
+            ? (appData.waliKelas || []).filter(
+                (w) => !staffIdsSet.has(w.id) && !staffUsernamesSet.has(w.username || '')
+              )
+            : appData.waliKelas;
+
+        const nextAppData = addAuditLog(
+          {
+            ...appData,
+            siswa: updatedSiswa,
+            deletedSiswaIds: updatedDeletedIds,
+            waliKelas: updatedWaliKelas,
+          },
+          staffTargets.length > 0 ? 'Hapus akun pengguna' : 'Hapus beberapa siswa',
+          `Menghapus ${targetUsers.length} data terpilih (${sampleNames}${moreText})`
+        );
+
+        onUpdateAppData(nextAppData);
+        setSelectedUserIds([]);
+        onShowToast(`Berhasil menghapus ${targetUsers.length} data terpilih!`, 'success');
       }
     );
   };
@@ -2192,6 +2314,34 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
           </div>
         </div>
 
+        {/* Bar Aksi Massal / Hapus Beberapa Siswa atau User */}
+        {selectedUserIds.length > 0 && (
+          <div className="px-4 sm:px-6 py-3 bg-rose-50/80 dark:bg-rose-950/30 border-b border-rose-100 dark:border-rose-900/50 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-600 text-white text-[11px] font-extrabold shadow-2xs">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{selectedUserIds.length} Dipilih</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedUserIds([])}
+                className="text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white cursor-pointer"
+              >
+                Batal Pilih
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDeleteSelectedUsers}
+              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Hapus Terpilih ({selectedUserIds.length})</span>
+            </button>
+          </div>
+        )}
+
         {filteredUsers.length === 0 ? (
           <div className="py-12 text-center text-slate-400">
             <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
@@ -2204,7 +2354,11 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               {pagedUsers.map((user, idx) => (
                 <div
                   key={user.id}
-                  className="bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700/60 transition duration-150 flex flex-col justify-between"
+                  className={`bg-white dark:bg-slate-800/80 border rounded-2xl p-4 shadow-xs hover:shadow-md transition duration-150 flex flex-col justify-between ${
+                    selectedUserSet.has(user.id)
+                      ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-50/20 dark:bg-blue-950/20'
+                      : 'border-slate-200/80 dark:border-slate-700/80 hover:border-blue-300 dark:hover:border-blue-700/60'
+                  }`}
                 >
                   <div>
                     {/* Header: Foto/Avatar, Nama, No, Username */}
@@ -2242,6 +2396,15 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
                           </p>
                         </div>
                       </div>
+                      {canDeleteUser(user) && (
+                        <input
+                          type="checkbox"
+                          checked={selectedUserSet.has(user.id)}
+                          onChange={() => handleToggleSelectUser(user.id)}
+                          className="w-4 h-4 mt-1 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                          title={`Pilih ${user.nama}`}
+                        />
+                      )}
                     </div>
 
                     {/* Metadata: Kelas / Mapel */}
@@ -2351,6 +2514,17 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800 font-bold uppercase tracking-wider text-[10px]">
+                  {deletablePagedUsers.length > 0 && (
+                    <th className="py-3 px-4 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllPagedDeletableSelected}
+                        onChange={handleToggleSelectPageUsers}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        title="Pilih semua di halaman ini"
+                      />
+                    </th>
+                  )}
                   <th className="py-3 px-4 w-12 text-center">NO</th>
                   <th className="py-3 px-4 cursor-pointer hover:text-blue-600 transition select-none" onClick={() => handleSort('nama')}>
                     <div className="flex items-center gap-1.5">
@@ -2388,7 +2562,27 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {pagedUsers.map((user, idx) => (
-                  <tr key={user.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                  <tr
+                    key={user.id}
+                    className={`transition ${
+                      selectedUserSet.has(user.id)
+                        ? 'bg-blue-50/60 dark:bg-blue-950/30 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                        : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
+                    {deletablePagedUsers.length > 0 && (
+                      <td className="py-3.5 px-4 text-center">
+                        {canDeleteUser(user) ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedUserSet.has(user.id)}
+                            onChange={() => handleToggleSelectUser(user.id)}
+                            className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            title={`Pilih ${user.nama}`}
+                          />
+                        ) : null}
+                      </td>
+                    )}
                     <td className="py-3.5 px-4 text-center font-bold text-slate-400">
                       {(currentPage - 1) * pageSize + idx + 1}
                     </td>

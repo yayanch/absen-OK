@@ -469,27 +469,11 @@ export default function App() {
               const allDeletedPelanggaran = Array.from(new Set([...(prev.deletedPelanggaranIds || []), ...(data.appData.deletedPelanggaranIds || [])]));
               const allDeletedHomeVisits = Array.from(new Set([...(prev.deletedHomeVisitIds || []), ...(data.appData.deletedHomeVisitIds || [])]));
 
-              // Protect active schedules, GMK, and students from zombie deletion tombstones
-              const activeJadwalSet = new Set([
-                ...(prev.jadwalMengajar || []).map((j) => String(j.id)),
-                ...(data.appData.jadwalMengajar || []).map((j) => String(j.id)),
-              ]);
-              const activeGmkSet = new Set([
-                ...(prev.guruMapelKelas || []).map((g: any) => String(g.id)),
-                ...(data.appData.guruMapelKelas || []).map((g: any) => String(g.id)),
-              ]);
-              const activeSiswaSet = new Set([
-                ...(prev.siswa || []).map((s: any) => String(s.id)),
-                ...(data.appData.siswa || []).map((s: any) => String(s.id)),
-              ]);
-
-              const rawDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
-              const allDeletedSiswa = rawDeletedSiswa.filter((id) => !activeSiswaSet.has(id));
+              const allDeletedSiswa = Array.from(new Set([...(prev.deletedSiswaIds || []), ...(data.appData.deletedSiswaIds || [])]));
 
               const allDeletedJadwal = Array.from(new Set([...(prev.deletedJadwalIds || []), ...(data.appData.deletedJadwalIds || [])]));
 
-              const rawDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(data.appData.deletedGmkIds || [])]));
-              const allDeletedGmk = rawDeletedGmk.filter((id) => !activeGmkSet.has(id));
+              const allDeletedGmk = Array.from(new Set([...(prev.deletedGmkIds || []), ...(data.appData.deletedGmkIds || [])]));
 
               const mergedPelanggaran = mergePelanggaran(prev.pelanggaran, data.appData.pelanggaran, allDeletedPelanggaran);
               const mergedHomeVisits = mergeHomeVisits(prev.homeVisits, data.appData.homeVisits, allDeletedHomeVisits);
