@@ -1498,7 +1498,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       </div>
                     )}
                     <p
-                      className={`text-lg sm:text-2xl font-black tracking-tight mt-0.5 ${
+                      className={`${
+                        sekolah.loginCardWelcomeTitleSize === 'sm'
+                          ? 'text-sm sm:text-base'
+                          : sekolah.loginCardWelcomeTitleSize === 'base'
+                          ? 'text-base sm:text-lg'
+                          : sekolah.loginCardWelcomeTitleSize === 'xl'
+                          ? 'text-xl sm:text-3xl'
+                          : sekolah.loginCardWelcomeTitleSize === '2xl'
+                          ? 'text-2xl sm:text-4xl'
+                          : 'text-lg sm:text-2xl'
+                      } font-black tracking-tight mt-0.5 ${
                         isCardDark ? 'text-white' : 'text-slate-950'
                       }`}
                     >
@@ -1506,7 +1516,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </p>
                     {sekolah.loginCardWelcomeSubtext && (
                       <p
-                        className={`text-[11px] sm:text-sm font-medium mt-0.5 sm:mt-1 leading-snug sm:leading-relaxed ${
+                        className={`${
+                          sekolah.loginCardWelcomeSubtextSize === 'xs'
+                            ? 'text-[10px] sm:text-xs'
+                            : sekolah.loginCardWelcomeSubtextSize === 'base'
+                            ? 'text-xs sm:text-base'
+                            : sekolah.loginCardWelcomeSubtextSize === 'lg'
+                            ? 'text-sm sm:text-lg'
+                            : 'text-[11px] sm:text-sm'
+                        } font-medium mt-0.5 sm:mt-1 leading-snug sm:leading-relaxed ${
                           isCardDark ? 'text-zinc-300' : 'text-slate-600'
                         }`}
                       >

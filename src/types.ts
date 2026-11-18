@@ -110,7 +110,9 @@ export interface SekolahConfig {
   loginCardShowSubtitle?: boolean;
   loginCardShowAcademicYear?: boolean;
   loginCardWelcomeTitle?: string;
+  loginCardWelcomeTitleSize?: 'sm' | 'base' | 'lg' | 'xl' | '2xl';
   loginCardWelcomeSubtext?: string;
+  loginCardWelcomeSubtextSize?: 'xs' | 'sm' | 'base' | 'lg';
   loginCardSchoolNameCustom?: string;
   loginCardSchoolNameSize?: 'xs' | 'sm' | 'base' | 'lg';
   loginCardSchoolNameStyle?: 'uppercase_bold' | 'normal' | 'badge';

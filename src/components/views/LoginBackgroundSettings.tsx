@@ -147,7 +147,13 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [cardShowSubtitle, setCardShowSubtitle] = useState<boolean>(sekolah.loginCardShowSubtitle !== false);
   const [cardShowAcademicYear, setCardShowAcademicYear] = useState<boolean>(sekolah.loginCardShowAcademicYear !== false);
   const [cardWelcomeTitle, setCardWelcomeTitle] = useState<string>(sekolah.loginCardWelcomeTitle || 'Sistem Absensi Siswa');
+  const [cardWelcomeTitleSize, setCardWelcomeTitleSize] = useState<'sm' | 'base' | 'lg' | 'xl' | '2xl'>(
+    sekolah.loginCardWelcomeTitleSize || 'lg'
+  );
   const [cardWelcomeSubtext, setCardWelcomeSubtext] = useState<string>(sekolah.loginCardWelcomeSubtext || 'Masuk dengan Username / NISN / NIP Anda');
+  const [cardWelcomeSubtextSize, setCardWelcomeSubtextSize] = useState<'xs' | 'sm' | 'base' | 'lg'>(
+    sekolah.loginCardWelcomeSubtextSize || 'sm'
+  );
   const [cardInputStyle, setCardInputStyle] = useState<'outlined' | 'filled' | 'underlined'>(sekolah.loginCardInputStyle || 'outlined');
   const [cardInputRounded, setCardInputRounded] = useState<'lg' | 'xl' | 'full'>(sekolah.loginCardInputRounded || 'xl');
   const [cardButtonAccent, setCardButtonAccent] = useState<'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'slate' | 'neutral'>(
@@ -550,7 +556,9 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginCardShowSubtitle: cardShowSubtitle,
       loginCardShowAcademicYear: cardShowAcademicYear,
       loginCardWelcomeTitle: cardWelcomeTitle,
+      loginCardWelcomeTitleSize: cardWelcomeTitleSize,
       loginCardWelcomeSubtext: cardWelcomeSubtext,
+      loginCardWelcomeSubtextSize: cardWelcomeSubtextSize,
       loginCardSchoolNameCustom: cardSchoolNameCustom,
       loginCardSchoolNameSize: cardSchoolNameSize,
       loginCardSchoolNameStyle: cardSchoolNameStyle,
@@ -638,6 +646,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setCardShadow('medium');
       setCardBorder('glass');
       setCardShowLogo(true);
+      setCardWelcomeTitleSize('lg');
+      setCardWelcomeSubtextSize('sm');
 
       setCustomLinks(defaultCustomLinksList);
       setCustomLinksDisplayMode('dropdown');
@@ -1649,7 +1659,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Judul Selamat Datang */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Judul Utama Kartu</label>
                     <input
                       type="text"
@@ -1658,10 +1668,40 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                       placeholder="Contoh: Sistem Absensi Siswa"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <div className="space-y-1 pt-0.5">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">
+                        Ukuran Teks Judul Utama
+                      </label>
+                      <div className="grid grid-cols-5 gap-1">
+                        {[
+                          { id: 'sm', label: 'Kecil' },
+                          { id: 'base', label: 'Sedang' },
+                          { id: 'lg', label: 'Standar' },
+                          { id: 'xl', label: 'Besar' },
+                          { id: '2xl', label: 'Ekstra' },
+                        ].map((sz) => (
+                          <button
+                            key={sz.id}
+                            type="button"
+                            onClick={() => {
+                              setCardWelcomeTitleSize(sz.id as any);
+                              saveWithUpdates({ loginCardWelcomeTitleSize: sz.id as any });
+                            }}
+                            className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition text-center cursor-pointer border ${
+                              cardWelcomeTitleSize === sz.id
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {sz.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Sub-teks Keterangan */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sub-teks Keterangan Kartu</label>
                     <input
                       type="text"
@@ -1670,6 +1710,35 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                       placeholder="Contoh: Silakan masuk ke akun Anda untuk melanjutkan"
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <div className="space-y-1 pt-0.5">
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">
+                        Ukuran Teks Sub-Judul / Keterangan
+                      </label>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { id: 'xs', label: 'Kecil (XS)' },
+                          { id: 'sm', label: 'Standar (SM)' },
+                          { id: 'base', label: 'Sedang' },
+                          { id: 'lg', label: 'Besar' },
+                        ].map((sz) => (
+                          <button
+                            key={sz.id}
+                            type="button"
+                            onClick={() => {
+                              setCardWelcomeSubtextSize(sz.id as any);
+                              saveWithUpdates({ loginCardWelcomeSubtextSize: sz.id as any });
+                            }}
+                            className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition text-center cursor-pointer border ${
+                              cardWelcomeSubtextSize === sz.id
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {sz.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Dedicated Block: Baris Teks di Atas Judul Utama */}
@@ -2638,9 +2707,35 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </div>
                 <div>
                   <h5 className="text-xs font-black uppercase tracking-wider">{cardSchoolNameCustom || sekolah.nama || 'SMK NEGERI 6 GARUT'}</h5>
-                  <p className="text-[11px] font-bold mt-0.5">{cardWelcomeTitle || 'Sistem Absensi Siswa'}</p>
+                  <p
+                    className={`${
+                      cardWelcomeTitleSize === 'sm'
+                        ? 'text-[10px]'
+                        : cardWelcomeTitleSize === 'base'
+                        ? 'text-[11px]'
+                        : cardWelcomeTitleSize === 'xl'
+                        ? 'text-sm'
+                        : cardWelcomeTitleSize === '2xl'
+                        ? 'text-base'
+                        : 'text-xs'
+                    } font-bold mt-0.5`}
+                  >
+                    {cardWelcomeTitle || 'Sistem Absensi Siswa'}
+                  </p>
                   {cardWelcomeSubtext && (
-                    <p className="text-[9.5px] opacity-70 mt-0.5 leading-snug">{cardWelcomeSubtext}</p>
+                    <p
+                      className={`${
+                        cardWelcomeSubtextSize === 'xs'
+                          ? 'text-[8.5px]'
+                          : cardWelcomeSubtextSize === 'base'
+                          ? 'text-[10.5px]'
+                          : cardWelcomeSubtextSize === 'lg'
+                          ? 'text-xs'
+                          : 'text-[9.5px]'
+                      } opacity-70 mt-0.5 leading-snug`}
+                    >
+                      {cardWelcomeSubtext}
+                    </p>
                   )}
                 </div>
 
