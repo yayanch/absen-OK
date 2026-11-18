@@ -479,7 +479,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
             alamat,
             tempatLahir,
             tanggalLahir,
-            password: password.trim() ? password.trim() : (s.password || s.nisn || ''),
+            password: password.trim() ? password.trim() : (s.password || ''),
             foto,
             suratNonAktifBukti,
           };
@@ -502,7 +502,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
         alamat,
         tempatLahir,
         tanggalLahir,
-        password: password.trim() || nisn || '',
+        password: password.trim() || '',
         foto,
         suratNonAktifBukti,
       };
@@ -793,7 +793,7 @@ export const MasterSiswaView: React.FC<MasterSiswaViewProps> = ({
           <div className="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Password Login Akun</span>
             <div className="font-mono font-bold text-slate-800 dark:text-white mt-0.5">
-              {s.password || s.nisn || '-'}
+              {s.password || '-'}
             </div>
           </div>
 

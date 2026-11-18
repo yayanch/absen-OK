@@ -664,7 +664,7 @@ export const UserFormModalContent: React.FC<UserFormModalContentProps> = ({
   const [nama, setNama] = useState(user ? user.nama : '');
   const [username, setUsername] = useState(user ? user.username : '');
   const [nip, setNip] = useState(user ? user.nip : '');
-  const [password, setPassword] = useState(user ? user.password : '123');
+  const [password, setPassword] = useState(user ? user.password : '');
   const [selectedRoles, setSelectedRoles] = useState<UserRole[]>(initialRoles);
   const [primaryRole, setPrimaryRole] = useState<UserRole>(user ? user.role || initialRoles[0] : 'wali');
   const [noHp, setNoHp] = useState(user ? user.noHp || '' : '');
@@ -1126,7 +1126,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         nama: appData.stafJadwal.nama || 'Staf Pengelola Jadwal',
         username: appData.stafJadwal.username || 'jadwal',
         nip: appData.stafJadwal.nip || 'STAF-JADWAL-01',
-        password: appData.stafJadwal.password || 'jadwal123',
+        password: appData.stafJadwal.password || '',
         role: sjRoles[0] || 'staf_jadwal',
         roles: sjRoles,
         originalType: 'user',
@@ -1145,7 +1145,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         nama: appData.admSiswa.nama || 'Staf Administrasi Siswa',
         username: appData.admSiswa.username || 'adm_siswa',
         nip: appData.admSiswa.nip || 'ADM-SISWA-01',
-        password: appData.admSiswa.password || '123',
+        password: appData.admSiswa.password || '',
         role: asRoles[0] || 'adm_siswa',
         roles: asRoles,
         originalType: 'user',
@@ -1163,13 +1163,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       const isWaliRole = userRoles.includes('wali');
       const k = isWaliRole ? appData.kelas.find((kl) => kl.waliKelasId === w.id) : undefined;
       
-      let effectivePassword = w.password || '';
-      if (userRoles.includes('kesiswaan') && appData.kesiswaan?.password) {
-        effectivePassword = w.password || appData.kesiswaan.password;
-      }
-      if ((userRoles.includes('user') || userRoles.includes('guru')) && appData.userBiasa?.password) {
-        effectivePassword = w.password || appData.userBiasa.password;
-      }
+      const effectivePassword = w.password || '';
 
       list.push({
         id: w.id,
@@ -1198,7 +1192,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         nama: s.nama,
         username: s.username || s.nisn,
         nip: s.nisn,
-        password: s.password !== undefined && s.password !== '' ? s.password : (s.nisn || ''),
+        password: s.password || '',
         role: studentRoles[0] || 'murid',
         roles: studentRoles,
         originalType: 'user',
@@ -1216,7 +1210,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         nama: `Piket Kelas ${k.nama}`,
         username: clean,
         nip: k.nama,
-        password: String(k.piketPassword || clean),
+        password: String(k.piketPassword || ''),
         role: 'piket_kelas',
         roles: ['piket_kelas'],
         originalType: 'user',
@@ -1541,7 +1535,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
       let updatedAdmin = {
         ...baseAppData.admin,
         username: username || appData.admin?.username || 'admin',
-        password: password || appData.admin?.password || 'admin123',
+        password: password || appData.admin?.password || '',
         nama: nama || appData.admin?.nama || 'Administrator Utama',
         foto: editingUser?.foto || appData.admin?.foto || '',
         roles: finalRoles,
@@ -1568,7 +1562,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
               nama: nama || s.nama,
               username: username || s.username || s.nisn,
               nisn: nip && nip !== '-' ? nip : s.nisn,
-              password: password ? password : (s.password || s.nisn || ''),
+              password: password ? password : (s.password || ''),
               noWa: noHp || s.noWa,
               foto: editingUser?.foto || s.foto,
               roles: finalRoles,
@@ -1582,7 +1576,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
           nama: nama,
           nisn: nip && nip !== '-' ? nip : username,
           username: username || nip,
-          password: password || '123',
+          password: password || '',
           kelasId: appData.kelas[0]?.id || '',
           noWa: noHp || '',
           gender: 'L',
@@ -1611,7 +1605,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         nama,
         username,
         nip: nip && nip !== '-' ? nip : 'STAF-JADWAL-01',
-        password: password || 'jadwal123',
+        password: password || appData.stafJadwal?.password || '',
         noHp,
         foto: editingUser?.foto || appData.stafJadwal?.foto || '',
         roles: finalRoles,
@@ -1637,7 +1631,7 @@ export const MasterUserView: React.FC<MasterUserViewProps> = ({
         nama,
         username,
         nip: nip && nip !== '-' ? nip : 'ADM-SISWA-01',
-        password: password || '123',
+        password: password || appData.admSiswa?.password || '',
         noHp,
         foto: editingUser?.foto || appData.admSiswa?.foto || '',
         roles: finalRoles,

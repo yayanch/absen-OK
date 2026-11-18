@@ -56,7 +56,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
     const currentData = (currentUser?.data || {}) as any;
 
     if (currentUser.role === 'admin') {
-      const a = appData.admin || { username: 'admin', password: 'admin123', nama: 'Administrator Utama', foto: '' };
+      const a = appData.admin || { username: 'admin', password: '', nama: 'Administrator Utama', foto: '' };
       return {
         nama: a.nama || currentData.nama || 'Administrator Utama',
         username: a.username || currentData.username || 'admin',
@@ -74,7 +74,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       return {
         nama: s.nama || currentData.nama || '',
         username: s.username || s.nisn || currentData.username || currentData.nisn || '',
-        password: s.password || s.nisn || currentData.password || currentData.nisn || '',
+        password: s.password || currentData.password || '',
         foto: s.foto !== undefined ? s.foto : (currentData.foto || ''),
         jabatan: 'Siswa / Murid',
       };
@@ -85,7 +85,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       return {
         nama: u.nama || currentData.nama || 'Tim WKS Kesiswaan & BP BK',
         username: u.username || currentData.username || 'kesiswaan',
-        password: u.password || currentData.password || '123',
+        password: u.password || currentData.password || '',
         foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || 'WKS Kesiswaan / BP BK',
       };
@@ -96,7 +96,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       return {
         nama: u.nama || currentData.nama || 'Tim Kurikulum & Akademik',
         username: u.username || currentData.username || 'kurikulum',
-        password: u.password || currentData.password || '123',
+        password: u.password || currentData.password || '',
         foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || 'WKS Kurikulum',
       };
@@ -107,7 +107,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       return {
         nama: u.nama || currentData.nama || 'Guru / Staf Pengajar',
         username: u.username || currentData.username || u.nip || 'guru',
-        password: u.password || currentData.password || '123',
+        password: u.password || currentData.password || '',
         foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || (u.mataPelajaran ? `Guru ${u.mataPelajaran}` : 'Guru Pengampu'),
       };
@@ -118,7 +118,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
       return {
         nama: u.nama || currentData.nama || '',
         username: u.username || currentData.username || u.nip || '',
-        password: u.password || currentData.password || '123',
+        password: u.password || currentData.password || '',
         foto: u.foto !== undefined ? u.foto : (currentData.foto || ''),
         jabatan: u.jabatan || currentData.jabatan || (currentUser.role === 'hubin' ? 'WKS Hubin / Humas' : 'Wali Kelas'),
       };
@@ -305,7 +305,7 @@ export const PengaturanAdminView: React.FC<PengaturanAdminViewProps> = ({
             ...s,
             nama: cleanNama || s.nama,
             username: cleanUsername || s.username || s.nisn,
-            password: cleanPassword ? cleanPassword : (s.password || s.nisn || ''),
+            password: cleanPassword ? cleanPassword : (s.password || ''),
             foto: fotoBase64,
           };
           const newRoles = currentUser.roles || (s.roles) || ['murid'];

@@ -1544,8 +1544,8 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
          VALUES (1, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE username=?, password=?, nama=?, foto=?;`,
         [
-          a.username || 'admin', a.password || 'admin', a.nama || 'Administrator', a.foto || '',
-          a.username || 'admin', a.password || 'admin', a.nama || 'Administrator', a.foto || ''
+          a.username || 'admin', a.password || '', a.nama || 'Administrator', a.foto || '',
+          a.username || 'admin', a.password || '', a.nama || 'Administrator', a.foto || ''
         ]
       );
     }
@@ -1608,7 +1608,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
               w.nip || '',
               w.nama,
               w.username || `guru_${String(w.nip || w.nama).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
-              w.password || '123',
+              w.password || '',
               w.noHp || '',
               w.role || 'wali',
               w.foto || '',
@@ -1794,7 +1794,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
               s.namaOrangTua || '',
               s.noWaOrangTua || '',
               s.username || s.nisn || '',
-              s.password || s.nisn || '',
+              s.password || '',
               s.foto || '',
               s.tempatLahir || '',
               s.tanggalLahir || '',
@@ -1838,7 +1838,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
       allUsersList.push({
         id: 'admin_1',
         username: appData.admin.username || 'admin',
-        password: appData.admin.password || 'admin123',
+        password: appData.admin.password || '',
         nama: appData.admin.nama || 'Administrator Utama',
         role: 'admin',
         nip: '-',
@@ -1852,7 +1852,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         allUsersList.push({
           id: w.id,
           username: w.username,
-          password: w.password,
+          password: w.password || '',
           nama: w.nama,
           role: w.role || 'wali',
           nip: w.nip || '-',
@@ -1865,12 +1865,12 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
     if (Array.isArray(appData.siswa)) {
       for (const s of appData.siswa) {
         const studentUsername = s.username || s.nisn;
-        const studentPassword = s.password || s.nisn;
+        const studentPassword = s.password || '';
         if (studentUsername) {
           allUsersList.push({
             id: s.id,
             username: studentUsername,
-            password: studentPassword || studentUsername,
+            password: studentPassword,
             nama: s.nama,
             role: 'murid',
             nip: s.nisn || '-',
@@ -2995,7 +2995,7 @@ async function performMySQLLoad(config: any) {
           email: w.email || '',
           gelarBelakang: w.gelar_belakang || '',
           username: w.username || `guru_${String(w.nip || w.nama).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
-          password: w.password || '123',
+          password: w.password || '',
           role: w.role || 'wali',
           roles: rolesArr,
           additionalRoles: additionalRolesArr,
@@ -3066,7 +3066,7 @@ async function performMySQLLoad(config: any) {
             namaOrangTua: s.nama_orang_tua !== null && s.nama_orang_tua !== undefined ? s.nama_orang_tua : (prev.namaOrangTua || ''),
             noWaOrangTua: s.no_wa_orang_tua !== null && s.no_wa_orang_tua !== undefined ? s.no_wa_orang_tua : (prev.noWaOrangTua || ''),
             username: s.username || prev.username || s.nisn || '',
-            password: s.password || prev.password || s.nisn || '',
+            password: s.password || prev.password || '',
             foto: s.foto !== null && s.foto !== undefined ? s.foto : (prev.foto || ''),
             tempatLahir: s.tempat_lahir || prev.tempatLahir || '',
             tanggalLahir: s.tanggal_lahir || prev.tanggalLahir || '',

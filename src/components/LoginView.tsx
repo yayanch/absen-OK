@@ -132,7 +132,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const logoSrc = sekolah.logo || DEFAULT_TOGA_LOGO;
   const adminData = appData.admin || {
     username: 'admin',
-    password: 'admin123',
+    password: '',
     nama: 'Administrator Utama',
     foto: '',
   };
@@ -523,11 +523,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       if (isAdminAttempt) {
         const currentAdminPassword = String(adminData.password || '').trim();
-        const validAdminPasswords = Array.from(
-          new Set([currentAdminPassword, 'admin123', 'admin', '123'])
-        ).filter(Boolean);
 
-        if (validAdminPasswords.includes(pInput)) {
+        if (Boolean(currentAdminPassword) && pInput === currentAdminPassword) {
           setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
           handleSuccessfulLogin('admin', adminData);
           onShowToast(`Selamat datang, ${adminData.nama || 'Administrator'}!`, 'success');
@@ -535,213 +532,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
         } else {
           setIsLoggingIn(false);
           handleRecordFailedAttempt(uInput, 'admin');
-          onShowToast('Password Administrator salah! (Default: admin123 atau 123)', 'error');
+          onShowToast('Password Administrator salah! Silakan periksa kembali.', 'error');
           return;
         }
       }
 
-      // 2. Check Kurikulum
-      const kurikulumData = appData.kurikulum;
-      const isKurikulumAlias =
-        uInput === 'kurikulum' ||
-        uInput === 'wks_kurikulum' ||
-        uInput === 'wkskurikulum' ||
-        (kurikulumData && String(kurikulumData.username || '').toLowerCase() === uInput);
-
-      if (isKurikulumAlias) {
-        const curKurikulum = kurikulumData || {
-          username: 'kurikulum',
-          password: '123',
-          nama: 'Tim WKS Kurikulum & Akademik',
-          jabatan: 'WKS Kurikulum',
-        };
-        const expectedPassword = String(curKurikulum.password || '').trim();
-        const validKurikulumPasswords = Array.from(
-          new Set([expectedPassword, '123', 'kurikulum', 'kurikulum123'])
-        ).filter(Boolean);
-
-        if (validKurikulumPasswords.includes(pInput)) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin('kurikulum', curKurikulum);
-          onShowToast(`Login berhasil sebagai ${curKurikulum.nama}!`, 'success');
-          return;
-        } else {
-          setIsLoggingIn(false);
-          handleRecordFailedAttempt(uInput, 'kurikulum');
-          onShowToast('Password Tim Kurikulum salah! (Default: 123)', 'error');
-          return;
-        }
-      }
-
-      // 3. Check Hubin / Humas
-      const hubinData = (appData as any).hubin;
-      const isHubinAlias =
-        uInput === 'hubin' ||
-        uInput === 'wks_hubin' ||
-        uInput === 'wkshubin' ||
-        uInput === 'humas' ||
-        (hubinData && String(hubinData.username || '').toLowerCase() === uInput);
-
-      if (isHubinAlias) {
-        const curHubin = hubinData || {
-          username: 'hubin',
-          password: '123',
-          nama: 'Tim WKS Hubungan Industri & Humas',
-          jabatan: 'WKS Hubungan Industri',
-        };
-        const expectedPassword = String(curHubin.password || '').trim();
-        const validHubinPasswords = Array.from(
-          new Set([expectedPassword, '123', 'hubin', 'hubin123'])
-        ).filter(Boolean);
-
-        if (validHubinPasswords.includes(pInput)) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin('hubin', curHubin);
-          onShowToast(`Login berhasil sebagai ${curHubin.nama}!`, 'success');
-          return;
-        } else {
-          setIsLoggingIn(false);
-          handleRecordFailedAttempt(uInput, 'hubin');
-          onShowToast('Password Tim Hubin salah! (Default: 123)', 'error');
-          return;
-        }
-      }
-
-      // 4. Check Kesiswaan
-      const kesiswaanData = appData.kesiswaan;
-      const isKesiswaanAlias =
-        uInput === 'kesiswaan' ||
-        uInput === 'bk' ||
-        uInput === 'bp' ||
-        uInput === 'bpbk' ||
-        (kesiswaanData && String(kesiswaanData.username || '').toLowerCase() === uInput);
-
-      if (isKesiswaanAlias) {
-        const curKesiswaan = kesiswaanData || {
-          username: 'kesiswaan',
-          password: '123',
-          nama: 'Tim Kesiswaan & BP/BK',
-        };
-        const expectedPassword = String(curKesiswaan.password || '').trim();
-        const validKesiswaanPasswords = Array.from(
-          new Set([expectedPassword, '123', 'kesiswaan', 'kesiswaan123'])
-        ).filter(Boolean);
-
-        if (validKesiswaanPasswords.includes(pInput)) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin('kesiswaan', curKesiswaan);
-          onShowToast(`Login berhasil sebagai Tim Kesiswaan: ${curKesiswaan.nama}!`, 'success');
-          return;
-        } else {
-          setIsLoggingIn(false);
-          handleRecordFailedAttempt(uInput, 'kesiswaan');
-          onShowToast('Password Tim Kesiswaan salah! (Default: 123)', 'error');
-          return;
-        }
-      }
-
-      // 5. Check Staf Pengelola Jadwal
-      const stafJadwalData = appData.stafJadwal;
-      const isJadwalAlias =
-        uInput === 'jadwal' ||
-        uInput === 'staf_jadwal' ||
-        uInput === 'stafjadwal' ||
-        uInput === 'operator_jadwal' ||
-        (stafJadwalData && (
-          String(stafJadwalData.username || '').toLowerCase() === uInput ||
-          String(stafJadwalData.nip || '').toLowerCase() === uInput
-        ));
-
-      if (isJadwalAlias) {
-        const curJadwal = stafJadwalData || {
-          username: 'jadwal',
-          password: '123',
-          nama: 'Staf Pengelola Jadwal KBM',
-        };
-        const expectedPassword = String(curJadwal.password || '').trim();
-        const validJadwalPasswords = Array.from(
-          new Set([expectedPassword, 'jadwal123', 'jadwal', '123'])
-        ).filter(Boolean);
-
-        if (validJadwalPasswords.includes(pInput)) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin('staf_jadwal', curJadwal);
-          onShowToast(`Login berhasil sebagai Pengelola Jadwal: ${curJadwal.nama}!`, 'success');
-          return;
-        } else {
-          setIsLoggingIn(false);
-          handleRecordFailedAttempt(uInput, 'staf_jadwal');
-          onShowToast('Password Staf Jadwal salah! (Default: jadwal123 atau 123)', 'error');
-          return;
-        }
-      }
-
-      // 5b. Check Staf Administrasi Siswa (Non-Guru - adm_siswa TIDAK termasuk guru)
-      const admSiswaData = appData.admSiswa;
-      const isAdmSiswaAlias =
-        uInput === 'adm_siswa' ||
-        uInput === 'admsiswa' ||
-        uInput === 'admin_siswa' ||
-        uInput === 'adminsiswa' ||
-        uInput === 'operator_siswa' ||
-        (admSiswaData && (
-          String(admSiswaData.username || '').toLowerCase() === uInput ||
-          String(admSiswaData.nip || '').toLowerCase() === uInput
-        ));
-
-      if (isAdmSiswaAlias) {
-        const curAdmSiswa = admSiswaData || {
-          username: 'adm_siswa',
-          password: '123',
-          nama: 'Siti Rahmawati, A.Md (Admin Siswa)',
-        };
-        const expectedPassword = String(curAdmSiswa.password || '').trim();
-        const validAdmSiswaPasswords = Array.from(
-          new Set([expectedPassword, '123', 'admsiswa123', 'adm_siswa'])
-        ).filter(Boolean);
-
-        if (validAdmSiswaPasswords.includes(pInput)) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin('adm_siswa', curAdmSiswa);
-          onShowToast(`Login berhasil sebagai Admin Siswa: ${curAdmSiswa.nama}!`, 'success');
-          return;
-        } else {
-          setIsLoggingIn(false);
-          handleRecordFailedAttempt(uInput, 'adm_siswa');
-          onShowToast('Password Admin Siswa salah! (Default: 123)', 'error');
-          return;
-        }
-      }
-
-      // 6. Check User Biasa / Guru
-      const userBiasaData = appData.userBiasa;
-      const isUserBiasaAlias =
-        uInput === 'guru' ||
-        uInput === 'user' ||
-        uInput === 'pengajar' ||
-        uInput === 'staf' ||
-        (userBiasaData && String(userBiasaData.username || '').toLowerCase() === uInput);
-
-      if (isUserBiasaAlias && userBiasaData) {
-        const expectedPassword = String(userBiasaData.password || '').trim();
-        const validGuruPasswords = Array.from(
-          new Set([expectedPassword, '123', 'guru', 'guru123', 'user', 'user123'])
-        ).filter(Boolean);
-
-        if (validGuruPasswords.includes(pInput)) {
-          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
-          handleSuccessfulLogin('guru', userBiasaData);
-          onShowToast(`Login berhasil sebagai Guru: ${userBiasaData.nama}!`, 'success');
-          return;
-        } else {
-          setIsLoggingIn(false);
-          handleRecordFailedAttempt(uInput, 'guru');
-          onShowToast('Password Guru / User salah! (Default: 123)', 'error');
-          return;
-        }
-      }
-
-      // 7. Check Wali Kelas / Guru Pengajar in waliKelas list
+      // 2. Check Wali Kelas / Guru Pengajar / Custom Roles in waliKelas list
       const matchedUser = (appData.waliKelas || []).find(
         (w) =>
           (w.username && String(w.username).toLowerCase() === uInput) ||
@@ -751,26 +547,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       if (matchedUser) {
         const role = matchedUser.role || 'wali';
-        const expectedPassword = String(
-          matchedUser.password ||
-            (role === 'kesiswaan' ? appData.kesiswaan?.password : '') ||
-            (role === 'adm_siswa' ? appData.admSiswa?.password : '') ||
-            (role === 'guru' || role === 'user' ? appData.userBiasa?.password : '') ||
-            '123'
-        ).trim();
+        const expectedPassword = String(matchedUser.password || '').trim();
 
-        const validWaliPasswords = Array.from(
-          new Set([
-            expectedPassword,
-            '123',
-            matchedUser.username || '',
-            matchedUser.nip || '',
-            'guru123',
-            'wali123',
-          ])
-        ).filter(Boolean);
-
-        if (validWaliPasswords.includes(pInput)) {
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
           const todayDayName = getIndonesianDayName(new Date());
           const teachingDays = matchedUser.hariMengajar || [];
           const isTeacher = role === 'guru' || role === 'user';
@@ -809,7 +588,123 @@ export const LoginView: React.FC<LoginViewProps> = ({
         } else {
           setIsLoggingIn(false);
           handleRecordFailedAttempt(uInput, role);
-          onShowToast(`Password untuk user "${matchedUser.nama}" salah! (Default: 123)`, 'error');
+          onShowToast(`Password untuk user "${matchedUser.nama}" salah! Silakan periksa kembali.`, 'error');
+          return;
+        }
+      }
+
+      // 3. Check Kurikulum
+      const kurikulumData = appData.kurikulum;
+      if (kurikulumData && String(kurikulumData.username || '').toLowerCase() === uInput) {
+        const expectedPassword = String(kurikulumData.password || '').trim();
+
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('kurikulum', kurikulumData);
+          onShowToast(`Login berhasil sebagai ${kurikulumData.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'kurikulum');
+          onShowToast('Password Tim Kurikulum salah! Silakan periksa kembali.', 'error');
+          return;
+        }
+      }
+
+      // 4. Check Hubin / Humas
+      const hubinData = (appData as any).hubin;
+      if (hubinData && String(hubinData.username || '').toLowerCase() === uInput) {
+        const expectedPassword = String(hubinData.password || '').trim();
+
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('hubin', hubinData);
+          onShowToast(`Login berhasil sebagai ${hubinData.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'hubin');
+          onShowToast('Password Tim Hubin salah! Silakan periksa kembali.', 'error');
+          return;
+        }
+      }
+
+      // 5. Check Kesiswaan
+      const kesiswaanData = appData.kesiswaan;
+      if (kesiswaanData && String(kesiswaanData.username || '').toLowerCase() === uInput) {
+        const expectedPassword = String(kesiswaanData.password || '').trim();
+
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('kesiswaan', kesiswaanData);
+          onShowToast(`Login berhasil sebagai Tim Kesiswaan: ${kesiswaanData.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'kesiswaan');
+          onShowToast('Password Tim Kesiswaan salah! Silakan periksa kembali.', 'error');
+          return;
+        }
+      }
+
+      // 6. Check Staf Pengelola Jadwal
+      const stafJadwalData = appData.stafJadwal;
+      if (
+        stafJadwalData &&
+        (String(stafJadwalData.username || '').toLowerCase() === uInput ||
+          (stafJadwalData.nip && String(stafJadwalData.nip).toLowerCase() === uInput))
+      ) {
+        const expectedPassword = String(stafJadwalData.password || '').trim();
+
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('staf_jadwal', stafJadwalData);
+          onShowToast(`Login berhasil sebagai Pengelola Jadwal: ${stafJadwalData.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'staf_jadwal');
+          onShowToast('Password Staf Jadwal salah! Silakan periksa kembali.', 'error');
+          return;
+        }
+      }
+
+      // 6b. Check Staf Administrasi Siswa (Non-Guru - adm_siswa TIDAK termasuk guru)
+      const admSiswaData = appData.admSiswa;
+      if (
+        admSiswaData &&
+        (String(admSiswaData.username || '').toLowerCase() === uInput ||
+          (admSiswaData.nip && String(admSiswaData.nip).toLowerCase() === uInput))
+      ) {
+        const expectedPassword = String(admSiswaData.password || '').trim();
+
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('adm_siswa', admSiswaData);
+          onShowToast(`Login berhasil sebagai Admin Siswa: ${admSiswaData.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'adm_siswa');
+          onShowToast('Password Admin Siswa salah! Silakan periksa kembali.', 'error');
+          return;
+        }
+      }
+
+      // 7. Check User Biasa / Guru
+      const userBiasaData = appData.userBiasa;
+      if (userBiasaData && String(userBiasaData.username || '').toLowerCase() === uInput) {
+        const expectedPassword = String(userBiasaData.password || '').trim();
+
+        if (Boolean(expectedPassword) && pInput === expectedPassword) {
+          setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
+          handleSuccessfulLogin('guru', userBiasaData);
+          onShowToast(`Login berhasil sebagai Guru: ${userBiasaData.nama}!`, 'success');
+          return;
+        } else {
+          setIsLoggingIn(false);
+          handleRecordFailedAttempt(uInput, 'guru');
+          onShowToast('Password Guru / User salah! Silakan periksa kembali.', 'error');
           return;
         }
       }
@@ -831,28 +726,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       if (matchedPiketKelas) {
         const cleanClassName = String(matchedPiketKelas.nama || '').toLowerCase().replace(/[\s\-_]+/g, '');
-        const exactClassName = String(matchedPiketKelas.nama || '').trim();
         const customPiketPass = String((matchedPiketKelas as any).piketPassword || '').trim();
-
-        // Valid passwords according to class name:
-        // e.g. "xrpl1", "X RPL 1", "x rpl 1", custom password, or fallback "123"
-        const validPasswords = Array.from(
-          new Set([
-            cleanClassName,
-            exactClassName,
-            exactClassName.toLowerCase(),
-            customPiketPass,
-            '123',
-            'piket123',
-          ])
-        ).filter(Boolean);
-
         const pInputTrimmed = pInput.trim();
-        const pInputClean = pInputTrimmed.toLowerCase().replace(/[\s\-_]+/g, '');
 
-        const isPasswordCorrect =
-          validPasswords.includes(pInputTrimmed) ||
-          validPasswords.map((v) => v.toLowerCase().replace(/[\s\-_]+/g, '')).includes(pInputClean);
+        const isPasswordCorrect = Boolean(customPiketPass) && pInputTrimmed === customPiketPass;
 
         if (isPasswordCorrect) {
           setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
@@ -872,32 +749,25 @@ export const LoginView: React.FC<LoginViewProps> = ({
           setIsLoggingIn(false);
           handleRecordFailedAttempt(uInput, 'piket_kelas');
           onShowToast(
-            `Password untuk Piket Kelas "${matchedPiketKelas.nama}" salah! (Password sesuai nama kelas, contoh: ${cleanClassName})`,
+            `Password untuk Piket Kelas "${matchedPiketKelas.nama}" salah! Silakan periksa kembali.`,
             'error'
           );
           return;
         }
       }
 
-      // 8. Check Siswa / Murid (Fallback Password Login)
-      const isGenericSiswa = uInput === 'siswa' || uInput === 'murid' || uInput === 'siswa1' || uInput === 'murid1';
-      const matchedSiswa = isGenericSiswa
-        ? (appData.siswa || [])[0]
-        : (appData.siswa || []).find(
-            (s) =>
-              (s.nisn && String(s.nisn).toLowerCase() === uInput) ||
-              (s.username && String(s.username).toLowerCase() === uInput) ||
-              (s.id && String(s.id).toLowerCase() === uInput)
-          );
+      // 8. Check Siswa / Murid
+      const matchedSiswa = (appData.siswa || []).find(
+        (s) =>
+          (s.nisn && String(s.nisn).toLowerCase() === uInput) ||
+          (s.username && String(s.username).toLowerCase() === uInput) ||
+          (s.id && String(s.id).toLowerCase() === uInput)
+      );
 
       if (matchedSiswa) {
         const studentPass = String(matchedSiswa.password || '').trim();
-        const studentNisn = String(matchedSiswa.nisn || '').trim();
-        const validStudentPasswords = Array.from(
-          new Set([studentPass, studentNisn, '123', 'siswa123', matchedSiswa.username || ''])
-        ).filter(Boolean);
 
-        if (validStudentPasswords.includes(pInput) || (isGenericSiswa && (pInput === '123' || pInput === studentNisn))) {
+        if (Boolean(studentPass) && pInput === studentPass) {
           setLoginFailedAttempts((prev) => ({ ...prev, [uInput]: 0 }));
           handleSuccessfulLogin('murid', matchedSiswa);
           onShowToast(`Login berhasil sebagai Siswa: ${matchedSiswa.nama}!`, 'success');
@@ -905,7 +775,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         } else {
           setIsLoggingIn(false);
           handleRecordFailedAttempt(uInput, 'murid');
-          onShowToast(`Password untuk Siswa "${matchedSiswa.nama}" salah! (Default: NISN atau 123)`, 'error');
+          onShowToast(`Password untuk Siswa "${matchedSiswa.nama}" salah! Silakan periksa kembali.`, 'error');
           return;
         }
       }

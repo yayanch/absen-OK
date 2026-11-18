@@ -1413,7 +1413,7 @@ export default function App() {
           appData={appData}
           isOpen={sidebarOpen}
           enableLiveChat={appData.enableLiveChat ?? appData.sekolah?.enableLiveChat ?? true}
-          adminPassword={appData.admin?.password || 'admin123'}
+          adminPassword={appData.admin?.password || ''}
           onSwitchView={(v) => handleNavigate(v)}
           onCloseMobile={() => setSidebarOpen(false)}
           onResetPresensi={handleResetPresensiData}
