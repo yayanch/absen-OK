@@ -1472,6 +1472,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         loginBgOverlayColor: s.loginBgOverlayColor || '#000000',
         loginContrastMode: s.loginContrastMode || 'auto',
         loginCardTheme: s.loginCardTheme || 'glass',
+        loginCardCustomColor: s.loginCardCustomColor || '',
         loginCardOpacity: s.loginCardOpacity ?? 95,
         loginCardBlur: s.loginCardBlur || 'md',
         loginCardLayout: s.loginCardLayout || 'centered',

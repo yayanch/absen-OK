@@ -906,6 +906,15 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const cardTheme = sekolah.loginCardTheme || 'white';
     const alpha = cardOpacity / 100;
 
+    if (alpha < 0.35) {
+      return isBackgroundDark;
+    }
+
+    if (cardTheme === 'custom') {
+      const rgb = parseColorToRgb(sekolah.loginCardCustomColor || '#ffffff');
+      return calculateLuminance(rgb) < 135;
+    }
+
     if (cardTheme === 'dark') return true;
     if (cardTheme === 'white' || cardTheme === 'light') return false;
 
@@ -922,7 +931,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     return darkTheme;
-  }, [sekolah.loginCardTheme, cardOpacity, darkTheme, isBackgroundDark]);
+  }, [sekolah.loginCardTheme, sekolah.loginCardCustomColor, cardOpacity, darkTheme, isBackgroundDark]);
 
   const getBlurFilter = () => {
     switch (wallpaperBlur) {
@@ -939,8 +948,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const cardTheme = sekolah.loginCardTheme || 'white';
     const alpha = cardOpacity / 100;
 
+    if (cardTheme === 'custom') {
+      const rgb = parseColorToRgb(sekolah.loginCardCustomColor || '#ffffff');
+      return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+    }
     if (cardTheme === 'dark') {
-      return `rgba(18, 18, 21, ${Math.min(0.98, alpha)})`;
+      return `rgba(18, 18, 21, ${alpha})`;
     }
     if (cardTheme === 'glass') {
       return darkTheme
@@ -948,7 +961,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         : `rgba(255, 255, 255, ${alpha * 0.85})`;
     }
     if (darkTheme && cardTheme !== 'white' && cardTheme !== 'light') {
-      return `linear-gradient(145deg, rgba(24, 24, 27, ${Math.min(0.96, alpha + 0.15)}) 0%, rgba(9, 9, 11, ${Math.min(0.95, alpha + 0.10)}) 100%)`;
+      return `linear-gradient(145deg, rgba(24, 24, 27, ${alpha}) 0%, rgba(9, 9, 11, ${alpha * 0.95}) 100%)`;
     }
     // Gradient White card background for white / light / default theme
     return `linear-gradient(135deg, rgba(255, 255, 255, ${alpha}) 0%, rgba(248, 250, 252, ${alpha * 0.98}) 50%, rgba(241, 245, 249, ${alpha * 0.92}) 100%)`;

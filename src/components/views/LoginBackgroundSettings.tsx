@@ -128,7 +128,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
   // Card & Contrast States
   const [contrastMode, setContrastMode] = useState<'auto' | 'dark' | 'light'>(sekolah.loginContrastMode || 'auto');
-  const [cardTheme, setCardTheme] = useState<'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto'>(sekolah.loginCardTheme || 'white');
+  const [cardTheme, setCardTheme] = useState<'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto' | 'custom'>(sekolah.loginCardTheme || 'white');
+  const [cardCustomColor, setCardCustomColor] = useState<string>(sekolah.loginCardCustomColor || '#ffffff');
   const [cardOpacity, setCardOpacity] = useState<number>(sekolah.loginCardOpacity ?? 100);
   const [cardBlur, setCardBlur] = useState<'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(sekolah.loginCardBlur || '2xl');
 
@@ -533,6 +534,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginBgBlendMode: blendMode,
       loginContrastMode: contrastMode,
       loginCardTheme: cardTheme,
+      loginCardCustomColor: cardCustomColor,
       loginCardOpacity: cardOpacity,
       loginCardBlur: cardBlur,
       loginCardLayout: cardLayout,
@@ -625,6 +627,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setOverlayColor('#020617');
       setOverlayOpacity(35);
 
+      setCardTheme('white');
+      setCardCustomColor('#ffffff');
       setCardOpacity(65);
       setCardBlur('2xl');
       setCardLayout('right');
@@ -1306,11 +1310,169 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                 </div>
               </div>
 
+              {/* Warna, Opasitas & Efek Blur Card Login */}
+              <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-5">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-blue-600" />
+                  <span>Warna, Opasitas & Efek Kaca Card Login</span>
+                </h4>
+
+                {/* Pilihan Mode Warna Card */}
+                <div className="space-y-2.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tema & Warna Latar Card Login</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { id: 'white', label: 'Putih Bersih' },
+                      { id: 'dark', label: 'Gelap (Dark)' },
+                      { id: 'glass', label: 'Kaca (Glass)' },
+                      { id: 'auto', label: 'Otomatis' },
+                      { id: 'custom', label: 'Warna Kustom' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setCardTheme(item.id as any)}
+                        className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                          cardTheme === item.id || (item.id === 'white' && cardTheme === 'light') || (item.id === 'auto' && cardTheme === 'neutral')
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Pemilih Warna Kustom & Preset Swatches */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="color"
+                          value={cardCustomColor}
+                          onChange={(e) => {
+                            setCardCustomColor(e.target.value);
+                            setCardTheme('custom');
+                          }}
+                          className="w-9 h-9 rounded-xl border border-slate-300 dark:border-slate-600 cursor-pointer bg-transparent p-0.5"
+                          title="Pilih warna kustom card login"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Pilih Warna Card Kustom</div>
+                          <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase">{cardCustomColor}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {[
+                          { hex: '#ffffff', name: 'Putih' },
+                          { hex: '#f8fafc', name: 'Slate Terang' },
+                          { hex: '#eff6ff', name: 'Biru Muda' },
+                          { hex: '#ecfdf5', name: 'Hijau Muda' },
+                          { hex: '#1e293b', name: 'Slate Gelap' },
+                          { hex: '#0f172a', name: 'Navy Gelap' },
+                          { hex: '#1e1b4b', name: 'Indigo Gelap' },
+                          { hex: '#09090b', name: 'Hitam Pekat' },
+                        ].map((preset) => (
+                          <button
+                            key={preset.hex}
+                            type="button"
+                            onClick={() => {
+                              setCardCustomColor(preset.hex);
+                              setCardTheme('custom');
+                            }}
+                            title={preset.name}
+                            className={`w-6 h-6 rounded-lg border transition cursor-pointer ${
+                              cardTheme === 'custom' && cardCustomColor.toLowerCase() === preset.hex.toLowerCase()
+                                ? 'ring-2 ring-blue-500 ring-offset-1 border-blue-600 scale-110'
+                                : 'border-slate-300 dark:border-slate-600 hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: preset.hex }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Slider Opasitas Card Login */}
+                <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Opasitas / Ketebalan Warna Card Login
+                    </label>
+                    <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-lg border border-blue-200/60 dark:border-blue-800/60">
+                      {cardOpacity}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={cardOpacity}
+                    onChange={(e) => setCardOpacity(Number(e.target.value))}
+                    className="w-full accent-blue-600 cursor-pointer"
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      0% = Transparan Penuh, 100% = Solid Penuh
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {[0, 25, 50, 75, 90, 100].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setCardOpacity(val)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                            cardOpacity === val
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          {val}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tingkat Efek Blur Kaca Card Login */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Efek Blur Kaca Belakang Card (Backdrop Blur)
+                  </label>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[
+                      { id: 'none', label: 'Tanpa Blur' },
+                      { id: 'sm', label: 'Tipis (SM)' },
+                      { id: 'md', label: 'Sedang (MD)' },
+                      { id: 'lg', label: 'Tebal (LG)' },
+                      { id: 'xl', label: 'Ekstra (XL)' },
+                      { id: '2xl', label: 'Maksimal (2XL)' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setCardBlur(item.id as any)}
+                        className={`py-2 px-2.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                          cardBlur === item.id
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Bentuk & Efek Kaca Form */}
               <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
                   <Palette className="w-4 h-4 text-purple-600" />
-                  <span>Bentuk, Efek Kaca & Bayangan Container</span>
+                  <span>Bentuk, Sudut Lengkungan & Bayangan Container</span>
                 </h4>
 
                 <div className="space-y-4">
@@ -2431,15 +2593,46 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
               />
 
               {/* PREVIEW CARD FORM */}
-              <div
-                className={`relative z-10 w-full max-w-xs p-5 rounded-2xl shadow-xl border transition-all text-center space-y-3 ${
-                  liveDetectedDark.isDark ? 'bg-slate-900/90 text-white border-slate-700' : 'bg-white/95 text-slate-900 border-slate-200'
-                }`}
-                style={{
-                  backdropFilter: cardBlur !== 'none' ? `blur(${cardBlur === 'sm' ? 4 : cardBlur === 'md' ? 8 : 16}px)` : 'none',
-                  opacity: cardOpacity / 100,
-                }}
-              >
+              {(() => {
+                const alpha = cardOpacity / 100;
+                const customRgb = parseColorToRgb(cardCustomColor || '#ffffff');
+                const isPreviewCardDark =
+                  alpha < 0.35
+                    ? liveDetectedDark.isDark
+                    : cardTheme === 'custom'
+                      ? calculateLuminance(customRgb) < 135
+                      : cardTheme === 'dark'
+                        ? true
+                        : cardTheme === 'white' || cardTheme === 'light'
+                          ? false
+                          : liveDetectedDark.isDark;
+
+                const previewCardBg =
+                  cardTheme === 'custom'
+                    ? `rgba(${customRgb.r}, ${customRgb.g}, ${customRgb.b}, ${alpha})`
+                    : cardTheme === 'dark'
+                      ? `rgba(18, 18, 21, ${alpha})`
+                      : cardTheme === 'glass'
+                        ? liveDetectedDark.isDark
+                          ? `rgba(24, 24, 27, ${alpha * 0.7})`
+                          : `rgba(255, 255, 255, ${alpha * 0.85})`
+                        : liveDetectedDark.isDark && cardTheme !== 'white' && cardTheme !== 'light'
+                          ? `rgba(24, 24, 27, ${alpha})`
+                          : `rgba(255, 255, 255, ${alpha})`;
+
+                const blurPx =
+                  cardBlur === 'sm' ? 4 : cardBlur === 'md' ? 8 : cardBlur === 'lg' ? 12 : cardBlur === 'xl' ? 16 : cardBlur === '2xl' ? 24 : 0;
+
+                return (
+                  <div
+                    className={`relative z-10 w-full max-w-xs p-5 rounded-2xl shadow-xl border transition-all text-center space-y-3 ${
+                      isPreviewCardDark ? 'text-white border-slate-700/70' : 'text-slate-900 border-slate-200/80'
+                    }`}
+                    style={{
+                      background: previewCardBg,
+                      backdropFilter: blurPx > 0 ? `blur(${blurPx}px)` : 'none',
+                    }}
+                  >
                 <div className="w-10 h-10 rounded-xl bg-blue-600 text-white mx-auto flex items-center justify-center shadow-md">
                   <School className="w-5 h-5" />
                 </div>
@@ -2472,6 +2665,8 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
                   )}
                 </div>
               </div>
+                );
+              })()}
             </div>
           </div>
         </div>

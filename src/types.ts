@@ -95,7 +95,8 @@ export interface SekolahConfig {
   loginCardStyle?: LoginCardStyleOption | string;
 
   // Pengaturan Kustomisasi Container / Kartu Form Login
-  loginCardTheme?: 'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto';
+  loginCardTheme?: 'white' | 'neutral' | 'light' | 'dark' | 'glass' | 'auto' | 'custom';
+  loginCardCustomColor?: string;
   loginCardLayout?: 'center' | 'left' | 'right';
   loginCardMaxWidth?: 'compact' | 'standard' | 'wide' | 'large';
   loginCardRounded?: 'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill';
