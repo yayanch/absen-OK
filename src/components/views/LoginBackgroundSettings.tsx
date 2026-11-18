@@ -136,6 +136,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
   const [cardLayout, setCardLayout] = useState<'center' | 'left' | 'right'>(sekolah.loginCardLayout || 'right');
   const [cardMaxWidth, setCardMaxWidth] = useState<'compact' | 'standard' | 'wide' | 'large'>(sekolah.loginCardMaxWidth || 'standard');
   const [cardRounded, setCardRounded] = useState<'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill'>(sekolah.loginCardRounded || '2xl');
+  const [cardMobileRounded, setCardMobileRounded] = useState<'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill'>(sekolah.loginCardMobileRounded || 'none');
   const [cardShadow, setCardShadow] = useState<'none' | 'soft' | 'medium' | 'glow' | 'neon'>(sekolah.loginCardShadow || 'medium');
   const [cardBorder, setCardBorder] = useState<'none' | 'subtle' | 'gradient' | 'glass' | 'accent'>(sekolah.loginCardBorder || 'glass');
   const [cardShowLogo, setCardShowLogo] = useState<boolean>(sekolah.loginCardShowLogo !== false);
@@ -537,6 +538,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       loginCardLayout: cardLayout,
       loginCardMaxWidth: cardMaxWidth,
       loginCardRounded: cardRounded,
+      loginCardMobileRounded: cardMobileRounded,
       loginCardShadow: cardShadow,
       loginCardBorder: cardBorder,
       loginCardShowLogo: cardShowLogo,
@@ -628,6 +630,7 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
       setCardLayout('right');
       setCardMaxWidth('standard');
       setCardRounded('2xl');
+      setCardMobileRounded('none');
       setCardShadow('medium');
       setCardBorder('glass');
       setCardShowLogo(true);
@@ -1312,22 +1315,63 @@ export const LoginBackgroundSettings: React.FC<LoginBackgroundSettingsProps> = (
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sudut Lengkungan (Rounded)</label>
-                    <div className="grid grid-cols-5 gap-2">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sudut Lengkungan (Corner Radius) — Desktop & Tablet</label>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                       {[
                         { id: 'none', label: 'Kotak' },
                         { id: 'lg', label: 'Halus' },
                         { id: 'xl', label: 'Sedang' },
                         { id: '2xl', label: 'Lengkung' },
+                        { id: '3xl', label: 'Ekstra' },
                         { id: 'full_pill', label: 'Pill' },
                       ].map((item) => (
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => setCardRounded(item.id as any)}
+                          onClick={() => {
+                            setCardRounded(item.id as any);
+                            saveWithUpdates({ loginCardRounded: item.id as any });
+                          }}
                           className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
                             cardRounded === item.id
                               ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Sudut Lengkungan (Corner Radius) — Mode Mobile
+                      </label>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                        Layar HP / Mobile
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {[
+                        { id: 'none', label: 'Kotak (0px)' },
+                        { id: 'lg', label: 'Halus (16px)' },
+                        { id: 'xl', label: 'Sedang (24px)' },
+                        { id: '2xl', label: 'Lengkung (28px)' },
+                        { id: '3xl', label: 'Ekstra (32px)' },
+                        { id: 'full_pill', label: 'Pill (36px)' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setCardMobileRounded(item.id as any);
+                            saveWithUpdates({ loginCardMobileRounded: item.id as any });
+                          }}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-bold border transition cursor-pointer text-center ${
+                            cardMobileRounded === item.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                               : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                           }`}
                         >

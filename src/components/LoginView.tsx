@@ -974,15 +974,36 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   const getContainerRoundedClass = () => {
-    switch (sekolah.loginCardRounded) {
-      case 'none': return 'rounded-none';
-      case 'lg': return 'rounded-none sm:rounded-2xl';
-      case 'xl': return 'rounded-none sm:rounded-3xl';
-      case 'full_pill': return 'rounded-none sm:rounded-[44px]';
-      case '3xl': return 'rounded-none sm:rounded-[36px]';
-      case '2xl':
-      default: return 'rounded-none sm:rounded-3xl';
-    }
+    const mobileRounded = sekolah.loginCardMobileRounded || 'none';
+    const desktopRounded = sekolah.loginCardRounded || '2xl';
+
+    const mobileClass =
+      mobileRounded === 'none'
+        ? 'rounded-none'
+        : mobileRounded === 'lg'
+        ? 'rounded-2xl'
+        : mobileRounded === 'xl'
+        ? 'rounded-3xl'
+        : mobileRounded === '3xl'
+        ? 'rounded-[32px]'
+        : mobileRounded === 'full_pill'
+        ? 'rounded-[36px]'
+        : 'rounded-[28px]';
+
+    const desktopClass =
+      desktopRounded === 'none'
+        ? 'sm:rounded-none'
+        : desktopRounded === 'lg'
+        ? 'sm:rounded-2xl'
+        : desktopRounded === 'xl'
+        ? 'sm:rounded-3xl'
+        : desktopRounded === '3xl'
+        ? 'sm:rounded-[36px]'
+        : desktopRounded === 'full_pill'
+        ? 'sm:rounded-[44px]'
+        : 'sm:rounded-3xl';
+
+    return `${mobileClass} ${desktopClass}`;
   };
 
   const getContainerShadowClass = () => {
@@ -1395,7 +1416,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <div className={`w-full min-h-dvh sm:min-h-0 ${getContainerMaxWidthClass()} ${getContainerAlignmentClass()} flex flex-col justify-center my-0 sm:my-auto`}>
             {/* Main Card Container with White Gradient Styling */}
             <div
-              className={`${getBlurFilter()} ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} px-6 pt-16 pb-6 sm:p-6 relative transition-all w-full min-h-dvh sm:min-h-0 flex-1 sm:flex-initial flex flex-col justify-between items-center ${
+              className={`${getBlurFilter()} ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} overflow-hidden sm:overflow-visible px-6 pt-16 pb-6 sm:p-6 relative transition-all w-full min-h-dvh sm:min-h-0 flex-1 sm:flex-initial flex flex-col justify-between items-center ${
                 isCardDark
                   ? 'text-zinc-100'
                   : 'text-slate-900'

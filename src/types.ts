@@ -99,6 +99,7 @@ export interface SekolahConfig {
   loginCardLayout?: 'center' | 'left' | 'right';
   loginCardMaxWidth?: 'compact' | 'standard' | 'wide' | 'large';
   loginCardRounded?: 'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill';
+  loginCardMobileRounded?: 'none' | 'lg' | 'xl' | '2xl' | '3xl' | 'full_pill';
   loginCardShadow?: 'none' | 'soft' | 'medium' | 'glow' | 'neon';
   loginCardBorder?: 'none' | 'subtle' | 'gradient' | 'glass' | 'accent';
   loginCardShowLogo?: boolean;

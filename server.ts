@@ -1477,6 +1477,7 @@ async function performMySQLSave(config: any, appData: any, ignoreCooldown = fals
         loginCardLayout: s.loginCardLayout || 'centered',
         loginCardMaxWidth: s.loginCardMaxWidth || 'md',
         loginCardRounded: s.loginCardRounded || '2xl',
+        loginCardMobileRounded: s.loginCardMobileRounded || 'none',
         loginCardShadow: s.loginCardShadow || '2xl',
         loginCardBorder: s.loginCardBorder || 'subtle',
         loginCardShowLogo: s.loginCardShowLogo !== false,
