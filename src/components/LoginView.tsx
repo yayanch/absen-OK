@@ -1043,10 +1043,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   const getLogoSizeClass = () => {
     switch (sekolah.loginCardLogoSize) {
-      case 'sm': return 'w-11 h-11 sm:w-12 sm:h-12';
-      case 'lg': return 'w-18 h-18 sm:w-20 sm:h-20';
+      case 'sm': return 'w-9 h-9 sm:w-12 sm:h-12';
+      case 'lg': return 'w-14 h-14 sm:w-20 sm:h-20';
       case 'md':
-      default: return 'w-14 h-14 sm:w-16 sm:h-16';
+      default: return 'w-11 h-11 sm:w-16 sm:h-16';
     }
   };
 
@@ -1149,7 +1149,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
   return (
     <div
-      className={`h-screen w-full flex flex-col justify-between items-center relative overflow-hidden select-none transition-colors duration-300 ${
+      className={`fixed inset-0 h-dvh w-full flex flex-col justify-between items-center overflow-hidden overscroll-none select-none transition-colors duration-300 ${
         isBackgroundDark
           ? 'bg-zinc-950 text-zinc-100'
           : 'bg-gradient-to-br from-slate-100 via-zinc-50 to-slate-200 text-slate-900'
@@ -1284,7 +1284,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       </header>
 
       {/* MAIN CONTAINER: LEFT TEXT & RIGHT LOGIN CARD */}
-      <main className={`w-full flex-1 ${sekolah.loginLeftShowPanel !== false ? 'grid grid-cols-1 md:grid-cols-12 items-stretch sm:items-center justify-between' : 'flex justify-center items-stretch sm:items-center'} p-0 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-0 sm:my-auto overflow-y-auto w-full h-full min-h-dvh sm:min-h-0`}>
+      <main className={`w-full flex-1 ${sekolah.loginLeftShowPanel !== false ? 'grid grid-cols-1 md:grid-cols-12 items-stretch sm:items-center justify-between' : 'flex justify-center items-stretch sm:items-center'} p-0 sm:p-6 lg:p-10 xl:px-16 2xl:px-24 relative z-10 my-0 sm:my-auto overflow-hidden sm:overflow-y-auto h-full min-h-0`}>
         {/* LEFT SIDE TEXT: Sistem Absensi Siswa */}
         {sekolah.loginLeftShowPanel !== false && (
           <div className="hidden md:flex md:col-span-6 lg:col-span-7 flex-col justify-center space-y-6 pr-6 lg:pr-10 xl:pr-14 pl-2 lg:pl-6">
@@ -1425,11 +1425,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
         )}
 
         {/* RIGHT SIDE LOGIN CARD */}
-        <div className={`w-full min-h-dvh sm:min-h-0 ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-stretch sm:items-center my-0 sm:my-auto`}>
-          <div className={`w-full min-h-dvh sm:min-h-0 ${getContainerMaxWidthClass()} ${getContainerAlignmentClass()} flex flex-col justify-center my-0 sm:my-auto`}>
+        <div className={`w-full h-full sm:h-auto min-h-0 ${sekolah.loginLeftShowPanel !== false ? 'md:col-span-6 lg:col-span-5 flex justify-center md:justify-end' : 'flex justify-center'} items-stretch sm:items-center my-0 sm:my-auto overflow-hidden sm:overflow-visible`}>
+          <div className={`w-full h-full sm:h-auto min-h-0 ${getContainerMaxWidthClass()} ${getContainerAlignmentClass()} flex flex-col justify-center my-0 sm:my-auto overflow-hidden sm:overflow-visible`}>
             {/* Main Card Container with White Gradient Styling */}
             <div
-              className={`${getBlurFilter()} ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} overflow-hidden sm:overflow-visible px-6 pt-16 pb-6 sm:p-6 relative transition-all w-full min-h-dvh sm:min-h-0 flex-1 sm:flex-initial flex flex-col justify-between items-center ${
+              className={`${getBlurFilter()} ${getContainerRoundedClass()} ${getContainerShadowClass()} ${getContainerBorderClass()} overflow-hidden sm:overflow-visible px-5 pt-12 pb-3 sm:p-6 relative transition-all w-full h-full sm:h-auto min-h-0 flex-1 sm:flex-initial flex flex-col justify-between items-center ${
                 isCardDark
                   ? 'text-zinc-100'
                   : 'text-slate-900'
@@ -1439,9 +1439,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 backdropFilter: cardBlur !== 'none' ? `blur(${cardBlur === 'sm' ? '4px' : cardBlur === 'md' ? '8px' : cardBlur === 'lg' ? '16px' : cardBlur === 'xl' ? '24px' : '32px'})` : 'none',
               }}
             >
-              <div className="w-full space-y-4 my-auto">
+              <div className="w-full space-y-2.5 sm:space-y-4 my-auto">
                 {/* School Branding Header */}
-                <div className={`space-y-3 pb-1 ${getLogoAlignClass()}`}>
+                <div className={`space-y-1.5 sm:space-y-3 pb-0.5 sm:pb-1 ${getLogoAlignClass()}`}>
                   {sekolah.loginCardShowLogo !== false && (
                     <div className={`flex transition-transform hover:scale-105 ${getLogoAlignClass()}`}>
                       {logoSrc ? (
@@ -1498,7 +1498,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       </div>
                     )}
                     <p
-                      className={`text-xl sm:text-2xl font-black tracking-tight mt-0.5 ${
+                      className={`text-lg sm:text-2xl font-black tracking-tight mt-0.5 ${
                         isCardDark ? 'text-white' : 'text-slate-950'
                       }`}
                     >
@@ -1506,7 +1506,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </p>
                     {sekolah.loginCardWelcomeSubtext && (
                       <p
-                        className={`text-xs sm:text-sm font-medium mt-1 leading-relaxed ${
+                        className={`text-[11px] sm:text-sm font-medium mt-0.5 sm:mt-1 leading-snug sm:leading-relaxed ${
                           isCardDark ? 'text-zinc-300' : 'text-slate-600'
                         }`}
                       >
@@ -1551,8 +1551,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
               )}
 
               {/* UNIFIED SINGLE LOGIN FORM */}
-              <form onSubmit={handleSubmit} className="space-y-4 pt-1 w-full">
-                <div className="space-y-1.5 text-left">
+              <form onSubmit={handleSubmit} className="space-y-2.5 sm:space-y-4 pt-0.5 sm:pt-1 w-full">
+                <div className="space-y-1 sm:space-y-1.5 text-left">
                   <label
                     className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider ${
                       isCardDark ? 'text-zinc-200' : 'text-slate-900'
@@ -1575,12 +1575,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder={sekolah.loginCardUsernamePlaceholder || roleInfo.placeholder}
-                      className={`w-full pl-10 sm:pl-10.5 pr-4 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
+                      className={`w-full pl-10 sm:pl-10.5 pr-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5 text-left">
+                <div className="space-y-1 sm:space-y-1.5 text-left">
                   <label
                     className={`block text-[11px] sm:text-xs font-black uppercase tracking-wider ${
                       isCardDark ? 'text-zinc-200' : 'text-slate-900'
@@ -1602,7 +1602,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={sekolah.loginCardPasswordPlaceholder || 'Masukkan password akun Anda'}
-                      className={`w-full pl-10 sm:pl-10.5 pr-11 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
+                      className={`w-full pl-10 sm:pl-10.5 pr-11 py-2 sm:py-2.5 text-xs sm:text-sm font-medium transition focus:outline-none ${getInputStyleClass()}`}
                     />
                     <button
                       type="button"
@@ -1623,7 +1623,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 px-1">
+                  <div className="flex items-center justify-between pt-0.5 sm:pt-1 px-1">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -1645,7 +1645,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className={`w-full py-3 sm:py-3.5 px-4 font-black text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${getSubmitButtonClass()}`}
+                  className={`w-full py-2.5 sm:py-3.5 px-4 font-black text-sm sm:text-base transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${getSubmitButtonClass()}`}
                 >
                   {isLoggingIn ? (
                     <>
@@ -2042,7 +2042,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
 
             {/* FOOTER BAR (AT THE BOTTOM OF LOGIN CARD) */}
-            <footer className={`w-full relative z-20 mt-5 sm:mt-6 pt-3.5 pb-1 sm:pb-1.5 border-t text-center shrink-0 transition-colors ${
+            <footer className={`w-full relative z-20 mt-2 sm:mt-6 pt-2.5 sm:pt-3.5 pb-0.5 sm:pb-1.5 border-t text-center shrink-0 transition-colors ${
               isCardDark 
                 ? 'border-zinc-800/80 text-zinc-300' 
                 : 'border-slate-200/80 text-slate-700'
